@@ -5,6 +5,7 @@ import { splashShownAt } from './index';
 import { useIncomingShare } from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { passiveListener, type PassiveListenerState } from './src/audio/PassiveListener';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { LUCY_COLORS, LUCY_PILLARS } from './src/config/colors';
 import { getDatabase } from './src/db';
@@ -32,6 +33,7 @@ export default function App() {
   const [startupError, setStartupError] = useState('');
   const [backgroundEnabled, setBackgroundEnabled] = useState(false);
   const [notificationDetail, setNotificationDetail] = useState<NotificationDetailPayload | null>(null);
+  const [passiveState, setPassiveState] = useState<PassiveListenerState>(passiveListener.getState());
   const processing = useRef(false);
   const queueRequested = useRef(false);
   const receivingShare = useRef(false);
@@ -179,6 +181,30 @@ export default function App() {
     return count;
   }, [drainQueue]);
 
+  useEffect(() => passiveListener.subscribe(setPassiveState), []);
+
+  const togglePassiveListening = useCallback(() => {
+    if (!passiveListener.isAvailable) {
+      Alert.alert(
+        'Passive listening needs a new build',
+        'This feature requires a native module that will be included in the next TestFlight build (1.0.5).',
+      );
+      return;
+    }
+    if (passiveState.status === 'off') {
+      Alert.alert(
+        'Start passive listening?',
+        'LUCY will listen continuously, transcribe your speech in 10-minute batches, and detect songs you hum. A red indicator will appear while recording.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Start', onPress: () => void passiveListener.start() },
+        ],
+      );
+    } else if (passiveState.status === 'listening') {
+      void passiveListener.stop();
+    }
+  }, [passiveState.status]);
+
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, unknown> | undefined;
@@ -200,10 +226,22 @@ export default function App() {
               style={styles.brandLogo}
               resizeMode="contain"
             />
-            <TouchableOpacity style={styles.localPill} onPress={showBackgroundChoice}>
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={[styles.listenPill, passiveState.status === 'listening' && styles.listenPillActive]} onPress={togglePassiveListening}>
+                <View style={[styles.listenDot, passiveState.status === 'listening' && styles.listenDotActive]} />
+                <Text style={[styles.listenText, passiveState.status === 'listening' && styles.listenTextActive]}>
+                  {passiveState.status === 'listening'
+                    ? `Listening · ${passiveState.wordsHeard}w`
+                    : passiveState.status === 'starting' || passiveState.status === 'stopping'
+                    ? '...'
+                    : 'Listen'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.localPill} onPress={showBackgroundChoice}>
               <View style={styles.localDot} />
               <Text style={styles.localText}>{backgroundEnabled ? 'Background on' : 'Local-first'}</Text>
             </TouchableOpacity>
+            </View>
           </View>
           <View style={styles.pillarsContainer}>
             {LUCY_PILLARS.map((pillar, index) => (
@@ -266,7 +304,15 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: LUCY_COLORS.background },
   brand: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14 },
   brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  brandLogo: { height: 38, width: 120 },
+  brandLogo: { height: 32, width: 160 },
+  brandName: { color: LUCY_COLORS.textDark, fontSize: 24, fontWeight: '800', letterSpacing: 1.3 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  listenPill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  listenPillActive: { backgroundColor: '#1a0a00', borderColor: LUCY_COLORS.primary },
+  listenDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: LUCY_COLORS.textSubtle },
+  listenDotActive: { backgroundColor: '#ef4444' },
+  listenText: { color: LUCY_COLORS.textMuted, fontWeight: '700', fontSize: 12 },
+  listenTextActive: { color: LUCY_COLORS.primary },
   pillarsContainer: { marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 3 },
   pillarText: { fontSize: 13, fontWeight: '600', letterSpacing: -0.2 },
   bulletSeparator: { marginHorizontal: 6, color: LUCY_COLORS.textSubtle, fontSize: 13 },

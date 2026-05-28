@@ -95,4 +95,4 @@ export interface ExtractionResult {
   follow_ups: FollowUp[];
 }
 
-export type CaptureSource = 'text' | 'voice' | 'android' | 'ios';
+export type CaptureSource = 'text' | 'voice' | 'android' | 'ios' | 'passive';

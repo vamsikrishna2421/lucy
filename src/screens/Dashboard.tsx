@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { PrivacyBadge } from '../components/PrivacyBadge';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
@@ -11,6 +11,7 @@ import { listInterests, type InterestRow } from '../db/interests';
 import { getLatestOrganizationRun, listKnowledgeConnections, listKnowledgeEntities, listKnowledgeInsights, type KnowledgeConnectionRow, type KnowledgeEntityRow, type KnowledgeInsightRow, type OrganizationRunRow } from '../db/knowledge';
 import { listOpenLoops, resolveOpenLoop, type OpenLoopRow } from '../db/openLoops';
 import { listFollowUps, resolveFollowUp, type FollowUpRow } from '../db/followUps';
+import { listRecentMusicCaptures, markMusicCaptureDismissed, type MusicCaptureRow } from '../db/musicCaptures';
 import { listPlaces, type PlaceRow } from '../db/places';
 import { listReminders, type ReminderRow } from '../db/reminders';
 import { listTodos, type TodoRow } from '../db/todos';
@@ -53,6 +54,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   const [organizationRun, setOrganizationRun] = useState<OrganizationRunRow | null>(null);
   const [openLoops, setOpenLoops] = useState<OpenLoopRow[]>([]);
   const [followUps, setFollowUps] = useState<FollowUpRow[]>([]);
+  const [musicCaptures, setMusicCaptures] = useState<MusicCaptureRow[]>([]);
   const [contextRefresh, setContextRefresh] = useState(0);
 
   useEffect(() => {
@@ -73,6 +75,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
         getLatestOrganizationRun(db),
         listOpenLoops(db),
         listFollowUps(db),
+        listRecentMusicCaptures(db),
       ]);
       setTodos(results[0]);
       setIdeas(results[1]);
@@ -88,6 +91,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
       setOrganizationRun(results[11]);
       setOpenLoops(results[12]);
       setFollowUps(results[13]);
+      setMusicCaptures(results[14]);
       const nextUpdates = await listCaptureUpdates(db, results[6].map((capture) => capture.id));
       setUpdates(groupUpdates(nextUpdates));
     })();
@@ -109,7 +113,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
           </TouchableOpacity>
         ))}
       </View>
-      {view === 'Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} onOpenContext={() => setView('Context')} onLoopResolved={() => setContextRefresh((v) => v + 1)} /> : null}
+      {view === 'Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} musicCaptures={musicCaptures} onOpenContext={() => setView('Context')} onLoopResolved={() => setContextRefresh((v) => v + 1)} onMusicDismissed={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Context' ? (
         <NeedsContextView requests={contextRequests} onAnswered={() => setContextRefresh((value) => value + 1)} />
       ) : null}
@@ -139,8 +143,10 @@ function NowView({
   contextCount,
   openLoops,
   followUps,
+  musicCaptures,
   onOpenContext,
   onLoopResolved,
+  onMusicDismissed,
 }: {
   todos: TodoRow[];
   reminders: ReminderRow[];
@@ -148,8 +154,10 @@ function NowView({
   contextCount: number;
   openLoops: OpenLoopRow[];
   followUps: FollowUpRow[];
+  musicCaptures: MusicCaptureRow[];
   onOpenContext: () => void;
   onLoopResolved: () => void;
+  onMusicDismissed: () => void;
 }) {
   const organizing = captures.filter((item) => captureStatus(item) !== 'complete').length;
   const scheduledReminders = reminders.filter((item) => Boolean(item.notification_id) && Boolean(item.remind_at));
@@ -209,6 +217,39 @@ function NowView({
               <TouchableOpacity style={styles.resolveButton} onPress={() => void handleResolveFollowUp(item.id)}>
                 <Text style={styles.resolveText}>Done</Text>
               </TouchableOpacity>
+            </View>
+          ))}
+        </>
+      ) : null}
+      {musicCaptures.length > 0 ? (
+        <>
+          <SectionTitle title="Heard" />
+          {musicCaptures.map((item) => (
+            <View style={styles.musicCard} key={item.id}>
+              <View style={styles.musicInfo}>
+                <Text style={styles.musicTitle}>{item.title}</Text>
+                <Text style={styles.musicArtist}>{item.artist}{item.album ? ` · ${item.album}` : ''}</Text>
+                <Text style={styles.musicTime}>{displayTimestamp(item.created_at)}</Text>
+              </View>
+              <View style={styles.musicActions}>
+                {item.spotify_url ? (
+                  <TouchableOpacity style={styles.streamButton} onPress={() => void Linking.openURL(item.spotify_url!)}>
+                    <Text style={styles.streamButtonText}>Spotify</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {item.apple_music_url ? (
+                  <TouchableOpacity style={[styles.streamButton, styles.streamButtonApple]} onPress={() => void Linking.openURL(item.apple_music_url!)}>
+                    <Text style={styles.streamButtonText}>Apple Music</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity onPress={async () => {
+                  const db = await getDatabase();
+                  await markMusicCaptureDismissed(db, item.id);
+                  onMusicDismissed();
+                }}>
+                  <Text style={styles.dismissText}>dismiss</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ))}
         </>
@@ -490,6 +531,16 @@ const styles = StyleSheet.create({
   loopCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, marginBottom: 10, gap: 10 },
   resolveButton: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: LUCY_COLORS.primarySoft },
   resolveText: { color: LUCY_COLORS.primaryGlow, fontSize: 13, fontWeight: '600' },
+  musicCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, marginBottom: 10, gap: 10 },
+  musicInfo: { gap: 3 },
+  musicTitle: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '700' },
+  musicArtist: { color: LUCY_COLORS.primaryGlow, fontSize: 13, fontWeight: '600' },
+  musicTime: { color: LUCY_COLORS.textSubtle, fontSize: 12 },
+  musicActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  streamButton: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10, backgroundColor: '#1DB954' },
+  streamButtonApple: { backgroundColor: '#fc3c44' },
+  streamButtonText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  dismissText: { color: LUCY_COLORS.textSubtle, fontSize: 13, paddingVertical: 7 },
   captureRow: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, marginBottom: 10 },
   captureText: { color: LUCY_COLORS.textDark, fontSize: 15, lineHeight: 21 },
   captureTime: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 7 },

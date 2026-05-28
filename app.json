@@ -15,14 +15,17 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.4",
+      "buildNumber": "1.0.5",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
         ]
       },
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["audio"],
+        "NSMicrophoneUsageDescription": "LUCY listens in the background to capture your thoughts, ideas, and songs automatically.",
+        "NSSpeechRecognitionUsageDescription": "LUCY uses on-device speech recognition to transcribe what you say during passive listening mode."
       }
     },
     "android": {
@@ -32,7 +35,8 @@
       },
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
-      "package": "com.anonymous.lucy"
+      "package": "com.anonymous.lucy",
+      "versionCode": 5
     },
     "web": {
       "favicon": "./assets/lucy-icon.png"
@@ -66,6 +70,7 @@
       "expo-notifications",
       "expo-background-task",
       "expo-splash-screen",
+      "expo-audio",
       "expo-asset",
       [
         "expo-build-properties",

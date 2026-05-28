@@ -19,6 +19,12 @@ export const config = {
   defaultTodoPrivacy: 'normal' as const,
   obsidianSyncEnabled: false,
   syncPrivateItems: false,
+  acrHost: process.env.EXPO_PUBLIC_ACR_HOST ?? '',
+  acrAccessKey: process.env.EXPO_PUBLIC_ACR_ACCESS_KEY ?? '',
+  acrAccessSecret: process.env.EXPO_PUBLIC_ACR_ACCESS_SECRET ?? '',
+  passiveListenBatchMinutes: 10,
+  passiveMusicSampleIntervalMinutes: 2,
+  passiveMusicSampleDurationSeconds: 15,
   // Used only when EXPO_PUBLIC_LOCAL_INFERENCE=ollama-dev for emulator development.
   ollamaBaseUrl: process.env.EXPO_PUBLIC_OLLAMA_BASE_URL ?? 'http://localhost:11434',
   ollamaModel: process.env.EXPO_PUBLIC_OLLAMA_MODEL ?? 'phi3',

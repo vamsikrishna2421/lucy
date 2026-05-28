@@ -242,6 +242,19 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       FOREIGN KEY (capture_id) REFERENCES captures(id)
     );
 
+    CREATE TABLE IF NOT EXISTS music_captures (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      title TEXT NOT NULL,
+      artist TEXT NOT NULL,
+      album TEXT,
+      acr_confidence REAL,
+      spotify_track_id TEXT,
+      spotify_url TEXT,
+      apple_music_url TEXT,
+      status TEXT DEFAULT 'new'
+    );
+
   `);
 
   const captureColumns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(captures)');
@@ -320,5 +333,6 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
   await db.execAsync(`
     CREATE INDEX IF NOT EXISTS idx_open_loops_status ON open_loops(status, created_at);
     CREATE INDEX IF NOT EXISTS idx_follow_ups_status ON follow_ups(status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_music_captures_status ON music_captures(status, created_at);
   `);
 }

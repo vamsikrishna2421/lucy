@@ -4,18 +4,6 @@
     "appVersionSource": "local"
   },
   "build": {
-    "beta": {
-      "distribution": "internal",
-      "env": {
-        "EXPO_PUBLIC_AI_MODE": "hybrid",
-        "EXPO_PUBLIC_LOCAL_INFERENCE": "device",
-        "EXPO_PUBLIC_DEVICE_MODEL_TIER": "fast",
-        "EXPO_PUBLIC_OPENAI_MODEL": "gpt-5.4-nano"
-      },
-      "android": {
-        "buildType": "apk"
-      }
-    },
     "testflight": {
       "distribution": "store",
       "env": {
@@ -26,6 +14,31 @@
       },
       "ios": {
         "resourceClass": "m-medium"
+      }
+    },
+    "android-release": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_AI_MODE": "hybrid",
+        "EXPO_PUBLIC_LOCAL_INFERENCE": "device",
+        "EXPO_PUBLIC_DEVICE_MODEL_TIER": "fast",
+        "EXPO_PUBLIC_OPENAI_MODEL": "gpt-5.4-nano"
+      },
+      "android": {
+        "buildType": "apk",
+        "resourceClass": "medium"
+      }
+    },
+    "beta": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_AI_MODE": "hybrid",
+        "EXPO_PUBLIC_LOCAL_INFERENCE": "device",
+        "EXPO_PUBLIC_DEVICE_MODEL_TIER": "fast",
+        "EXPO_PUBLIC_OPENAI_MODEL": "gpt-5.4-nano"
+      },
+      "android": {
+        "buildType": "apk"
       }
     }
   },

@@ -222,10 +222,14 @@ export async function organizeMemory(db: SQLiteDatabase, trigger: string): Promi
     (entity) => entity.confidence === 'confirmed' && entity.evidenceCount === 3,
   );
   if (freshlyConfirmed.length > 0) {
-    const names = freshlyConfirmed.map((entity) => entity.name).slice(0, 2).join(', ');
-    const extra = freshlyConfirmed.length > 2 ? ` and ${freshlyConfirmed.length - 2} more` : '';
+    const entityNames = freshlyConfirmed.map((entity) => entity.name);
+    const names = entityNames.slice(0, 2).join(', ');
+    const extra = entityNames.length > 2 ? ` and ${entityNames.length - 2} more` : '';
     try {
-      await sendGuardianNotification(`You keep returning to: ${names}${extra}. LUCY grouped related memories.`);
+      await sendGuardianNotification(
+        `you keep coming back to ${names}${extra} — I connected the dots`,
+        { entityNames, evidenceCount: 3 },
+      );
     } catch {
       // Non-critical.
     }

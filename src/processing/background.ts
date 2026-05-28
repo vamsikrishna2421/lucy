@@ -35,7 +35,7 @@ if (!TaskManager.isTaskDefined(BACKGROUND_PROCESSING_TASK)) {
         if (openCount > 0) parts.push(`${openCount} open loop${openCount === 1 ? '' : 's'} still waiting`);
         if (followCount > 0) parts.push(`${followCount} follow-up${followCount === 1 ? '' : 's'} pending`);
         if (parts.length > 0) {
-          await sendDigestNotification('Lucy noticed', parts.join(' · '));
+          await sendDigestNotification('psst — quick check-in', parts.join(' · '), openCount, followCount);
           await setSetting(db, 'daily_digest_last_sent', today);
         }
       }

@@ -2,6 +2,12 @@
 // Native's standard environment is initialized first on bundled Hermes builds.
 require('react-native/Libraries/Core/InitializeCore');
 
+// Prevent the splash screen from auto-hiding before the app finishes startup.
+// Must be called before any component renders.
+const SplashScreen = require('expo-splash-screen') as typeof import('expo-splash-screen');
+void SplashScreen.preventAutoHideAsync();
+export const splashShownAt = Date.now();
+
 const { registerRootComponent } = require('expo') as typeof import('expo');
 const App = require('./App').default as typeof import('./App').default;
 

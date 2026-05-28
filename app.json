@@ -7,10 +7,15 @@
     "orientation": "portrait",
     "icon": "./assets/lucy-icon.png",
     "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/lucy-splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0D1015"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.2",
+      "buildNumber": "1.0.3",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
@@ -60,6 +65,7 @@
       ],
       "expo-notifications",
       "expo-background-task",
+      "expo-splash-screen",
       "expo-asset",
       [
         "expo-build-properties",

@@ -1,7 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
+import * as Notifications from 'expo-notifications';
+import * as SplashScreen from 'expo-splash-screen';
+import { splashShownAt } from './index';
 import { useIncomingShare } from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, AppState, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, AppState, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { LUCY_COLORS, LUCY_PILLARS } from './src/config/colors';
 import { getDatabase } from './src/db';
@@ -20,6 +23,7 @@ import { CaptureScreen } from './src/screens/Capture';
 import { DashboardScreen } from './src/screens/Dashboard';
 import { AskScreen } from './src/screens/Ask';
 import { SettingsScreen } from './src/screens/Settings';
+import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
 
 export default function App() {
   const [screen, setScreen] = useState<'capture' | 'dashboard' | 'ask' | 'settings'>('capture');
@@ -27,6 +31,7 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [startupError, setStartupError] = useState('');
   const [backgroundEnabled, setBackgroundEnabled] = useState(false);
+  const [notificationDetail, setNotificationDetail] = useState<NotificationDetailPayload | null>(null);
   const processing = useRef(false);
   const queueRequested = useRef(false);
   const receivingShare = useRef(false);
@@ -108,8 +113,13 @@ export default function App() {
           await setSetting(db, BACKGROUND_PROMPTED_SETTING, 'true');
           setTimeout(showBackgroundChoice, 400);
         }
+        // Wait until 1 second has elapsed since launch, then hide splash.
+        const elapsed = Date.now() - splashShownAt;
+        const remaining = Math.max(0, 1000 - elapsed);
+        setTimeout(() => void SplashScreen.hideAsync(), remaining);
       } catch (error) {
         setStartupError(error instanceof Error ? error.message : 'Storage initialization failed.');
+        void SplashScreen.hideAsync();
       }
     })();
   }, [drainQueue]);
@@ -169,13 +179,27 @@ export default function App() {
     return count;
   }, [drainQueue]);
 
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+      if (data?.kind && typeof data.kind === 'string') {
+        setNotificationDetail(data as unknown as NotificationDetailPayload);
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
         <StatusBar style="light" />
         <View style={styles.brand}>
           <View style={styles.brandRow}>
-            <Text style={styles.brandName}>LUCY</Text>
+            <Image
+              source={require('./assets/lucy-home-icon.png')}
+              style={styles.brandLogo}
+              resizeMode="contain"
+            />
             <TouchableOpacity style={styles.localPill} onPress={showBackgroundChoice}>
               <View style={styles.localDot} />
               <Text style={styles.localText}>{backgroundEnabled ? 'Background on' : 'Local-first'}</Text>
@@ -230,6 +254,10 @@ export default function App() {
           ) : null}
         </View>
       </SafeAreaView>
+      <NotificationDetailModal
+        payload={notificationDetail}
+        onDismiss={() => setNotificationDetail(null)}
+      />
     </SafeAreaProvider>
   );
 }
@@ -238,7 +266,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: LUCY_COLORS.background },
   brand: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14 },
   brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  brandName: { color: LUCY_COLORS.textDark, fontSize: 24, fontWeight: '800', letterSpacing: 1.3 },
+  brandLogo: { height: 38, width: 120 },
   pillarsContainer: { marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 3 },
   pillarText: { fontSize: 13, fontWeight: '600', letterSpacing: -0.2 },
   bulletSeparator: { marginHorizontal: 6, color: LUCY_COLORS.textSubtle, fontSize: 13 },

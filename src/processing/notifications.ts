@@ -42,15 +42,18 @@ async function requestNotificationPermission(): Promise<boolean> {
   return requested.granted;
 }
 
-export async function sendGuardianNotification(message: string): Promise<void> {
+export async function sendGuardianNotification(
+  message: string,
+  extraData?: Record<string, unknown>,
+): Promise<void> {
   if (!(await requestNotificationPermission())) {
     return;
   }
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'LUCY remembered',
+      title: 'I spotted something',
       body: message,
-      data: { kind: 'guardian' },
+      data: { kind: 'guardian', ...(extraData ?? {}) },
       sound: true,
     },
     trigger: {
@@ -61,7 +64,12 @@ export async function sendGuardianNotification(message: string): Promise<void> {
   });
 }
 
-export async function sendDigestNotification(title: string, body: string): Promise<void> {
+export async function sendDigestNotification(
+  title: string,
+  body: string,
+  openCount?: number,
+  followCount?: number,
+): Promise<void> {
   if (!(await requestNotificationPermission())) {
     return;
   }
@@ -69,7 +77,7 @@ export async function sendDigestNotification(title: string, body: string): Promi
     content: {
       title,
       body,
-      data: { kind: 'digest' },
+      data: { kind: 'digest', openCount: openCount ?? 0, followCount: followCount ?? 0 },
       sound: false,
     },
     trigger: {
@@ -98,9 +106,9 @@ export async function scheduleCapturedReminder(
   const isSecret = containsCredentialSecret(`${originalInput}\n${reminder.text}`);
   return Notifications.scheduleNotificationAsync({
     content: {
-      title: isSecret ? 'Protected reminder' : 'LUCY reminder',
+      title: isSecret ? 'Protected reminder' : 'heads up —',
       body: isSecret ? 'Open LUCY to view a protected reminder.' : reminder.text,
-      data: { privacy, kind: 'captured-reminder' },
+      data: { kind: 'captured-reminder', privacy, text: isSecret ? null : reminder.text },
       sound: true,
     },
     trigger: {

@@ -255,12 +255,16 @@ function NeedsContextView({
         </View>
         {requests.map((request) => (
           <View style={styles.contextCard} key={request.id}>
-            {request.snippet ? <Text style={styles.contextSnippet}>{protectedPreview(request.snippet)}</Text> : null}
-            <Text style={styles.contextQuestion}>{request.question}</Text>
-            {request.reason ? <Text style={styles.detail}>{request.reason}</Text> : null}
+            <Text style={styles.contextLucyLabel}>hey, quick question —</Text>
+            <Text style={styles.contextQuestion}>
+              {request.question || 'Can you add any context that might help me organize this memory?'}
+            </Text>
+            {request.snippet ? (
+              <Text style={styles.contextSnippet}>You said: "{protectedPreview(request.snippet)}"</Text>
+            ) : null}
             <TextInput
               multiline
-              placeholder="Add helpful context..."
+              placeholder="Your answer here..."
               placeholderTextColor={LUCY_COLORS.textSubtle}
               style={styles.contextInput}
               value={answers[request.id] ?? ''}
@@ -271,7 +275,7 @@ function NeedsContextView({
               disabled={!(answers[request.id] ?? '').trim()}
               onPress={() => void rememberContext(request)}
             >
-              <Text style={styles.contextButtonText}>Remember context</Text>
+              <Text style={styles.contextButtonText}>Tell LUCY</Text>
             </TouchableOpacity>
           </View>
         ))}
@@ -452,8 +456,9 @@ const styles = StyleSheet.create({
   contextPromptTitle: { color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700', marginTop: 8 },
   contextIntro: { backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderRadius: 22, padding: 18, marginBottom: 14 },
   contextCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, marginBottom: 12, gap: 9 },
-  contextSnippet: { color: LUCY_COLORS.primaryGlow, fontSize: 13, fontWeight: '700' },
-  contextQuestion: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '700', lineHeight: 22 },
+  contextLucyLabel: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700', letterSpacing: 0.3, textTransform: 'uppercase', marginBottom: 2 },
+  contextSnippet: { color: LUCY_COLORS.textMuted, fontSize: 13, fontStyle: 'italic' },
+  contextQuestion: { color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '800', lineHeight: 24 },
   contextInput: { minHeight: 64, color: LUCY_COLORS.textDark, borderRadius: 13, borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surface, padding: 12, textAlignVertical: 'top' },
   contextButton: { backgroundColor: LUCY_COLORS.primary, paddingVertical: 11, borderRadius: 12, alignItems: 'center' },
   contextButtonDisabled: { opacity: 0.42 },

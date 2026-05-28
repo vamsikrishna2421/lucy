@@ -1,0 +1,41 @@
+diff --git a/node_modules/@expo/expo-modules-macros-plugin/apple/Package.resolved b/node_modules/@expo/expo-modules-macros-plugin/apple/Package.resolved
+index 9aa805f..75bf1d5 100644
+--- a/node_modules/@expo/expo-modules-macros-plugin/apple/Package.resolved
++++ b/node_modules/@expo/expo-modules-macros-plugin/apple/Package.resolved
+@@ -1,15 +1,5 @@
+ {
+-  "originHash" : "4832fa479257148c1acb46952c02540c156db6e744797638db69be31154d5ad2",
+-  "pins" : [
+-    {
+-      "identity" : "swift-syntax",
+-      "kind" : "remoteSourceControl",
+-      "location" : "https://github.com/swiftlang/swift-syntax.git",
+-      "state" : {
+-        "revision" : "4799286537280063c85a32f09884cfbca301b1a1",
+-        "version" : "602.0.0"
+-      }
+-    }
+-  ],
++  "originHash" : "",
++  "pins" : [],
+   "version" : 3
+ }
+diff --git a/node_modules/@expo/expo-modules-macros-plugin/apple/Package.swift b/node_modules/@expo/expo-modules-macros-plugin/apple/Package.swift
+index 6e2411c..d7c0126 100644
+--- a/node_modules/@expo/expo-modules-macros-plugin/apple/Package.swift
++++ b/node_modules/@expo/expo-modules-macros-plugin/apple/Package.swift
+@@ -1,4 +1,4 @@
+-// swift-tools-version: 6.2
++// swift-tools-version: 6.0
+ // The swift-tools-version declares the minimum version of Swift required to build this package.
+ 
+ import CompilerPluginSupport
+@@ -9,7 +9,7 @@ let package = Package(
+   platforms: [.macOS(.v13)],
+   products: [],
+   dependencies: [
+-    .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0-latest")
++    .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0")
+   ],
+   targets: [
+     .macro(

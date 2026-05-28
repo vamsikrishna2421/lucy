@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
   ScrollView,
   StyleSheet,
@@ -44,7 +44,16 @@ export function AskScreen() {
   const [view, setView] = useState<'new' | 'history' | 'thread'>('new');
   const [history, setHistory] = useState<AskThreadSummaryRow[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
   const conversationRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, (e) => setKeyboardOffset(e.endCoordinates.height));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardOffset(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   function scrollToLatest() {
     setTimeout(() => conversationRef.current?.scrollToEnd({ animated: true }), 20);
@@ -123,7 +132,7 @@ export function AskScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: keyboardOffset }]}>
       <View style={styles.heading}>
         <View style={styles.headingRow}>
           <Text style={styles.title}>Ask LUCY</Text>
@@ -143,11 +152,7 @@ export function AskScreen() {
       {view === 'history' ? (
         <HistoryView history={history} loading={loadingHistory} onSelect={openThread} />
       ) : (
-        <KeyboardAvoidingView
-          style={styles.conversation}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={0}
-        >
+        <>
           <ScrollView
             ref={conversationRef}
             style={styles.conversation}
@@ -186,7 +191,7 @@ export function AskScreen() {
               <Text style={styles.sendText}>Ask</Text>
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
+        </>
       )}
     </View>
   );

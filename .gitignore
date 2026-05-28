@@ -31,6 +31,9 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
+.env.*
+!.env.example
 .env*.local
 
 # typescript
@@ -39,3 +42,9 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Local benchmark source material and generated benchmark results
+/kaggle_dataset.zip
+/benchmarks/kaggle-eleanor/raw/
+/benchmarks/kaggle-eleanor/results/
+/dist/

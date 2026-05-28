@@ -1,0 +1,39 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "beta": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_AI_MODE": "hybrid",
+        "EXPO_PUBLIC_LOCAL_INFERENCE": "device",
+        "EXPO_PUBLIC_DEVICE_MODEL_TIER": "fast",
+        "EXPO_PUBLIC_OPENAI_MODEL": "gpt-5.4-nano"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "testflight": {
+      "distribution": "store",
+      "env": {
+        "EXPO_PUBLIC_AI_MODE": "hybrid",
+        "EXPO_PUBLIC_LOCAL_INFERENCE": "device",
+        "EXPO_PUBLIC_DEVICE_MODEL_TIER": "fast",
+        "EXPO_PUBLIC_OPENAI_MODEL": "gpt-5.4-nano"
+      },
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    }
+  },
+  "submit": {
+    "testflight": {
+      "ios": {
+        "ascAppId": "6774077314"
+      }
+    }
+  }
+}

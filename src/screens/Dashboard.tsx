@@ -9,6 +9,8 @@ import { listExpenses, type ExpenseRow } from '../db/expenses';
 import { listIdeas, type IdeaRow } from '../db/ideas';
 import { listInterests, type InterestRow } from '../db/interests';
 import { getLatestOrganizationRun, listKnowledgeConnections, listKnowledgeEntities, listKnowledgeInsights, type KnowledgeConnectionRow, type KnowledgeEntityRow, type KnowledgeInsightRow, type OrganizationRunRow } from '../db/knowledge';
+import { listOpenLoops, resolveOpenLoop, type OpenLoopRow } from '../db/openLoops';
+import { listFollowUps, resolveFollowUp, type FollowUpRow } from '../db/followUps';
 import { listPlaces, type PlaceRow } from '../db/places';
 import { listReminders, type ReminderRow } from '../db/reminders';
 import { listTodos, type TodoRow } from '../db/todos';
@@ -49,6 +51,8 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   const [knowledgeConnections, setKnowledgeConnections] = useState<KnowledgeConnectionRow[]>([]);
   const [knowledgeInsights, setKnowledgeInsights] = useState<KnowledgeInsightRow[]>([]);
   const [organizationRun, setOrganizationRun] = useState<OrganizationRunRow | null>(null);
+  const [openLoops, setOpenLoops] = useState<OpenLoopRow[]>([]);
+  const [followUps, setFollowUps] = useState<FollowUpRow[]>([]);
   const [contextRefresh, setContextRefresh] = useState(0);
 
   useEffect(() => {
@@ -67,6 +71,8 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
         listKnowledgeConnections(db),
         listKnowledgeInsights(db),
         getLatestOrganizationRun(db),
+        listOpenLoops(db),
+        listFollowUps(db),
       ]);
       setTodos(results[0]);
       setIdeas(results[1]);
@@ -80,6 +86,8 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
       setKnowledgeConnections(results[9]);
       setKnowledgeInsights(results[10]);
       setOrganizationRun(results[11]);
+      setOpenLoops(results[12]);
+      setFollowUps(results[13]);
       const nextUpdates = await listCaptureUpdates(db, results[6].map((capture) => capture.id));
       setUpdates(groupUpdates(nextUpdates));
     })();
@@ -101,7 +109,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
           </TouchableOpacity>
         ))}
       </View>
-      {view === 'Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} onOpenContext={() => setView('Context')} /> : null}
+      {view === 'Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} onOpenContext={() => setView('Context')} onLoopResolved={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Context' ? (
         <NeedsContextView requests={contextRequests} onAnswered={() => setContextRefresh((value) => value + 1)} />
       ) : null}
@@ -129,17 +137,36 @@ function NowView({
   reminders,
   captures,
   contextCount,
+  openLoops,
+  followUps,
   onOpenContext,
+  onLoopResolved,
 }: {
   todos: TodoRow[];
   reminders: ReminderRow[];
   captures: CaptureRow[];
   contextCount: number;
+  openLoops: OpenLoopRow[];
+  followUps: FollowUpRow[];
   onOpenContext: () => void;
+  onLoopResolved: () => void;
 }) {
   const organizing = captures.filter((item) => captureStatus(item) !== 'complete').length;
   const scheduledReminders = reminders.filter((item) => Boolean(item.notification_id) && Boolean(item.remind_at));
   const unscheduledCount = reminders.length - scheduledReminders.length;
+
+  const handleResolveLoop = async (id: number) => {
+    const db = await getDatabase();
+    await resolveOpenLoop(db, id);
+    onLoopResolved();
+  };
+
+  const handleResolveFollowUp = async (id: number) => {
+    const db = await getDatabase();
+    await resolveFollowUp(db, id);
+    onLoopResolved();
+  };
+
   return (
     <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.tonight}>
@@ -159,6 +186,32 @@ function NowView({
           </Text>
           <Text style={styles.tonightDetail}>Add a little context when you have time. LUCY keeps your original thought unchanged.</Text>
         </TouchableOpacity>
+      ) : null}
+      {openLoops.length > 0 ? (
+        <>
+          <SectionTitle title="Open Loops" />
+          {openLoops.map((item) => (
+            <View style={styles.loopCard} key={item.id}>
+              <Text style={styles.cardTitle}>{protectedPreview(item.description)}</Text>
+              <TouchableOpacity style={styles.resolveButton} onPress={() => void handleResolveLoop(item.id)}>
+                <Text style={styles.resolveText}>Mark resolved</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </>
+      ) : null}
+      {followUps.length > 0 ? (
+        <>
+          <SectionTitle title="Follow-ups" />
+          {followUps.map((item) => (
+            <View style={styles.loopCard} key={item.id}>
+              <Text style={styles.cardTitle}>{item.assignee ? `${item.assignee}: ` : ''}{protectedPreview(item.action)}</Text>
+              <TouchableOpacity style={styles.resolveButton} onPress={() => void handleResolveFollowUp(item.id)}>
+                <Text style={styles.resolveText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </>
       ) : null}
       <SectionTitle title="Reminders" />
       {scheduledReminders.length ? scheduledReminders.map((item) => <ReminderCard item={item} key={item.id} />) : <EmptyLine text="No scheduled reminders yet." />}
@@ -424,6 +477,9 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   cardTitle: { flex: 1, color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 16 },
   detail: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 19 },
+  loopCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, marginBottom: 10, gap: 10 },
+  resolveButton: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: LUCY_COLORS.primarySoft },
+  resolveText: { color: LUCY_COLORS.primaryGlow, fontSize: 13, fontWeight: '600' },
   captureRow: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, marginBottom: 10 },
   captureText: { color: LUCY_COLORS.textDark, fontSize: 15, lineHeight: 21 },
   captureTime: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 7 },

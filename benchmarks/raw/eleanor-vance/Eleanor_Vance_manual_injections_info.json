@@ -1,0 +1,302 @@
+{
+    "Drill borrowed by uncle": {
+        "injected_note": "Uncle Robert stopped by, borrowed our drill.",
+        "testing_prompt": "Gonna take out my drill and put up the new shelves today. I think I can quickly do that before the neighbors go to bed. I don't want to disturb them with the drilling noises!",
+        "response_expected_content": "Drill borrowed by uncle Robert.",
+        "date": "7 December 2020"
+    },
+    "The Silent Patient book recommendation": {
+        "injected_note": "Recommmended book: 'The Silent Patient'. Amy swears it's amazing.",
+        "testing_prompt": "I'm browsing through the online bookstore, I want to get a new book for the weekend. I'm in the mood for a good thriller.",
+        "response_expected_content": "The Silent Patient",
+        "date": "5 February 2021"
+    },
+    "Taste of India restaurant recommendation": {
+        "injected_note": "My colleague recommended the Indian restaurant downtown, it's called 'Taste of India'.",
+        "testing_prompt": "David has been working a lot lately, I want to surprise him with a dinner. I have to find a good spot. I'm in the mood for some indian food.",
+        "response_expected_content": "'Taste of India'",
+        "date": "4 March 2021"
+    },
+    "Financial advisor recommendation": {
+        "injected_note": "Recommended financial advisor: Patryk Kowalski, phone: 555-123-4567.",
+        "testing_prompt": "Time to finally get our finances in order. I need to read up on this, or maybe get someone to help me. David is busy.",
+        "response_expected_content": "Patryk Kowalski, 555-123-4567",
+        "date": "5 March 2021"
+    },
+    "Mary is allergic to strawberries": {
+        "injected_note": "Found out today that Mary Podolski is allergic to strawberries.",
+        "testing_prompt": "I finally managed to invite Mary Podolski and her husband for dinner. I have to plan what to cook, I'm also planning a strawberry pie for dessert.",
+        "response_expected_content": "Mary is allergic to strawberries.",
+        "date": "9 March 2021"
+    },
+    "Tossa de Mar vacation recommendation": {
+        "injected_note": "Karolina mentioned a nice town on the Costa Brava coast called Tossa de Mar. Beautiful pictures, worth writing down.",
+        "testing_prompt": "Planning a little city break with Dave. We don't know yet where we want to go, but somewhere warm definitely, preferably by the sea.",
+        "response_expected_content": "Tossa de Mar",
+        "date": "12 May 2021"
+    },
+    "Insurance agent recommendation": {
+        "injected_note": "Turns out Natalie's friend from high school is an insurance agent now, and apparently a good one. Email: amy.keitel@gmail.com",
+        "testing_prompt": "I have to finally get around to getting that life insurance. I need to find a good insurance agent.",
+        "response_expected_content": "amy.keitel@gmail.com",
+        "date": "20 May 2021"
+    },
+    "Sensory book recommendation": {
+        "injected_note": "Good idea for a toy for kids to play with in the car: sensory book. www.softbook.com",
+        "testing_prompt": "We're planning a road trip with the kids. We're bringing my 3 year old niece Laura with us. I need to figure out a way to keep her entertained ruing the trip.",
+        "response_expected_content": "sensory book(s), or softbook.com",
+        "date": "6 June 2021"
+    },
+    "Watch brand David likes": {
+        "injected_note": "David mentioned that he likes a brand of watches that sounds like a man's name, but I can't rememmber it exactly. Christopher... something.",
+        "testing_prompt": "I have to quickly come up with a promotion gift idea for David.",
+        "response_expected_content": "David likes a brand of watches that starts with Christopher.",
+        "date": "25 July 2021"
+    },
+    "Pasta alla Norma recipe": {
+        "injected_note": "Found a great Italian recipe: Pasta alla Norma. Must try it sometime.",
+        "testing_prompt": "I feel like cooking something new tonight. Maybe an Italian dish.",
+        "response_expected_content": "Pasta alla Norma",
+        "date": "19 August 2021"
+    },
+    "Dentist / parents visit conflict": {
+        "injected_note": "Dentist appointment rescheduled to December 3rd at 5 PM.",
+        "testing_prompt": "I'm thinking of inviting my parents over, maybe Tuesday Dec 3 after work.",
+        "response_expected_content": "Dentist appointment at 3 PM.",
+        "date": "17 November 2024"
+    },
+    "Orchids for Sarah's birthday gift": {
+        "injected_note": "Sarah's birthday is on December 15th. She loves orchids.",
+        "testing_prompt": "I need to buy a gift for Sarah's upcoming birthday.",
+        "response_expected_content": "Sarah loves orchids.",
+        "date": "27 October 2021"
+    },
+    "Electrician's phone number": {
+        "injected_note": "Electrician: John Novak, phone: 555-987-6543.",
+        "testing_prompt": "The living room light keeps flickering, need to find someone to fix it.",
+        "response_expected_content": "Electrician John Novak, phone: 555-987-6543.",
+        "date": "29 October 2021"
+    },
+    "The History Hour podcast": {
+        "injected_note": "Found an interesting podcast called 'The History Hour'.",
+        "testing_prompt": "Looking for a podcast to listen to during my commute.",
+        "response_expected_content": "'The History Hour' podcast",
+        "date": "22 December 2021"
+    },
+    "Car insurance expires soon": {
+        "injected_note": "Reminder: Car insurance expires on December 21st.",
+        "testing_prompt": "Planning to go to the mountains for Christmas. Hopefully the weather will be good so we can drive there, otherwise we'll take a train.",
+        "response_expected_content": "Car insurance expires on December 21st.",
+        "date": "3 October 2024"
+    },
+    "Green Book movie recommendation": {
+        "injected_note": "Emma recommended a comedy / drama movie called 'Green Book'.",
+        "testing_prompt": "I want to watch a good movie tonight, can't decide: comedy or drama?",
+        "response_expected_content": "'Green Book'",
+        "date": "26 February 2022"
+    },
+    "Mark's daughter is vegan": {
+        "injected_note": "Mark told me today that his daughter Kate is vegan. It got me thinking - how difficult would it be to adjust the family's eating habits if we had to?",
+        "testing_prompt": "Inviting Mark and his family over for a barbecue, got to pick up some sausages and some chicken.",
+        "response_expected_content": "Mark's daughter is vegan.",
+        "date": "27 March 2022"
+    },
+    "Passport expires soon": {
+        "injected_note": "Noticed that my passport expires in March 2025.",
+        "testing_prompt": "Already thinking about booking a trip abroad around May 2025. Now that the kids are older, maybe finally we can go to China?",
+        "response_expected_content": "Passport expires in March 2025.",
+        "date": "3 April 2022"
+    },
+    "VeriNet ISP recommendation": {
+        "injected_note": "Natsuko recommended her internet service provider today (VeriNet?), cheap and reliable apparently.",
+        "testing_prompt": "Our internet is acting up lately, I'm very disappointed considering how much we pay for it.",
+        "response_expected_content": "VeriNet internet service provider",
+        "date": "20 April 2022"
+    },
+    "All stores closed on Sundays": {
+        "injected_note": "A new bill just passed that will make it mandatory to close all stores on all Sundays. Goes into effect in December.",
+        "testing_prompt": "The fridge is empty again, I have to buy some groceries. I'll take care of that over the weekend. Saturday is busy, so Sunday it is.",
+        "response_expected_content": "Stores will be closed on Sundays.",
+        "date": "3 September 2024"
+    },
+    "Escape room recommendation": {
+        "injected_note": "My cousin recommended 'The Great Escape' escape room experience.",
+        "testing_prompt": "I've been tasked with organizing a fun activity for the team. No idea where to even start.",
+        "response_expected_content": "'The Great Escape' escape room",
+        "date": "10 July 2022"
+    },
+    "Printer model": {
+        "injected_note": "Got a new printer, model P-XYZ123a.",
+        "testing_prompt": "David just messaged me that the printer is out of ink again. I'd like to buy a new cartridge, but I can't remember the model. I'll have to check it once I'm back home.",
+        "response_expected_content": "Printer model P-XYZ123a",
+        "date": "23 July 2022"
+    },
+    "Science museum planetarium": {
+        "injected_note": "The science museum has a new planetarium show about black holes. Kids under 12 get in free on Wednesdays.",
+        "testing_prompt": "Owen's really into space lately. Should do something educational with him this week.",
+        "response_expected_content": "Science museum free for kids under 12 on Wednesdays",
+        "date": "5 May 2023"
+    },
+    "PlantID AI app": {
+        "injected_note": "Read about this AI app called 'PlantID' that helps identify plants based on photos and tells you how to care for them. Cool stuff.",
+        "testing_prompt": "I keep killing my houseplants. The problem is I often don't really know what plant I have. This makes it difficutl to find out online how to care for it.",
+        "response_expected_content": "'PlantID' app for plant identification",
+        "date": "22 June 2023"
+    },
+    "RetroChic vintage clothing store": {
+        "injected_note": "Discovered a cool online vintage clothing store with free returns: RetroChic.com. Emily swears by it.",
+        "testing_prompt": "Need to find a retro, 70s-style dress for the upcoming themed party, but don't want to spend too much time going around thrift stores.",
+        "response_expected_content": "RetroChic.com",
+        "date": "10 July 2023"
+    },
+    "Sourdough recipe": {
+        "injected_note": "Jenny's recipe for sourdough starter: 100g flour, 100g water, feed daily for a week. Keep at room temperature.",
+        "testing_prompt": "I want to try making my own bread. Maybe start with sourdough? Need to find a good recipe.",
+        "response_expected_content": "100g flour, 100g water, daily feeding",
+        "date": "22 July 2023"
+    },
+    "Batteries for grandma's clock": {
+        "injected_note": "The antique clock from Grandma needs special batteries: LR44, available at WatchWorld store downtown.",
+        "testing_prompt": "Grandma's clock stopped working. Need to get it running again before her visit next month.",
+        "response_expected_content": "Clock needs LR44 batteries from WatchWorld",
+        "date": "5 September 2023"
+    },
+    "Dad's salt intake": {
+        "injected_note": "Dad's cardiologist recommended reducing salt intake to max 2000mg per day and walking 30 minutes daily.",
+        "testing_prompt": "Planning to cook dinner for Dad this weekend. He loves my lasagna recipe.",
+        "response_expected_content": "Dad needs to limit salt intake to 2000mg",
+        "date": "15 September 2023"
+    },
+    "Electronics recycling center": {
+        "injected_note": "New recycling rules: electronics must be taken to the collection center on 3rd Street. Open Saturdays 9-3.",
+        "testing_prompt": "Need to get rid of that old laptop that's been sitting in the drawer forever.",
+        "response_expected_content": "Electronics recycling on 3rd Street",
+        "date": "15 August 2023"
+    },
+    "Emily's favorite wine": {
+        "injected_note": "Noted that Emily's favorite wine is Pinot Noir.",
+        "testing_prompt": "Inviting Emily over for dinner; need to get some snacks and some drinks.",
+        "response_expected_content": "Emily's favorite wine is Pinot Noir.",
+        "date": "21 August 2022"
+    },
+    "Spare tire under trunk floor": {
+        "injected_note": "David just insisted that I write down that the spare tire is under the trunk floor.",
+        "testing_prompt": "Noticed that one of the tires is flat - thankfully before I started the car! I have to look through the garage for the spare.",
+        "response_expected_content": "Spare tire is under the trunk floor.",
+        "date": "5 October 2022"
+    },
+    "Air purifier filter": {
+        "injected_note": "Just bought an air purifier from a colleague. The filter needs to be changed every 3 months; last changed in June.",
+        "testing_prompt": "The air purifier smells wierd. I probably have to buy a new one.",
+        "response_expected_content": "Filter needs to be changed every 3 months; last changed in June.",
+        "date": "7 July 2024"
+    },
+    "Cinema half-price Tuesdays": {
+        "injected_note": "Discovered that the local cinema has half-price tickets on Tuesdays.",
+        "testing_prompt": "Thinking of going to see a movie with David this week.",
+        "response_expected_content": "Cinema has half-price tickets on Tuesdays.",
+        "date": "25 November 2022"
+    },
+    "Handyman's visit / office visit conflict": {
+        "injected_note": "I scheduled the handyman to come on December 6th and fix the bathroom door. David is going to office so I'm going to have to let the guy in.",
+        "testing_prompt": "I just found out that I have to come to the office on December 6th for that in-person meeting with the CEO.",
+        "response_expected_content": "Handyman scheduled for December 6th.",
+        "date": "28 November 2024"
+    },
+    "Phone's Now Playing feature": {
+        "injected_note": "I just found out that my Google Pixel has his Now Playing feature that keeps track of all the songs that play around me, and I can can check the history in the settings. How cool is that!",
+        "testing_prompt": "I heard a lovely song yesterday while at the coffee shop. I wish I could remember the lyrics to Google them and figure out what it was!",
+        "response_expected_content": "Phone keeps track of all the songs that play around me.",
+        "date": "4 April 2024"
+    },
+    "David's high cholesterol": {
+        "injected_note": "David's doctor advised him to cut down on fat, as his cholesterol is a bit high.",
+        "testing_prompt": "I want to surprise David tomorrow with a nice breakfast. Maybe some scrambled eggs with a lot of butter and a lot of bacon, just as he likes it. Note: buy eggs, bacon.",
+        "response_expected_content": "David should not eat too much fat.",
+        "date": "22 March 2024"
+    },
+    "Pharmacy closes at 6 PM": {
+        "injected_note": "The pharmacy around the corner changed its opening hours. Now it's only open until 6 PM.",
+        "testing_prompt": "Can't stand the headache, and I'm out of painkillers. Good that we have that pharmacy around the corner. It's a bit late but they've always been open until 8 PM.",
+        "response_expected_content": "Pharmacy is open until 6 PM.",
+        "date": "31 August 2024"
+    },
+    "IT Tech Score discount coupon": {
+        "injected_note": "Received a coupon code for 20% off at 'IT Tech Store': SAVE20",
+        "testing_prompt": "I need to buy a new keyboard. David suggests a nice mechanical one but they're so expensive.",
+        "response_expected_content": "Coupon code 'SAVE20' at IT Tech Store",
+        "date": "13 March 2024"
+    },
+    "Fun4kids.com website": {
+        "injected_note": "I found this cool side with game ideas for kids of all ages. fun4kids.com.",
+        "testing_prompt": "Owen's birthday party is approaching, I have to think of some games for all the kids. Not an easy task!",
+        "response_expected_content": "fun4kids.com",
+        "date": "28 November 2022"
+    },
+    "Samantha's wedding / Milan trip conflict": {
+        "injected_note": "Samantha's wedding is on July 12th 2025. Still a lot of time but I should probably start thinking about a gift.",
+        "testing_prompt": "Found very cheap flight tickets to Milan, we could depart on July 11th 2025 and come back on July 14th. I'm really considering buying them as they might sell out soon!",
+        "response_expected_content": "Samantha's wedding is on July 12th.",
+        "date": "13 January 2024"
+    },
+    "Car rental in Poland": {
+        "injected_note": "Recommended car rental company in Poland: 'RentPOL'. They accept debit cards.",
+        "testing_prompt": "Planning our trip to Warsaw next month. I have to rent a car. Finding a rental company is difficult considering I just got rid of my only credit card.",
+        "response_expected_content": "RentPOL",
+        "date": "29 November 2022"
+    },
+    "WiFi password": {
+        "injected_note": "New WiFi password: DavidLovesBacon123",
+        "testing_prompt": "Mom visited and can't connect to our wifi, even though I'm sure I gave her the password around a year ago.",
+        "response_expected_content": "WiFi password: DavidLovesBacon123",
+        "date": "31 December 2022"
+    },
+    "Ozark tv show recommendation": {
+        "injected_note": "Mary is probably the only person whos movie / tv recommendations I trust. She just recommended a show called Ozark, I should check it out when I have time.",
+        "testing_prompt": "David is out with the kids for the entire weekend, I feel like binge-watching something. There's so many shows to choose from though #firstworldproblems.",
+        "response_expected_content": "Ozark",
+        "date": "20 January 2023"
+    },
+    "Spotify playlist recommendation": {
+        "injected_note": "Fun Spotify playlist recommended by Dave to pump him up at the gym: 'Sigma Male Grindset Songs'.",
+        "testing_prompt": "I'm struggling to find some good motivating music for the gym lately.",
+        "response_expected_content": "Sigma Male Grindset Songs",
+        "date": "24 January 2023"
+    },
+    "Bounce House playground recommendation": {
+        "injected_note": "Rachel's kids love that indoor playground 'Bounce House' on 12th Street. $12 entry fee.",
+        "testing_prompt": "It's going to rain all weekend, need to find something fun to do with the kids indoors.",
+        "response_expected_content": "'Bounce House' indoor playground",
+        "date": "19 February 2023"
+    },
+    "Free tree saplings": {
+        "injected_note": "City offering free tree saplings for yard planting on Earth Day (April 22).",
+        "testing_prompt": "We're thinking about redesigning our backyard. It definitely needs more shade in summer. Should plant some trees, hopefully we can find some cheap saplings.",
+        "response_expected_content": "Free tree saplings on Earth Day",
+        "date": "16 December 2023"
+    },
+    "Frank is allergic to wasp venom": {
+        "injected_note": "Frank swallowed a wasp today at work, it got into his soda can. He got an anaphylactic shock and almost died. He's allergic to wasp venom. Super scary.",
+        "testing_prompt": "Yes there's definitely a wasp nest in the attic. There's more and more of them in the kitchen, it's insane. I have to call the pest control. Also, invited Frank and his wife Suzy for dinner tonight, can't wait.",
+        "response_expected_content": "Frank is allergic to wasp venom.",
+        "date": "13 March 2023"
+    },
+    "High protein meal prep website": {
+        "injected_note": "Meal prep website with high protein recipes: www.proteinpowermealprep.com",
+        "testing_prompt": "Cooking takes too much time, I have to find a way to make it more efficient. I'm thinking about meal prepping. It's a bit difficult to find high protein recipes for dishes that can be prepared in bulk and frozen.",
+        "response_expected_content": "www.proteinpowermealprep.com",
+        "date": "26 March 2023"
+    },
+    "Stolen supplies / worked from home": {
+        "injected_note": "I'm very happy that I can work from home today, it's much easier to do all the focused work.",
+        "testing_prompt": "Someone at work has stolen some supplies apparently a while ago (June 12th 2023) but only now the boss found out and they're looking for the person. They are suspecting me for some reason, this is a nightmare.",
+        "response_expected_content": "Working from home on June 12th 2023.",
+        "date": "12 June 2023"
+    },
+    "Supplement brand with high mercury levels": {
+        "injected_note": "The company Bobby's has been always buying his supplements from, StrongMax, was found to be selling stuff with high levels of mercury in it. Bobby has to get tested now, scary stuff.",
+        "testing_prompt": "I have to restock on creatine, it got expensive lately. StrongMax seems to be super cheap for some reason, I might give them a try.",
+        "response_expected_content": "StrongMax sells supplements with high mercury levels.",
+        "date": "28 February 2024"
+    }
+}

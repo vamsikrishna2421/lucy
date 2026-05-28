@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Alert,
   FlatList,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
   StyleSheet,
   Text,
@@ -39,6 +39,15 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
   const [sending, setSending] = useState(false);
   const [acknowledgement, setAcknowledgement] = useState('');
   const [markedPrivate, setMarkedPrivate] = useState(false);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, (e) => setKeyboardOffset(e.endCoordinates.height));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardOffset(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -70,7 +79,7 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: keyboardOffset }]}>
       <View style={styles.heading}>
         <Text style={styles.title}>Inbox</Text>
         <Text style={styles.intro}>Drop a thought. Keep moving. We organize quietly.</Text>
@@ -80,58 +89,52 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
           <Text style={styles.ackText}>{acknowledgement}</Text>
         </View>
       ) : null}
-      <KeyboardAvoidingView
-        style={styles.liftedContent}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
-      >
-        <FlatList
-          data={captures}
-          inverted
-          keyboardShouldPersistTaps="handled"
-          style={styles.feedList}
-          contentContainerStyle={styles.feed}
-          keyExtractor={(item) => String(item.id)}
-          ListEmptyComponent={<Text style={styles.empty}>Your captured thoughts will appear here.</Text>}
-          renderItem={({ item }) => <CaptureBubble item={item} updates={updates[item.id] ?? []} />}
-        />
-        <View style={styles.composerDock}>
-          <View style={styles.composer}>
-            <TouchableOpacity
-              style={styles.micButton}
-              onPress={() => Alert.alert('Coming soon', 'Voice recording is coming soon. Dictate with WhisperFlow today.')}
-            >
-              <Text style={styles.micText}>+</Text>
-            </TouchableOpacity>
-            <TextInput
-              multiline
-              placeholder="Capture anything..."
-              placeholderTextColor="#8a968f"
-              style={styles.input}
-              textAlignVertical="top"
-              value={text}
-              onChangeText={setText}
-            />
-            <TouchableOpacity style={[styles.sendButton, !text.trim() && styles.sendDisabled]} onPress={sendCapture} disabled={sending || !text.trim()}>
-              <Text style={styles.sendText}>{sending ? '...' : 'Send'}</Text>
-            </TouchableOpacity>
-          </View>
+      <FlatList
+        data={captures}
+        inverted
+        keyboardShouldPersistTaps="handled"
+        style={styles.feedList}
+        contentContainerStyle={styles.feed}
+        keyExtractor={(item) => String(item.id)}
+        ListEmptyComponent={<Text style={styles.empty}>Your captured thoughts will appear here.</Text>}
+        renderItem={({ item }) => <CaptureBubble item={item} updates={updates[item.id] ?? []} />}
+      />
+      <View style={styles.composerDock}>
+        <View style={styles.composer}>
           <TouchableOpacity
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: markedPrivate }}
-            style={styles.protectionToggle}
-            onPress={() => setMarkedPrivate((current) => !current)}
+            style={styles.micButton}
+            onPress={() => Alert.alert('Coming soon', 'Voice recording is coming soon. Dictate with WhisperFlow today.')}
           >
-            <View style={[styles.check, markedPrivate && styles.checkSelected]}>
-              {markedPrivate ? <Text style={styles.checkMark}>{'\u2713'}</Text> : null}
-            </View>
-            <View style={styles.protectionText}>
-              <Text style={styles.protectionTitle}>Contains private details</Text>
-              <Text style={styles.protectionHint}>Mask locally before remote intelligence</Text>
-            </View>
+            <Text style={styles.micText}>+</Text>
+          </TouchableOpacity>
+          <TextInput
+            multiline
+            placeholder="Capture anything..."
+            placeholderTextColor="#8a968f"
+            style={styles.input}
+            textAlignVertical="top"
+            value={text}
+            onChangeText={setText}
+          />
+          <TouchableOpacity style={[styles.sendButton, !text.trim() && styles.sendDisabled]} onPress={sendCapture} disabled={sending || !text.trim()}>
+            <Text style={styles.sendText}>{sending ? '...' : 'Send'}</Text>
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+        <TouchableOpacity
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: markedPrivate }}
+          style={styles.protectionToggle}
+          onPress={() => setMarkedPrivate((current) => !current)}
+        >
+          <View style={[styles.check, markedPrivate && styles.checkSelected]}>
+            {markedPrivate ? <Text style={styles.checkMark}>{'\u2713'}</Text> : null}
+          </View>
+          <View style={styles.protectionText}>
+            <Text style={styles.protectionTitle}>Contains private details</Text>
+            <Text style={styles.protectionHint}>Mask locally before remote intelligence</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -177,7 +180,6 @@ function CaptureBubble({ item, updates }: { item: CaptureRow; updates: CaptureRo
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  liftedContent: { flex: 1 },
   heading: { marginBottom: 10 },
   title: { fontSize: 30, letterSpacing: -0.8, fontWeight: '700', color: LUCY_COLORS.textDark },
   intro: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 4 },

@@ -1,25 +1,104 @@
 {
   "expo": {
-    "name": "life-capture",
-    "slug": "life-capture",
+    "name": "LUCY",
+    "slug": "lucy",
+    "scheme": "lucy",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "icon": "./assets/lucy-icon.png",
+    "userInterfaceStyle": "dark",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.lucy",
+      "buildNumber": "1.0.2",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.anonymous.lucy"
+        ]
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#0D1015",
+        "foregroundImage": "./assets/lucy-adaptive-foreground.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize",
+      "package": "com.anonymous.lucy"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/lucy-icon.png"
+    },
+    "plugins": [
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-sharing",
+        {
+          "ios": {
+            "enabled": true,
+            "activationRule": {
+              "supportsText": true,
+              "supportsWebUrlWithMaxCount": 1
+            }
+          },
+          "android": {
+            "enabled": true,
+            "singleShareMimeTypes": [
+              "text/plain"
+            ]
+          }
+        }
+      ],
+      "expo-notifications",
+      "expo-background-task",
+      "expo-asset",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 33
+          },
+          "ios": {
+            "deploymentTarget": "17.0",
+            "buildSettings": {
+              "SWIFT_ENABLE_INCREMENTAL_COMPILATION": "NO",
+              "ENABLE_USER_SCRIPT_SANDBOXING": "NO"
+            }
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "expo-sharing-extension",
+                  "bundleIdentifier": "com.anonymous.lucy.expo-sharing-extension",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.anonymous.lucy"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "1a602e40-067f-4786-a9a6-26c6cc15bda6"
+      }
+    },
+    "owner": "lekkala2421"
   }
 }

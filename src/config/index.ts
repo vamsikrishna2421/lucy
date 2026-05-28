@@ -1,0 +1,25 @@
+export const config = {
+  remoteProvider: 'openai' as const,
+  aiMode: (process.env.EXPO_PUBLIC_AI_MODE ?? 'hybrid') as 'hybrid' | 'offline',
+  localInference: (process.env.EXPO_PUBLIC_LOCAL_INFERENCE === 'ollama-dev' ? 'ollama-dev' : 'device') as 'device' | 'ollama-dev',
+  deviceModelTier: (process.env.EXPO_PUBLIC_DEVICE_MODEL_TIER === 'balanced' ? 'balanced' : 'fast') as 'fast' | 'balanced',
+  // Development-only asset relay; model inference still executes on the phone.
+  deviceModelAssetBaseUrl: (process.env.EXPO_PUBLIC_DEVICE_MODEL_ASSET_BASE_URL ?? '').replace(/\/$/, ''),
+  allowExternalAI: process.env.EXPO_PUBLIC_ALLOW_EXTERNAL_AI === 'true',
+  openAIModel: process.env.EXPO_PUBLIC_OPENAI_MODEL ?? 'gpt-5.4-nano',
+  openAISummaryModel: process.env.EXPO_PUBLIC_OPENAI_SUMMARY_MODEL ?? 'gpt-5.4-nano',
+  claudeExtractionModel: process.env.EXPO_PUBLIC_CLAUDE_EXTRACTION_MODEL ?? 'claude-haiku-4-5-20251001',
+  claudeSummaryModel: process.env.EXPO_PUBLIC_CLAUDE_SUMMARY_MODEL ?? 'claude-sonnet-4-6',
+  tier1IntervalMinutes: 5,
+  tier2IntervalMinutes: 120,
+  tier3Time: '22:00',
+  backgroundProcessingIntervalMinutes: 120,
+  defaultIdeaPrivacy: 'private' as const,
+  defaultExpensePrivacy: 'normal' as const,
+  defaultTodoPrivacy: 'normal' as const,
+  obsidianSyncEnabled: false,
+  syncPrivateItems: false,
+  // Used only when EXPO_PUBLIC_LOCAL_INFERENCE=ollama-dev for emulator development.
+  ollamaBaseUrl: process.env.EXPO_PUBLIC_OLLAMA_BASE_URL ?? 'http://localhost:11434',
+  ollamaModel: process.env.EXPO_PUBLIC_OLLAMA_MODEL ?? 'phi3',
+};

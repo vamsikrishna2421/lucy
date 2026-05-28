@@ -422,8 +422,13 @@ function EmptyLine({ text }: { text: string }) {
 }
 
 function ReminderCard({ item }: { item: ReminderRow }) {
-  const time = item.remind_at ? new Date(item.remind_at).toLocaleString() : 'Time not specified';
-  return <Card title={protectedPreview(item.text)} detail={item.notification_id ? time : `${time} / notification pending`} privacy={item.privacy_level} />;
+  const time = item.remind_at
+    ? new Date(item.remind_at).toLocaleString(undefined, {
+        weekday: 'short', month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+      })
+    : 'Time not specified';
+  return <Card title={protectedPreview(item.text)} detail={item.notification_id ? time : `${time} · notification pending`} privacy={item.privacy_level} />;
 }
 
 function Card({ title, detail, privacy }: { title: string; detail: string; privacy?: 'private' | 'local' | 'normal' }) {

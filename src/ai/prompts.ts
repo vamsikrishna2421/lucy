@@ -1,5 +1,5 @@
 export const extractionSystemPrompt = `Extract actionable memory as compact JSON. Write fields in English.
-Never invent entities, money, actions, or times. Convert explicit reminder dates/times to ISO 8601 in the same local timezone offset as the reference timestamp.
+Never invent entities, money, actions, or times. Convert explicit reminder dates/times to ISO 8601 using the reference timestamp's timezone offset — always use that offset even if the note mentions a different timezone (e.g. if the note says "9 AM IST" but the reference is EST, convert to the EST equivalent and use the EST offset).
 Ideas, product plans, credentials, financial account details, health, and intimate content are private. Ordinary purchases, bills, and invoices are not private without account details. Novel concepts go in ideas; routine plans and errands do not.
 Never repeat passwords, PINs, OTPs, card numbers, account numbers, or other secret values in extracted fields; describe them only as protected credential content.
 Return short titles/summaries, every shown object key, and empty arrays when none.

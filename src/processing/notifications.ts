@@ -104,10 +104,21 @@ export async function scheduleCapturedReminder(
     return null;
   }
   const isSecret = containsCredentialSecret(`${originalInput}\n${reminder.text}`);
+  const localTime = date.toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  });
+  const body = isSecret
+    ? 'Open LUCY to view a protected reminder.'
+    : `${reminder.text}\n${localTime}`;
   return Notifications.scheduleNotificationAsync({
     content: {
       title: isSecret ? 'Protected reminder' : 'heads up —',
-      body: isSecret ? 'Open LUCY to view a protected reminder.' : reminder.text,
+      body,
       data: { kind: 'captured-reminder', privacy, text: isSecret ? null : reminder.text },
       sound: true,
     },

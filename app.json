@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.3",
+      "buildNumber": "1.0.4",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"

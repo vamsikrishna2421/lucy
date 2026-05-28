@@ -1,0 +1,27 @@
+# Local database files (not needed for build)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Local dev files
+.env.local
+.env*.local
+vault/
+
+# Test/benchmark artifacts
+tests/
+benchmarks/
+TEST_*.md
+FINAL_*.md
+QUICK_*.md
+COLOR_*.md
+*.ps1
+
+# Claude/agent tooling
+.claude-flow/
+.claude/
+.codex/
+.mcp.json

@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.5",
+      "buildNumber": "1.0.6",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
@@ -25,7 +25,8 @@
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": ["audio"],
         "NSMicrophoneUsageDescription": "LUCY listens in the background to capture your thoughts, ideas, and songs automatically.",
-        "NSSpeechRecognitionUsageDescription": "LUCY uses on-device speech recognition to transcribe what you say during passive listening mode."
+        "NSSpeechRecognitionUsageDescription": "LUCY uses on-device speech recognition to transcribe what you say during passive listening mode.",
+        "NSPhotoLibraryUsageDescription": "LUCY may save audio recordings to your library when capturing memories."
       }
     },
     "android": {

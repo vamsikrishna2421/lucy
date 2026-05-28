@@ -1,0 +1,18 @@
+diff --git a/node_modules/expo-crypto/ios/CryptoModule.swift b/node_modules/expo-crypto/ios/CryptoModule.swift
+index cbf756a..d87a006 100644
+--- a/node_modules/expo-crypto/ios/CryptoModule.swift
++++ b/node_modules/expo-crypto/ios/CryptoModule.swift
+@@ -15,12 +15,7 @@ public class CryptoModule: Module {
+ 
+     Function("digest", digest)
+ 
+-    Function("randomUUID", randomUUID())
+-  }
+-
+-  @OptimizedFunction
+-  private func randomUUID() -> String {
+-    return UUID().uuidString.lowercased()
++    Function("randomUUID") { UUID().uuidString.lowercased() }
+   }
+ }
+ 

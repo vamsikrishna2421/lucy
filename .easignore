@@ -1,3 +1,18 @@
+# node_modules — EAS installs fresh from package.json + patch-package postinstall
+node_modules/
+
+# Built outputs / local APK
+dist/
+
+# Design source files
+logos/
+
+# Build logs
+*.log
+
+# Swarm tooling state
+.swarm/
+
 # Local database files (not needed for build)
 *.db
 *.db-shm

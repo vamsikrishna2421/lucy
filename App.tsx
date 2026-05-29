@@ -1,10 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
-import { splashShownAt } from './index';
+import { splashShownAt } from './src/splashTime';
 import { useIncomingShare } from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, AppState, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, AppState, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { passiveListener, type PassiveListenerState } from './src/audio/PassiveListener';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { LUCY_COLORS, LUCY_PILLARS } from './src/config/colors';
@@ -117,7 +117,7 @@ export default function App() {
         }
         // Wait until 1 second has elapsed since launch, then hide splash.
         const elapsed = Date.now() - splashShownAt;
-        const remaining = Math.max(0, 1000 - elapsed);
+        const remaining = Math.max(0, 2000 - elapsed);
         setTimeout(() => void SplashScreen.hideAsync(), remaining);
       } catch (error) {
         setStartupError(error instanceof Error ? error.message : 'Storage initialization failed.');
@@ -186,8 +186,8 @@ export default function App() {
   const togglePassiveListening = useCallback(() => {
     if (!passiveListener.isAvailable) {
       Alert.alert(
-        'Passive listening needs a new build',
-        'This feature requires a native module that will be included in the next TestFlight build (1.0.5).',
+        'Coming soon',
+        'Passive listening is being set up. It will be ready in the next update.',
       );
       return;
     }
@@ -221,11 +221,7 @@ export default function App() {
         <StatusBar style="light" />
         <View style={styles.brand}>
           <View style={styles.brandRow}>
-            <Image
-              source={require('./assets/lucy-home-icon.png')}
-              style={styles.brandLogo}
-              resizeMode="contain"
-            />
+            <Text style={styles.brandName}>LUCY</Text>
             <View style={styles.headerActions}>
               <TouchableOpacity style={[styles.listenPill, passiveState.status === 'listening' && styles.listenPillActive]} onPress={togglePassiveListening}>
                 <View style={[styles.listenDot, passiveState.status === 'listening' && styles.listenDotActive]} />

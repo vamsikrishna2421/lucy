@@ -11,6 +11,7 @@ import { getLatestOrganizationRun, type OrganizationRunRow } from '../db/knowled
 import { getBackgroundProcessingState, type BackgroundProcessingState } from '../processing/background';
 import { runEnglishDeviceBenchmark, type BenchmarkResult } from '../processing/benchmark';
 import { organizeMemory } from '../processing/organizer';
+import { getUserProfile, saveUserProfile, type UserProfile } from '../db/userProfile';
 
 interface SettingsScreenProps {
   backgroundEnabled: boolean;
@@ -19,7 +20,7 @@ interface SettingsScreenProps {
   onReprocessAll: () => Promise<number>;
 }
 
-type SettingsPanel = 'intelligence' | 'remote' | 'background' | 'organization' | 'queue' | 'privacy' | null;
+type SettingsPanel = 'intelligence' | 'remote' | 'background' | 'organization' | 'queue' | 'privacy' | 'profile' | null;
 
 const emptyQueue: CaptureQueueSummary = { queued: 0, processing: 0, retrying: 0, complete: 0, archived: 0 };
 const emptyRemote: RemoteAccessState = { enabled: false, hasKey: false, usingDevelopmentKey: false, modelName: 'gpt-5.4-nano' };
@@ -43,20 +44,26 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [organizationRun, setOrganizationRun] = useState<OrganizationRunRow | null>(null);
   const [organizingNow, setOrganizingNow] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
+  const [profile, setProfile] = useState<UserProfile>({ name: '', about: '' });
+  const [profileDraft, setProfileDraft] = useState<UserProfile>({ name: '', about: '' });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
     void (async () => {
       const db = await getDatabase();
-      const [queueSummary, state, latestRun, remoteState] = await Promise.all([
+      const [queueSummary, state, latestRun, remoteState, userProfile] = await Promise.all([
         getCaptureQueueSummary(db),
         getBackgroundProcessingState(),
         getLatestOrganizationRun(db),
         getRemoteAccessState(),
+        getUserProfile(db),
       ]);
       setQueue(queueSummary);
       setBackground(state);
       setOrganizationRun(latestRun);
       setRemote(remoteState);
+      setProfile(userProfile);
+      setProfileDraft(userProfile);
     })();
   }, [backgroundEnabled, localRefresh, refreshToken]);
 
@@ -224,6 +231,13 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       <Text style={styles.subtitle}>Quiet controls for your memory.</Text>
 
       <View style={styles.list}>
+        <SettingsRow
+          title="About you"
+          value={profile.name ? `${profile.name}${profile.about ? ' · ' + profile.about.slice(0, 30) + (profile.about.length > 30 ? '…' : '') : ''}` : 'Tell LUCY who you are'}
+          badge={profile.name ? '✓' : 'Set up'}
+          active={!!profile.name}
+          onInfo={() => { setProfileDraft({ ...profile }); setActivePanel('profile'); }}
+        />
         <SettingsRow
           title="On-device intelligence"
           value={modelStatus}
@@ -454,6 +468,44 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
             Original private thoughts stay encrypted on your device and remain visible to you in LUCY. With remote intelligence enabled, a protected thought can be sent for analysis only after the selected on-device model replaces private details with placeholders. This protection path is experimental during beta testing. Credentials and passwords remain masked in previews.
           </Text>
         ) : null}
+
+        {activePanel === 'profile' ? (
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <Text style={styles.hint}>LUCY uses your name and background to personalize every response — no more "the user said" language.</Text>
+            <Text style={styles.fieldLabel}>Your name</Text>
+            <TextInput
+              style={styles.profileInput}
+              placeholder="e.g. Vamsy"
+              placeholderTextColor={LUCY_COLORS.textSubtle}
+              value={profileDraft.name}
+              onChangeText={(v) => setProfileDraft((p) => ({ ...p, name: v }))}
+            />
+            <Text style={styles.fieldLabel}>About you</Text>
+            <TextInput
+              style={[styles.profileInput, styles.profileInputMulti]}
+              placeholder={'e.g. Data engineer, interested in AI, music lover, work at a tech company'}
+              placeholderTextColor={LUCY_COLORS.textSubtle}
+              multiline
+              value={profileDraft.about}
+              onChangeText={(v) => setProfileDraft((p) => ({ ...p, about: v }))}
+            />
+            <SecondaryButton
+              disabled={savingProfile}
+              label={savingProfile ? 'Saving...' : 'Save'}
+              onPress={async () => {
+                setSavingProfile(true);
+                try {
+                  const db = await getDatabase();
+                  await saveUserProfile(db, profileDraft);
+                  setProfile(profileDraft);
+                  setActivePanel(null);
+                } finally {
+                  setSavingProfile(false);
+                }
+              }}
+            />
+          </KeyboardAvoidingView>
+        ) : null}
       </SettingsSheet>
     </View>
   );
@@ -461,6 +513,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
 
 function panelTitle(panel: SettingsPanel): string {
   switch (panel) {
+    case 'profile': return 'About you';
     case 'intelligence': return 'On-device intelligence';
     case 'remote': return 'Remote intelligence';
     case 'background': return 'Background organizing';
@@ -585,7 +638,10 @@ const styles = StyleSheet.create({
   cardTitle: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700' },
   settingValue: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 4 },
   detail: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21 },
-  hint: { color: LUCY_COLORS.textSubtle, fontSize: 12, lineHeight: 18 },
+  hint: { color: LUCY_COLORS.textSubtle, fontSize: 12, lineHeight: 18, marginBottom: 12 },
+  fieldLabel: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, marginTop: 12 },
+  profileInput: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 12, padding: 12, color: LUCY_COLORS.textDark, fontSize: 15 },
+  profileInputMulti: { minHeight: 80, textAlignVertical: 'top' },
   keyLabel: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700' },
   activity: { color: LUCY_COLORS.textDark, fontSize: 14, lineHeight: 20, fontWeight: '600' },
   failure: { color: '#FDA4AF', fontSize: 12, lineHeight: 18 },

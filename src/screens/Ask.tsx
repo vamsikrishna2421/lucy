@@ -246,32 +246,51 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   }
   const tasks = answer.tasks.filter((task) => !isInvalidPendingTask(task));
   const deadlines = answer.deadlines.filter((deadline) => !isInvalidDeadline(deadline));
-  const taskScopeLabel = answer.taskScope ? ` related to ${answer.taskScope}` : '';
+  const taskScopeLabel = answer.taskScope ? ` for ${answer.taskScope}` : '';
+  const hasAnything = tasks.length > 0 || deadlines.length > 0;
   return (
     <View style={[styles.bubble, styles.lucyBubble]}>
-      <Text style={styles.responseLabel}>LUCY ANSWER</Text>
-      <Text style={styles.answerTitle}>{answer.title}</Text>
-      <Text style={styles.answerMessage}>
-        {tasks.length} pending task{tasks.length === 1 ? '' : 's'}{taskScopeLabel} and {deadlines.length} deadline{deadlines.length === 1 ? '' : 's'} for today.
-      </Text>
-      <Text style={styles.section}>Pending Tasks ({tasks.length})</Text>
-      {tasks.map((task) => (
-        <View style={styles.row} key={task.id}>
-          <Text style={styles.rowText}>{protectedPreview(task.task)}</Text>
-        </View>
-      ))}
-      {!tasks.length ? <Text style={styles.emptySection}>No pending tasks found.</Text> : null}
-      <Text style={styles.section}>Deadlines Today ({deadlines.length})</Text>
-      {deadlines.map((deadline) => (
-        <View style={styles.row} key={deadline.id}>
-          <View style={styles.deadline}>
-            <Text style={styles.rowText}>{protectedPreview(deadline.text)}</Text>
-            <Text style={styles.time}>{new Date(deadline.remind_at as string).toLocaleString()}</Text>
+      <Text style={styles.responseLabel}>LUCY</Text>
+      {!hasAnything ? (
+        <>
+          <Text style={styles.answerMessage}>
+            {`Nothing captured${taskScopeLabel} yet — here's how to get something here:`}
+          </Text>
+          <View style={styles.tipList}>
+            <Text style={styles.tipItem}>{'→  "Meeting with Sam about Q3, need to follow up on budget"'}</Text>
+            <Text style={styles.tipItem}>{'→  "Remind me to call the client tomorrow morning"'}</Text>
+            <Text style={styles.tipItem}>{'→  "Deadline: submit the proposal by Friday"'}</Text>
           </View>
-        </View>
-      ))}
-      {!deadlines.length ? <Text style={styles.emptySection}>No deadlines scheduled for today.</Text> : null}
-      <Text style={styles.signal}>{answer.recordedSignal}</Text>
+          <Text style={styles.tipHint}>Mention names, projects, and deadlines in Capture — LUCY picks them up automatically.</Text>
+        </>
+      ) : (
+        <>
+          {tasks.length > 0 ? (
+            <>
+              <Text style={styles.section}>{`Tasks${taskScopeLabel}`}</Text>
+              {tasks.map((task) => (
+                <View style={styles.row} key={task.id}>
+                  <Text style={styles.rowText}>{protectedPreview(task.task)}</Text>
+                </View>
+              ))}
+            </>
+          ) : null}
+          {deadlines.length > 0 ? (
+            <>
+              <Text style={styles.section}>Deadlines today</Text>
+              {deadlines.map((deadline) => (
+                <View style={styles.row} key={deadline.id}>
+                  <View style={styles.deadline}>
+                    <Text style={styles.rowText}>{protectedPreview(deadline.text)}</Text>
+                    <Text style={styles.time}>{new Date(deadline.remind_at as string).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}</Text>
+                  </View>
+                </View>
+              ))}
+            </>
+          ) : null}
+        </>
+      )}
+      {answer.recordedSignal ? <Text style={styles.signal}>{answer.recordedSignal}</Text> : null}
     </View>
   );
 }
@@ -368,6 +387,9 @@ const styles = StyleSheet.create({
   responseLabel: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 7 },
   answerTitle: { color: LUCY_COLORS.textDark, fontSize: 18, fontWeight: '700', marginBottom: 6 },
   answerMessage: { color: LUCY_COLORS.textMuted, fontSize: 14, marginBottom: 10 },
+  tipList: { gap: 8, marginBottom: 12 },
+  tipItem: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 20, paddingLeft: 4 },
+  tipHint: { color: LUCY_COLORS.textSubtle, fontSize: 12, lineHeight: 18, fontStyle: 'italic' },
   section: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginTop: 8, marginBottom: 7 },
   emptySection: { color: LUCY_COLORS.textMuted, fontSize: 13, paddingVertical: 7 },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.border },

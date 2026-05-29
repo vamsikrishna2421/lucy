@@ -7,6 +7,8 @@ import { analyzeWithOpenAI, promptOpenAI } from './openai';
 import { dailySummaryPrompt, privateRemoteRedactionPrompt, urgentScanPrompt } from './prompts';
 import { getRemoteAccessState, getRemoteOpenAIKey } from './remoteAccess';
 import { redactForRemote } from '../processing/redaction';
+import { getDatabase } from '../db';
+import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
 
 function localAnalyze(transcript: string): Promise<ExtractionResult> {
   return config.localInference === 'ollama-dev'
@@ -53,10 +55,13 @@ export const AIProvider = {
       return localAnalyze(transcript);
     }
     try {
+      const db = await getDatabase();
+      const profile = await getUserProfile(db);
+      const userContextPrefix = buildUserContextPrefix(profile);
       const remoteTranscript = privacyLevel === 'private'
         ? await sanitizePrivatelyForRemote(transcript)
         : transcript;
-      return await analyzeWithOpenAI(remoteTranscript, apiKey);
+      return await analyzeWithOpenAI(remoteTranscript, apiKey, userContextPrefix);
     } catch {
       return localAnalyze(transcript);
     }

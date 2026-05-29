@@ -25,6 +25,24 @@ function displayTimestamp(value: string): string {
   return new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`).toLocaleString();
 }
 
+// Parse structured memory text into clean bullet points, skipping metadata lines.
+function extractKeyPoints(structured: string): string[] {
+  const skip = new Set(['title', 'type', 'summary']);
+  return structured
+    .split('\n')
+    .map((line) => {
+      const colon = line.indexOf(':');
+      if (colon === -1) return null;
+      const label = line.slice(0, colon).trim().toLowerCase();
+      if (skip.has(label)) return null;
+      const value = line.slice(colon + 1).trim();
+      if (!value) return null;
+      return `· ${value}`;
+    })
+    .filter((x): x is string => x !== null)
+    .slice(0, 4);
+}
+
 function groupUpdates(updates: CaptureRow[]): Record<number, CaptureRow[]> {
   return updates.reduce<Record<number, CaptureRow[]>>((grouped, update) => {
     if (update.parent_capture_id === null) {
@@ -197,12 +215,12 @@ function NowView({
       ) : null}
       {openLoops.length > 0 ? (
         <>
-          <SectionTitle title="Open Loops" />
+          <SectionTitle title="Loose ends" />
           {openLoops.map((item) => (
             <View style={styles.loopCard} key={item.id}>
-              <Text style={styles.cardTitle}>{protectedPreview(item.description)}</Text>
+              <Text style={styles.loopDescription}>{protectedPreview(item.description)}</Text>
               <TouchableOpacity style={styles.resolveButton} onPress={() => void handleResolveLoop(item.id)}>
-                <Text style={styles.resolveText}>Mark resolved</Text>
+                <Text style={styles.resolveText}>Done with this</Text>
               </TouchableOpacity>
             </View>
           ))}
@@ -383,7 +401,17 @@ function CapturedView({ captures, updates }: { captures: CaptureRow[]; updates: 
     <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
       {captures.map((item) => (
         <View key={item.id} style={styles.captureRow}>
-          <Text style={styles.captureText}>{protectedPreview(item.raw_transcript)}</Text>
+          {item.extracted_title ? (
+            <Text style={styles.captureTitle}>{protectedPreview(item.extracted_title)}</Text>
+          ) : null}
+          <Text style={styles.captureText} numberOfLines={1} ellipsizeMode="tail">{protectedPreview(item.raw_transcript)}</Text>
+          {item.structured_text ? (
+            <View style={styles.keyPoints}>
+              {extractKeyPoints(item.structured_text).map((point, i) => (
+                <Text key={i} style={styles.keyPoint}>{point}</Text>
+              ))}
+            </View>
+          ) : null}
           <Text style={styles.captureTime}>Captured {displayTimestamp(item.created_at)}</Text>
           {item.structured_text ? (
             <TouchableOpacity
@@ -529,6 +557,7 @@ const styles = StyleSheet.create({
   cardTitle: { flex: 1, color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 16 },
   detail: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 19 },
   loopCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, marginBottom: 10, gap: 10 },
+  loopDescription: { color: LUCY_COLORS.textDark, fontSize: 15, lineHeight: 22, fontWeight: '500' },
   resolveButton: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: LUCY_COLORS.primarySoft },
   resolveText: { color: LUCY_COLORS.primaryGlow, fontSize: 13, fontWeight: '600' },
   musicCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, marginBottom: 10, gap: 10 },
@@ -542,8 +571,11 @@ const styles = StyleSheet.create({
   streamButtonText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   dismissText: { color: LUCY_COLORS.textSubtle, fontSize: 13, paddingVertical: 7 },
   captureRow: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, marginBottom: 10 },
-  captureText: { color: LUCY_COLORS.textDark, fontSize: 15, lineHeight: 21 },
-  captureTime: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 7 },
+  captureTitle: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700', lineHeight: 20, marginBottom: 4 },
+  captureText: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 18 },
+  captureTime: { color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 7 },
+  keyPoints: { marginTop: 8, gap: 3 },
+  keyPoint: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 19 },
   structuredMemory: { backgroundColor: LUCY_COLORS.surface, borderRadius: 13, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 11, marginTop: 10 },
   structureToggle: { alignSelf: 'flex-start', marginTop: 10, paddingVertical: 4 },
   structureToggleText: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700' },

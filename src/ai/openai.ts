@@ -47,9 +47,10 @@ export async function promptOpenAI(
 export async function analyzeWithOpenAI(
   transcript: string,
   apiKey: string,
+  userContextPrefix = '',
 ): Promise<ExtractionResult> {
   const raw = await promptOpenAI(
-    `${extractionSystemPrompt}\nReference local timestamp: ${localReferenceTimestamp()}\n${extractionSchemaPrompt}`,
+    `${userContextPrefix}${extractionSystemPrompt}\nReference local timestamp: ${localReferenceTimestamp()}\n${extractionSchemaPrompt}`,
     transcript,
     apiKey,
   );

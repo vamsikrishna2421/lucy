@@ -1,20 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
+  Animated,
   Keyboard,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  Alert,
 } from 'react-native';
-import { PrivacyBadge } from '../components/PrivacyBadge';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import { listPendingTodos, archiveTodo, type TodoRow } from '../db/todos';
 import { enqueueTranscript } from '../processing/extract';
+
+interface DoneEntry {
+  todo: TodoRow;
+  doneAt: string;
+  notes: string;
+}
 
 function groupTodos(todos: TodoRow[]): Array<{ label: string; items: TodoRow[] }> {
   const map = new Map<string, TodoRow[]>();
@@ -24,7 +32,6 @@ function groupTodos(todos: TodoRow[]): Array<{ label: string; items: TodoRow[] }
     existing.push(todo);
     map.set(key, existing);
   }
-  // Sort: Urgent first, then alphabetical
   const sorted = [...map.entries()].sort(([a], [b]) => {
     if (a === 'Urgent') return -1;
     if (b === 'Urgent') return 1;
@@ -33,13 +40,70 @@ function groupTodos(todos: TodoRow[]): Array<{ label: string; items: TodoRow[] }
   return sorted.map(([label, items]) => ({ label, items }));
 }
 
+function formatDoneTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  });
+}
+
+function AnimatedTodoRow({ todo, onPress }: { todo: TodoRow; onPress: () => void }) {
+  const checkScale = useRef(new Animated.Value(1)).current;
+  const checkFill = useRef(new Animated.Value(0)).current;
+  const strikeWidth = useRef(new Animated.Value(0)).current;
+  const rowOpacity = useRef(new Animated.Value(1)).current;
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.timing(checkScale, { toValue: 1.35, duration: 100, useNativeDriver: true }),
+      Animated.timing(checkScale, { toValue: 1, duration: 100, useNativeDriver: true }),
+    ]).start();
+    Animated.timing(checkFill, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    Animated.timing(strikeWidth, { toValue: 1, duration: 380, delay: 80, useNativeDriver: false }).start();
+    Animated.timing(rowOpacity, { toValue: 0, duration: 280, delay: 520, useNativeDriver: true }).start(() => {
+      onPress();
+    });
+  };
+
+  return (
+    <Animated.View style={[styles.todoRow, { opacity: rowOpacity }]}>
+      <TouchableOpacity style={styles.checkboxArea} onPress={handlePress}>
+        <Animated.View style={[styles.checkCircle, { transform: [{ scale: checkScale }] }]}>
+          <Animated.Text style={[styles.checkFillText, { opacity: checkFill }]}>✓</Animated.Text>
+        </Animated.View>
+      </TouchableOpacity>
+      <View style={styles.todoContent}>
+        <View style={styles.todoTextWrap}>
+          <Text style={styles.todoText}>{todo.task}</Text>
+          <Animated.View
+            style={[
+              styles.strikeBar,
+              {
+                width: strikeWidth.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0%', '100%'],
+                }),
+              },
+            ]}
+          />
+        </View>
+        {todo.urgency === 'high' ? <Text style={styles.urgentBadge}>urgent</Text> : null}
+      </View>
+    </Animated.View>
+  );
+}
+
 export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number; onQueued: () => void }) {
   const [text, setText] = useState('');
   const [todos, setTodos] = useState<TodoRow[]>([]);
+  const [done, setDone] = useState<DoneEntry[]>([]);
   const [sending, setSending] = useState(false);
   const [acknowledgement, setAcknowledgement] = useState('');
   const [markedPrivate, setMarkedPrivate] = useState(false);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [pendingTodo, setPendingTodo] = useState<TodoRow | null>(null);
+  const [doneNotes, setDoneNotes] = useState('');
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -56,10 +120,31 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
     })();
   }, [refreshToken]);
 
-  const markDone = async (todo: TodoRow) => {
+  const openDoneModal = (todo: TodoRow) => {
+    setDoneNotes('');
+    setPendingTodo(todo);
+  };
+
+  const confirmDone = async (skip = false) => {
+    if (!pendingTodo) return;
+    const notes = skip ? '' : doneNotes.trim();
+    const doneAt = new Date().toISOString();
     const db = await getDatabase();
-    await archiveTodo(db, todo.id, 'done');
-    setTodos((prev) => prev.filter((t) => t.id !== todo.id));
+    await archiveTodo(db, pendingTodo.id, notes ? `done: ${notes}` : 'done');
+    setTodos((prev) => prev.filter((t) => t.id !== pendingTodo.id));
+    setDone((prev) => [{ todo: pendingTodo, doneAt, notes }, ...prev]);
+    setPendingTodo(null);
+    setDoneNotes('');
+    if (notes) {
+      await enqueueTranscript(`Completed: ${pendingTodo.task}. ${notes}`, 'text', false);
+      onQueued();
+    }
+  };
+
+  const undoDone = async (entry: DoneEntry) => {
+    // Put the task back in todos list (re-insert visually; DB is archived but UX restores it)
+    setDone((prev) => prev.filter((e) => e.todo.id !== entry.todo.id));
+    setTodos((prev) => [entry.todo, ...prev]);
   };
 
   const sendCapture = async () => {
@@ -85,28 +170,47 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
   return (
     <View style={[styles.container, { paddingBottom: keyboardOffset }]}>
       <ScrollView style={styles.board} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {groups.length === 0 ? (
+        {groups.length === 0 && done.length === 0 ? (
           <View style={styles.emptyBoard}>
             <Text style={styles.emptyTitle}>Your board is clear</Text>
             <Text style={styles.emptyHint}>Capture something and LUCY will organize it here by category.</Text>
           </View>
         ) : (
-          groups.map((group) => (
-            <View key={group.label} style={styles.group}>
-              <Text style={styles.groupLabel}>{group.label.toUpperCase()}</Text>
-              {group.items.map((todo) => (
-                <View key={todo.id} style={styles.todoRow}>
-                  <TouchableOpacity style={styles.checkbox} onPress={() => void markDone(todo)}>
-                    <View style={styles.checkCircle} />
-                  </TouchableOpacity>
-                  <View style={styles.todoContent}>
-                    <Text style={styles.todoText}>{todo.task}</Text>
-                    {todo.urgency === 'high' ? <Text style={styles.urgentBadge}>urgent</Text> : null}
-                  </View>
+          <>
+            {groups.map((group) => (
+              <View key={group.label} style={styles.group}>
+                <Text style={styles.groupLabel}>{group.label.toUpperCase()}</Text>
+                {group.items.map((todo) => (
+                  <AnimatedTodoRow key={todo.id} todo={todo} onPress={() => openDoneModal(todo)} />
+                ))}
+              </View>
+            ))}
+
+            {done.length > 0 ? (
+              <View style={styles.doneSection}>
+                <View style={styles.doneDivider}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerLabel}>Done today</Text>
+                  <View style={styles.dividerLine} />
                 </View>
-              ))}
-            </View>
-          ))
+                {done.map((entry, i) => (
+                  <View key={i} style={styles.doneRow}>
+                    <View style={styles.doneCheck}>
+                      <Text style={styles.doneCheckMark}>✓</Text>
+                    </View>
+                    <View style={styles.doneContent}>
+                      <Text style={styles.doneText}>{entry.todo.task}</Text>
+                      {entry.notes ? <Text style={styles.doneNotes}>{entry.notes}</Text> : null}
+                      <Text style={styles.doneTime}>{formatDoneTime(entry.doneAt)}</Text>
+                    </View>
+                    <TouchableOpacity style={styles.undoButton} onPress={() => void undoDone(entry)}>
+                      <Text style={styles.undoText}>undo</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </>
         )}
         <View style={{ height: 12 }} />
       </ScrollView>
@@ -151,6 +255,37 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
           </View>
         </TouchableOpacity>
       </View>
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={pendingTodo !== null}
+        onRequestClose={() => setPendingTodo(null)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setPendingTodo(null)}>
+          <Pressable style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Mark as done</Text>
+            <Text style={styles.modalTask}>{pendingTodo?.task}</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Add a note (optional)"
+              placeholderTextColor={LUCY_COLORS.textSubtle}
+              value={doneNotes}
+              onChangeText={setDoneNotes}
+              multiline
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.modalSkip} onPress={() => void confirmDone(true)}>
+                <Text style={styles.modalSkipText}>Skip</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalDone} onPress={() => void confirmDone(false)}>
+                <Text style={styles.modalDoneText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -161,45 +296,94 @@ const styles = StyleSheet.create({
   emptyBoard: { paddingTop: 40, alignItems: 'center', gap: 10 },
   emptyTitle: { color: LUCY_COLORS.textMuted, fontSize: 18, fontWeight: '700' },
   emptyHint: { color: LUCY_COLORS.textSubtle, fontSize: 14, textAlign: 'center', lineHeight: 20, paddingHorizontal: 20 },
-  group: { marginBottom: 20 },
+  group: { marginBottom: 22 },
   groupLabel: {
     color: LUCY_COLORS.primaryGlow,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 1.2,
-    marginBottom: 8,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: LUCY_COLORS.divider,
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
+    marginBottom: 10,
   },
-  todoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 8 },
-  checkbox: { paddingTop: 2 },
+  todoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: LUCY_COLORS.surfaceRaised,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: LUCY_COLORS.border,
+  },
+  checkboxArea: { paddingTop: 1 },
   checkCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 1.5,
     borderColor: LUCY_COLORS.textSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  checkFillText: { color: LUCY_COLORS.success, fontSize: 12, fontWeight: '800' },
   todoContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  todoText: { color: LUCY_COLORS.textDark, fontSize: 15, lineHeight: 22, flex: 1 },
+  todoTextWrap: { flex: 1, position: 'relative', justifyContent: 'center' },
+  todoText: { color: LUCY_COLORS.textDark, fontSize: 15, lineHeight: 22 },
+  strikeBar: {
+    position: 'absolute',
+    height: 1.5,
+    backgroundColor: LUCY_COLORS.textMuted,
+    top: '50%',
+    left: 0,
+  },
   urgentBadge: {
     color: LUCY_COLORS.primary,
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '800',
     backgroundColor: LUCY_COLORS.primarySoft,
     paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 6,
+    letterSpacing: 0.3,
   },
-  ack: {
-    alignSelf: 'center',
-    backgroundColor: LUCY_COLORS.primarySoft,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 18,
-    marginBottom: 8,
+  // Done section
+  doneSection: { marginTop: 8 },
+  doneDivider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: LUCY_COLORS.divider },
+  dividerLabel: { color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' },
+  doneRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: LUCY_COLORS.surface,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: LUCY_COLORS.divider,
+    opacity: 0.6,
   },
+  doneCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: LUCY_COLORS.success + '22',
+    borderWidth: 1,
+    borderColor: LUCY_COLORS.success + '55',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  doneCheckMark: { color: LUCY_COLORS.success, fontSize: 11, fontWeight: '800' },
+  doneContent: { flex: 1, gap: 2 },
+  doneText: { color: LUCY_COLORS.textSubtle, fontSize: 14, lineHeight: 20, textDecorationLine: 'line-through' },
+  doneNotes: { color: LUCY_COLORS.textSubtle, fontSize: 12, lineHeight: 18, fontStyle: 'italic', marginTop: 2 },
+  doneTime: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 3 },
+  undoButton: { paddingVertical: 4, paddingHorizontal: 6 },
+  undoText: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700' },
+  // Capture
+  ack: { alignSelf: 'center', backgroundColor: LUCY_COLORS.primarySoft, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, marginBottom: 8 },
   ackText: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700' },
   composerDock: {},
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, paddingTop: 8 },
@@ -228,4 +412,15 @@ const styles = StyleSheet.create({
   protectionText: { flex: 1 },
   protectionTitle: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '600' },
   protectionHint: { color: LUCY_COLORS.textMuted, fontSize: 11, marginTop: 1 },
+  // Modal
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  modalCard: { backgroundColor: LUCY_COLORS.surface, borderRadius: 20, padding: 24, width: '100%', maxWidth: 380, borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 14 },
+  modalTitle: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
+  modalTask: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '700', lineHeight: 23 },
+  modalInput: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 12, color: LUCY_COLORS.textDark, fontSize: 15, minHeight: 72, textAlignVertical: 'top' },
+  modalButtons: { flexDirection: 'row', gap: 10 },
+  modalSkip: { flex: 1, paddingVertical: 13, borderRadius: 12, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center' },
+  modalSkipText: { color: LUCY_COLORS.textMuted, fontSize: 15, fontWeight: '600' },
+  modalDone: { flex: 2, paddingVertical: 13, borderRadius: 12, backgroundColor: LUCY_COLORS.primary, alignItems: 'center' },
+  modalDoneText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

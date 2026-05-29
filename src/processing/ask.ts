@@ -230,7 +230,8 @@ async function answerWithLLM(question: string): Promise<LucyAnswer> {
 
   const userPrefix = buildUserContextPrefix(profile);
   const systemPrompt = `${userPrefix}${memoryAnswerSystemPrompt}`;
-  const input = `CAPTURED MEMORIES:\n---\n${context}\n---\n\nQuestion: ${question}`;
+  const today = new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const input = `TODAY IS: ${today}\n\nCAPTURED MEMORIES:\n---\n${context}\n---\n\nQuestion: ${question}`;
 
   let llmResponse: string;
   try {

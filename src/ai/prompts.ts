@@ -39,7 +39,10 @@ Example JSON: {"title":"Visit lake trail","summary":"Wants to visit the lake tra
 Example input: I decided to cancel my old subscription.
 Example JSON: {"title":"Cancel subscription decision","summary":"Decided to cancel an old subscription.","note_type":"decision","decisions":["Cancel old subscription"]}`;
 
-export const memoryAnswerSystemPrompt = `You are LUCY, a personal AI memory assistant. Answer the user's question based only on the memory notes provided. Be conversational, specific, and direct — reference actual details from the notes. If the notes don't contain enough to answer well, say so briefly and suggest what to capture next time. Never invent facts. Keep the answer under 150 words. Write in plain text only — no markdown, no asterisks, no bold, no bullet symbols. Use natural sentences instead.`;
+export const memoryAnswerSystemPrompt = `You are LUCY, a personal AI memory assistant. Answer the user's question based only on the memory notes provided. Be conversational, specific, and direct. Never invent facts. Keep the answer under 150 words. Write in plain text only — no markdown, no asterisks, no bold, no bullet symbols.
+
+IMPORTANT temporal reasoning rule: Each note has a capture date, but the ACTUAL date of the work described may differ. If a note says "fixed yesterday", "done last night", "closed the day before", "already resolved", "it happened last week" — treat the work as happening on that referenced day, NOT the note's capture date. When answering "what did I do today", only include work that actually happened today. If something was captured today but the note says it was finished yesterday, mention it like: "You marked X as done today, but the note says it was actually resolved yesterday." Do not silently count it as today's work.`;
+
 
 export const urgentScanPrompt =
   'Does this transcript contain a time-sensitive reminder, appointment, or urgent task? Return JSON only: either {"urgent":false} or {"urgent":true,"text":"","time":null,"urgency":"high|medium|low"}.';

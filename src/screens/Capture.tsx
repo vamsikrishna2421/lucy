@@ -147,10 +147,6 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
     setDone((prev) => [{ todo: pendingTodo, doneAt, notes }, ...prev]);
     setPendingTodo(null);
     setDoneNotes('');
-    if (notes) {
-      await enqueueTranscript(`Completed: ${pendingTodo.task}. ${notes}`, 'text', false);
-      onQueued();
-    }
   };
 
   const undoDone = async (entry: DoneEntry) => {

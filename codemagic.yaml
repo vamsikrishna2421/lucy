@@ -14,6 +14,10 @@ workflows:
       vars:
         BUNDLE_ID: com.anonymous.lucy
         XCODE_SCHEME: lucy
+        # Set these 3 in Codemagic → Environment variables (mark as secure):
+        APP_STORE_CONNECT_KEY_ID: $APP_STORE_CONNECT_KEY_ID
+        APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
+        APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
 
     triggering:
       events:
@@ -60,10 +64,10 @@ workflows:
 
     publishing:
       app_store_connect:
-        auth: integration
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_ID
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
-        beta_groups:
-          - Internal Testers
       email:
         recipients:
           - vamsy.24@gmail.com

@@ -1,0 +1,73 @@
+workflows:
+  ios-testflight:
+    name: LUCY — iOS TestFlight
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.anonymous.lucy
+      node: latest
+      xcode: latest
+      cocoapods: default
+      vars:
+        BUNDLE_ID: com.anonymous.lucy
+        XCODE_SCHEME: lucy
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: master
+          include: true
+
+    scripts:
+      - name: Install dependencies
+        script: npm install
+
+      - name: Apply patches
+        script: npx patch-package
+
+      - name: Expo prebuild (generate native iOS code)
+        script: npx expo prebuild --platform ios --non-interactive
+
+      - name: Set up keychain
+        script: keychain initialize
+
+      - name: Fetch App Store signing files
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+
+      - name: Add certificates to keychain
+        script: keychain add-certificates
+
+      - name: Apply signing profiles
+        script: xcode-project use-profiles
+
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace "ios/lucy.xcworkspace" \
+            --scheme "$XCODE_SCHEME" \
+            --config Release
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - Internal Testers
+        notify_beta_testers: false
+      email:
+        recipients:
+          - vamsy.24@gmail.com
+        notify:
+          success: true
+          failure: true

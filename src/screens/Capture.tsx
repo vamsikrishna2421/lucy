@@ -13,10 +13,19 @@ import {
   View,
   Alert,
 } from 'react-native';
+import { RecordingPresets, setAudioModeAsync } from 'expo-audio';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { AudioRecorder: AR } = require('expo-audio') as { AudioRecorder: new (opts: unknown) => { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void } };
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import { listPendingTodos, archiveTodo, type TodoRow } from '../db/todos';
 import { enqueueTranscript } from '../processing/extract';
+import { transcribeAudioFile } from '../audio/WhisperTranscriber';
+import { getRemoteAccessState } from '../ai/remoteAccess';
+
+// On-device STT for the voice button (iOS: SFSpeechRecognizer)
+let Voice: { default: { onSpeechResults: ((e: { value?: string[] }) => void) | null; onSpeechEnd: ((e: unknown) => void) | null; onSpeechError: ((e: unknown) => void) | null; start(l: string): Promise<void>; stop(): Promise<void>; destroy(): Promise<void> } } | null = null;
+try { Voice = require('@react-native-voice/voice') as typeof Voice; } catch { /* not compiled yet */ }
 
 interface DoneEntry {
   todo: TodoRow;
@@ -104,6 +113,9 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const [pendingTodo, setPendingTodo] = useState<TodoRow | null>(null);
   const [doneNotes, setDoneNotes] = useState('');
+  const [voiceRecording, setVoiceRecording] = useState(false);
+  type RecInst = { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void };
+  const audioRecorder = useRef<RecInst | null>(null);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -145,6 +157,54 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
     // Put the task back in todos list (re-insert visually; DB is archived but UX restores it)
     setDone((prev) => prev.filter((e) => e.todo.id !== entry.todo.id));
     setTodos((prev) => [entry.todo, ...prev]);
+  };
+
+  const toggleVoiceInput = async () => {
+    if (voiceRecording) {
+      // Stop recording
+      setVoiceRecording(false);
+      if (Voice?.default) {
+        // On-device STT: stop and get result via onSpeechResults
+        await Voice.default.stop().catch(() => {});
+        await Voice.default.destroy().catch(() => {});
+      } else if (audioRecorder.current) {
+        // Whisper fallback: stop and transcribe
+        await audioRecorder.current.stop();
+        const uri = audioRecorder.current.uri;
+        audioRecorder.current.release?.();
+        audioRecorder.current = null;
+        if (uri) {
+          const transcript = await transcribeAudioFile(uri);
+          if (transcript) setText((prev) => prev ? `${prev} ${transcript}` : transcript);
+          else Alert.alert('Could not transcribe', 'Enable Remote Intelligence in Settings for voice transcription.');
+        }
+      }
+      return;
+    }
+
+    // Start recording
+    if (Voice?.default) {
+      // On-device STT (iOS SFSpeechRecognizer)
+      Voice.default.onSpeechResults = (e) => {
+        const text = (e.value ?? []).join(' ').trim();
+        if (text) setText((prev) => prev ? `${prev} ${text}` : text);
+      };
+      Voice.default.onSpeechEnd = () => setVoiceRecording(false);
+      Voice.default.onSpeechError = () => setVoiceRecording(false);
+      await Voice.default.start('en-US');
+      setVoiceRecording(true);
+    } else {
+      // Audio recording fallback → Whisper on stop
+      try {
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+        audioRecorder.current = new AR(RecordingPresets.HIGH_QUALITY);
+        await audioRecorder.current.prepareToRecordAsync();
+        audioRecorder.current.record();
+        setVoiceRecording(true);
+      } catch {
+        Alert.alert('Microphone unavailable', 'Could not start recording.');
+      }
+    }
   };
 
   const sendCapture = async () => {
@@ -223,6 +283,14 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
 
       <View style={styles.composerDock}>
         <View style={styles.composer}>
+          <TouchableOpacity
+            style={[styles.micButton, voiceRecording && styles.micButtonActive]}
+            onPress={() => void toggleVoiceInput()}
+          >
+            <Text style={[styles.micIcon, voiceRecording && styles.micIconActive]}>
+              {voiceRecording ? '■' : '♪'}
+            </Text>
+          </TouchableOpacity>
           <TextInput
             multiline
             placeholder="Capture anything..."
@@ -387,6 +455,10 @@ const styles = StyleSheet.create({
   ackText: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700' },
   composerDock: {},
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, paddingTop: 8 },
+  micButton: { width: 46, height: 46, borderRadius: 23, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', justifyContent: 'center' },
+  micButtonActive: { backgroundColor: '#3B0000', borderColor: '#ef4444' },
+  micIcon: { fontSize: 18, color: LUCY_COLORS.textMuted },
+  micIconActive: { color: '#ef4444' },
   input: {
     flex: 1,
     maxHeight: 110,

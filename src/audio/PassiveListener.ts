@@ -1,40 +1,36 @@
-import { setAudioModeAsync } from 'expo-audio';
+import { RecordingPresets, setAudioModeAsync } from 'expo-audio';
+import * as FileSystem from 'expo-file-system';
 import { config } from '../config';
 import { getDatabase } from '../db';
 import { insertMusicCapture, markMusicCaptureNotified } from '../db/musicCaptures';
 import { enqueueTranscript } from '../processing/extract';
 import { sendGuardianNotification } from '../processing/notifications';
 import { detectMusic } from './MusicDetector';
+import { transcribeAudioFile } from './WhisperTranscriber';
 
-// @jamsch/expo-speech-recognition wraps SFSpeechRecognizer (iOS) and
-// Android SpeechRecognizer. Loaded dynamically — graceful no-op on builds
-// that predate the package being compiled into the native binary.
-let SR: SpeechRecognitionModule | null = null;
+// AudioRecorder is type-only in expo-audio — use require() to get the runtime class.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+type RecorderInstance = { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void };
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const AudioRecorderClass = (require('expo-audio') as { AudioRecorder: new (opts: unknown) => RecorderInstance }).AudioRecorder;
+
+// Try on-device STT first (SFSpeechRecognizer via react-native-voice).
+// Falls back to audio recording + Whisper if not available.
+let Voice: VoiceModule | null = null;
 try {
-  SR = require('@jamsch/expo-speech-recognition') as SpeechRecognitionModule;
-} catch {
-  // Native module not available in this build.
+  Voice = (require('@react-native-voice/voice') as { default: VoiceModule }).default;
+} catch { /* not available in this build */ }
+
+interface VoiceModule {
+  onSpeechResults: ((e: { value?: string[] }) => void) | null;
+  onSpeechEnd: ((e: unknown) => void) | null;
+  onSpeechError: ((e: unknown) => void) | null;
+  start(locale: string): Promise<void>;
+  stop(): Promise<void>;
+  destroy(): Promise<void>;
 }
 
-interface SpeechRecognitionModule {
-  ExpoSpeechRecognitionModule: {
-    start(options: { lang: string; continuous: boolean; interimResults: boolean }): void;
-    stop(): void;
-    abort(): void;
-    addListener(
-      event: 'result' | 'end' | 'error' | 'start',
-      listener: (e: SREvent) => void,
-    ): { remove(): void };
-  };
-}
-
-interface SREvent {
-  results?: Array<{ transcript: string; isFinal: boolean }>;
-  error?: string;
-  message?: string;
-}
-
-export type ListeningStatus = 'off' | 'starting' | 'listening' | 'stopping';
+export type ListeningStatus = 'off' | 'starting' | 'listening' | 'stopping' | 'no_key';
 
 export interface PassiveListenerState {
   status: ListeningStatus;
@@ -51,19 +47,17 @@ class PassiveListenerManager {
     sessionStartedAt: null,
   };
 
-  private listeners: Array<(s: PassiveListenerState) => void> = [];
-  private transcriptBuffer: string[] = [];
+  private stateListeners: Array<(s: PassiveListenerState) => void> = [];
+  private recorder: RecorderInstance | null = null;
   private batchTimer: ReturnType<typeof setInterval> | null = null;
   private musicTimer: ReturnType<typeof setInterval> | null = null;
-  private sessionRestartTimer: ReturnType<typeof setTimeout> | null = null;
-  private srListeners: Array<{ remove(): void }> = [];
   private active = false;
 
   subscribe(fn: (s: PassiveListenerState) => void): () => void {
-    this.listeners.push(fn);
+    this.stateListeners.push(fn);
     fn({ ...this.state });
     return () => {
-      this.listeners = this.listeners.filter((l) => l !== fn);
+      this.stateListeners = this.stateListeners.filter((l) => l !== fn);
     };
   }
 
@@ -72,11 +66,15 @@ class PassiveListenerManager {
   }
 
   get isAvailable(): boolean {
-    return SR !== null;
+    return true; // Always available — uses on-device STT or expo-audio + Whisper
+  }
+
+  get usesOnDeviceSTT(): boolean {
+    return Voice !== null;
   }
 
   private emit(): void {
-    for (const fn of this.listeners) fn({ ...this.state });
+    for (const fn of this.stateListeners) fn({ ...this.state });
   }
 
   private patch(patch: Partial<PassiveListenerState>): void {
@@ -84,9 +82,14 @@ class PassiveListenerManager {
     this.emit();
   }
 
-  async start(): Promise<void> {
-    if (!SR || this.state.status !== 'off') return;
+  async checkCanTranscribe(): Promise<boolean> {
+    const { getRemoteAccessState: getState } = await import('../ai/remoteAccess');
+    const remote = await getState();
+    return remote.enabled && remote.hasKey;
+  }
 
+  async start(): Promise<void> {
+    if (this.state.status !== 'off') return;
     this.patch({ status: 'starting', wordsHeard: 0, songsDetected: 0, sessionStartedAt: Date.now() });
     this.active = true;
 
@@ -94,74 +97,99 @@ class PassiveListenerManager {
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
     } catch { /* non-fatal */ }
 
-    this.attachSrListeners();
-    this.startSrSession();
+    if (Voice) {
+      await this.startVoiceSTT();
+    } else {
+      await this.startRecordingBatch();
+    }
 
     const batchMs = config.passiveListenBatchMinutes * 60 * 1000;
     const musicMs = config.passiveMusicSampleIntervalMinutes * 60 * 1000;
-    this.batchTimer = setInterval(() => void this.flushBatch(), batchMs);
+
+    this.batchTimer = Voice
+      ? setInterval(() => void this.flushVoiceBuffer(), batchMs)
+      : setInterval(() => void this.rotateBatch(), batchMs);
     this.musicTimer = setInterval(() => void this.sampleMusic(), musicMs);
 
     this.patch({ status: 'listening' });
   }
 
-  private attachSrListeners(): void {
-    if (!SR) return;
-    const mod = SR.ExpoSpeechRecognitionModule;
+  private voiceBuffer: string[] = [];
+  private voiceRestartTimer: ReturnType<typeof setTimeout> | null = null;
 
-    this.srListeners.push(
-      mod.addListener('result', (e) => {
-        for (const result of e.results ?? []) {
-          if (result.isFinal && result.transcript.trim()) {
-            this.transcriptBuffer.push(result.transcript.trim());
-            const words = result.transcript.trim().split(/\s+/).length;
-            this.patch({ wordsHeard: this.state.wordsHeard + words });
-          }
-        }
-      }),
-    );
-
-    this.srListeners.push(
-      mod.addListener('end', () => {
-        // SFSpeechRecognizer ends sessions after ~1 min — restart automatically.
-        if (this.active) {
-          this.sessionRestartTimer = setTimeout(() => this.startSrSession(), 300);
-        }
-      }),
-    );
-
-    this.srListeners.push(
-      mod.addListener('error', () => {
-        if (this.active) {
-          this.sessionRestartTimer = setTimeout(() => this.startSrSession(), 2000);
-        }
-      }),
-    );
-  }
-
-  private startSrSession(): void {
-    if (!SR || !this.active) return;
-    try {
-      SR.ExpoSpeechRecognitionModule.start({
-        lang: 'en-US',
-        continuous: true,
-        interimResults: false,
-      });
-    } catch {
-      if (this.active) {
-        this.sessionRestartTimer = setTimeout(() => this.startSrSession(), 3000);
+  private async startVoiceSTT(): Promise<void> {
+    if (!Voice || !this.active) return;
+    Voice.onSpeechResults = (e) => {
+      const text = (e.value ?? []).join(' ').trim();
+      if (text) {
+        this.voiceBuffer.push(text);
+        this.patch({ wordsHeard: this.state.wordsHeard + text.split(/\s+/).length });
       }
+    };
+    Voice.onSpeechEnd = () => {
+      if (this.active) this.voiceRestartTimer = setTimeout(() => void this.startVoiceSTT(), 300);
+    };
+    Voice.onSpeechError = () => {
+      if (this.active) this.voiceRestartTimer = setTimeout(() => void this.startVoiceSTT(), 2000);
+    };
+    try {
+      await Voice.start('en-US');
+      // SFSpeechRecognizer has ~1 min limit; restart before cutoff
+      this.voiceRestartTimer = setTimeout(() => {
+        if (this.active && Voice) Voice.stop().catch(() => {});
+      }, 50_000);
+    } catch {
+      if (this.active) this.voiceRestartTimer = setTimeout(() => void this.startVoiceSTT(), 3000);
     }
   }
 
-  private async flushBatch(): Promise<void> {
-    if (this.transcriptBuffer.length === 0) return;
-    const text = this.transcriptBuffer.join(' ').trim();
-    this.transcriptBuffer = [];
-    if (text.split(/\s+/).length < 5) return;
+  private async flushVoiceBuffer(): Promise<void> {
+    if (this.voiceBuffer.length === 0) return;
+    const text = this.voiceBuffer.join(' ').trim();
+    this.voiceBuffer = [];
+    if (text.split(/\s+/).length >= 5) {
+      try { await enqueueTranscript(text, 'passive'); } catch { /* non-critical */ }
+    }
+  }
+
+  private async startRecordingBatch(): Promise<void> {
     try {
-      await enqueueTranscript(text, 'passive');
+      this.recorder = new AudioRecorderClass(RecordingPresets.HIGH_QUALITY);
+      await this.recorder.prepareToRecordAsync();
+      this.recorder.record();
+    } catch {
+      this.patch({ status: 'off', sessionStartedAt: null });
+      this.active = false;
+    }
+  }
+
+  private async rotateBatch(): Promise<void> {
+    if (!this.recorder || !this.active) return;
+    try {
+      await this.recorder.stop();
+      const uri = this.recorder.uri;
+      this.recorder.release?.();
+      this.recorder = null;
+
+      if (uri) {
+        void this.transcribeAndProcess(uri);
+      }
     } catch { /* non-critical */ }
+
+    if (this.active) {
+      await this.startRecordingBatch();
+    }
+  }
+
+  private async transcribeAndProcess(uri: string): Promise<void> {
+    try {
+      const text = await transcribeAudioFile(uri);
+      if (text && text.split(/\s+/).length >= 5) {
+        await enqueueTranscript(text, 'passive');
+        this.patch({ wordsHeard: this.state.wordsHeard + text.split(/\s+/).length });
+      }
+    } catch { /* non-critical */ }
+    FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
   }
 
   private async sampleMusic(): Promise<void> {
@@ -190,19 +218,25 @@ class PassiveListenerManager {
 
     clearInterval(this.batchTimer!);
     clearInterval(this.musicTimer!);
-    clearTimeout(this.sessionRestartTimer!);
+    clearTimeout(this.voiceRestartTimer!);
     this.batchTimer = null;
     this.musicTimer = null;
-    this.sessionRestartTimer = null;
+    this.voiceRestartTimer = null;
 
-    for (const sub of this.srListeners) sub.remove();
-    this.srListeners = [];
-
-    if (SR) {
-      try { SR.ExpoSpeechRecognitionModule.stop(); } catch { /* ignore */ }
+    if (Voice) {
+      try { await Voice.destroy(); } catch { /* ignore */ }
+      await this.flushVoiceBuffer();
     }
 
-    await this.flushBatch();
+    if (this.recorder) {
+      try {
+        await this.recorder.stop();
+        const uri = this.recorder.uri;
+        this.recorder.release?.();
+        this.recorder = null;
+        if (uri) await this.transcribeAndProcess(uri);
+      } catch { /* ignore */ }
+    }
 
     try {
       await setAudioModeAsync({ allowsRecording: false });

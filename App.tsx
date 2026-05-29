@@ -194,7 +194,9 @@ export default function App() {
     if (passiveState.status === 'off') {
       Alert.alert(
         'Start passive listening?',
-        'LUCY will listen continuously, transcribe your speech in 10-minute batches, and detect songs you hum. A red indicator will appear while recording.',
+        passiveListener.usesOnDeviceSTT
+          ? 'LUCY will listen continuously using on-device speech recognition. Transcripts are batched every 10 minutes and stored privately on your device.'
+          : 'LUCY will record in 10-minute batches and transcribe using remote AI. Enable Remote Intelligence in Settings for best results.',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Start', onPress: () => void passiveListener.start() },

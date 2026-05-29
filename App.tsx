@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { passiveListener, type PassiveListenerState } from './src/audio/PassiveListener';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { LUCY_COLORS, LUCY_PILLARS } from './src/config/colors';
+import { LUCY_COLORS } from './src/config/colors';
 import { getDatabase } from './src/db';
 import { resetInterruptedCaptures } from './src/db/captures';
 import { getSetting, setSetting } from './src/db/settings';
@@ -239,30 +239,6 @@ export default function App() {
             </TouchableOpacity>
             </View>
           </View>
-          <View style={styles.pillarsContainer}>
-            {LUCY_PILLARS.map((pillar, index) => (
-              <View key={pillar.label} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={[styles.pillarText, { color: pillar.color }]}>
-                  {pillar.label}
-                </Text>
-                {index < LUCY_PILLARS.length - 1 && <Text style={styles.bulletSeparator}>{'\u2022'}</Text>}
-              </View>
-            ))}
-          </View>
-        </View>
-        <View style={styles.nav}>
-          <TouchableOpacity style={[styles.navButton, screen === 'capture' && styles.navSelected]} onPress={() => setScreen('capture')}>
-            <Text style={[styles.navLabel, screen === 'capture' && styles.navLabelSelected]}>Capture</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.navButton, screen === 'dashboard' && styles.navSelected]} onPress={() => setScreen('dashboard')}>
-            <Text style={[styles.navLabel, screen === 'dashboard' && styles.navLabelSelected]}>Today</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.navButton, screen === 'ask' && styles.navSelected]} onPress={() => setScreen('ask')}>
-            <Text style={[styles.navLabel, screen === 'ask' && styles.navLabelSelected]}>Ask</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.navButton, screen === 'settings' && styles.navSelected]} onPress={() => setScreen('settings')}>
-            <Text style={[styles.navLabel, screen === 'settings' && styles.navLabelSelected]}>Settings</Text>
-          </TouchableOpacity>
         </View>
         <View style={styles.container}>
           {startupError ? <Text style={styles.error}>{startupError}</Text> : null}
@@ -287,6 +263,27 @@ export default function App() {
             />
           ) : null}
         </View>
+        <View style={styles.bottomNav}>
+          {([
+            { key: 'capture', label: 'Board', icon: '\u25a6' },
+            { key: 'dashboard', label: 'Today', icon: '\u25c8' },
+            { key: 'ask', label: 'Ask', icon: '\u25ce' },
+            { key: 'settings', label: 'Settings', icon: '\u25c9' },
+          ] as const).map((tab) => (
+            <TouchableOpacity
+              key={tab.key}
+              style={styles.bottomTab}
+              onPress={() => setScreen(tab.key)}
+            >
+              <Text style={[styles.bottomTabIcon, screen === tab.key && styles.bottomTabIconActive]}>
+                {tab.icon}
+              </Text>
+              <Text style={[styles.bottomTabLabel, screen === tab.key && styles.bottomTabLabelActive]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </SafeAreaView>
       <NotificationDetailModal
         payload={notificationDetail}
@@ -309,18 +306,22 @@ const styles = StyleSheet.create({
   listenDotActive: { backgroundColor: '#ef4444' },
   listenText: { color: LUCY_COLORS.textMuted, fontWeight: '700', fontSize: 12 },
   listenTextActive: { color: LUCY_COLORS.primary },
-  pillarsContainer: { marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 3 },
-  pillarText: { fontSize: 13, fontWeight: '600', letterSpacing: -0.2 },
-  bulletSeparator: { marginHorizontal: 6, color: LUCY_COLORS.textSubtle, fontSize: 13 },
-  localPill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, backgroundColor: LUCY_COLORS.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  localDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: LUCY_COLORS.primary },
-  localText: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 12 },
-  nav: { marginHorizontal: 20, padding: 4, borderRadius: 16, flexDirection: 'row', backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, marginBottom: 14 },
-  navButton: { flex: 1, alignItems: 'center', padding: 11, borderRadius: 11 },
-  navSelected: { backgroundColor: LUCY_COLORS.surfaceRaised },
-  navLabel: { color: LUCY_COLORS.textMuted, fontWeight: '700' },
-  navLabelSelected: { color: LUCY_COLORS.primaryGlow },
-  container: { flex: 1, paddingHorizontal: 20, paddingBottom: 12 },
+  localPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: LUCY_COLORS.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  localDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: LUCY_COLORS.primary },
+  localText: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 11 },
+  container: { flex: 1, paddingHorizontal: 20, paddingTop: 4 },
+  bottomNav: {
+    flexDirection: 'row',
+    backgroundColor: LUCY_COLORS.surface,
+    borderTopWidth: 1,
+    borderTopColor: LUCY_COLORS.border,
+    paddingBottom: 4,
+  },
+  bottomTab: { flex: 1, alignItems: 'center', paddingVertical: 10, gap: 3 },
+  bottomTabIcon: { fontSize: 20, color: LUCY_COLORS.textSubtle },
+  bottomTabIconActive: { color: LUCY_COLORS.primary },
+  bottomTabLabel: { fontSize: 11, fontWeight: '600', color: LUCY_COLORS.textSubtle },
+  bottomTabLabelActive: { color: LUCY_COLORS.primary, fontWeight: '700' },
   loading: { color: LUCY_COLORS.textMuted, textAlign: 'center', marginTop: 50 },
   error: { color: '#FDA4AF', backgroundColor: '#3B1722', borderRadius: 12, padding: 15 },
 });

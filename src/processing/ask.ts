@@ -192,6 +192,11 @@ async function answerFromMemoryMap(question: string): Promise<LucyAnswer> {
   };
 }
 
+function detectsCaptureIntent(text: string): boolean {
+  return /\b(add|save|remember|capture|note|log|record)\b.{0,30}\b(this|that|progress|update|today|memory)\b/i.test(text)
+    || /\b(yes,?\s*add|please\s*(add|save|remember))\b/i.test(text);
+}
+
 async function answerWithLLM(question: string): Promise<LucyAnswer> {
   const db = await getDatabase();
   const [captures, profile] = await Promise.all([
@@ -254,9 +259,29 @@ async function answerWithLLM(question: string): Promise<LucyAnswer> {
   };
 }
 
-export async function askLucy(question: string): Promise<LucyAnswer> {
+export async function askLucy(question: string, captureCallback?: (text: string) => Promise<void>): Promise<LucyAnswer> {
   const db = await getDatabase();
   const trimmed = question.trim();
+
+  // If the user is adding new information to memory, capture it and confirm.
+  if (detectsCaptureIntent(trimmed) && captureCallback) {
+    try {
+      await captureCallback(trimmed);
+    } catch { /* non-critical */ }
+    const { getUserProfile: gp, buildUserContextPrefix: bcp } = await import('../db/userProfile');
+    const profile = await gp(db);
+    const name = profile.name || 'you';
+    return {
+      supported: true,
+      answerKind: 'llm',
+      title: '',
+      message: '',
+      tasks: [],
+      deadlines: [],
+      recordedSignal: '',
+      llmResponse: `Got it, ${name}. I've saved that to your memory and will organize it shortly.`,
+    };
+  }
   if (recognizesMonthlySpendingQuestion(trimmed)) {
     return answerMonthlySpending(trimmed);
   }

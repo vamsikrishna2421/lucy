@@ -22,6 +22,7 @@ import {
 import { askLucy, type LucyAnswer } from '../processing/ask';
 import { isInvalidDeadline, isInvalidPendingTask } from '../processing/artifactCleanup';
 import { protectedPreview } from '../processing/privacy';
+import { enqueueTranscript } from '../processing/extract';
 
 const exampleQuestion = 'What tasks and deadlines need my attention today?';
 
@@ -122,7 +123,10 @@ export function AskScreen() {
     setAsking(true);
     scrollToLatest();
     try {
-      const answer = await askLucy(trimmed);
+      const captureCallback = async (text: string) => {
+        await enqueueTranscript(text, 'text', false);
+      };
+      const answer = await askLucy(trimmed, captureCallback);
       await insertLucyAskMessage(db, currentThreadId, answer);
       setMessages((existing) => [...existing, { id: `lucy-${messageId}`, role: 'lucy', answer }]);
     } finally {

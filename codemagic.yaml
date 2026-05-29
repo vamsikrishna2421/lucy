@@ -41,15 +41,11 @@ workflows:
 
       - name: Fetch or create App Store signing files
         script: |
-          # Write the private key to a temp file
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > /tmp/AuthKey.p8
-
+          # Credentials are read automatically from env vars:
+          # APP_STORE_CONNECT_KEY_IDENTIFIER, APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_PRIVATE_KEY
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
-            --create \
-            --api-key "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
-            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
-            --private-key @file:/tmp/AuthKey.p8
+            --create
 
       - name: Add certificates to keychain
         script: keychain add-certificates

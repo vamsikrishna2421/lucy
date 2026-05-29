@@ -64,7 +64,6 @@ workflows:
         submit_to_testflight: true
         beta_groups:
           - Internal Testers
-        notify_beta_testers: false
       email:
         recipients:
           - vamsy.24@gmail.com

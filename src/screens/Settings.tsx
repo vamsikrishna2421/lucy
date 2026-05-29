@@ -173,11 +173,24 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
 
   const organizeNow = async () => {
     setOrganizingNow(true);
+    const startedAt = Date.now();
     try {
       const db = await getDatabase();
       await organizeMemory(db, 'manual');
-      setOrganizationRun(await getLatestOrganizationRun(db));
+      const run = await getLatestOrganizationRun(db);
+      setOrganizationRun(run);
       setLocalRefresh((value) => value + 1);
+      // Ensure the "Working..." state is visible for at least 600ms
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < 600) await new Promise((resolve) => setTimeout(resolve, 600 - elapsed));
+      if (run) {
+        Alert.alert(
+          'Memory organized',
+          run.summary || `Found ${run.entity_count ?? 0} entities and ${run.connection_count ?? 0} connections.`,
+        );
+      } else {
+        Alert.alert('Memory organized', 'Nothing new to reorganize — your memory map is already up to date.');
+      }
     } finally {
       setOrganizingNow(false);
     }

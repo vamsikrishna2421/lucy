@@ -57,7 +57,7 @@ function formatDoneTime(iso: string): string {
   });
 }
 
-function AnimatedTodoRow({ todo, onPress }: { todo: TodoRow; onPress: () => void }) {
+function AnimatedTodoRow({ todo, onPress, onLongPress }: { todo: TodoRow; onPress: () => void; onLongPress: () => void }) {
   const checkScale = useRef(new Animated.Value(1)).current;
   const checkFill = useRef(new Animated.Value(0)).current;
   const strikeWidth = useRef(new Animated.Value(0)).current;
@@ -77,7 +77,7 @@ function AnimatedTodoRow({ todo, onPress }: { todo: TodoRow; onPress: () => void
 
   return (
     <Animated.View style={[styles.todoRow, { opacity: rowOpacity }]}>
-      <TouchableOpacity style={styles.checkboxArea} onPress={handlePress}>
+      <TouchableOpacity style={styles.checkboxArea} onPress={handlePress} onLongPress={onLongPress} delayLongPress={500}>
         <Animated.View style={[styles.checkCircle, { transform: [{ scale: checkScale }] }]}>
           <Animated.Text style={[styles.checkFillText, { opacity: checkFill }]}>✓</Animated.Text>
         </Animated.View>
@@ -113,6 +113,8 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const [pendingTodo, setPendingTodo] = useState<TodoRow | null>(null);
   const [doneNotes, setDoneNotes] = useState('');
+  const [editTodo, setEditTodo] = useState<TodoRow | null>(null);
+  const [editText, setEditText] = useState('');
   const [voiceRecording, setVoiceRecording] = useState(false);
   type RecInst = { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void };
   const audioRecorder = useRef<RecInst | null>(null);
@@ -147,6 +149,21 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
     setDone((prev) => [{ todo: pendingTodo, doneAt, notes }, ...prev]);
     setPendingTodo(null);
     setDoneNotes('');
+  };
+
+  const saveEditTodo = async () => {
+    if (!editTodo || !editText.trim()) return;
+    const db = await getDatabase();
+    await db.runAsync('UPDATE todos SET task = ? WHERE id = ?', editText.trim(), editTodo.id);
+    setTodos((prev) => prev.map((t) => t.id === editTodo.id ? { ...t, task: editText.trim() } : t));
+    setEditTodo(null);
+  };
+
+  const deleteTodo = async (todo: TodoRow) => {
+    const db = await getDatabase();
+    await archiveTodo(db, todo.id, 'deleted');
+    setTodos((prev) => prev.filter((t) => t.id !== todo.id));
+    setEditTodo(null);
   };
 
   const undoDone = async (entry: DoneEntry) => {
@@ -237,7 +254,12 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
               <View key={group.label} style={styles.group}>
                 <Text style={styles.groupLabel}>{group.label.toUpperCase()}</Text>
                 {group.items.map((todo) => (
-                  <AnimatedTodoRow key={todo.id} todo={todo} onPress={() => openDoneModal(todo)} />
+                  <AnimatedTodoRow
+                    key={todo.id}
+                    todo={todo}
+                    onPress={() => openDoneModal(todo)}
+                    onLongPress={() => { setEditText(todo.task); setEditTodo(todo); }}
+                  />
                 ))}
               </View>
             ))}
@@ -319,6 +341,30 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
           </View>
         </TouchableOpacity>
       </View>
+
+      {/* Edit todo modal */}
+      <Modal transparent animationType="fade" visible={editTodo !== null} onRequestClose={() => setEditTodo(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setEditTodo(null)}>
+          <Pressable style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit task</Text>
+            <TextInput
+              style={[styles.modalInput, { minHeight: 48 }]}
+              value={editText}
+              onChangeText={setEditText}
+              autoFocus
+              multiline
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={[styles.modalSkip, { flex: 1, borderColor: '#ef4444' }]} onPress={() => void deleteTodo(editTodo!)}>
+                <Text style={[styles.modalSkipText, { color: '#ef4444' }]}>Delete</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalDone} onPress={() => void saveEditTodo()}>
+                <Text style={styles.modalDoneText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal
         transparent

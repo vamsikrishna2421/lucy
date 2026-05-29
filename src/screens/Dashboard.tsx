@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { PrivacyBadge } from '../components/PrivacyBadge';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
@@ -17,6 +17,8 @@ import { listReminders, type ReminderRow } from '../db/reminders';
 import { listTodos, type TodoRow } from '../db/todos';
 import { protectedPreview } from '../processing/privacy';
 import { organizeMemory } from '../processing/organizer';
+import { enqueueTranscript } from '../processing/extract';
+import { archiveTodo } from '../db/todos';
 
 type ViewMode = 'Now' | 'Context' | 'Memory' | 'Captured' | 'Library';
 type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'Places' | 'Interests';
@@ -138,7 +140,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
       {view === 'Memory' ? (
         <KnowledgeView run={organizationRun} entities={knowledgeEntities} connections={knowledgeConnections} insights={knowledgeInsights} />
       ) : null}
-      {view === 'Captured' ? <CapturedView captures={captures} updates={updates} /> : null}
+      {view === 'Captured' ? <CapturedView captures={captures} updates={updates} onFeedback={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Library' ? (
         <LibraryView
           tab={tab}
@@ -395,52 +397,105 @@ function KnowledgeView({
   );
 }
 
-function CapturedView({ captures, updates }: { captures: CaptureRow[]; updates: Record<number, CaptureRow[]> }) {
+function CapturedView({ captures, updates, onFeedback }: { captures: CaptureRow[]; updates: Record<number, CaptureRow[]>; onFeedback: () => void }) {
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+  const [feedbackTarget, setFeedbackTarget] = useState<CaptureRow | null>(null);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const submitFeedback = async () => {
+    if (!feedbackTarget || !feedbackText.trim()) return;
+    setSending(true);
+    try {
+      const correction = `[Correction for previous capture: ${feedbackTarget.extracted_title ?? feedbackTarget.raw_transcript?.slice(0, 60)}]\n${feedbackText.trim()}`;
+      await enqueueTranscript(correction, 'text', feedbackTarget.privacy_level === 'private');
+      setFeedbackTarget(null);
+      setFeedbackText('');
+      onFeedback();
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
-    <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-      {captures.map((item) => (
-        <View key={item.id} style={styles.captureRow}>
-          {item.extracted_title ? (
-            <Text style={styles.captureTitle}>{protectedPreview(item.extracted_title)}</Text>
-          ) : null}
-          <Text style={styles.captureText} numberOfLines={1} ellipsizeMode="tail">{protectedPreview(item.raw_transcript)}</Text>
-          {item.structured_text ? (
-            <View style={styles.keyPoints}>
-              {extractKeyPoints(item.structured_text).map((point, i) => (
-                <Text key={i} style={styles.keyPoint}>{point}</Text>
-              ))}
+    <>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {captures.map((item) => (
+          <View key={item.id} style={styles.captureRow}>
+            {item.extracted_title ? (
+              <Text style={styles.captureTitle}>{protectedPreview(item.extracted_title)}</Text>
+            ) : null}
+            <Text style={styles.captureText} numberOfLines={1} ellipsizeMode="tail">{protectedPreview(item.raw_transcript)}</Text>
+            {item.structured_text ? (
+              <View style={styles.keyPoints}>
+                {extractKeyPoints(item.structured_text).map((point, i) => (
+                  <Text key={i} style={styles.keyPoint}>{point}</Text>
+                ))}
+              </View>
+            ) : null}
+            <Text style={styles.captureTime}>Captured {displayTimestamp(item.created_at)}</Text>
+            {item.structured_text ? (
+              <TouchableOpacity
+                style={styles.structureToggle}
+                onPress={() => setExpanded((current) => ({ ...current, [item.id]: !current[item.id] }))}
+              >
+                <Text style={styles.structureToggleText}>{expanded[item.id] ? 'Hide structure' : 'View structure'}</Text>
+              </TouchableOpacity>
+            ) : null}
+            {item.structured_text && expanded[item.id] ? (
+              <View style={styles.structuredMemory}>
+                <Text style={styles.structuredLabel}>STRUCTURED MEMORY</Text>
+                <Text style={styles.structuredText}>{protectedPreview(item.structured_text)}</Text>
+              </View>
+            ) : null}
+            <View style={styles.captureMeta}>
+              <Text style={styles.captureStatus}>{captureStatus(item) === 'complete' ? 'Remembered' : captureStatus(item)}</Text>
+              {captureStatus(item) === 'complete' ? <PrivacyBadge level={item.privacy_level} /> : null}
+              <TouchableOpacity onPress={() => { setFeedbackText(''); setFeedbackTarget(item); }}>
+                <Text style={styles.feedbackLink}>Correct this</Text>
+              </TouchableOpacity>
             </View>
-          ) : null}
-          <Text style={styles.captureTime}>Captured {displayTimestamp(item.created_at)}</Text>
-          {item.structured_text ? (
-            <TouchableOpacity
-              style={styles.structureToggle}
-              onPress={() => setExpanded((current) => ({ ...current, [item.id]: !current[item.id] }))}
-            >
-              <Text style={styles.structureToggleText}>{expanded[item.id] ? 'Hide structure' : 'View structure'}</Text>
-            </TouchableOpacity>
-          ) : null}
-          {item.structured_text && expanded[item.id] ? (
-            <View style={styles.structuredMemory}>
-              <Text style={styles.structuredLabel}>STRUCTURED MEMORY</Text>
-              <Text style={styles.structuredText}>{protectedPreview(item.structured_text)}</Text>
-            </View>
-          ) : null}
-          <View style={styles.captureMeta}>
-            <Text style={styles.captureStatus}>{captureStatus(item) === 'complete' ? 'Remembered' : captureStatus(item)}</Text>
-            {captureStatus(item) === 'complete' ? <PrivacyBadge level={item.privacy_level} /> : null}
+            {(updates[item.id] ?? []).map((update) => (
+              <View key={update.id} style={styles.activity}>
+                <Text style={styles.activityTitle}>{protectedPreview(update.raw_transcript)}</Text>
+                <Text style={styles.activityTime}>Completed {displayTimestamp(update.created_at)}</Text>
+              </View>
+            ))}
           </View>
-          {(updates[item.id] ?? []).map((update) => (
-            <View key={update.id} style={styles.activity}>
-              <Text style={styles.activityTitle}>{protectedPreview(update.raw_transcript)}</Text>
-              <Text style={styles.activityTime}>Completed {displayTimestamp(update.created_at)}</Text>
+        ))}
+        {!captures.length ? <EmptyLine text="New captures will show here." /> : null}
+      </ScrollView>
+
+      <Modal transparent animationType="fade" visible={feedbackTarget !== null} onRequestClose={() => setFeedbackTarget(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setFeedbackTarget(null)}>
+          <Pressable style={styles.feedbackModal}>
+            <Text style={styles.feedbackModalTitle}>Correct this memory</Text>
+            <Text style={styles.feedbackModalSub} numberOfLines={2}>{feedbackTarget?.extracted_title ?? feedbackTarget?.raw_transcript?.slice(0, 80)}</Text>
+            <TextInput
+              style={styles.feedbackInput}
+              placeholder="What's wrong? What should LUCY know instead?"
+              placeholderTextColor={LUCY_COLORS.textSubtle}
+              multiline
+              autoFocus
+              value={feedbackText}
+              onChangeText={setFeedbackText}
+            />
+            <View style={styles.feedbackButtons}>
+              <TouchableOpacity style={styles.feedbackCancel} onPress={() => setFeedbackTarget(null)}>
+                <Text style={styles.feedbackCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.feedbackSend, !feedbackText.trim() && { opacity: 0.4 }]}
+                disabled={!feedbackText.trim() || sending}
+                onPress={() => void submitFeedback()}
+              >
+                <Text style={styles.feedbackSendText}>{sending ? '...' : 'Send to LUCY'}</Text>
+              </TouchableOpacity>
             </View>
-          ))}
-        </View>
-      ))}
-      {!captures.length ? <EmptyLine text="New captures will show here." /> : null}
-    </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -583,6 +638,17 @@ const styles = StyleSheet.create({
   structuredText: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 19 },
   captureMeta: { marginTop: 10, alignItems: 'center', justifyContent: 'flex-end', flexDirection: 'row', gap: 8 },
   captureStatus: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 12, textTransform: 'capitalize' },
+  feedbackLink: { color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '600', textDecorationLine: 'underline' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  feedbackModal: { backgroundColor: LUCY_COLORS.surface, borderRadius: 20, padding: 24, width: '100%', borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 12 },
+  feedbackModalTitle: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
+  feedbackModalSub: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 20 },
+  feedbackInput: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 12, color: LUCY_COLORS.textDark, fontSize: 15, minHeight: 80, textAlignVertical: 'top' },
+  feedbackButtons: { flexDirection: 'row', gap: 10 },
+  feedbackCancel: { flex: 1, paddingVertical: 12, borderRadius: 11, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center' },
+  feedbackCancelText: { color: LUCY_COLORS.textMuted, fontWeight: '600' },
+  feedbackSend: { flex: 2, paddingVertical: 12, borderRadius: 11, backgroundColor: LUCY_COLORS.primary, alignItems: 'center' },
+  feedbackSendText: { color: '#fff', fontWeight: '700' },
   activity: { borderLeftWidth: 2, borderLeftColor: LUCY_COLORS.primary, paddingLeft: 12, paddingTop: 9, marginTop: 10 },
   activityTitle: { color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '600' },
   activityTime: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 3 },

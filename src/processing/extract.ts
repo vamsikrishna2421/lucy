@@ -21,7 +21,7 @@ import { insertPlace } from '../db/places';
 import { insertOpenLoop } from '../db/openLoops';
 import { insertFollowUp } from '../db/followUps';
 import { insertReminder, markReminderScheduled } from '../db/reminders';
-import { insertTodo } from '../db/todos';
+import { insertTodo, listPendingTodos } from '../db/todos';
 import type { CaptureSource, ExtractionResult } from '../types/extraction';
 import { extractExplicitEnglishFact } from './explicitEnglish';
 import { resolveCompletionFollowUp } from './followUp';
@@ -31,6 +31,22 @@ import { normalizeExtraction } from './schema';
 import { scheduleCapturedReminder, sendGuardianNotification } from './notifications';
 import { writeVaultNote } from './vault';
 import { formatStructuredMemory } from './structuredMemory';
+
+function normText(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function isSimilarTask(a: string, b: string): boolean {
+  const na = normText(a);
+  const nb = normText(b);
+  if (na === nb) return true;
+  if (na.includes(nb) || nb.includes(na)) return true;
+  const wordsA = new Set(na.split(' ').filter((w) => w.length > 3));
+  const wordsB = new Set(nb.split(' ').filter((w) => w.length > 3));
+  if (wordsA.size === 0 || wordsB.size === 0) return false;
+  const overlap = [...wordsA].filter((w) => wordsB.has(w)).length;
+  return overlap / Math.max(wordsA.size, wordsB.size) > 0.65;
+}
 
 function hasMeaningfulExtraction(result: ExtractionResult): boolean {
   return (
@@ -100,8 +116,12 @@ async function persistExtraction(
   const reminderRows: Array<{ id: number; reminder: ExtractionResult['reminders'][number] }> = [];
 
   await db.withTransactionAsync(async () => {
+    const existingTodos = await listPendingTodos(db);
     for (const task of extraction.tasks) {
-      await insertTodo(db, capture.id, task, extraction.privacy_level);
+      const isDuplicate = existingTodos.some((existing) => isSimilarTask(existing.task, task.task));
+      if (!isDuplicate) {
+        await insertTodo(db, capture.id, task, extraction.privacy_level);
+      }
     }
     for (const expense of extraction.expenses) {
       await insertExpense(db, capture.id, expense, extraction.privacy_level);

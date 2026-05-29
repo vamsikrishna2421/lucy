@@ -8,13 +8,11 @@ workflows:
       node: latest
       xcode: latest
       cocoapods: default
+      groups:
+        - ios-creds    # variable group name you create in Codemagic app settings
       vars:
         BUNDLE_ID: com.anonymous.lucy
         XCODE_SCHEME: lucy
-        # Add these 3 as Secure environment variables in Codemagic app settings:
-        # APP_STORE_CONNECT_KEY_IDENTIFIER   (your Key ID)
-        # APP_STORE_CONNECT_ISSUER_ID        (Issuer ID from App Store Connect)
-        # APP_STORE_CONNECT_PRIVATE_KEY      (full contents of .p8 file)
 
     triggering:
       events:

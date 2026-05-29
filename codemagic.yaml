@@ -15,11 +15,7 @@ workflows:
         XCODE_SCHEME: lucy
 
     triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: master
-          include: true
+      events: []   # manual builds only — start from Codemagic dashboard
 
     scripts:
       - name: Install dependencies

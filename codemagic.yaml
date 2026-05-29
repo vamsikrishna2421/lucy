@@ -39,10 +39,15 @@ workflows:
       - name: Set up keychain
         script: keychain initialize
 
+      - name: Generate certificate private key
+        script: |
+          openssl genrsa -out /tmp/cert_private.pem 2048
+          echo "CERTIFICATE_PRIVATE_KEY<<EOF" >> $CM_ENV
+          cat /tmp/cert_private.pem >> $CM_ENV
+          echo "EOF" >> $CM_ENV
+
       - name: Fetch or create App Store signing files
         script: |
-          # Credentials are read automatically from env vars:
-          # APP_STORE_CONNECT_KEY_IDENTIFIER, APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_PRIVATE_KEY
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create

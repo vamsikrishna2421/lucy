@@ -60,6 +60,11 @@ export interface MemoryGap {
   notification: string | null;
 }
 
+export interface MoodEntry {
+  tone: 'positive' | 'negative' | 'neutral' | 'stressed' | 'excited' | 'frustrated' | 'calm';
+  energy: 'high' | 'medium' | 'low';
+}
+
 export interface OpenLoop {
   description: string;
 }
@@ -93,6 +98,7 @@ export interface ExtractionResult {
   memory_gaps: MemoryGap[];
   open_loops: OpenLoop[];
   follow_ups: FollowUp[];
+  mood: MoodEntry;
 }
 
 export type CaptureSource = 'text' | 'voice' | 'android' | 'ios' | 'passive';

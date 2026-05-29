@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { PrivacyBadge } from '../components/PrivacyBadge';
 import { LUCY_COLORS } from '../config/colors';
@@ -21,7 +21,7 @@ import { enqueueTranscript } from '../processing/extract';
 import { archiveTodo } from '../db/todos';
 
 type ViewMode = 'Now' | 'Context' | 'Memory' | 'Captured' | 'Library';
-type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'Places' | 'Interests';
+type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'Places' | 'Interests' | 'People';
 
 function displayTimestamp(value: string): string {
   return new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`).toLocaleString();
@@ -400,6 +400,25 @@ function KnowledgeView({
 function CapturedView({ captures, updates, onFeedback }: { captures: CaptureRow[]; updates: Record<number, CaptureRow[]>; onFeedback: () => void }) {
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [feedbackTarget, setFeedbackTarget] = useState<CaptureRow | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<CaptureRow[] | null>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!query.trim()) { setSearchResults(null); return; }
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const { findSimilarCaptures } = await import('../processing/vectorSearch');
+        const db = await getDatabase();
+        const results = await findSimilarCaptures(db, query, 10, 0.1);
+        setSearchResults(results.map((r) => r.capture));
+      } catch { setSearchResults(null); }
+    }, 300);
+  };
+
+  const displayCaptures = searchResults ?? captures;
   const [feedbackText, setFeedbackText] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -419,8 +438,28 @@ function CapturedView({ captures, updates, onFeedback }: { captures: CaptureRow[
 
   return (
     <>
+      <View style={styles.searchBar}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search memories..."
+          placeholderTextColor={LUCY_COLORS.textSubtle}
+          value={searchQuery}
+          onChangeText={handleSearch}
+          returnKeyType="search"
+        />
+        {searchQuery ? (
+          <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults(null); }}>
+            <Text style={styles.searchClear}>✕</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      {searchResults !== null && (
+        <Text style={styles.searchResultsLabel}>
+          {searchResults.length > 0 ? `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''}` : 'No matching memories'}
+        </Text>
+      )}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {captures.map((item) => (
+        {displayCaptures.map((item) => (
           <View key={item.id} style={styles.captureRow}>
             {item.extracted_title ? (
               <Text style={styles.captureTitle}>{protectedPreview(item.extracted_title)}</Text>
@@ -463,7 +502,7 @@ function CapturedView({ captures, updates, onFeedback }: { captures: CaptureRow[
             ))}
           </View>
         ))}
-        {!captures.length ? <EmptyLine text="New captures will show here." /> : null}
+        {displayCaptures.length === 0 && !searchQuery ? <EmptyLine text="New captures will show here." /> : null}
       </ScrollView>
 
       <Modal transparent animationType="fade" visible={feedbackTarget !== null} onRequestClose={() => setFeedbackTarget(null)}>
@@ -516,7 +555,7 @@ function LibraryView({
   places: PlaceRow[];
   interests: InterestRow[];
 }) {
-  const tabs: LibraryTab[] = ['Todos', 'Ideas', 'Expenses', 'Places', 'Interests'];
+  const tabs: LibraryTab[] = ['Todos', 'Ideas', 'Expenses', 'Places', 'Interests', 'People'];
   return (
     <View style={styles.library}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs}>
@@ -532,8 +571,41 @@ function LibraryView({
         {tab === 'Expenses' && expenses.map((item) => <Card key={item.id} title={`${item.amount ?? '-'} - ${item.description}`} detail={item.category} privacy={item.privacy_level} />)}
         {tab === 'Places' && places.map((item) => <Card key={item.id} title={item.name} detail={item.reason} privacy={item.privacy_level} />)}
         {tab === 'Interests' && interests.map((item) => <Card key={item.id} title={item.topic} detail={`${item.strength} / mentioned ${item.mention_count} time(s)`} />)}
+        {tab === 'People' && <PeopleTab />}
       </ScrollView>
     </View>
+  );
+}
+
+function PeopleTab() {
+  const [people, setPeople] = useState<Array<{ name: string; lastMentioned: string | null; mentionCount: number; typicalContext: string | null; pendingFollowUps: number }>>([]);
+
+  useEffect(() => {
+    void (async () => {
+      const { getAllPersonContexts } = await import('../processing/relationshipEngine');
+      const db = await getDatabase();
+      setPeople(await getAllPersonContexts(db));
+    })();
+  }, []);
+
+  if (people.length === 0) return <EmptyLine text="People will appear here as you capture notes mentioning names." />;
+
+  return (
+    <>
+      {people.map((p) => {
+        const lastSeen = p.lastMentioned
+          ? new Date(p.lastMentioned.includes('T') ? p.lastMentioned : `${p.lastMentioned.replace(' ', 'T')}Z`).toLocaleDateString()
+          : 'Unknown';
+        const detail = [
+          `${p.mentionCount} mention${p.mentionCount !== 1 ? 's' : ''}`,
+          `Last: ${lastSeen}`,
+          p.pendingFollowUps > 0 ? `${p.pendingFollowUps} follow-up${p.pendingFollowUps !== 1 ? 's' : ''}` : null,
+        ].filter(Boolean).join(' · ');
+        return (
+          <Card key={p.name} title={p.name} detail={detail} />
+        );
+      })}
+    </>
   );
 }
 
@@ -638,6 +710,10 @@ const styles = StyleSheet.create({
   structuredText: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 19 },
   captureMeta: { marginTop: 10, alignItems: 'center', justifyContent: 'flex-end', flexDirection: 'row', gap: 8 },
   captureStatus: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 12, textTransform: 'capitalize' },
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8, gap: 8 },
+  searchInput: { flex: 1, color: LUCY_COLORS.textDark, fontSize: 14 },
+  searchClear: { color: LUCY_COLORS.textSubtle, fontSize: 14, fontWeight: '700' },
+  searchResultsLabel: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginBottom: 8, fontWeight: '600' },
   feedbackBtn: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', justifyContent: 'center' },
   feedbackBtnText: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '700' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', alignItems: 'center', padding: 24 },

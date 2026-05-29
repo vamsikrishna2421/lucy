@@ -8,6 +8,10 @@ import { getSetting, setSetting } from '../db/settings';
 import { sendDigestNotification } from './notifications';
 import { processQueue } from './extract';
 import { organizeMemory } from './organizer';
+import { sendMorningBrief, shouldSendMorningBrief } from './morningBrief';
+import { weeklyInsightIfDue } from './weeklyInsight';
+import { storeEmbedding } from '../ai/embeddings';
+import { listRecentCaptures } from '../db/captures';
 
 export const BACKGROUND_PROCESSING_TASK = 'lucy-background-organizing';
 export const BACKGROUND_LAST_RUN_SETTING = 'background_processing_last_run';
@@ -39,6 +43,26 @@ if (!TaskManager.isTaskDefined(BACKGROUND_PROCESSING_TASK)) {
           await setSetting(db, 'daily_digest_last_sent', today);
         }
       }
+      // Backfill embeddings for any captures missing them
+      try {
+        const recentCaptures = await listRecentCaptures(db, 30);
+        for (const capture of recentCaptures) {
+          const existing = await db.getFirstAsync<{ id: number }>(
+            'SELECT id FROM capture_embeddings WHERE capture_id = ?', capture.id,
+          );
+          if (!existing && capture.raw_transcript) {
+            await storeEmbedding(db, capture.id, capture.raw_transcript);
+          }
+        }
+      } catch { /* non-critical */ }
+
+      // Morning brief (7-9am, once per day)
+      if (await shouldSendMorningBrief()) {
+        try { await sendMorningBrief(db); } catch { /* non-critical */ }
+      }
+      // Weekly insight (Sunday evenings)
+      try { await weeklyInsightIfDue(db); } catch { /* non-critical */ }
+
       await setSetting(db, BACKGROUND_LAST_RUN_SETTING, new Date().toISOString());
       await setSetting(
         db,

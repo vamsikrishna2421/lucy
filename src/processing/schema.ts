@@ -176,5 +176,15 @@ export function normalizeExtraction(value: unknown): ExtractionResult {
           })
           .filter((item) => item.action.trim().length > 0)
       : [],
+    mood: (() => {
+      const validTones = ['positive','negative','neutral','stressed','excited','frustrated','calm'] as const;
+      const validEnergy = ['high','medium','low'] as const;
+      const m = record((source as Record<string, unknown>).mood);
+      const rawTone = text(m?.tone ?? 'neutral');
+      const rawEnergy = text(m?.energy ?? 'medium');
+      const tone = validTones.includes(rawTone as typeof validTones[number]) ? rawTone as typeof validTones[number] : 'neutral';
+      const energy = validEnergy.includes(rawEnergy as typeof validEnergy[number]) ? rawEnergy as typeof validEnergy[number] : 'medium';
+      return { tone, energy };
+    })(),
   };
 }

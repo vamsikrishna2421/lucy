@@ -31,6 +31,9 @@ import { normalizeExtraction } from './schema';
 import { scheduleCapturedReminder, sendGuardianNotification } from './notifications';
 import { writeVaultNote } from './vault';
 import { formatStructuredMemory } from './structuredMemory';
+import { storeEmbedding } from '../ai/embeddings';
+import { getRelatedContext } from './vectorSearch';
+import { updatePersonContext } from './relationshipEngine';
 
 function normText(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -141,12 +144,20 @@ async function persistExtraction(
     }
     for (const person of extraction.people) {
       await upsertPerson(db, person, extraction.summary);
+      void updatePersonContext(db, person, capture.raw_transcript);
     }
     for (const loop of extraction.open_loops) {
       await insertOpenLoop(db, capture.id, loop.description, extraction.privacy_level);
     }
     for (const fu of extraction.follow_ups) {
       await insertFollowUp(db, capture.id, fu.assignee, fu.action, extraction.privacy_level);
+    }
+    // Persist mood entry
+    if (extraction.mood) {
+      await db.runAsync(
+        'INSERT INTO mood_entries (capture_id, tone, energy) VALUES (?, ?, ?)',
+        capture.id, extraction.mood.tone, extraction.mood.energy,
+      );
     }
     for (const clarification of extraction.clarifications) {
       await insertContextRequest(
@@ -212,10 +223,24 @@ export async function processQueue(onChange?: () => void, maxCaptures = Number.P
         onChange?.();
         continue;
       }
-      const extraction = await analyzeTranscript(capture.raw_transcript, {
+      // Inject related past captures as context for richer extraction
+      let transcriptWithContext = capture.raw_transcript;
+      if (capture.privacy_level !== 'private') {
+        try {
+          const relatedCtx = await getRelatedContext(db, capture.raw_transcript, capture.id, 3);
+          if (relatedCtx.length > 0) {
+            transcriptWithContext = `${capture.raw_transcript}\n\n[Related past memories for context:\n${relatedCtx.join('\n')}]`;
+          }
+        } catch { /* non-critical */ }
+      }
+
+      const extraction = await analyzeTranscript(transcriptWithContext, {
         privacyLevel: capture.privacy_level === 'private' || capture.user_marked_private === 1 ? 'private' : capture.privacy_level,
       });
       await persistExtraction(capture, extraction);
+
+      // Store embedding for this capture (enables future semantic search)
+      void storeEmbedding(db, capture.id, capture.raw_transcript);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Processing failed.';
       console.warn(`Capture processing deferred: ${message}`);

@@ -242,6 +242,34 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       FOREIGN KEY (capture_id) REFERENCES captures(id)
     );
 
+    CREATE TABLE IF NOT EXISTS capture_embeddings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      capture_id INTEGER NOT NULL UNIQUE,
+      embedding TEXT NOT NULL,
+      model TEXT DEFAULT 'keyword',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (capture_id) REFERENCES captures(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS person_contexts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      last_mentioned DATETIME,
+      mention_count INTEGER DEFAULT 1,
+      typical_context TEXT,
+      pending_followups INTEGER DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS mood_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      capture_id INTEGER,
+      tone TEXT DEFAULT 'neutral',
+      energy TEXT DEFAULT 'medium',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (capture_id) REFERENCES captures(id)
+    );
+
     CREATE TABLE IF NOT EXISTS music_captures (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -334,5 +362,8 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_open_loops_status ON open_loops(status, created_at);
     CREATE INDEX IF NOT EXISTS idx_follow_ups_status ON follow_ups(status, created_at);
     CREATE INDEX IF NOT EXISTS idx_music_captures_status ON music_captures(status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_capture_embeddings_capture ON capture_embeddings(capture_id);
+    CREATE INDEX IF NOT EXISTS idx_mood_entries_created ON mood_entries(created_at);
+    CREATE INDEX IF NOT EXISTS idx_person_contexts_name ON person_contexts(name);
   `);
 }

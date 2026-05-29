@@ -77,7 +77,7 @@ function AnimatedTodoRow({ todo, onPress, onLongPress }: { todo: TodoRow; onPres
 
   return (
     <Animated.View style={[styles.todoRow, { opacity: rowOpacity }]}>
-      <TouchableOpacity style={styles.checkboxArea} onPress={handlePress} onLongPress={onLongPress} delayLongPress={500}>
+      <TouchableOpacity style={styles.checkboxArea} onPress={handlePress}>
         <Animated.View style={[styles.checkCircle, { transform: [{ scale: checkScale }] }]}>
           <Animated.Text style={[styles.checkFillText, { opacity: checkFill }]}>✓</Animated.Text>
         </Animated.View>
@@ -98,6 +98,9 @@ function AnimatedTodoRow({ todo, onPress, onLongPress }: { todo: TodoRow; onPres
           />
         </View>
         {todo.urgency === 'high' ? <Text style={styles.urgentBadge}>urgent</Text> : null}
+        <TouchableOpacity style={styles.editBtn} onPress={onLongPress}>
+          <Text style={styles.editBtnText}>⋯</Text>
+        </TouchableOpacity>
       </View>
     </Animated.View>
   );
@@ -491,6 +494,8 @@ const styles = StyleSheet.create({
   doneNotes: { color: LUCY_COLORS.textSubtle, fontSize: 12, lineHeight: 18, fontStyle: 'italic', marginTop: 2 },
   doneTime: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 3 },
   undoButton: { paddingVertical: 4, paddingHorizontal: 6 },
+  editBtn: { paddingHorizontal: 6, paddingVertical: 2 },
+  editBtnText: { color: LUCY_COLORS.textSubtle, fontSize: 18, fontWeight: '700', letterSpacing: 1 },
   undoText: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700' },
   // Capture
   ack: { alignSelf: 'center', backgroundColor: LUCY_COLORS.primarySoft, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, marginBottom: 8 },

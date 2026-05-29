@@ -451,8 +451,8 @@ function CapturedView({ captures, updates, onFeedback }: { captures: CaptureRow[
             <View style={styles.captureMeta}>
               <Text style={styles.captureStatus}>{captureStatus(item) === 'complete' ? 'Remembered' : captureStatus(item)}</Text>
               {captureStatus(item) === 'complete' ? <PrivacyBadge level={item.privacy_level} /> : null}
-              <TouchableOpacity onPress={() => { setFeedbackText(''); setFeedbackTarget(item); }}>
-                <Text style={styles.feedbackLink}>Correct this</Text>
+              <TouchableOpacity style={styles.feedbackBtn} onPress={() => { setFeedbackText(''); setFeedbackTarget(item); }}>
+                <Text style={styles.feedbackBtnText}>?</Text>
               </TouchableOpacity>
             </View>
             {(updates[item.id] ?? []).map((update) => (
@@ -638,7 +638,8 @@ const styles = StyleSheet.create({
   structuredText: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 19 },
   captureMeta: { marginTop: 10, alignItems: 'center', justifyContent: 'flex-end', flexDirection: 'row', gap: 8 },
   captureStatus: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 12, textTransform: 'capitalize' },
-  feedbackLink: { color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '600', textDecorationLine: 'underline' },
+  feedbackBtn: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', justifyContent: 'center' },
+  feedbackBtnText: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '700' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   feedbackModal: { backgroundColor: LUCY_COLORS.surface, borderRadius: 20, padding: 24, width: '100%', borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 12 },
   feedbackModalTitle: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },

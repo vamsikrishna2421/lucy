@@ -76,7 +76,9 @@
       "expo-background-task",
       "expo-splash-screen",
       "expo-audio",
-      "@jamsch/expo-speech-recognition",
+      ["@jamsch/expo-speech-recognition", {
+        "speechRecognitionPermission": "LUCY uses on-device speech recognition to transcribe your voice during passive listening mode."
+      }],
       "expo-asset",
       [
         "expo-build-properties",

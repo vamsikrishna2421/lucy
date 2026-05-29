@@ -88,6 +88,43 @@ export async function sendDigestNotification(
   });
 }
 
+export async function scheduleProgressCheckIn(): Promise<string | null> {
+  if (!(await requestNotificationPermission())) return null;
+  const messages = [
+    "what's been happening? quick capture before it slips away.",
+    "hey — any wins, updates, or things on your mind from the last couple hours?",
+    "good time to jot something down. I'm here.",
+    "two hours gone — anything worth remembering?",
+  ];
+  const body = messages[Math.floor(Date.now() / (2 * 60 * 60 * 1000)) % messages.length];
+  return Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'hey —',
+      body,
+      data: { kind: 'progress-checkin' },
+      sound: false,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: 2 * 60 * 60,
+      repeats: true,
+    },
+  });
+}
+
+export async function cancelProgressCheckIn(notificationId: string): Promise<void> {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(notificationId);
+  } catch { /* already cancelled */ }
+}
+
+// How many minutes before the deadline to fire the notification, by urgency.
+const REMINDER_LEAD_MINUTES: Record<string, number> = {
+  high: 15,
+  medium: 30,
+  low: 5,
+};
+
 export async function scheduleCapturedReminder(
   reminder: ExtractedReminder,
   privacy: PrivacyLevel,
@@ -96,10 +133,17 @@ export async function scheduleCapturedReminder(
   if (!reminder.time) {
     return null;
   }
-  const date = new Date(reminder.time);
-  if (!Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) {
+  const deadlineMs = new Date(reminder.time).getTime();
+  if (!Number.isFinite(deadlineMs)) {
     return null;
   }
+  const leadMs = (REMINDER_LEAD_MINUTES[reminder.urgency] ?? 15) * 60 * 1000;
+  const fireAt = deadlineMs - leadMs;
+  // If even the lead-time adjusted date is already past, skip.
+  if (fireAt <= Date.now()) {
+    return null;
+  }
+  const date = new Date(fireAt);
   if (!(await requestNotificationPermission())) {
     return null;
   }

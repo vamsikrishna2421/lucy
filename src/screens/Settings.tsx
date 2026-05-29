@@ -8,9 +8,11 @@ import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import { getCaptureQueueSummary, type CaptureQueueSummary } from '../db/captures';
 import { getLatestOrganizationRun, type OrganizationRunRow } from '../db/knowledge';
+import { getSetting, setSetting } from '../db/settings';
 import { getBackgroundProcessingState, type BackgroundProcessingState } from '../processing/background';
 import { runEnglishDeviceBenchmark, type BenchmarkResult } from '../processing/benchmark';
 import { organizeMemory } from '../processing/organizer';
+import { scheduleProgressCheckIn, cancelProgressCheckIn } from '../processing/notifications';
 import { getUserProfile, saveUserProfile, type UserProfile } from '../db/userProfile';
 
 interface SettingsScreenProps {
@@ -47,6 +49,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [profile, setProfile] = useState<UserProfile>({ name: '', about: '' });
   const [profileDraft, setProfileDraft] = useState<UserProfile>({ name: '', about: '' });
   const [savingProfile, setSavingProfile] = useState(false);
+  const [checkInEnabled, setCheckInEnabled] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -64,6 +67,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       setRemote(remoteState);
       setProfile(userProfile);
       setProfileDraft(userProfile);
+      setCheckInEnabled(!!(await getSetting(db, 'progress_checkin_notification_id')));
     })();
   }, [backgroundEnabled, localRefresh, refreshToken]);
 
@@ -231,6 +235,28 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       <Text style={styles.subtitle}>Quiet controls for your memory.</Text>
 
       <View style={styles.list}>
+        <SettingsRow
+          title="Progress check-ins"
+          value={checkInEnabled ? 'LUCY reminds you every 2 hours to capture updates' : 'Off — tap to turn on'}
+          badge={checkInEnabled ? 'On' : 'Off'}
+          active={checkInEnabled}
+          onInfo={async () => {
+            const db = await getDatabase();
+            if (checkInEnabled) {
+              const existingId = await getSetting(db, 'progress_checkin_notification_id');
+              if (existingId) await cancelProgressCheckIn(existingId);
+              await setSetting(db, 'progress_checkin_notification_id', '');
+              setCheckInEnabled(false);
+            } else {
+              const id = await scheduleProgressCheckIn();
+              if (id) {
+                await setSetting(db, 'progress_checkin_notification_id', id);
+                setCheckInEnabled(true);
+                Alert.alert('Check-ins on', 'LUCY will nudge you every 2 hours to capture your progress.');
+              }
+            }
+          }}
+        />
         <SettingsRow
           title="About you"
           value={profile.name ? `${profile.name}${profile.about ? ' · ' + profile.about.slice(0, 30) + (profile.about.length > 30 ? '…' : '') : ''}` : 'Tell LUCY who you are'}

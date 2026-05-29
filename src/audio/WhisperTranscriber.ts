@@ -12,7 +12,7 @@ export async function transcribeAudioFile(uri: string): Promise<string | null> {
   const form = new FormData();
   form.append('file', { uri, type: 'audio/mp4', name: 'passive.m4a' } as unknown as Blob);
   form.append('model', 'whisper-1');
-  form.append('language', 'en');
+  // No language hint — let Whisper auto-detect (handles Telugu, Tanglish, mixed)
 
   try {
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {

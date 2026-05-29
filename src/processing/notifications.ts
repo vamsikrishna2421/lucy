@@ -128,13 +128,6 @@ export async function cancelProgressCheckIn(storedValue: string): Promise<void> 
   } catch { /* already cancelled or invalid */ }
 }
 
-// How many minutes before the deadline to fire the notification, by urgency.
-const REMINDER_LEAD_MINUTES: Record<string, number> = {
-  high: 15,
-  medium: 30,
-  low: 5,
-};
-
 export async function scheduleCapturedReminder(
   reminder: ExtractedReminder,
   privacy: PrivacyLevel,
@@ -147,39 +140,47 @@ export async function scheduleCapturedReminder(
   if (!Number.isFinite(deadlineMs)) {
     return null;
   }
-  const leadMs = (REMINDER_LEAD_MINUTES[reminder.urgency] ?? 15) * 60 * 1000;
-  const fireAt = deadlineMs - leadMs;
-  // If even the lead-time adjusted date is already past, skip.
-  if (fireAt <= Date.now()) {
-    return null;
-  }
-  const date = new Date(fireAt);
   if (!(await requestNotificationPermission())) {
     return null;
   }
   const isSecret = containsCredentialSecret(`${originalInput}\n${reminder.text}`);
-  const localTime = date.toLocaleString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZoneName: 'short',
+  const deadlineTime = new Date(deadlineMs).toLocaleTimeString(undefined, {
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
   });
-  const body = isSecret
-    ? 'Open LUCY to view a protected reminder.'
-    : `${reminder.text}\n${localTime}`;
-  return Notifications.scheduleNotificationAsync({
-    content: {
-      title: isSecret ? 'Protected reminder' : 'heads up —',
-      body,
-      data: { kind: 'captured-reminder', privacy, text: isSecret ? null : reminder.text },
-      sound: true,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date,
-      channelId: REMINDER_CHANNEL,
-    },
-  });
+  const baseBody = isSecret ? 'Open LUCY to view a protected reminder.' : reminder.text;
+  const baseTitle = isSecret ? 'Protected reminder' : 'heads up —';
+
+  // Schedule cascade: 15 min before, 10 min before, 5 min before, at time.
+  const offsets: Array<{ ms: number; label: string }> = [
+    { ms: 15 * 60 * 1000, label: '15 min until' },
+    { ms: 10 * 60 * 1000, label: '10 min until' },
+    { ms: 5 * 60 * 1000, label: '5 min until' },
+    { ms: 0, label: 'now —' },
+  ];
+
+  let firstId: string | null = null;
+  for (const { ms, label } of offsets) {
+    const fireAt = deadlineMs - ms;
+    if (fireAt <= Date.now()) continue;
+    const body = isSecret
+      ? baseBody
+      : ms === 0
+        ? `${baseBody}\n${deadlineTime}`
+        : `${label} ${deadlineTime}: ${baseBody}`;
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: ms === 0 ? baseTitle : `${label} ${deadlineTime}`,
+        body,
+        data: { kind: 'captured-reminder', privacy, text: isSecret ? null : reminder.text },
+        sound: ms === 0,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: new Date(fireAt),
+        channelId: REMINDER_CHANNEL,
+      },
+    });
+    if (!firstId) firstId = id;
+  }
+  return firstId;
 }

@@ -88,34 +88,44 @@ export async function sendDigestNotification(
   });
 }
 
-export async function scheduleProgressCheckIn(): Promise<string | null> {
-  if (!(await requestNotificationPermission())) return null;
-  const messages = [
-    "what's been happening? quick capture before it slips away.",
-    "hey — any wins, updates, or things on your mind from the last couple hours?",
-    "good time to jot something down. I'm here.",
-    "two hours gone — anything worth remembering?",
-  ];
-  const body = messages[Math.floor(Date.now() / (2 * 60 * 60 * 1000)) % messages.length];
-  return Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'hey —',
-      body,
-      data: { kind: 'progress-checkin' },
-      sound: false,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-      seconds: 2 * 60 * 60,
-      repeats: true,
-    },
-  });
+// Fires every 2 hours during waking hours only (8 AM, 10 AM, 12 PM, 2 PM, 4 PM, 6 PM).
+const CHECKIN_HOURS = [8, 10, 12, 14, 16, 18];
+const CHECKIN_MESSAGES = [
+  "morning check-in — anything worth capturing before the day gets busy?",
+  "two hours in — any updates, decisions, or thoughts worth saving?",
+  "good time to jot something down. what's been on your plate?",
+  "quick capture moment — any wins, blockers, or ideas?",
+  "end of the work stretch — anything worth remembering from today?",
+  "evening check-in — wrap up the day with a quick thought?",
+];
+
+export async function scheduleProgressCheckIn(): Promise<string> {
+  if (!(await requestNotificationPermission())) return '';
+  const ids: string[] = [];
+  for (let i = 0; i < CHECKIN_HOURS.length; i++) {
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'hey —',
+        body: CHECKIN_MESSAGES[i],
+        data: { kind: 'progress-checkin' },
+        sound: false,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: CHECKIN_HOURS[i],
+        minute: 0,
+      },
+    });
+    ids.push(id);
+  }
+  return JSON.stringify(ids);
 }
 
-export async function cancelProgressCheckIn(notificationId: string): Promise<void> {
+export async function cancelProgressCheckIn(storedValue: string): Promise<void> {
   try {
-    await Notifications.cancelScheduledNotificationAsync(notificationId);
-  } catch { /* already cancelled */ }
+    const ids: string[] = JSON.parse(storedValue);
+    await Promise.all(ids.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => {})));
+  } catch { /* already cancelled or invalid */ }
 }
 
 // How many minutes before the deadline to fire the notification, by urgency.

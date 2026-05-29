@@ -238,6 +238,14 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     );
   }
   const answer = message.answer;
+  if (answer.answerKind === 'llm') {
+    return (
+      <View style={[styles.bubble, styles.lucyBubble]}>
+        <Text style={styles.responseLabel}>LUCY</Text>
+        <Text style={styles.llmResponse}>{answer.llmResponse}</Text>
+      </View>
+    );
+  }
   if (answer.answerKind === 'memory') {
     return <MemoryAnswerBubble answer={answer} />;
   }
@@ -390,6 +398,7 @@ const styles = StyleSheet.create({
   tipList: { gap: 8, marginBottom: 12 },
   tipItem: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 20, paddingLeft: 4 },
   tipHint: { color: LUCY_COLORS.textSubtle, fontSize: 12, lineHeight: 18, fontStyle: 'italic' },
+  llmResponse: { color: LUCY_COLORS.textDark, fontSize: 15, lineHeight: 23 },
   section: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginTop: 8, marginBottom: 7 },
   emptySection: { color: LUCY_COLORS.textMuted, fontSize: 13, paddingVertical: 7 },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.border },

@@ -5,10 +5,16 @@ import { listKnowledgeConnections, listKnowledgeEntities, type KnowledgeConfiden
 import { insertQuestionSignal } from '../db/questions';
 import { listReminders, type ReminderRow } from '../db/reminders';
 import { listPendingTodos, type TodoRow } from '../db/todos';
+import { listRecentCaptures } from '../db/captures';
 import type { ExtractionResult, PrivacyLevel } from '../types/extraction';
 import { isInvalidDeadline, isInvalidPendingTask } from './artifactCleanup';
 import { normalizeMemoryLookupText, recognizesMemoryMapQuestion, recognizesMonthlySpendingQuestion, recognizesTodayPlanQuestion, requestedTaskContext } from './askIntent';
 import { organizeMemory } from './organizer';
+import { getRemoteAccessState, getRemoteOpenAIKey } from '../ai/remoteAccess';
+import { promptOpenAI } from '../ai/openai';
+import { promptDevice } from '../ai/device';
+import { memoryAnswerSystemPrompt } from '../ai/prompts';
+import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
 
 export interface LucyMemoryConnection {
   statement: string;
@@ -33,7 +39,7 @@ export interface LucySpendingCategory {
 
 export interface LucyAnswer {
   supported: boolean;
-  answerKind?: 'today' | 'memory' | 'spending';
+  answerKind?: 'today' | 'memory' | 'spending' | 'llm';
   title: string;
   message: string;
   tasks: TodoRow[];
@@ -46,6 +52,7 @@ export interface LucyAnswer {
   expenses?: ExpenseRow[];
   expenseTotal?: number;
   spendingCategories?: LucySpendingCategory[];
+  llmResponse?: string;
 }
 
 function isToday(value: string): boolean {
@@ -185,6 +192,68 @@ async function answerFromMemoryMap(question: string): Promise<LucyAnswer> {
   };
 }
 
+async function answerWithLLM(question: string): Promise<LucyAnswer> {
+  const db = await getDatabase();
+  const [captures, profile] = await Promise.all([
+    listRecentCaptures(db, 20),
+    getUserProfile(db),
+  ]);
+
+  // Build context from non-private captures only (private stays on device).
+  const context = captures
+    .filter((c) => c.privacy_level !== 'private' && c.raw_transcript?.trim())
+    .slice(0, 15)
+    .map((c) => {
+      const date = new Date(c.created_at.includes('T') ? c.created_at : `${c.created_at.replace(' ', 'T')}Z`).toLocaleDateString();
+      const title = c.extracted_title ? `[${c.extracted_title}]` : '';
+      return `${date} ${title}\n${c.raw_transcript?.slice(0, 400) ?? ''}`;
+    })
+    .join('\n---\n');
+
+  if (!context.trim()) {
+    return {
+      supported: true,
+      answerKind: 'llm',
+      title: '',
+      message: '',
+      tasks: [],
+      deadlines: [],
+      recordedSignal: '',
+      llmResponse: "I don't have any captured notes to answer from yet. Try capturing some thoughts first — voice notes, meeting summaries, anything — and then ask me again.",
+    };
+  }
+
+  const userPrefix = buildUserContextPrefix(profile);
+  const systemPrompt = `${userPrefix}${memoryAnswerSystemPrompt}`;
+  const input = `CAPTURED MEMORIES:\n---\n${context}\n---\n\nQuestion: ${question}`;
+
+  let llmResponse: string;
+  try {
+    const remote = await getRemoteAccessState();
+    const apiKey = remote.enabled && remote.hasKey ? await getRemoteOpenAIKey() : null;
+    if (apiKey) {
+      llmResponse = await promptOpenAI(systemPrompt, input, apiKey);
+    } else {
+      llmResponse = await promptDevice(`${systemPrompt}\n${input}\n/no_think`);
+    }
+  } catch {
+    llmResponse = 'I had trouble answering this. Try enabling remote intelligence in Settings.';
+  }
+
+  await insertQuestionSignal(db, question, 'llm_answer', llmResponse.slice(0, 200), 'LLM answered from memory context.');
+
+  return {
+    supported: true,
+    answerKind: 'llm',
+    title: '',
+    message: '',
+    tasks: [],
+    deadlines: [],
+    recordedSignal: '',
+    llmResponse: llmResponse.trim(),
+  };
+}
+
 export async function askLucy(question: string): Promise<LucyAnswer> {
   const db = await getDatabase();
   const trimmed = question.trim();
@@ -195,18 +264,8 @@ export async function askLucy(question: string): Promise<LucyAnswer> {
     return answerFromMemoryMap(trimmed);
   }
   if (!recognizesTodayPlanQuestion(trimmed)) {
-    const message = 'Ask about pending tasks or deadlines for today, or name an organized project, area, or person to explore connected memory.';
-    await insertQuestionSignal(db, trimmed, 'unclassified', message, 'Evaluate future question pattern support.');
-    await organizeMemory(db, 'question');
-    return {
-      supported: false,
-      answerKind: 'today',
-      title: 'Still learning this question',
-      message,
-      tasks: [],
-      deadlines: [],
-      recordedSignal: 'Question pattern remembered locally for future organization.',
-    };
+    // No structured pattern matched — use LLM to answer from memory context.
+    return answerWithLLM(trimmed);
   }
 
   const [allTasks, reminders] = await Promise.all([listPendingTodos(db), listReminders(db)]);

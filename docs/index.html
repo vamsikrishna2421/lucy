@@ -223,6 +223,8 @@
 
 <!-- HERO -->
 <section class="hero">
+  <!-- Hero orbital logo -->
+  <canvas id="lucy-hero-canvas" width="260" height="200" style="display:block;margin:0 auto 32px;"></canvas>
   <div class="hero-eyebrow">Introducing</div>
   <h1 class="hero-title">LUC<span>Y</span></h1>
   <div class="hero-sub">Your Private AI Second Brain</div>
@@ -260,8 +262,8 @@
     <p class="section-desc">The logo is not just letters — it is an eye, an orbit, and a philosophy.</p>
     <div class="logo-layout">
       <div class="logo-visual">
-        <div class="logo-eye-text">LUC<span>Y</span></div>
-        <div class="logo-eye-sub">L · U · C orbiting around Y</div>
+        <canvas id="lucy-logo-canvas" width="320" height="240" style="display:block;margin:0 auto;position:relative;z-index:1;"></canvas>
+        <div class="logo-eye-sub" style="margin-top:20px;">L · U · C orbiting around Y</div>
       </div>
       <div>
         <div class="logo-items">
@@ -804,6 +806,94 @@
 </section>
 
 <footer>© 2026 LUCY · Private Beta · Scuts Technologies Private Limited · Listen · Understand · Connect · Yield</footer>
+
+<script>
+function startOrbitalAnimation(canvasId, scale) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const CX = W / 2, CY = H / 2;
+  const RX = 100 * scale, RY = 35 * scale;
+  const TAIL = 8;
+  const ORANGE = '#FF8C42', GLOW = '#FFA05C', DIM = '#FDDCB0';
+
+  const planets = [
+    { letter: 'L', phase: 0,     speed: 1.0,  color: ORANGE, size: 9 * scale },
+    { letter: 'U', phase: 2.094, speed: 1.3,  color: GLOW,   size: 7 * scale },
+    { letter: 'C', phase: 4.189, speed: 0.75, color: DIM,    size: 6 * scale },
+  ];
+
+  let angles = planets.map(p => p.phase);
+  let sunPulse = 0, last = 0;
+
+  function draw(ts) {
+    const dt = last ? (ts - last) / 1000 : 0;
+    last = ts; sunPulse += dt * 2;
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,140,66,0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(CX, CY, RX, RY, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    angles = angles.map((a, i) => a + dt * planets[i].speed);
+
+    planets.forEach((p, i) => {
+      const angle = angles[i];
+      const x = CX + RX * Math.cos(angle);
+      const y = CY + RY * Math.sin(angle);
+      const depth = (y - (CY - RY)) / (2 * RY);
+
+      for (let j = 1; j <= TAIL; j++) {
+        const ta = angle - j * 0.14;
+        const tx = CX + RX * Math.cos(ta), ty = CY + RY * Math.sin(ta);
+        const alpha = (1 - j / (TAIL + 2)) * (0.4 + depth * 0.4);
+        const ts2 = Math.max(1.5, (p.size - j * 0.8) * 0.72);
+        ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(tx, ty, ts2 / 2, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      }
+
+      const pSize = p.size + depth * 2.5, pAlpha = 0.5 + depth * 0.5;
+      ctx.save();
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, pSize * 1.8);
+      grad.addColorStop(0, p.color + '55'); grad.addColorStop(1, 'transparent');
+      ctx.globalAlpha = pAlpha * 0.7; ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(x, y, pSize * 1.8, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = pAlpha; ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(x, y, pSize, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1; ctx.fillStyle = '#0F0E0B';
+      ctx.font = `bold ${Math.max(7, pSize * 1.1)}px Inter, sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(p.letter, x, y + 0.5); ctx.restore();
+    });
+
+    const pulse = 1 + Math.sin(sunPulse) * 0.12, sunR = 16 * scale * pulse;
+    ctx.save();
+    const sunGrad = ctx.createRadialGradient(CX, CY, 0, CX, CY, sunR * 2.2);
+    sunGrad.addColorStop(0, 'rgba(255,140,66,0.28)'); sunGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = sunGrad; ctx.beginPath(); ctx.arc(CX, CY, sunR * 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = ORANGE; ctx.beginPath(); ctx.arc(CX, CY, sunR, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0F0E0B';
+    ctx.font = `900 ${Math.round(sunR * 0.85)}px Inter, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Y', CX, CY + 1); ctx.restore();
+
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+}
+
+(function() {
+  startOrbitalAnimation('lucy-hero-canvas', 1.1);
+  startOrbitalAnimation('lucy-logo-canvas', 1.0);
+})();
+
+// Logo canvases are already initialized above
+</script>
 
 </body>
 </html>

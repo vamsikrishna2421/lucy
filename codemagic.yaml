@@ -32,6 +32,19 @@ workflows:
           cd ios
           pod install --repo-update
 
+      - name: Auto-increment build number (commit count)
+        script: |
+          # Monotonic, Apple-ID-free build number that stays in the dotted scheme and
+          # always exceeds the last upload. Overrides the app.json buildNumber so we
+          # never hit "build number already used" on App Store Connect again.
+          BUILD_NUM="1.0.$(git rev-list --count HEAD)"
+          echo "Setting CFBundleVersion to $BUILD_NUM"
+          # App + extension Info.plists only (skip Pods/build artifacts).
+          find ios -name "Info.plist" -not -path "*/Pods/*" -not -path "*/build/*" | while read -r plist; do
+            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUM" "$plist" 2>/dev/null \
+              && echo "  updated $plist" || true
+          done
+
       - name: Set up keychain
         script: keychain initialize
 

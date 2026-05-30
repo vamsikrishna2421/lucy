@@ -422,8 +422,11 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         {/* AI Model Picker */}
         <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider }}>
           <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700', marginBottom: 4 }}>AI extraction model</Text>
-          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginBottom: 12 }}>
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginBottom: 6 }}>
             Select which model LUCY uses to understand your captures. Claude models require an Anthropic API key.
+          </Text>
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, marginBottom: 12, fontStyle: 'italic' }}>
+            Note: semantic search and voice transcription always use OpenAI (Anthropic has no embeddings or speech API), so an OpenAI key is still recommended even when extracting with Claude.
           </Text>
 
           {/* Dropdown trigger — shows the currently selected model */}

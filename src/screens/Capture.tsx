@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Dimensions,
   Keyboard,
   Linking,
   Modal,
@@ -210,8 +211,14 @@ function CategoryModal({
               </TouchableOpacity>
             </View>
 
-            {/* Checklist — pending + done items shown together */}
-            <ScrollView style={cmStyles.list} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {/* Checklist — pending + done items shown together.
+                Bound the height explicitly (sheet ~80% of screen minus header+add-bar)
+                so the list reliably scrolls; flexShrink alone wasn't dependable in RN. */}
+            <ScrollView
+              style={[cmStyles.list, { maxHeight: Math.round(Dimensions.get('window').height * 0.62) }]}
+              showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
+            >
               {allItems.map(({ todo, doneAt }) =>
                 doneAt === null ? (
                   // Pending item — normal animated row

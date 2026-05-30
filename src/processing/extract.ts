@@ -276,33 +276,42 @@ async function chunkAndMergeExtract(
   text: string,
   privacyLevel: 'private' | 'local' | 'normal',
 ): Promise<ExtractionResult> {
-  const WORDS_PER_CHUNK = 600;
+  // Split ONLY on paragraph boundaries — never cut across sentences.
+  // Each paragraph is a self-contained thought; mixing content from different
+  // paragraphs into the same chunk risks context bleeding.
+  const MAX_CHARS_PER_CHUNK = 2400; // ~600 words — fits comfortably in one LLM call
   const paragraphs = text.split(/\n\s*\n/).filter((p) => p.trim().length > 10);
   const chunks: string[] = [];
   let current: string[] = [];
-  let wordCount = 0;
+  let charCount = 0;
 
   for (const para of paragraphs) {
-    const words = para.trim().split(/\s+/).length;
-    if (wordCount + words > WORDS_PER_CHUNK && current.length > 0) {
+    if (charCount + para.length > MAX_CHARS_PER_CHUNK && current.length > 0) {
       chunks.push(current.join('\n\n'));
       current = [para];
-      wordCount = words;
+      charCount = para.length;
     } else {
       current.push(para);
-      wordCount += words;
+      charCount += para.length;
     }
   }
   if (current.length > 0) chunks.push(current.join('\n\n'));
 
-  // If still only one chunk (no paragraph breaks), force-split by word count
-  if (chunks.length <= 1) {
-    const words = text.split(/\s+/);
-    const forcedChunks: string[] = [];
-    for (let i = 0; i < words.length; i += WORDS_PER_CHUNK) {
-      forcedChunks.push(words.slice(i, i + WORDS_PER_CHUNK).join(' '));
+  // If no paragraph breaks at all (one long wall of text), split at sentence boundaries
+  if (chunks.length <= 1 && text.length > MAX_CHARS_PER_CHUNK) {
+    const sentences = text.match(/[^.!?]+[.!?]+\s*/g) ?? [text];
+    const sentenceChunks: string[] = [];
+    let buf = '';
+    for (const s of sentences) {
+      if (buf.length + s.length > MAX_CHARS_PER_CHUNK && buf.length > 0) {
+        sentenceChunks.push(buf.trim());
+        buf = s;
+      } else {
+        buf += s;
+      }
     }
-    chunks.splice(0, chunks.length, ...forcedChunks);
+    if (buf.trim()) sentenceChunks.push(buf.trim());
+    if (sentenceChunks.length > 1) chunks.splice(0, chunks.length, ...sentenceChunks);
   }
 
   // Process each chunk (sequential to respect rate limits)
@@ -374,11 +383,23 @@ export async function processQueue(onChange?: () => void, maxCaptures = Number.P
       const isPrivate = capture.privacy_level === 'private' || capture.user_marked_private === 1;
       const privacyLevel = isPrivate ? 'private' : (capture.privacy_level as 'private' | 'local' | 'normal');
 
-      // Large captures (>3000 chars) get chunked into parallel agent extractions then merged
-      const CHUNK_THRESHOLD = 3000;
       const rawText = capture.raw_transcript ?? '';
       let extraction;
-      if (rawText.length > CHUNK_THRESHOLD) {
+      if (rawText.length > 3000) {
+        // For dated journals: split into per-date captures and archive the original
+        const { isMultiDateJournal, ingestJournal } = await import('./journalSplitter');
+        if (isMultiDateJournal(rawText)) {
+          const count = await ingestJournal(db, rawText, privacyLevel);
+          if (count >= 2) {
+            // Archive the original oversized capture — the dated splits replace it
+            const { archiveCapture } = await import('../db/captures');
+            await archiveCapture(db, capture.id, `split into ${count} dated captures`);
+            processedCount += 1;
+            onChange?.();
+            continue;
+          }
+        }
+        // No date structure — chunk by paragraph boundaries (never by word count)
         extraction = await chunkAndMergeExtract(rawText, privacyLevel);
       } else {
         extraction = await analyzeTranscript(transcriptWithContext, { privacyLevel });

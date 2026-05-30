@@ -16,8 +16,8 @@ import { getCapturePatterns } from '../db/deviceStats';
 import { getMoodTrend } from './temporalEngine';
 import { getPersonInsights } from './relationshipEngine';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
-import { getRemoteAccessState, getRemoteOpenAIKey } from '../ai/remoteAccess';
-import { promptOpenAI } from '../ai/openai';
+import { promptAI } from '../ai/openai';
+import { resolveRemoteAvailability } from '../ai/provider';
 import { getDeviceContext, enrichWithUsagePatterns } from '../ai/deviceContext';
 
 export interface GeneratedInsight {
@@ -49,11 +49,8 @@ export async function generateDailyInsights(db: SQLiteDatabase): Promise<Generat
     return getStoredInsights(db);
   }
 
-  const remote = await getRemoteAccessState();
-  if (!remote.enabled || !remote.hasKey) return [];
-
-  const apiKey = await getRemoteOpenAIKey();
-  if (!apiKey) return [];
+  const { available, openAIKey: apiKey } = await resolveRemoteAvailability();
+  if (!available) return [];
 
   // Gather all context
   const [captures, patterns, moodTrend, personInsights, profile, deviceCtx] = await Promise.all([
@@ -97,7 +94,7 @@ Rules:
 - Questions should feel like a friend noticing something about you`;
 
   try {
-    const raw = await promptOpenAI(systemPrompt, contextStr, apiKey);
+    const raw = await promptAI(systemPrompt, contextStr, apiKey);
     const start = raw.indexOf('[');
     const end   = raw.lastIndexOf(']');
     if (start === -1 || end === -1) return [];

@@ -5,8 +5,8 @@ import { getOverdueItems, getMoodTrend } from './temporalEngine';
 import { getPersonInsights } from './relationshipEngine';
 import { sendGuardianNotification } from './notifications';
 import { getUserProfile } from '../db/userProfile';
-import { getRemoteAccessState, getRemoteOpenAIKey } from '../ai/remoteAccess';
-import { promptOpenAI } from '../ai/openai';
+import { promptAI } from '../ai/openai';
+import { resolveRemoteAvailability } from '../ai/provider';
 
 const WEEKLY_LAST_SENT_KEY = 'weekly_insight_last_sent';
 
@@ -59,14 +59,11 @@ async function generateAndSendWeeklyInsight(db: SQLiteDatabase): Promise<void> {
   let insightText = '';
 
   try {
-    const remote = await getRemoteAccessState();
-    if (remote.enabled && remote.hasKey) {
-      const apiKey = await getRemoteOpenAIKey();
-      if (apiKey) {
-        const system = `You are LUCY giving ${name} their weekly insight. Write 2-3 sentences in a warm, direct tone. Plain text only, no markdown. Be specific and actionable. Notice patterns, delays, or things worth reflecting on.`;
-        const data = `Week captures:\n${capturesSummary}\n\nOverdue items:\n${overdueText}\n\nMood trend: ${moodTrend.dominant} (${Math.round(moodTrend.positiveRatio * 100)}% positive)\n\nRelationship notes: ${personInsights.join('; ')}`;
-        insightText = await promptOpenAI(system, data, apiKey);
-      }
+    const { available, openAIKey } = await resolveRemoteAvailability();
+    if (available) {
+      const system = `You are LUCY giving ${name} their weekly insight. Write 2-3 sentences in a warm, direct tone. Plain text only, no markdown. Be specific and actionable. Notice patterns, delays, or things worth reflecting on.`;
+      const data = `Week captures:\n${capturesSummary}\n\nOverdue items:\n${overdueText}\n\nMood trend: ${moodTrend.dominant} (${Math.round(moodTrend.positiveRatio * 100)}% positive)\n\nRelationship notes: ${personInsights.join('; ')}`;
+      insightText = await promptAI(system, data, openAIKey);
     }
   } catch { /* fall through to fallback */ }
 

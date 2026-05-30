@@ -15,7 +15,7 @@ import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
  *  checking the correct provider's key (Anthropic for claude-*, OpenAI otherwise).
  *  Fixes the bug where a Claude-only setup never went remote because availability
  *  was gated solely on the OpenAI key + OpenAI "remote enabled" toggle. */
-async function resolveRemoteForAnalyze(): Promise<{ available: boolean; openAIKey: string }> {
+export async function resolveRemoteAvailability(): Promise<{ available: boolean; openAIKey: string }> {
   if (config.aiMode === 'offline') {
     return { available: false, openAIKey: '' };
   }
@@ -70,7 +70,7 @@ export const AIProvider = {
     // on-device model is intentionally disconnected. On-device privacy redaction
     // (sanitizePrivatelyForRemote) is deliberately NOT used here; privacy masking will
     // be revisited later. Sending the raw transcript to the configured remote provider.
-    const { available, openAIKey } = await resolveRemoteForAnalyze();
+    const { available, openAIKey } = await resolveRemoteAvailability();
     if (!available) {
       return localAnalyze(transcript);
     }
@@ -84,14 +84,14 @@ export const AIProvider = {
   async urgentScan(transcript: string, _privacyLevel: PrivacyLevel = 'local'): Promise<string> {
     // Provider-aware + everything-remote (privacy deferred): promptAI routes to Claude
     // when a claude-* model is selected, so Claude-only users still get urgent scans.
-    const { available, openAIKey } = await resolveRemoteForAnalyze();
+    const { available, openAIKey } = await resolveRemoteAvailability();
     if (!available) {
       return localPrompt(`${urgentScanPrompt}\nTranscript:\n${transcript}`);
     }
     return promptAI(urgentScanPrompt, transcript, openAIKey);
   },
   async summarize(notes: string, _privacyLevel: PrivacyLevel = 'normal'): Promise<string> {
-    const { available, openAIKey } = await resolveRemoteForAnalyze();
+    const { available, openAIKey } = await resolveRemoteAvailability();
     if (!available) {
       return localPrompt(`${dailySummaryPrompt}\nNotes:\n${notes}`);
     }

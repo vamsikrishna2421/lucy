@@ -6,8 +6,8 @@ import { countOpenLoops } from '../db/openLoops';
 import { countFollowUps } from '../db/followUps';
 import { sendGuardianNotification } from './notifications';
 import { getUserProfile } from '../db/userProfile';
-import { getRemoteAccessState, getRemoteOpenAIKey } from '../ai/remoteAccess';
-import { promptOpenAI } from '../ai/openai';
+import { promptAI } from '../ai/openai';
+import { resolveRemoteAvailability } from '../ai/provider';
 
 const BRIEF_LAST_SENT_KEY = 'morning_brief_last_sent';
 
@@ -17,17 +17,15 @@ function todayKey(): string {
 
 async function buildBriefWithLLM(db: SQLiteDatabase, rawBrief: string, name: string): Promise<string> {
   try {
-    const remote = await getRemoteAccessState();
-    if (!remote.enabled || !remote.hasKey) return rawBrief;
-    const apiKey = await getRemoteOpenAIKey();
-    if (!apiKey) return rawBrief;
+    const { available, openAIKey } = await resolveRemoteAvailability();
+    if (!available) return rawBrief;
 
     const system = `You are LUCY, a personal AI assistant giving ${name || 'the user'} their morning brief.
 Write in a warm, direct, conversational tone — like a trusted friend checking in.
 Use plain text only (no markdown, no asterisks). Keep it under 120 words.
 Be specific about what matters today. Start with their name.`;
 
-    const result = await promptOpenAI(system, `Morning brief data:\n${rawBrief}\n\nWrite the morning brief now.`, apiKey);
+    const result = await promptAI(system, `Morning brief data:\n${rawBrief}\n\nWrite the morning brief now.`, openAIKey);
     return result.trim();
   } catch {
     return rawBrief;

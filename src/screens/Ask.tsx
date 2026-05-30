@@ -77,7 +77,22 @@ export function AskScreen() {
       const db = await getDatabase();
       let stored = await getStoredInsights(db);
       if (stored.length === 0) {
-        stored = await generateDailyInsights(db);
+        // Also add device intelligence as insights
+        const { generateDeviceIntelligence } = await import('../processing/deviceInsights');
+        const deviceReport = await generateDeviceIntelligence().catch(() => null);
+        if (deviceReport) {
+          const deviceInsights = [
+            { question: 'What are my capture habits this week?', answer: deviceReport.captureRhythm, category: 'habits' as const, generatedAt: new Date().toISOString() },
+            { question: 'What does my battery pattern reveal?', answer: deviceReport.batteryPattern, category: 'device' as const, generatedAt: new Date().toISOString() },
+            { question: 'How does my mood connect to my activity?', answer: deviceReport.moodCorrelation, category: 'wellbeing' as const, generatedAt: new Date().toISOString() },
+            { question: 'What\'s the most important thing I should notice?', answer: deviceReport.topInsight, category: 'habits' as const, generatedAt: new Date().toISOString() },
+          ];
+          stored = [...deviceInsights, ...stored];
+        }
+        if (stored.length === 0) {
+          const generated = await generateDailyInsights(db);
+          stored = generated;
+        }
       }
       setInsights(stored);
     } finally {
@@ -265,10 +280,18 @@ function InsightsView({
       {loading ? (
         <Text style={{ color: LUCY_COLORS.textSubtle, textAlign: 'center', marginTop: 40, fontSize: 14 }}>LUCY is thinking...</Text>
       ) : insights.length === 0 ? (
-        <View style={{ padding: 20 }}>
+        <View style={{ padding: 20, gap: 16 }}>
           <Text style={{ color: LUCY_COLORS.textSubtle, textAlign: 'center', fontSize: 14, lineHeight: 22 }}>
-            No insights yet. Capture some thoughts and enable Remote Intelligence in Settings — LUCY will generate observations overnight.
+            No insights generated yet.
           </Text>
+          <View style={{ backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 14, padding: 16 }}>
+            <Text style={{ color: LUCY_COLORS.primaryGlow, fontSize: 13, fontWeight: '700', marginBottom: 4 }}>To generate insights:</Text>
+            <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 21 }}>
+              1. Enable Remote Intelligence in Settings{'\n'}
+              2. Add your OpenAI API key{'\n'}
+              3. Capture a few thoughts — LUCY generates observations overnight or tap here to generate now
+            </Text>
+          </View>
         </View>
       ) : insights.map((insight, i) => (
         <TouchableOpacity key={i} style={styles.insightCard} onPress={() => onToggle(i)} activeOpacity={0.75}>

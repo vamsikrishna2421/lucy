@@ -138,9 +138,18 @@ export function formatDeviceContext(ctx: DeviceContext): string {
   ].filter(Boolean).join('\n');
 }
 
+// 5-minute cache for usage patterns (DB query is cheap but called on every Ask)
+let _usagePatternsCache: { value: string; expiresAt: number } | null = null;
+
 // Add LUCY usage patterns from DB alongside device context
 export async function enrichWithUsagePatterns(ctx: DeviceContext): Promise<string> {
   const base = formatDeviceContext(ctx);
+
+  // Return cached result if still fresh
+  if (_usagePatternsCache && Date.now() < _usagePatternsCache.expiresAt) {
+    return `${base}\n${_usagePatternsCache.value}`;
+  }
+
   try {
     const db = await getDatabase();
     const [today, week, topHour, pendingTasks, openLoops] = await Promise.all([
@@ -168,7 +177,9 @@ export async function enrichWithUsagePatterns(ctx: DeviceContext): Promise<strin
       usage.push(`Peak LUCY usage time this week: ${label} (${h}:00)`);
     }
 
-    return `${base}\n${usage.join('\n')}`;
+    const usageStr = usage.join('\n');
+    _usagePatternsCache = { value: usageStr, expiresAt: Date.now() + 5 * 60 * 1000 };
+    return `${base}\n${usageStr}`;
   } catch {
     return base;
   }

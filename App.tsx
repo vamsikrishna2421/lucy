@@ -8,6 +8,7 @@ import { Alert, Animated, AppState, Platform, StyleSheet, Text, TouchableOpacity
 import { passiveListener, type PassiveListenerState } from './src/audio/PassiveListener';
 import { SplashAnimation } from './src/components/SplashAnimation';
 import { MeetingMode } from './src/components/MeetingMode';
+import { Onboarding } from './src/components/Onboarding';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { LUCY_COLORS } from './src/config/colors';
 import { getDatabase } from './src/db';
@@ -30,7 +31,7 @@ import { ConnectorsScreen } from './src/screens/Connectors';
 import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
 
 export default function App() {
-  const [screen, setScreen] = useState<'capture' | 'dashboard' | 'ask' | 'connectors' | 'settings'>('capture');
+  const [screen, setScreen] = useState<'capture' | 'dashboard' | 'ask' | 'settings'>('capture');
   const [refreshToken, setRefreshToken] = useState(0);
   const [ready, setReady] = useState(false);
   const [startupError, setStartupError] = useState('');
@@ -38,6 +39,7 @@ export default function App() {
   const [notificationDetail, setNotificationDetail] = useState<NotificationDetailPayload | null>(null);
   const [passiveState, setPassiveState] = useState<PassiveListenerState>(passiveListener.getState());
   const [meetingVisible, setMeetingVisible] = useState(false);
+  const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const splashFade = useRef(new Animated.Value(1)).current;
   const processing = useRef(false);
@@ -117,6 +119,9 @@ export default function App() {
         }
         setReady(true);
         void drainQueue();
+        // Show onboarding for first-time users
+        const hasOnboarded = await getSetting(db, 'onboarding_complete');
+        if (!hasOnboarded) setOnboardingVisible(true);
         if (!await getSetting(db, BACKGROUND_PROMPTED_SETTING)) {
           await setSetting(db, BACKGROUND_PROMPTED_SETTING, 'true');
           setTimeout(showBackgroundChoice, 400);
@@ -238,10 +243,6 @@ export default function App() {
             <View style={styles.brandRow}>
               <Text style={styles.brandName}>LUCY</Text>
               <View style={styles.headerActions}>
-                <TouchableOpacity style={styles.meetingPill} onPress={() => setMeetingVisible(true)}>
-                  <View style={[styles.listenDot, { backgroundColor: '#ef4444' }]} />
-                  <Text style={[styles.listenText, { color: '#ef4444' }]}>Meeting</Text>
-                </TouchableOpacity>
                 <TouchableOpacity style={[styles.listenPill, passiveState.status === 'listening' && styles.listenPillActive]} onPress={togglePassiveListening}>
                   <View style={[styles.listenDot, passiveState.status === 'listening' && styles.listenDotActive]} />
                   <Text style={[styles.listenText, passiveState.status === 'listening' && styles.listenTextActive]}>
@@ -270,6 +271,7 @@ export default function App() {
               onToggleListen={togglePassiveListening}
               backgroundEnabled={backgroundEnabled}
               onBackgroundPress={showBackgroundChoice}
+              onMeeting={() => setMeetingVisible(true)}
               onQueued={() => {
                 setRefreshToken((value) => value + 1);
                 void drainQueue();
@@ -278,9 +280,6 @@ export default function App() {
           ) : null}
           {ready && screen === 'dashboard' ? <DashboardScreen refreshToken={refreshToken} /> : null}
           {ready && screen === 'ask' ? <AskScreen /> : null}
-          {ready && screen === 'connectors' ? (
-            <ConnectorsScreen />
-          ) : null}
           {ready && screen === 'settings' ? (
             <SettingsScreen
               refreshToken={refreshToken}
@@ -295,7 +294,6 @@ export default function App() {
             { key: 'capture', label: 'Board', icon: '\u25a6' },
             { key: 'dashboard', label: 'Today', icon: '\u25c8' },
             { key: 'ask', label: 'Ask', icon: '\u25ce' },
-            { key: 'connectors', label: 'Connect', icon: '\u27c1' },
             { key: 'settings', label: 'Settings', icon: '\u25c9' },
           ] as const).map((tab) => (
             <TouchableOpacity
@@ -319,6 +317,11 @@ export default function App() {
       />
       {showSplash ? <SplashAnimation fadeAnim={splashFade} /> : null}
       <MeetingMode visible={meetingVisible} onClose={() => setMeetingVisible(false)} />
+      <Onboarding visible={onboardingVisible} onComplete={async () => {
+        setOnboardingVisible(false);
+        const db = await getDatabase();
+        await setSetting(db, 'onboarding_complete', 'true');
+      }} />
     </SafeAreaProvider>
   );
 }

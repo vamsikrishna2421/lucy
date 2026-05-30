@@ -48,3 +48,34 @@ yarn-error.*
 /benchmarks/kaggle-eleanor/raw/
 /benchmarks/kaggle-eleanor/results/
 /dist/
+
+# Shell/terminal artifacts that accidentally get created as files
+# (fragments of commands, variable names, syntax fragments)
+[*
+{*
+(*
+0)
+80
+uri
+void
+void)
+,+
+,+,
+k.includes*
+capture.id*
+e.todo.id
+Boolean*
+setVoiceRecording*
+setShowSplash*
+datetime*
+text.includes*
+[])*
+
+# Build logs
+*.log
+
+# Playground (design iteration files)
+/playground/
+
+# Codemagic cert files
+codemagic_cert.pem

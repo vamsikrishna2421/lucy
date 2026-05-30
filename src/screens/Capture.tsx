@@ -122,6 +122,7 @@ export function CaptureScreen({
   onToggleListen,
   backgroundEnabled,
   onBackgroundPress,
+  onMeeting,
 }: {
   refreshToken: number;
   onQueued: () => void;
@@ -129,6 +130,7 @@ export function CaptureScreen({
   onToggleListen?: () => void;
   backgroundEnabled?: boolean;
   onBackgroundPress?: () => void;
+  onMeeting?: () => void;
 }) {
   const [text, setText] = useState('');
   const [todos, setTodos] = useState<TodoRow[]>([]);
@@ -307,6 +309,12 @@ export function CaptureScreen({
       <Animated.View style={[styles.compactHeader, { opacity: compactOpacity }]} pointerEvents="box-none">
         <Text style={styles.compactLogo}>LUC<Text style={{ color: LUCY_COLORS.primary }}>Y</Text></Text>
         <View style={styles.compactPills}>
+          {onMeeting ? (
+            <TouchableOpacity style={styles.meetingCompactPill} onPress={onMeeting}>
+              <View style={[styles.compactDot, { backgroundColor: '#ef4444' }]} />
+              <Text style={[styles.compactPillText, { color: '#ef4444' }]}>Meeting</Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={[styles.compactPill, passiveState?.status === 'listening' && styles.compactPillActive]}
             onPress={onToggleListen}
@@ -529,6 +537,7 @@ const styles = StyleSheet.create({
   compactPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
   compactPillActive: { backgroundColor: '#1a0a00', borderColor: LUCY_COLORS.primary },
   compactBgPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
+  meetingCompactPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
   compactDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: LUCY_COLORS.textSubtle },
   compactPillText: { fontSize: 11, fontWeight: '700', color: LUCY_COLORS.textMuted },
   emptyBoard: { paddingTop: 40, alignItems: 'center', gap: 10 },

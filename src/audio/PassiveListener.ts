@@ -40,6 +40,7 @@ class PassiveListenerManager {
   private active = false;
   private voiceBuffer: string[] = [];
   private voiceRestartTimer: ReturnType<typeof setTimeout> | null = null;
+  private transcriptAccumulator: string[] = []; // full session transcript for Meeting Mode
 
   subscribe(fn: (s: PassiveListenerState) => void): () => void {
     this.stateListeners.push(fn);
@@ -51,12 +52,23 @@ class PassiveListenerManager {
   get isAvailable(): boolean { return true; }
   get usesOnDeviceSTT(): boolean { return Voice !== null; }
 
+  /** Returns full accumulated transcript for the current/last session (for Meeting Mode) */
+  getAccumulatedTranscript(): string {
+    return this.transcriptAccumulator.join(' ').trim();
+  }
+
+  /** Clears the transcript accumulator — call after consuming it */
+  clearTranscript(): void {
+    this.transcriptAccumulator = [];
+  }
+
   private emit(): void { for (const fn of this.stateListeners) fn({ ...this.state }); }
   private patch(patch: Partial<PassiveListenerState>): void { this.state = { ...this.state, ...patch }; this.emit(); }
 
   async start(): Promise<void> {
     if (this.state.status !== 'off') return;
     this.patch({ status: 'starting', wordsHeard: 0, sessionStartedAt: Date.now() });
+    this.transcriptAccumulator = []; // fresh transcript for new session
     this.active = true;
     try { await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true }); } catch { /* non-fatal */ }
 
@@ -74,7 +86,7 @@ class PassiveListenerManager {
     if (!Voice || !this.active) return;
     Voice.onSpeechResults = (e) => {
       const text = (e.value ?? []).join(' ').trim();
-      if (text) { this.voiceBuffer.push(text); this.patch({ wordsHeard: this.state.wordsHeard + text.split(/\s+/).length }); }
+      if (text) { this.voiceBuffer.push(text); this.transcriptAccumulator.push(text); this.patch({ wordsHeard: this.state.wordsHeard + text.split(/\s+/).length }); }
     };
     Voice.onSpeechEnd = () => { if (this.active) this.voiceRestartTimer = setTimeout(() => void this.startVoiceSTT(), 300); };
     Voice.onSpeechError = () => { if (this.active) this.voiceRestartTimer = setTimeout(() => void this.startVoiceSTT(), 2000); };
@@ -115,6 +127,7 @@ class PassiveListenerManager {
     try {
       const text = await transcribeAudioFile(uri);
       if (text && text.split(/\s+/).length >= 5) {
+        this.transcriptAccumulator.push(text); // accumulate for Meeting Mode
         await enqueueTranscript(text, 'passive');
         this.patch({ wordsHeard: this.state.wordsHeard + text.split(/\s+/).length });
       }

@@ -23,7 +23,7 @@ interface SettingsScreenProps {
   onReprocessAll: () => Promise<number>;
 }
 
-type SettingsPanel = 'intelligence' | 'remote' | 'background' | 'organization' | 'queue' | 'privacy' | 'profile' | null;
+type SettingsPanel = 'intelligence' | 'remote' | 'background' | 'organization' | 'queue' | 'privacy' | 'profile' | 'connectors' | null;
 
 const emptyQueue: CaptureQueueSummary = { queued: 0, processing: 0, retrying: 0, complete: 0, archived: 0 };
 const emptyRemote: RemoteAccessState = { enabled: false, hasKey: false, usingDevelopmentKey: false, modelName: 'gpt-5.4-nano' };
@@ -404,6 +404,13 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
 
       <View style={styles.list}>
         <SettingsRow
+          title="Connectors & permissions"
+          value="Calendar, location, passive listening, meeting mode"
+          badge="Manage"
+          active
+          onInfo={() => setActivePanel('connectors')}
+        />
+        <SettingsRow
           title="Calendar integration"
           value="Pre-meeting briefs + post-meeting capture prompts"
           badge="Connect"
@@ -622,6 +629,10 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           </Text>
         ) : null}
 
+        {activePanel === 'connectors' ? (
+          <ConnectorsPanel />
+        ) : null}
+
         {activePanel === 'profile' ? (
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <Text style={styles.hint}>LUCY uses your name and background to personalize every response — no more "the user said" language.</Text>
@@ -664,8 +675,14 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   );
 }
 
+function ConnectorsPanel() {
+  const { ConnectorsScreen } = require('./Connectors') as { ConnectorsScreen: () => React.ReactElement };
+  return <ConnectorsScreen />;
+}
+
 function panelTitle(panel: SettingsPanel): string {
   switch (panel) {
+    case 'connectors': return 'Connectors & permissions';
     case 'profile': return 'About you';
     case 'intelligence': return 'On-device intelligence';
     case 'remote': return 'Remote intelligence';

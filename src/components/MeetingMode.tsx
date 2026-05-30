@@ -85,16 +85,19 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
 
   const stopMeeting = async () => {
     setPhase('processing');
+    // Grab the accumulated transcript BEFORE stopping (stop flushes the buffer)
+    const rawTranscript = passiveListener.getAccumulatedTranscript();
     await passiveListener.stop();
+    passiveListener.clearTranscript();
     const durationMs = startedAt ? Date.now() - startedAt.getTime() : 0;
-
-    // Grab whatever the passive listener collected
-    // (it flushes to DB on stop; we use the raw buffer as transcript)
-    const rawTranscript = `[Meeting: ${meetingTitle}] Recorded for ${formatDuration(durationMs)}.`;
 
     try {
       const db = await getDatabase();
-      const gen = await generateMeetingSummary(rawTranscript, meetingTitle, db);
+      const gen = await generateMeetingSummary(
+        rawTranscript || `Meeting lasted ${formatDuration(durationMs)} but no speech was captured.`,
+        meetingTitle,
+        db,
+      );
       setSummary(gen);
     } catch { /* show empty summary */ }
 

@@ -10,8 +10,8 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getBatteryHistory, getCapturePatterns } from '../db/deviceStats';
 import { getMoodTrend } from './temporalEngine';
-import { getRemoteAccessState, getRemoteOpenAIKey } from '../ai/remoteAccess';
-import { promptOpenAI } from '../ai/openai';
+import { promptAI } from '../ai/openai';
+import { resolveRemoteAvailability } from '../ai/provider';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
 import { getDatabase } from '../db';
 
@@ -92,19 +92,16 @@ export async function generateDeviceIntelligence(): Promise<DeviceIntelligenceRe
   let topInsight = `Your most productive capture window is ${timeLabel} on ${patterns.topDay}. Protect that time for deep thinking.`;
 
   try {
-    const remote = await getRemoteAccessState();
-    if (remote.enabled && remote.hasKey) {
-      const apiKey = await getRemoteOpenAIKey();
-      if (apiKey) {
-        const userPrefix = buildUserContextPrefix(profile);
-        const dataStr = `Capture patterns: ${captureRhythm}\nBattery: ${batteryPattern}\nMood: ${moodCorrelation}\nMood dominant: ${moodTrend.dominant}, positive ratio: ${Math.round(moodTrend.positiveRatio * 100)}%`;
-        const result = await promptOpenAI(
-          `${userPrefix}You are LUCY, a personal AI second brain. Based on the user's device behavior and mental patterns below, give ONE specific, actionable, and empathetic insight in 2 sentences. Not a statistic — an observation about their life. Plain text, no markdown.`,
-          dataStr,
-          apiKey,
-        );
-        if (result.trim()) topInsight = result.trim();
-      }
+    const { available, openAIKey } = await resolveRemoteAvailability();
+    if (available) {
+      const userPrefix = buildUserContextPrefix(profile);
+      const dataStr = `Capture patterns: ${captureRhythm}\nBattery: ${batteryPattern}\nMood: ${moodCorrelation}\nMood dominant: ${moodTrend.dominant}, positive ratio: ${Math.round(moodTrend.positiveRatio * 100)}%`;
+      const result = await promptAI(
+        `${userPrefix}You are LUCY, a personal AI second brain. Based on the user's device behavior and mental patterns below, give ONE specific, actionable, and empathetic insight in 2 sentences. Not a statistic — an observation about their life. Plain text, no markdown.`,
+        dataStr,
+        openAIKey,
+      );
+      if (result.trim()) topInsight = result.trim();
     }
   } catch { /* fall back to default */ }
 

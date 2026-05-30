@@ -12,8 +12,8 @@ import * as Calendar from 'expo-calendar';
 import { Platform } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getSetting, setSetting } from '../db/settings';
-import { getRemoteAccessState, getRemoteOpenAIKey } from '../ai/remoteAccess';
-import { promptOpenAI } from '../ai/openai';
+import { promptAI } from '../ai/openai';
+import { resolveRemoteAvailability } from '../ai/provider';
 import { getAllPersonContexts } from './relationshipEngine';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
 import { sendGuardianNotification } from './notifications';
@@ -156,7 +156,7 @@ async function generateAndSendPreMeetingBrief(db: SQLiteDatabase, event: Calenda
   if (event.attendees && event.attendees.length > 0) {
     try {
       const [remote, people, captures, profile] = await Promise.all([
-        getRemoteAccessState(),
+        resolveRemoteAvailability(),
         getAllPersonContexts(db),
         listRecentCaptures(db, 30),
         getUserProfile(db),
@@ -176,30 +176,27 @@ async function generateAndSendPreMeetingBrief(db: SQLiteDatabase, event: Calenda
         })
         .slice(0, 5);
 
-      if ((relevantPeople.length > 0 || relevantCaptures.length > 0) && remote.enabled && remote.hasKey) {
-        const apiKey = await getRemoteOpenAIKey();
-        if (apiKey) {
-          const userPrefix = buildUserContextPrefix(profile);
-          const context = [
-            `Upcoming: "${event.title}" in ${minsUntil} minutes`,
-            relevantPeople.length > 0
-              ? `People you know: ${relevantPeople.map((p) => `${p.name} (${p.typicalContext?.slice(0, 80) ?? 'no context'})`).join('; ')}`
-              : '',
-            relevantCaptures.length > 0
-              ? `Related captures:\n${relevantCaptures.map((c) => c.raw_transcript?.slice(0, 120)).join('\n')}`
-              : '',
-          ].filter(Boolean).join('\n\n');
+      if ((relevantPeople.length > 0 || relevantCaptures.length > 0) && remote.available) {
+        const userPrefix = buildUserContextPrefix(profile);
+        const context = [
+          `Upcoming: "${event.title}" in ${minsUntil} minutes`,
+          relevantPeople.length > 0
+            ? `People you know: ${relevantPeople.map((p) => `${p.name} (${p.typicalContext?.slice(0, 80) ?? 'no context'})`).join('; ')}`
+            : '',
+          relevantCaptures.length > 0
+            ? `Related captures:\n${relevantCaptures.map((c) => c.raw_transcript?.slice(0, 120)).join('\n')}`
+            : '',
+        ].filter(Boolean).join('\n\n');
 
-          const brief = await promptOpenAI(
-            `${userPrefix}You are LUCY. Generate a 2-sentence pre-meeting brief for the user. Be specific and useful. Mention key context from their memories. Plain text only.`,
-            context,
-            apiKey,
-          );
+        const brief = await promptAI(
+          `${userPrefix}You are LUCY. Generate a 2-sentence pre-meeting brief for the user. Be specific and useful. Mention key context from their memories. Plain text only.`,
+          context,
+          remote.openAIKey,
+        );
 
-          if (brief.trim()) {
-            await sendGuardianNotification(brief.trim(), { kind: 'pre-meeting', eventTitle: event.title });
-            return;
-          }
+        if (brief.trim()) {
+          await sendGuardianNotification(brief.trim(), { kind: 'pre-meeting', eventTitle: event.title });
+          return;
         }
       }
     } catch { /* fall through to base notification */ }

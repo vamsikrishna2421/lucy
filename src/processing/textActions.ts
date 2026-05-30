@@ -1,5 +1,5 @@
-import { getRemoteAccessState, getRemoteOpenAIKey } from '../ai/remoteAccess';
-import { promptOpenAI } from '../ai/openai';
+import { promptAI } from '../ai/openai';
+import { resolveRemoteAvailability } from '../ai/provider';
 import { promptDevice } from '../ai/device';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
 import { getDatabase } from '../db';
@@ -26,15 +26,14 @@ export async function runTextAction(
   text: string,
 ): Promise<TextActionResult> {
   const db = await getDatabase();
-  const [profile, remote] = await Promise.all([getUserProfile(db), getRemoteAccessState()]);
+  const [profile, remote] = await Promise.all([getUserProfile(db), resolveRemoteAvailability()]);
   const userPrefix = buildUserContextPrefix(profile);
   const systemPrompt = `${userPrefix}${SYSTEM_PROMPTS[action]}`;
 
   let result: string;
   try {
-    const apiKey = remote.enabled && remote.hasKey ? await getRemoteOpenAIKey() : null;
-    if (apiKey) {
-      result = await promptOpenAI(systemPrompt, text, apiKey);
+    if (remote.available) {
+      result = await promptAI(systemPrompt, text, remote.openAIKey);
     } else {
       result = await promptDevice(`${systemPrompt}\n\nText:\n${text}\n/no_think`);
     }

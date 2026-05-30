@@ -10,8 +10,8 @@ import type { ExtractionResult, PrivacyLevel } from '../types/extraction';
 import { isInvalidDeadline, isInvalidPendingTask } from './artifactCleanup';
 import { normalizeMemoryLookupText, recognizesMemoryMapQuestion, recognizesMonthlySpendingQuestion, recognizesTodayPlanQuestion, requestedTaskContext } from './askIntent';
 import { organizeMemory } from './organizer';
-import { getRemoteAccessState, getRemoteOpenAIKey } from '../ai/remoteAccess';
-import { promptOpenAI } from '../ai/openai';
+import { promptAI } from '../ai/openai';
+import { resolveRemoteAvailability } from '../ai/provider';
 import { promptDevice } from '../ai/device';
 import { memoryAnswerSystemPrompt } from '../ai/prompts';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
@@ -271,10 +271,10 @@ async function answerWithLLM(question: string): Promise<LucyAnswer> {
 
   let llmResponse: string;
   try {
-    const remote = await getRemoteAccessState();
-    const apiKey = remote.enabled && remote.hasKey ? await getRemoteOpenAIKey() : null;
-    if (apiKey) {
-      llmResponse = await promptOpenAI(systemPrompt, input, apiKey);
+    const { available, openAIKey } = await resolveRemoteAvailability();
+    if (available) {
+      // promptAI routes to Claude or OpenAI based on the selected model.
+      llmResponse = await promptAI(systemPrompt, input, openAIKey);
     } else {
       llmResponse = await promptDevice(`${systemPrompt}\n${input}\n/no_think`);
     }

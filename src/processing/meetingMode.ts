@@ -9,8 +9,8 @@
  */
 
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { getRemoteAccessState, getRemoteOpenAIKey } from '../ai/remoteAccess';
-import { promptOpenAI } from '../ai/openai';
+import { promptAI } from '../ai/openai';
+import { resolveRemoteAvailability } from '../ai/provider';
 import { enqueueTranscript } from './extract';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
 
@@ -64,17 +64,14 @@ export async function generateMeetingSummary(
 ): Promise<MeetingSummary | null> {
   if (!transcript.trim() || transcript.split(/\s+/).length < 20) return null;
 
-  const [remote, profile] = await Promise.all([getRemoteAccessState(), getUserProfile(db)]);
-  if (!remote.enabled || !remote.hasKey) return null;
-
-  const apiKey = await getRemoteOpenAIKey();
-  if (!apiKey) return null;
+  const [{ available, openAIKey }, profile] = await Promise.all([resolveRemoteAvailability(), getUserProfile(db)]);
+  if (!available) return null;
 
   const userPrefix = buildUserContextPrefix(profile);
   const input = `Meeting title: ${title}\n\nTranscript:\n${transcript.slice(0, 6000)}`;
 
   try {
-    const raw = await promptOpenAI(`${userPrefix}${MEETING_SYSTEM_PROMPT}`, input, apiKey);
+    const raw = await promptAI(`${userPrefix}${MEETING_SYSTEM_PROMPT}`, input, openAIKey);
     const start = raw.indexOf('{');
     const end   = raw.lastIndexOf('}');
     if (start === -1 || end === -1) return null;

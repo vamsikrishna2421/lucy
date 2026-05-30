@@ -404,6 +404,22 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
 
       <View style={styles.list}>
         <SettingsRow
+          title="Calendar integration"
+          value="Pre-meeting briefs + post-meeting capture prompts"
+          badge="Connect"
+          onAction={async () => {
+            const { requestCalendarPermission } = await import('../processing/calendarConnector');
+            const granted = await requestCalendarPermission();
+            Alert.alert(
+              granted ? 'Calendar connected' : 'Permission denied',
+              granted
+                ? 'LUCY will send a brief 30 minutes before meetings, and prompt you to capture notes afterward.'
+                : 'Go to Settings → LUCY → Calendars to grant access.',
+            );
+          }}
+          actionLabel="Grant access"
+        />
+        <SettingsRow
           title="Export my data"
           value="Download all memories as JSON"
           onAction={exportAllData}

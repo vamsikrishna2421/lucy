@@ -9,6 +9,7 @@
     "expo-background-task": "~56.0.15",
     "expo-battery": "~56.0.4",
     "expo-build-properties": "~56.0.15",
+    "expo-calendar": "~56.0.8",
     "expo-crypto": "~56.0.4",
     "expo-device": "~56.0.4",
     "expo-file-system": "~56.0.7",

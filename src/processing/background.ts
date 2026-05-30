@@ -11,6 +11,7 @@ import { organizeMemory } from './organizer';
 import { sendMorningBrief, shouldSendMorningBrief } from './morningBrief';
 import { weeklyInsightIfDue } from './weeklyInsight';
 import { generateDailyInsights } from './insightEngine';
+import { checkAndSendPreMeetingBrief, checkAndSendPostMeetingPrompt } from './calendarConnector';
 import { storeEmbedding } from '../ai/embeddings';
 import { listRecentCaptures } from '../db/captures';
 import { recordBatterySnapshot } from '../db/deviceStats';
@@ -67,6 +68,10 @@ if (!TaskManager.isTaskDefined(BACKGROUND_PROCESSING_TASK)) {
           }
         }
       } catch { /* non-critical */ }
+
+      // Calendar: pre-meeting brief + post-meeting prompt
+      try { await checkAndSendPreMeetingBrief(db); } catch { /* non-critical */ }
+      try { await checkAndSendPostMeetingPrompt(db); } catch { /* non-critical */ }
 
       // Generate daily AI insights (once per day, any time)
       try { await generateDailyInsights(db); } catch { /* non-critical */ }

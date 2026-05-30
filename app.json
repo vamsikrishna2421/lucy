@@ -24,7 +24,8 @@
         "UIBackgroundModes": ["audio"],
         "NSMicrophoneUsageDescription": "LUCY listens in the background to capture your thoughts, ideas, and songs automatically.",
         "NSSpeechRecognitionUsageDescription": "LUCY uses on-device speech recognition to transcribe what you say during passive listening mode.",
-        "NSPhotoLibraryUsageDescription": "LUCY may save audio recordings to your library when capturing memories."
+        "NSPhotoLibraryUsageDescription": "LUCY may save audio recordings to your library when capturing memories.",
+        "NSCalendarsUsageDescription": "LUCY reads your calendar to send pre-meeting briefs and help you prepare — all data stays on your device."
       }
     },
     "android": {
@@ -38,7 +39,8 @@
       "versionCode": 11,
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.INTERNET"
+        "android.permission.INTERNET",
+        "android.permission.READ_CALENDAR"
       ]
     },
     "web": {

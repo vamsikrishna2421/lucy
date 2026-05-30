@@ -70,9 +70,23 @@ setShowSplash*
 datetime*
 text.includes*
 [])*
+,
+,-
+,*
+*.confidence
+*.answer
+*.id
+*.includes*
+*.urgency
+*.doneAt
+*.allowsModifications*
 
 # Build logs
 *.log
+
+# Local vector DB (dev/bench artifact, regenerated at runtime)
+ruvector.db
+*.db
 
 # Playground (design iteration files)
 /playground/

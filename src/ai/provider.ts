@@ -57,9 +57,16 @@ export const AIProvider = {
     const db = await getDatabase();
     const profile = await getUserProfile(db);
     const userContextPrefix = buildUserContextPrefix(profile);
+    // Private/local captures must never leave the device unredacted: mask sensitive
+    // spans on-device first. If masking can't run (e.g. local model unavailable),
+    // sanitizePrivatelyForRemote throws and processQueue marks the capture failed —
+    // we fail closed rather than send raw protected content to the remote API.
+    const remoteTranscript = privacyLevel === 'normal'
+      ? transcript
+      : await sanitizePrivatelyForRemote(transcript);
     // Remote AI always — no silent fallback to device model.
     // If this throws, processQueue sees the real error and marks the capture as failed.
-    return await analyzeWithOpenAI(transcript, apiKey, userContextPrefix);
+    return await analyzeWithOpenAI(remoteTranscript, apiKey, userContextPrefix);
   },
   async urgentScan(transcript: string, privacyLevel: PrivacyLevel = 'local'): Promise<string> {
     const prompt = `${urgentScanPrompt}\nTranscript:\n${transcript}`;

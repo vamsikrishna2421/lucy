@@ -522,8 +522,8 @@ export function CaptureScreen({
     } else {
       try {
         // Request mic permission explicitly before recording
-        const { requestPermissionsAsync } = await import('expo-audio');
-        const { status } = await requestPermissionsAsync();
+        const { requestRecordingPermissionsAsync } = await import('expo-audio');
+        const { status } = await requestRecordingPermissionsAsync();
         if (status !== 'granted') {
           Alert.alert(
             'Microphone access needed',

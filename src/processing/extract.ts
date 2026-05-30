@@ -98,7 +98,7 @@ export async function analyzeTranscript(
         ...extraction,
         title: extraction.title !== 'Untitled capture' ? extraction.title : trimmed.slice(0, 60),
         summary: 'Routed to Ask — use the Ask tab to get answers from your memory.',
-        open_loops: [{ description: trimmed, urgency: 'none' as const }],
+        open_loops: [{ description: trimmed }],
       };
     }
     throw new Error('On-device extraction was empty; LUCY will retry automatically.');

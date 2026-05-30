@@ -985,7 +985,7 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
     setStuck((prev) => prev.filter((c) => c.id !== id));
   };
 
-  const renderCapture = (c: { id: number; raw_transcript: string | null; extracted_title: string | null; processing_error?: string | null }, color = LUCY_COLORS.surface) => (
+  const renderCapture = (c: { id: number; raw_transcript: string | null; extracted_title: string | null; processing_error?: string | null }, color: string = LUCY_COLORS.surface) => (
     <View key={c.id} style={{ backgroundColor: color, borderRadius: 10, padding: 10, marginTop: 6, gap: 3, flexDirection: 'row', alignItems: 'flex-start' }}>
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '600' }} numberOfLines={1}>

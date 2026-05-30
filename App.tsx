@@ -136,11 +136,7 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
           }
         } catch { /* non-critical */ }
 
-        // Seed demo data for judges on first launch
-        try {
-          const { seedDemoDataIfNeeded } = await import('./src/processing/demoSeed');
-          await seedDemoDataIfNeeded(db);
-        } catch { /* non-critical */ }
+        // Demo seeding only runs when explicitly switching to Demo Brain (not on main brain startup)
 
         setReady(true);
         void drainQueue();
@@ -297,6 +293,7 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
               backgroundEnabled={backgroundEnabled}
               onBackgroundPress={showBackgroundChoice}
               onMeeting={() => setMeetingVisible(true)}
+              onBrainSwitch={() => setScreen('settings')}
               onQueued={() => {
                 setRefreshToken((value) => value + 1);
                 void drainQueue();

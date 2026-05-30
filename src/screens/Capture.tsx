@@ -125,9 +125,8 @@ export function CaptureScreen({
   onQueued,
   passiveState,
   onToggleListen,
-  backgroundEnabled,
-  onBackgroundPress,
   onMeeting,
+  onBrainSwitch,
 }: {
   refreshToken: number;
   onQueued: () => void;
@@ -136,10 +135,12 @@ export function CaptureScreen({
   backgroundEnabled?: boolean;
   onBackgroundPress?: () => void;
   onMeeting?: () => void;
+  onBrainSwitch?: () => void;
 }) {
   const [text, setText] = useState('');
   const [todos, setTodos] = useState<TodoRow[]>([]);
   const [userName, setUserName] = useState('');
+  const [activeBrainName, setActiveBrainName] = useState('My Brain');
   const scrollY = useRef(new Animated.Value(0)).current;
   const [heroVisible, setHeroVisible] = useState(true);
 
@@ -189,6 +190,8 @@ export function CaptureScreen({
       setTodos(pendingTodosResult);
       const profile = await getUserProfile(db);
       setUserName(profile.name || '');
+      const { getActiveUser } = await import('../db/userManager');
+      setActiveBrainName(getActiveUser().name);
     })();
   }, [refreshToken]);
 
@@ -405,11 +408,13 @@ export function CaptureScreen({
             {listenPillLabel()}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.controlBgPill} onPress={onBackgroundPress}>
-          <View style={[styles.compactDot, { backgroundColor: LUCY_COLORS.primary }]} />
-          <Text style={[styles.compactPillText, { color: LUCY_COLORS.primary }]}>
-            {backgroundEnabled ? 'Background on' : 'Local-first'}
+        {/* Brain switcher — replaces "Background on" */}
+        <TouchableOpacity style={styles.controlBrainPill} onPress={onBrainSwitch}>
+          <Text style={styles.compactPillText}>◈ </Text>
+          <Text style={[styles.compactPillText, { color: LUCY_COLORS.primary }]} numberOfLines={1}>
+            {activeBrainName}
           </Text>
+          <Text style={[styles.compactPillText, { color: LUCY_COLORS.textSubtle }]}> ▾</Text>
         </TouchableOpacity>
       </View>
 
@@ -652,6 +657,7 @@ const styles = StyleSheet.create({
   controlPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
   controlBgPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
   controlMeetingPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
+  controlBrainPill: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5, maxWidth: 130 },
   // Hero
   hero: { backgroundColor: '#1a0f00', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 16, position: 'relative', overflow: 'hidden' },
   heroGlow: { position: 'absolute', top: -40, right: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,140,66,0.12)' },

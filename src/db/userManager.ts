@@ -24,10 +24,14 @@ export function getActiveUser(): BrainUser {
 }
 
 export function getDbName(): string {
+  // 'main' uses the original lucy.db for backward compatibility with existing installs
+  if (_activeUser.id === 'main') return 'lucy.db';
   return `lucy_${_activeUser.id}.db`;
 }
 
 export function getDbKeyName(): string {
+  // 'main' uses the original key name for backward compatibility
+  if (_activeUser.id === 'main') return 'lucy_database_key';
   return `lucy_database_key_${_activeUser.id}`;
 }
 

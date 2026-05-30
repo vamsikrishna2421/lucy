@@ -40,9 +40,9 @@ export async function seedDemoDataIfNeeded(db: SQLiteDatabase): Promise<void> {
     return;
   }
 
-  // Load pre-parsed entries (generated from Eleanor Vance Kaggle dataset)
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const entries: RawEntry[] = require('./eleanor_seed_data.json') as RawEntry[];
+  // Load pre-parsed entries (dynamic import keeps the 750KB off the startup critical path)
+  const entriesModule = await import('./eleanor_seed_data.json');
+  const entries: RawEntry[] = (entriesModule.default ?? entriesModule) as unknown as RawEntry[];
 
   await db.withTransactionAsync(async () => {
     // Insert Eleanor's profile capture first

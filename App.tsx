@@ -46,7 +46,7 @@ export default function App() {
   const queueRequested = useRef(false);
   const receivingShare = useRef(false);
   const recentShare = useRef<{ text: string; receivedAt: number } | null>(null);
-  const { sharedPayloads, clearSharedPayloads } = useIncomingShare();
+  const { sharedPayloads, resolvedSharedPayloads, isResolving, clearSharedPayloads } = useIncomingShare();
   const BACKGROUND_SETTING = 'background_processing_enabled';
   const BACKGROUND_PROMPTED_SETTING = 'background_processing_prompted';
 
@@ -161,23 +161,51 @@ export default function App() {
     if (!ready || receivingShare.current) {
       return;
     }
-    const sharedText = sharedPayloads
-      .filter((payload) => (payload.shareType ?? 'text') === 'text' || payload.shareType === 'url')
-      .map((payload) => payload.value?.trim() ?? '')
-      .filter(Boolean)
-      .join('\n');
-    if (!sharedText) {
+    // Wait for file URIs to resolve (a shared .md/.txt file arrives as a file payload,
+    // not text — its contents live behind contentUri and must be read).
+    if (isResolving) {
       return;
     }
-    const previous = recentShare.current;
-    if (previous && previous.text === sharedText && Date.now() - previous.receivedAt < 10_000) {
-      clearSharedPayloads();
+    if (resolvedSharedPayloads.length === 0 && sharedPayloads.length === 0) {
       return;
     }
-    recentShare.current = { text: sharedText, receivedAt: Date.now() };
     receivingShare.current = true;
     void (async () => {
       try {
+        const parts: string[] = [];
+        // Prefer resolved payloads (they expose contentUri + mime); fall back to raw.
+        const payloads: Array<Record<string, unknown>> = resolvedSharedPayloads.length
+          ? (resolvedSharedPayloads as unknown as Array<Record<string, unknown>>)
+          : (sharedPayloads as unknown as Array<Record<string, unknown>>);
+        for (const p of payloads) {
+          const shareType = (p.shareType as string) ?? 'text';
+          const contentType = p.contentType as string | undefined;
+          const value = (p.value as string | undefined)?.trim() ?? '';
+          const uri = (p.contentUri as string | null) ?? null;
+          const mime = (p.contentMimeType as string | undefined) ?? (p.mimeType as string | undefined) ?? '';
+          const name = (p.originalName as string | undefined) ?? '';
+          if (shareType === 'text' || shareType === 'url' || contentType === 'text') {
+            if (value) parts.push(value);
+          } else if (uri && (mime.startsWith('text/') || /\.(md|markdown|txt|text)$/i.test(name || uri))) {
+            // Text-like file (e.g. a journal .md): read its contents and capture them.
+            try {
+              const { readAsStringAsync } = await import('expo-file-system');
+              const content = (await readAsStringAsync(uri)).trim();
+              if (content) parts.push(content);
+            } catch { /* unreadable file — skip */ }
+          }
+        }
+        const sharedText = parts.join('\n').trim();
+        if (!sharedText) {
+          clearSharedPayloads();
+          return;
+        }
+        const previous = recentShare.current;
+        if (previous && previous.text === sharedText && Date.now() - previous.receivedAt < 10_000) {
+          clearSharedPayloads();
+          return;
+        }
+        recentShare.current = { text: sharedText, receivedAt: Date.now() };
         await enqueueTranscript(sharedText, Platform.OS === 'ios' ? 'ios' : 'android');
         clearSharedPayloads();
         setScreen('capture');
@@ -187,7 +215,7 @@ export default function App() {
         receivingShare.current = false;
       }
     })();
-  }, [clearSharedPayloads, drainQueue, ready, sharedPayloads]);
+  }, [clearSharedPayloads, drainQueue, ready, sharedPayloads, resolvedSharedPayloads, isResolving]);
 
   useEffect(() => {
     if (!ready) {

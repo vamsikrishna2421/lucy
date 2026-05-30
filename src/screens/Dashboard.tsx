@@ -609,9 +609,50 @@ function TimelineView({
 
                       <View style={styles.tlCardFooter}>
                         <PrivacyBadge level={item.privacy_level} />
-                        <TouchableOpacity style={styles.feedbackBtn} onPress={() => { setFeedbackText(''); setFeedbackTarget(item); }}>
-                          <Text style={styles.feedbackBtnText}>?</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                          {/* Feedback / correct */}
+                          <TouchableOpacity style={styles.feedbackBtn} onPress={() => { setFeedbackText(''); setFeedbackTarget(item); }}>
+                            <Text style={styles.feedbackBtnText}>?</Text>
+                          </TouchableOpacity>
+                          {/* Reprocess */}
+                          <TouchableOpacity
+                            style={[styles.feedbackBtn, { backgroundColor: LUCY_COLORS.primarySoft }]}
+                            onPress={async () => {
+                              const db = await getDatabase();
+                              await db.runAsync(
+                                'UPDATE captures SET processed = 0, processing_error = NULL, attempt_count = 0, extracted_title = NULL, structured_text = NULL WHERE id = ?',
+                                item.id,
+                              );
+                              onFeedback();
+                            }}
+                          >
+                            <Text style={[styles.feedbackBtnText, { color: LUCY_COLORS.primary }]}>↻</Text>
+                          </TouchableOpacity>
+                          {/* Delete */}
+                          <TouchableOpacity
+                            style={[styles.feedbackBtn, { backgroundColor: 'rgba(239,68,68,0.1)' }]}
+                            onPress={() => {
+                              Alert.alert(
+                                'Delete memory?',
+                                'This thought will be permanently removed from your timeline.',
+                                [
+                                  { text: 'Cancel', style: 'cancel' },
+                                  {
+                                    text: 'Delete', style: 'destructive',
+                                    onPress: async () => {
+                                      const db = await getDatabase();
+                                      const { archiveCapture } = await import('../db/captures');
+                                      await archiveCapture(db, item.id, 'deleted by user');
+                                      onFeedback();
+                                    },
+                                  },
+                                ],
+                              );
+                            }}
+                          >
+                            <Text style={[styles.feedbackBtnText, { color: '#ef4444' }]}>✕</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   </View>

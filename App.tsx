@@ -31,12 +31,6 @@ import { ConnectorsScreen } from './src/screens/Connectors';
 import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
 
 export default function App() {
-  // appKey increments on brain switch — forces full remount
-  const [appKey, setAppKey] = useState(0);
-  return <AppInner key={appKey} onBrainSwitch={() => setAppKey((k) => k + 1)} />;
-}
-
-function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
   const [screen, setScreen] = useState<'capture' | 'dashboard' | 'ask' | 'settings'>('dashboard');
   const [refreshToken, setRefreshToken] = useState(0);
   const [ready, setReady] = useState(false);
@@ -110,13 +104,6 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
   useEffect(() => {
     void (async () => {
       try {
-        // Always boot into the user's own brain — Eleanor is session-only
-        const { loadActiveUser, getActiveUser, switchUser } = await import('./src/db/userManager');
-        await loadActiveUser();
-        if (getActiveUser().id === 'demo') {
-          await switchUser({ id: 'main', name: 'My Brain' });
-        }
-
         const db = await getDatabase();
         await initializeDeviceModelSelection();
         void autoRestoreDeviceModel();
@@ -139,8 +126,6 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
           }
         } catch { /* non-critical */ }
 
-        // Start Eleanor's background seed (always safe — active user is always main here)
-        void import('./src/db/eleanorSeedState').then(({ startEleanorSeed }) => startEleanorSeed());
 
         setReady(true);
         void drainQueue();
@@ -283,9 +268,6 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
                     : 'Listen'}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.brainHeaderPill} onPress={() => setScreen('settings')}>
-                <Text style={styles.brainHeaderText}>◈ Brain</Text>
-              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -300,7 +282,6 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
               backgroundEnabled={backgroundEnabled}
               onBackgroundPress={showBackgroundChoice}
               onMeeting={() => setMeetingVisible(true)}
-              onBrainSwitch={() => setScreen('settings')}
               onQueued={() => {
                 setRefreshToken((value) => value + 1);
                 void drainQueue();
@@ -315,7 +296,6 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
               backgroundEnabled={backgroundEnabled}
               onChangeBackground={setBackgroundPreference}
               onReprocessAll={reprocessAllMemories}
-              onBrainSwitch={onBrainSwitch}
             />
           ) : null}
         </View>

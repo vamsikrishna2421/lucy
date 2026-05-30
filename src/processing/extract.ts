@@ -115,6 +115,18 @@ export async function enqueueTranscript(
   }
   const db = await getDatabase();
   const preflight = protectByUserChoice(trimmed, markedPrivate);
+
+  // Detect multi-date journal: split into separate historical captures
+  if (source === 'text' && trimmed.length > 200) {
+    try {
+      const { isMultiDateJournal, ingestJournal } = await import('./journalSplitter');
+      if (isMultiDateJournal(trimmed)) {
+        const count = await ingestJournal(db, trimmed, preflight.level);
+        if (count >= 3) return count; // returned count instead of a single ID
+      }
+    } catch { /* fall through to normal capture */ }
+  }
+
   if (source === 'android' || source === 'ios') {
     return insertSharedCapture(db, source, trimmed, preflight.level, markedPrivate);
   }
@@ -246,8 +258,11 @@ export async function processQueue(onChange?: () => void, maxCaptures = Number.P
         } catch { /* non-critical */ }
       }
 
+      const isPrivate = capture.privacy_level === 'private' || capture.user_marked_private === 1;
       const extraction = await analyzeTranscript(transcriptWithContext, {
-        privacyLevel: capture.privacy_level === 'private' || capture.user_marked_private === 1 ? 'private' : capture.privacy_level,
+        privacyLevel: isPrivate ? 'private' : (capture.privacy_level as 'private' | 'local' | 'normal'),
+        // Private captures always use local LLM — never sent to remote AI
+        localOnly: isPrivate,
       });
       await persistExtraction(capture, extraction);
 

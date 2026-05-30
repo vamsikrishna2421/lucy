@@ -21,7 +21,6 @@ interface SettingsScreenProps {
   refreshToken: number;
   onChangeBackground: (enabled: boolean) => Promise<boolean>;
   onReprocessAll: () => Promise<number>;
-  onBrainSwitch: () => void;
 }
 
 type SettingsPanel = 'intelligence' | 'remote' | 'background' | 'organization' | 'queue' | 'privacy' | 'profile' | 'connectors' | null;
@@ -29,7 +28,7 @@ type SettingsPanel = 'intelligence' | 'remote' | 'background' | 'organization' |
 const emptyQueue: CaptureQueueSummary = { queued: 0, processing: 0, retrying: 0, complete: 0, archived: 0 };
 const emptyRemote: RemoteAccessState = { enabled: false, hasKey: false, usingDevelopmentKey: false, modelName: 'gpt-5.4-nano' };
 
-export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll, onBrainSwitch }: SettingsScreenProps) {
+export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll }: SettingsScreenProps) {
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
   const [queue, setQueue] = useState(emptyQueue);
   const [background, setBackground] = useState<BackgroundProcessingState>();
@@ -53,27 +52,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [savingProfile, setSavingProfile] = useState(false);
   const [checkInEnabled, setCheckInEnabled] = useState(false);
   const [aiModel, setAiModel] = useState('gpt-4o-mini');
-  const [seedingDemo, setSeedingDemo] = useState(false);
-  const [seedProgress, setSeedProgress] = useState(0);
-  const [eleanorStatus, setEleanorStatus] = useState<import('../db/eleanorSeedState').EleanorSeedStatus>('idle');
-  const [eleanorProgress, setEleanorProgress] = useState(0);
-  const [brainUsers, setBrainUsers] = useState<Array<{ id: string; name: string; isDemo?: boolean }>>([]);
-  const [activeBrainId, setActiveBrainId] = useState('main');
-  const [newBrainName, setNewBrainName] = useState('');
-  const [switchingBrain, setSwitchingBrain] = useState(false);
 
-  // Subscribe to Eleanor background seed progress
-  useEffect(() => {
-    void import('../db/eleanorSeedState').then(({ getSeedState, subscribeSeedState }) => {
-      const update = () => {
-        const s = getSeedState();
-        setEleanorStatus(s.status);
-        setEleanorProgress(s.progress);
-      };
-      update();
-      return subscribeSeedState(update);
-    });
-  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -89,10 +68,6 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       const storedModel = await gs(db, 'ai_model_override');
       if (storedModel) setAiModel(storedModel);
 
-      const { listUsers, getActiveUser } = await import('../db/userManager');
-      const users = await listUsers();
-      setBrainUsers(users);
-      setActiveBrainId(getActiveUser().id);
       setQueue(queueSummary);
       setBackground(state);
       setOrganizationRun(latestRun);
@@ -421,126 +396,6 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           ))}
         </View>
 
-        {/* Brain Switcher */}
-        <View style={{ paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider }}>
-          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '800', marginBottom: 4 }}>
-            ◉ Brains on this device
-          </Text>
-          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginBottom: 12 }}>
-            Each brain is a completely separate memory — your own, a family member's, or a demo.
-          </Text>
-          {brainUsers.map((u) => (
-            <TouchableOpacity
-              key={u.id}
-              disabled={u.id === activeBrainId || switchingBrain}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 12, backgroundColor: u.id === activeBrainId ? LUCY_COLORS.primarySoft : LUCY_COLORS.surface, borderRadius: 12, marginBottom: 6, borderWidth: 1, borderColor: u.id === activeBrainId ? LUCY_COLORS.primary : LUCY_COLORS.border }}
-              onPress={async () => {
-                setSwitchingBrain(true);
-                try {
-                  const { switchUser } = await import('../db/userManager');
-                  const { resetDatabase } = await import('../db');
-                  await switchUser(u);
-                  await resetDatabase();
-                  setActiveBrainId(u.id);
-                  onBrainSwitch();
-                } finally { setSwitchingBrain(false); }
-              }}
-            >
-              <Text style={{ fontSize: 20 }}>{u.isDemo ? '🎭' : '◈'}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700' }}>{u.name}</Text>
-                {u.id === activeBrainId ? <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '700' }}>Active</Text> : null}
-              </View>
-              {u.id === activeBrainId
-                ? <Text style={{ color: LUCY_COLORS.primary, fontSize: 16 }}>✓</Text>
-                : <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13 }}>{switchingBrain ? '...' : 'Switch'}</Text>}
-            </TouchableOpacity>
-          ))}
-
-          {/* Add new brain */}
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-            <TextInput
-              style={{ flex: 1, backgroundColor: LUCY_COLORS.surface, borderRadius: 10, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingHorizontal: 12, paddingVertical: 9, color: LUCY_COLORS.textDark, fontSize: 14 }}
-              placeholder="New brain name (e.g. Nisha)"
-              placeholderTextColor={LUCY_COLORS.textSubtle}
-              value={newBrainName}
-              onChangeText={setNewBrainName}
-            />
-            <TouchableOpacity
-              style={{ backgroundColor: LUCY_COLORS.primary, borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center', opacity: newBrainName.trim() ? 1 : 0.4 }}
-              disabled={!newBrainName.trim()}
-              onPress={async () => {
-                const id = newBrainName.trim().toLowerCase().replace(/\s+/g, '_');
-                const user = { id, name: newBrainName.trim() };
-                const { addUser } = await import('../db/userManager');
-                await addUser(user);
-                setBrainUsers((prev) => [...prev.filter((u) => u.id !== id), user]);
-                setNewBrainName('');
-                Alert.alert('Brain created', `"${user.name}" is ready. Tap Switch to open it.`);
-              }}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Add</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Eleanor / Demo Brain — inline progress, background seeding */}
-        <View style={{ marginHorizontal: 16, marginVertical: 8, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#F472B6' + '44' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <Text style={{ fontSize: 22 }}>🎭</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700' }}>Eleanor's Brain</Text>
-              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 1 }}>Eleanor Vance · 1,461 daily logs · 2020–2024</Text>
-            </View>
-          </View>
-
-          {eleanorStatus === 'idle' ? (
-            <TouchableOpacity
-              style={{ backgroundColor: '#F472B6', borderRadius: 10, paddingVertical: 11, alignItems: 'center' }}
-              onPress={async () => {
-                const { startEleanorSeed } = await import('../db/eleanorSeedState');
-                void startEleanorSeed();
-              }}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Load Eleanor's brain in background →</Text>
-            </TouchableOpacity>
-          ) : eleanorStatus === 'seeding' ? (
-            <View style={{ gap: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 12 }}>
-                  {eleanorProgress < 20 ? 'Opening brain...' : 'Loading memories...'}
-                </Text>
-                <Text style={{ color: '#F472B6', fontSize: 12, fontWeight: '700' }}>{eleanorProgress}%</Text>
-              </View>
-              <View style={{ height: 6, backgroundColor: LUCY_COLORS.surface, borderRadius: 3, overflow: 'hidden' }}>
-                <View style={{ width: `${eleanorProgress}%` as any, height: 6, backgroundColor: '#F472B6', borderRadius: 3 }} />
-              </View>
-              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>You can keep using your brain — we'll notify you when Eleanor is ready.</Text>
-            </View>
-          ) : eleanorStatus === 'ready' ? (
-            <TouchableOpacity
-              style={{ backgroundColor: '#F472B6', borderRadius: 10, paddingVertical: 11, alignItems: 'center' }}
-              onPress={async () => {
-                try {
-                  const { switchUser, addUser, DEMO_USER } = await import('../db/userManager');
-                  const { resetDatabase } = await import('../db');
-                  await addUser(DEMO_USER);
-                  await switchUser(DEMO_USER);
-                  await resetDatabase();
-                  setBrainUsers((prev) => [...prev.filter((u) => u.id !== 'demo'), DEMO_USER]);
-                  setActiveBrainId('demo');
-                  onBrainSwitch();
-                } catch (e) {
-                  Alert.alert('Could not switch', String(e));
-                }
-              }}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>✓ Eleanor is ready — Switch now</Text>
-            </TouchableOpacity>
-          ) : (
-            <Text style={{ color: LUCY_COLORS.error, fontSize: 13 }}>Something went wrong loading Eleanor's brain.</Text>
-          )}
-        </View>
         <SettingsRow
           title="On-device intelligence"
           value={modelStatus}

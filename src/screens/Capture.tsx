@@ -126,7 +126,6 @@ export function CaptureScreen({
   passiveState,
   onToggleListen,
   onMeeting,
-  onBrainSwitch,
 }: {
   refreshToken: number;
   onQueued: () => void;
@@ -135,12 +134,10 @@ export function CaptureScreen({
   backgroundEnabled?: boolean;
   onBackgroundPress?: () => void;
   onMeeting?: () => void;
-  onBrainSwitch?: () => void;
 }) {
   const [text, setText] = useState('');
   const [todos, setTodos] = useState<TodoRow[]>([]);
   const [userName, setUserName] = useState('');
-  const [activeBrainName, setActiveBrainName] = useState('My Brain');
   const scrollY = useRef(new Animated.Value(0)).current;
   const heroOpacity = scrollY.interpolate({ inputRange: [0, 80], outputRange: [1, 0], extrapolate: 'clamp' });
 
@@ -182,8 +179,6 @@ export function CaptureScreen({
       setTodos(pendingTodosResult);
       const profile = await getUserProfile(db);
       setUserName(profile.name || '');
-      const { getActiveUser } = await import('../db/userManager');
-      setActiveBrainName(getActiveUser().name);
     })();
   }, [refreshToken]);
 

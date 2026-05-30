@@ -54,17 +54,12 @@ export const AIProvider = {
     if (remoteUnavailable) {
       return localAnalyze(transcript);
     }
-    try {
-      const db = await getDatabase();
-      const profile = await getUserProfile(db);
-      const userContextPrefix = buildUserContextPrefix(profile);
-      const remoteTranscript = privacyLevel === 'private'
-        ? await sanitizePrivatelyForRemote(transcript)
-        : transcript;
-      return await analyzeWithOpenAI(remoteTranscript, apiKey, userContextPrefix);
-    } catch {
-      return localAnalyze(transcript);
-    }
+    const db = await getDatabase();
+    const profile = await getUserProfile(db);
+    const userContextPrefix = buildUserContextPrefix(profile);
+    // Remote AI always — no silent fallback to device model.
+    // If this throws, processQueue sees the real error and marks the capture as failed.
+    return await analyzeWithOpenAI(transcript, apiKey, userContextPrefix);
   },
   async urgentScan(transcript: string, privacyLevel: PrivacyLevel = 'local'): Promise<string> {
     const prompt = `${urgentScanPrompt}\nTranscript:\n${transcript}`;

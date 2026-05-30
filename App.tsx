@@ -268,30 +268,33 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
         <StatusBar style="light" />
-        {/* Fixed header only shown on non-Board screens */}
-        {screen !== 'capture' ? (
-          <View style={styles.brand}>
-            <View style={styles.brandRow}>
-              <Text style={styles.brandName}>LUCY</Text>
-              <View style={styles.headerActions}>
-                <TouchableOpacity style={[styles.listenPill, passiveState.status === 'listening' && styles.listenPillActive]} onPress={togglePassiveListening}>
-                  <View style={[styles.listenDot, passiveState.status === 'listening' && styles.listenDotActive]} />
-                  <Text style={[styles.listenText, passiveState.status === 'listening' && styles.listenTextActive]}>
-                    {passiveState.status === 'listening'
-                      ? `Listening · ${passiveState.wordsHeard}w`
-                      : passiveState.status === 'starting' || passiveState.status === 'stopping'
-                      ? '...'
-                      : 'Listen'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.localPill} onPress={showBackgroundChoice}>
-                  <View style={styles.localDot} />
-                  <Text style={styles.localText}>{backgroundEnabled ? 'Background on' : 'Local-first'}</Text>
-                </TouchableOpacity>
-              </View>
+        {/* Unified header shown on all screens — consistent controls everywhere */}
+        <View style={styles.brand}>
+          <View style={styles.brandRow}>
+            <Text style={styles.brandName}>LUC<Text style={{ color: '#FF8C42' }}>Y</Text></Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.meetingHeaderPill} onPress={() => setMeetingVisible(true)}>
+                <View style={[styles.listenDot, { backgroundColor: '#ef4444' }]} />
+                <Text style={[styles.listenText, { color: '#ef4444' }]}>Meeting</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.listenPill, passiveState.status === 'listening' && styles.listenPillActive]} onPress={togglePassiveListening}>
+                <View style={[styles.listenDot, passiveState.status === 'listening' && styles.listenDotActive]} />
+                <Text style={[styles.listenText, passiveState.status === 'listening' && styles.listenTextActive]}>
+                  {passiveState.status === 'listening'
+                    ? (passiveState.noApiKey ? 'No key' : passiveState.mode === 'batch' && passiveState.wordsHeard === 0
+                        ? `Rec ${passiveState.recordingSeconds}s`
+                        : `${passiveState.wordsHeard}w`)
+                    : passiveState.status === 'starting' || passiveState.status === 'stopping'
+                    ? '...'
+                    : 'Listen'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.brainHeaderPill} onPress={() => setScreen('settings')}>
+                <Text style={styles.brainHeaderText}>◈ Brain</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        ) : null}
+        </View>
         <View style={styles.container}>
           {startupError ? <Text style={styles.error}>{startupError}</Text> : null}
           {/* Loading is handled by SplashAnimation overlay */}
@@ -376,6 +379,9 @@ const styles = StyleSheet.create({
   localPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: LUCY_COLORS.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 5 },
   localDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: LUCY_COLORS.primary },
   localText: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 11 },
+  meetingHeaderPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', flexDirection: 'row', alignItems: 'center', gap: 5 },
+  brainHeaderPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: LUCY_COLORS.primarySoft, flexDirection: 'row', alignItems: 'center' },
+  brainHeaderText: { color: LUCY_COLORS.primary, fontWeight: '700', fontSize: 11 },
   container: { flex: 1, paddingHorizontal: 20, paddingTop: 4 },
   bottomNav: {
     flexDirection: 'row',

@@ -54,6 +54,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [checkInEnabled, setCheckInEnabled] = useState(false);
   const [aiModel, setAiModel] = useState('gpt-4o-mini');
   const [seedingDemo, setSeedingDemo] = useState(false);
+  const [seedProgress, setSeedProgress] = useState(0); // 0-100
   const [brainUsers, setBrainUsers] = useState<Array<{ id: string; name: string; isDemo?: boolean }>>([]);
   const [activeBrainId, setActiveBrainId] = useState('main');
   const [newBrainName, setNewBrainName] = useState('');
@@ -472,26 +473,43 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           style={{ marginHorizontal: 16, marginVertical: 8, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#F472B6' + '55', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
           onPress={async () => {
             setSeedingDemo(true);
+            setSeedProgress(0);
             try {
               const { switchUser, addUser, DEMO_USER } = await import('../db/userManager');
-              const { resetDatabase } = await import('../db');
+              const { resetDatabase, openNamedDatabase } = await import('../db');
               await addUser(DEMO_USER);
+
+              // Check if Eleanor is already seeded BEFORE switching
+              setSeedProgress(10);
+              const eleanorDb = await openNamedDatabase('lucy_demo.db', 'lucy_database_key_demo');
+              const count = await eleanorDb.getFirstAsync<{n:number}>('SELECT COUNT(*) as n FROM captures');
+              const needsSeed = (count?.n ?? 0) === 0;
+
+              if (needsSeed) {
+                setSeedProgress(20);
+                const { seedDemoDataIfNeeded } = await import('../processing/demoSeed');
+                // Seed with progress callback
+                await seedDemoDataIfNeeded(eleanorDb, (pct: number) => setSeedProgress(20 + Math.round(pct * 0.75)));
+              } else {
+                setSeedProgress(95);
+              }
+
+              await eleanorDb.closeAsync();
+              setSeedProgress(98);
+
+              // NOW switch — seeding is complete, no freeze
               await switchUser(DEMO_USER);
               await resetDatabase();
-              // Eleanor's brain is pre-seeded in the background on first launch.
-              // If still empty (edge case), seed now — but this should be rare.
-              const db = await getDatabase();
-              const count = await db.getFirstAsync<{n:number}>('SELECT COUNT(*) as n FROM captures');
-              if ((count?.n ?? 0) === 0) {
-                const { seedDemoDataIfNeeded } = await import('../processing/demoSeed');
-                await seedDemoDataIfNeeded(db);
-              }
               setBrainUsers((prev) => [...prev.filter((u) => u.id !== 'demo'), DEMO_USER]);
               setActiveBrainId('demo');
+              setSeedProgress(100);
               onBrainSwitch();
             } catch (e) {
-              Alert.alert('Could not switch to demo brain', String(e));
-            } finally { setSeedingDemo(false); }
+              Alert.alert('Could not switch to Eleanor\'s brain', String(e));
+            } finally {
+              setSeedingDemo(false);
+              setSeedProgress(0);
+            }
           }}
           disabled={seedingDemo}
         >
@@ -845,6 +863,23 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           </KeyboardAvoidingView>
         ) : null}
       </SettingsSheet>
+
+      {/* Demo brain seeding progress overlay */}
+      {seedingDemo ? (
+        <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,14,11,0.92)', alignItems: 'center', justifyContent: 'center', gap: 24, zIndex: 999 }}>
+          <Text style={{ fontSize: 48 }}>🎭</Text>
+          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '800', textAlign: 'center' }}>
+            {seedProgress < 20 ? 'Opening Eleanor\'s brain...' : seedProgress < 95 ? 'Loading 4 years of memories...' : 'Almost ready...'}
+          </Text>
+          <View style={{ width: 260, height: 6, backgroundColor: LUCY_COLORS.surface, borderRadius: 3, overflow: 'hidden' }}>
+            <View style={{ width: `${seedProgress}%` as any, height: 6, backgroundColor: '#F472B6', borderRadius: 3 }} />
+          </View>
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13 }}>{seedProgress}%</Text>
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, textAlign: 'center', paddingHorizontal: 40 }}>
+            Eleanor Vance · Marketing Director · 1,461 daily logs from 2020–2024
+          </Text>
+        </View>
+      ) : null}
     </ScrollView>
   );
 }

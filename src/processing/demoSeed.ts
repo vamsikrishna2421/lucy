@@ -30,7 +30,7 @@ const PROFILE_CAPTURE = {
   m: 'positive',
 };
 
-export async function seedDemoDataIfNeeded(db: SQLiteDatabase): Promise<void> {
+export async function seedDemoDataIfNeeded(db: SQLiteDatabase, onProgress?: (pct: number) => void): Promise<void> {
   const alreadySeeded = await getSetting(db, DEMO_SEED_KEY);
   if (alreadySeeded) return;
 
@@ -39,6 +39,8 @@ export async function seedDemoDataIfNeeded(db: SQLiteDatabase): Promise<void> {
     await setSetting(db, DEMO_SEED_KEY, 'true');
     return;
   }
+
+  onProgress?.(5);
 
   // Load pre-parsed entries via dynamic import
   const entriesModule = await import('./eleanor_seed_data.json');
@@ -85,15 +87,19 @@ export async function seedDemoDataIfNeeded(db: SQLiteDatabase): Promise<void> {
     }
   };
 
+  onProgress?.(20);
   await insertChunks(
     'captures',
     'created_at,source,raw_transcript,privacy_level,processed,extracted_title,structured_text,processed_at',
     captureRows,
   );
+  onProgress?.(70);
   await insertChunks('mood_entries', 'capture_id,tone,energy,created_at', moodRows);
+  onProgress?.(85);
   if (todoRows.length > 0) {
     await insertChunks('todos', 'capture_id,task,category,urgency,context,privacy_level,created_at', todoRows);
   }
+  onProgress?.(95);
 
   await setSetting(db, DEMO_SEED_KEY, 'true');
 }

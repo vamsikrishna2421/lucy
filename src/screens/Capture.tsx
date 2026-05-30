@@ -142,15 +142,7 @@ export function CaptureScreen({
   const [userName, setUserName] = useState('');
   const [activeBrainName, setActiveBrainName] = useState('My Brain');
   const scrollY = useRef(new Animated.Value(0)).current;
-  const [heroVisible, setHeroVisible] = useState(true);
-
-  useEffect(() => {
-    const id = scrollY.addListener(({ value }) => setHeroVisible(value < 60));
-    return () => scrollY.removeListener(id);
-  }, [scrollY]);
-
   const heroOpacity = scrollY.interpolate({ inputRange: [0, 80], outputRange: [1, 0], extrapolate: 'clamp' });
-  const compactOpacity = scrollY.interpolate({ inputRange: [40, 90], outputRange: [0, 1], extrapolate: 'clamp' });
 
   // WhatsApp-style voice button animation
   const micScale = useRef(new Animated.Value(1)).current;
@@ -418,21 +410,6 @@ export function CaptureScreen({
         </TouchableOpacity>
       </View>
 
-      {/* Hero section — hidden (display:none) once scrolled to eliminate black gap */}
-      {heroVisible ? (
-      <Animated.View style={[styles.hero, { opacity: heroOpacity }]}>
-        <View style={styles.heroGlow} />
-        <Text style={styles.heroGreeting}>{getGreeting()}{userName ? `, ${userName}` : ''}</Text>
-        <Text style={styles.heroTitle}>LUCY</Text>
-        <Text style={styles.heroPillars}>Listen · Understand · Connect · Yield</Text>
-        <View style={styles.heroCard}>
-          <Text style={styles.heroCardLabel}>LUCY IS ACTIVE</Text>
-          <Text style={styles.heroCardTitle}>
-            {signalCount > 0 ? `${signalCount} urgent signal${signalCount !== 1 ? 's' : ''} for you` : 'All caught up'}
-          </Text>
-        </View>
-      </Animated.View>
-      ) : null}
 
       <Animated.ScrollView
         style={styles.board}
@@ -441,6 +418,20 @@ export function CaptureScreen({
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
         scrollEventThrottle={16}
       >
+        {/* Hero lives inside the scroll view — scrolls away naturally, always comes back */}
+        <Animated.View style={[styles.hero, { opacity: heroOpacity }]}>
+          <View style={styles.heroGlow} />
+          <Text style={styles.heroGreeting}>{getGreeting()}{userName ? `, ${userName}` : ''}</Text>
+          <Text style={styles.heroTitle}>LUCY</Text>
+          <Text style={styles.heroPillars}>Listen · Understand · Connect · Yield</Text>
+          <View style={styles.heroCard}>
+            <Text style={styles.heroCardLabel}>LUCY IS ACTIVE</Text>
+            <Text style={styles.heroCardTitle}>
+              {signalCount > 0 ? `${signalCount} urgent signal${signalCount !== 1 ? 's' : ''} for you` : 'All caught up'}
+            </Text>
+          </View>
+        </Animated.View>
+
         {groups.length === 0 && done.length === 0 ? (
           <View style={styles.emptyBoard}>
             <Text style={styles.emptyTitle}>Your board is clear</Text>

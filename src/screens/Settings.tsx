@@ -149,13 +149,21 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const saveRemoteKey = async () => {
     setChangingRemote(true);
     try {
+      // Test the key before saving
+      const testRes = await fetch('https://api.openai.com/v1/models', {
+        headers: { Authorization: `Bearer ${remoteKey.trim()}` },
+      });
+      if (!testRes.ok) {
+        const err = await testRes.json().catch(() => ({})) as { error?: { message?: string } };
+        throw new Error(err.error?.message ?? `OpenAI returned status ${testRes.status}`);
+      }
       await storeRemoteOpenAIKey(remoteKey);
       await setRemoteEnabled(true);
       setRemoteKey('');
       setRemote(await getRemoteAccessState());
-      Alert.alert('Remote intelligence ready', 'GPT-5.4 Nano can organize ordinary thoughts. Protected thoughts are first masked by on-device intelligence before any remote analysis.');
+      Alert.alert('✓ OpenAI key verified', 'Key is valid and saved. LUCY will now use OpenAI for extraction.');
     } catch (error) {
-      Alert.alert('Could not save key', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert('Key invalid', error instanceof Error ? error.message : 'Could not verify key.');
     } finally {
       setChangingRemote(false);
     }
@@ -437,11 +445,29 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
                       setHasClaudeKey(false);
                       Alert.alert('Removed', 'Claude API key cleared.');
                     } else if (claudeKey.trim()) {
+                      // Test the Claude key before saving
+                      const testRes = await fetch('https://api.anthropic.com/v1/messages', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'anthropic-version': '2023-06-01',
+                          'x-api-key': claudeKey.trim(),
+                        },
+                        body: JSON.stringify({
+                          model: 'claude-haiku-4-5-20251001',
+                          max_tokens: 10,
+                          messages: [{ role: 'user', content: 'hi' }],
+                        }),
+                      });
+                      if (!testRes.ok) {
+                        const err = await testRes.json().catch(() => ({})) as { error?: { message?: string } };
+                        throw new Error(err.error?.message ?? `Anthropic returned status ${testRes.status}`);
+                      }
                       const { storeClaudeApiKey } = await import('../ai/remoteAccess');
                       await storeClaudeApiKey(claudeKey.trim());
                       setHasClaudeKey(true);
                       setClaudeKey('');
-                      Alert.alert('Saved', 'Claude API key saved.');
+                      Alert.alert('✓ Claude key verified', 'Key is valid and saved. Select a Claude model above to use it.');
                     }
                   } catch (e) { Alert.alert('Error', String(e)); }
                   finally { setSavingClaudeKey(false); }

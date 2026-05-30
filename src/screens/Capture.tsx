@@ -195,7 +195,7 @@ function CategoryModal({
     <Modal transparent animationType="none" visible onRequestClose={close}>
       <Pressable style={cmStyles.backdrop} onPress={close}>
         <Animated.View style={[cmStyles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-          <Pressable>
+          <Pressable style={{ flexShrink: 1 }}>
             {/* Header */}
             <View style={[cmStyles.header, { borderBottomColor: category.color + '33' }]}>
               <Text style={cmStyles.icon}>{category.icon}</Text>
@@ -279,7 +279,7 @@ const cmStyles = StyleSheet.create({
   subtitle: { color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 2 },
   closeBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 10 },
   closeBtnText: { color: LUCY_COLORS.textMuted, fontSize: 13, fontWeight: '700' },
-  list: { paddingHorizontal: 16, paddingTop: 8 },
+  list: { flexShrink: 1, paddingHorizontal: 16, paddingTop: 8 },
   addBar: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider },
   addInput: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, color: LUCY_COLORS.textDark, fontSize: 15, borderWidth: 1, borderColor: LUCY_COLORS.border },
   addBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center' },

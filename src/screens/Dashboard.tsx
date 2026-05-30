@@ -592,12 +592,19 @@ function TimelineView({
                           {protectedPreview(item.extracted_title)}
                         </Text>
                       ) : (
-                        // Not yet processed — show neutral placeholder, never raw text
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: LUCY_COLORS.primary, opacity: 0.6 }} />
-                          <Text style={[styles.tlTitle, { color: LUCY_COLORS.textSubtle, fontStyle: 'italic' }]}>
-                            Organizing...
-                          </Text>
+                        // Not yet processed — show "Organizing..." + brief snippet so user knows what it is
+                        <View style={{ gap: 4 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: LUCY_COLORS.primary, opacity: 0.6 }} />
+                            <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>
+                              Organizing...
+                            </Text>
+                          </View>
+                          {item.raw_transcript ? (
+                            <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 18 }} numberOfLines={2}>
+                              {item.raw_transcript.slice(0, 120)}
+                            </Text>
+                          ) : null}
                         </View>
                       )}
 

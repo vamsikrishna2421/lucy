@@ -117,6 +117,15 @@ export default function App() {
         if (backgroundPreference === 'true') {
           setBackgroundEnabled(await enableBackgroundProcessing());
         }
+        // Load user's AI model preference
+        try {
+          const modelOverride = await getSetting(db, 'ai_model_override');
+          if (modelOverride) {
+            const { setPreferredModel } = await import('./src/ai/modelPreference');
+            setPreferredModel(modelOverride);
+          }
+        } catch { /* non-critical */ }
+
         // Seed demo data for judges on first launch
         try {
           const { seedDemoDataIfNeeded } = await import('./src/processing/demoSeed');

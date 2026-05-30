@@ -445,6 +445,8 @@ function TimelineView({
   const [quickText, setQuickText] = useState('');
   const [quickSending, setQuickSending] = useState(false);
   const [quickAck, setQuickAck] = useState('');
+  const [pendingAction, setPendingAction] = useState<import('../processing/automationEngine').ExtractedAction | null>(null);
+  const [executingAction, setExecutingAction] = useState(false);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -476,6 +478,16 @@ function TimelineView({
   const sendQuick = async () => {
     const t = quickText.trim();
     if (!t || quickSending) return;
+
+    // Check for automation intent first
+    const { detectAutomationIntent } = await import('../processing/automationEngine');
+    const autoAction = detectAutomationIntent(t);
+    if (autoAction && autoAction.confidence >= 0.8) {
+      setQuickText('');
+      setPendingAction(autoAction);
+      return;
+    }
+
     setQuickSending(true);
     try {
       await enqueueTranscript(t, 'text', false);
@@ -822,6 +834,37 @@ function CapturedView({ captures, updates, onFeedback }: { captures: CaptureRow[
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Automation confirmation card */}
+      {pendingAction ? (
+        <Modal transparent animationType="slide" visible onRequestClose={() => setPendingAction(null)}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setPendingAction(null)}>
+            <Pressable style={[styles.feedbackModal, { gap: 12 }]}>
+              <Text style={{ fontSize: 10, fontWeight: '800', letterSpacing: 1.4, color: LUCY_COLORS.primary, textTransform: 'uppercase' }}>LUCY CAN DO THIS</Text>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: LUCY_COLORS.textDark }}>{pendingAction.displayText}</Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingVertical: 13, alignItems: 'center', opacity: executingAction ? 0.5 : 1 }}
+                  disabled={executingAction}
+                  onPress={async () => {
+                    setExecutingAction(true);
+                    const { executeAction } = await import('../processing/automationEngine');
+                    await executeAction(pendingAction);
+                    setExecutingAction(false);
+                    setPendingAction(null);
+                    onQueued?.();
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>{executingAction ? '...' : pendingAction.confirmText}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={{ paddingHorizontal: 16, justifyContent: 'center' }} onPress={() => setPendingAction(null)}>
+                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 14 }}>Not now</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      ) : null}
     </>
   );
 }
@@ -867,6 +910,9 @@ function LibraryView({
 
 function PeopleTab() {
   const [people, setPeople] = useState<Array<{ name: string; lastMentioned: string | null; mentionCount: number; typicalContext: string | null; pendingFollowUps: number }>>([]);
+  const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
+  const [personCaptures, setPersonCaptures] = useState<CaptureRow[]>([]);
+  const [loadingCaptures, setLoadingCaptures] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -875,6 +921,20 @@ function PeopleTab() {
       setPeople(await getAllPersonContexts(db));
     })();
   }, []);
+
+  const openPerson = async (name: string) => {
+    setSelectedPerson(name);
+    setLoadingCaptures(true);
+    try {
+      const db = await getDatabase();
+      const rows = await db.getAllAsync<CaptureRow>(
+        `SELECT * FROM captures WHERE raw_transcript LIKE ? OR extracted_title LIKE ? ORDER BY created_at DESC LIMIT 30`,
+        [`%${name}%`, `%${name}%`],
+      );
+      setPersonCaptures(rows);
+    } catch { setPersonCaptures([]); }
+    setLoadingCaptures(false);
+  };
 
   if (people.length === 0) return <EmptyLine text="People will appear here as you capture notes mentioning names." />;
 
@@ -890,9 +950,42 @@ function PeopleTab() {
           p.pendingFollowUps > 0 ? `${p.pendingFollowUps} follow-up${p.pendingFollowUps !== 1 ? 's' : ''}` : null,
         ].filter(Boolean).join(' · ');
         return (
-          <Card key={p.name} title={p.name} detail={detail} />
+          <TouchableOpacity key={p.name} onPress={() => void openPerson(p.name)} activeOpacity={0.75}>
+            <Card title={p.name} detail={`${detail} · tap to see mentions`} />
+          </TouchableOpacity>
         );
       })}
+
+      {/* Person detail modal */}
+      <Modal transparent animationType="slide" visible={selectedPerson !== null} onRequestClose={() => setSelectedPerson(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setSelectedPerson(null)}>
+          <Pressable style={[styles.feedbackModal, { maxHeight: '80%', gap: 12 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: LUCY_COLORS.textDark }}>{selectedPerson}</Text>
+              <TouchableOpacity onPress={() => setSelectedPerson(null)}>
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 14, fontWeight: '700' }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 12, color: LUCY_COLORS.textSubtle }}>All captures mentioning {selectedPerson}</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {loadingCaptures ? (
+                <Text style={{ color: LUCY_COLORS.textSubtle, padding: 16 }}>Loading...</Text>
+              ) : personCaptures.length === 0 ? (
+                <Text style={{ color: LUCY_COLORS.textSubtle, padding: 16 }}>No captures found.</Text>
+              ) : personCaptures.map((c) => (
+                <View key={c.id} style={{ backgroundColor: LUCY_COLORS.surface, borderRadius: 12, padding: 12, marginBottom: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: LUCY_COLORS.textDark, marginBottom: 4 }} numberOfLines={2}>
+                    {c.extracted_title ?? c.raw_transcript?.slice(0, 80)}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: LUCY_COLORS.textSubtle }}>
+                    {new Date(c.created_at.includes('T') ? c.created_at : `${c.created_at.replace(' ', 'T')}Z`).toLocaleString()}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </>
   );
 }

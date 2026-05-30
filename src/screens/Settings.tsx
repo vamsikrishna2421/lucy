@@ -51,6 +51,8 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [profileDraft, setProfileDraft] = useState<UserProfile>({ name: '', about: '' });
   const [savingProfile, setSavingProfile] = useState(false);
   const [checkInEnabled, setCheckInEnabled] = useState(false);
+  const [aiModel, setAiModel] = useState('gpt-4o-mini');
+  const [seedingDemo, setSeedingDemo] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -62,6 +64,9 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         getRemoteAccessState(),
         getUserProfile(db),
       ]);
+      const { getSetting: gs } = await import('../db/settings');
+      const storedModel = await gs(db, 'ai_model_override');
+      if (storedModel) setAiModel(storedModel);
       setQueue(queueSummary);
       setBackground(state);
       setOrganizationRun(latestRun);
@@ -359,6 +364,60 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           active={!!profile.name}
           onInfo={() => { setProfileDraft({ ...profile }); setActivePanel('profile'); }}
         />
+
+        {/* AI Model Picker */}
+        <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider }}>
+          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700', marginBottom: 4 }}>AI extraction model</Text>
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginBottom: 12 }}>Which OpenAI model LUCY uses for understanding your captures.</Text>
+          {(['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1'] as const).map((m) => (
+            <TouchableOpacity
+              key={m}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: aiModel === m ? LUCY_COLORS.primarySoft : LUCY_COLORS.surface, borderRadius: 10, marginBottom: 6, borderWidth: 1, borderColor: aiModel === m ? LUCY_COLORS.primary : LUCY_COLORS.border }}
+              onPress={async () => {
+                setAiModel(m);
+                const db = await getDatabase();
+                await setSetting(db, 'ai_model_override', m);
+                const { setPreferredModel } = await import('../ai/modelPreference');
+                setPreferredModel(m);
+                Alert.alert('Model updated', `LUCY will now use ${m} for new captures.`);
+              }}
+            >
+              <View style={{ width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: LUCY_COLORS.primary, backgroundColor: aiModel === m ? LUCY_COLORS.primary : 'transparent' }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700' }}>{m}</Text>
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>
+                  {m === 'gpt-4o-mini' ? 'Fast, cheap — recommended' : m === 'gpt-4o' ? 'Smarter, higher cost' : m === 'gpt-4.1-mini' ? 'Fast, latest mini' : 'Most capable, highest cost'}
+                </Text>
+              </View>
+              {aiModel === m ? <Text style={{ color: LUCY_COLORS.primary, fontSize: 13, fontWeight: '800' }}>✓</Text> : null}
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Demo seed */}
+        <TouchableOpacity
+          style={{ marginHorizontal: 16, marginVertical: 8, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          onPress={async () => {
+            setSeedingDemo(true);
+            try {
+              const db = await getDatabase();
+              const { setSetting: ss } = await import('../db/settings');
+              await ss(db, 'demo_data_seeded', ''); // clear flag so seed runs again
+              const { seedDemoDataIfNeeded } = await import('../processing/demoSeed');
+              await seedDemoDataIfNeeded(db);
+              Alert.alert('Demo data loaded', '5 realistic captures added. Go to Timeline to see them.');
+            } catch (e) {
+              Alert.alert('Could not load demo data', String(e));
+            } finally { setSeedingDemo(false); }
+          }}
+          disabled={seedingDemo}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700' }}>Load demo data</Text>
+            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 2 }}>Adds 5 realistic captures for demo / testing</Text>
+          </View>
+          <Text style={{ color: LUCY_COLORS.primary, fontSize: 22 }}>{seedingDemo ? '⏳' : '▶'}</Text>
+        </TouchableOpacity>
         <SettingsRow
           title="On-device intelligence"
           value={modelStatus}

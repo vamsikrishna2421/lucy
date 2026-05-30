@@ -89,6 +89,16 @@ export async function analyzeTranscript(
     trimmed,
   );
   if (!hasMeaningfulExtraction(extraction)) {
+    // For questions / device queries, don't retry — just store with a note summary
+    const isQuestion = trimmed.trim().endsWith('?') || /^(what|where|when|who|why|how|is|are|do|does|can|will)\b/i.test(trimmed.trim());
+    if (isQuestion) {
+      return {
+        ...extraction,
+        title: extraction.title !== 'Untitled capture' ? extraction.title : trimmed.slice(0, 60),
+        summary: 'Routed to Ask — use the Ask tab to get answers from your memory.',
+        open_loops: [{ description: trimmed, urgency: 'none' as const }],
+      };
+    }
     throw new Error('On-device extraction was empty; LUCY will retry automatically.');
   }
   return extraction;

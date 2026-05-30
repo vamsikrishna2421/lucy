@@ -1,4 +1,5 @@
 import { config } from '../config';
+import { getPreferredModel } from './modelPreference';
 import type { ExtractionResult } from '../types/extraction';
 import { extractionSchemaPrompt, extractionSystemPrompt, localReferenceTimestamp } from './prompts';
 
@@ -18,7 +19,7 @@ export async function promptOpenAI(
   system: string,
   input: string,
   apiKey: string,
-  model = config.openAIModel,
+  model = getPreferredModel(config.openAIModel),
 ): Promise<string> {
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Keyboard,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -140,9 +141,13 @@ export function CaptureScreen({
   const [todos, setTodos] = useState<TodoRow[]>([]);
   const [userName, setUserName] = useState('');
   const scrollY = useRef(new Animated.Value(0)).current;
+  const [heroVisible, setHeroVisible] = useState(true);
 
-  // Hero animation — opacity only (native driver = no JS thread blocking = no flicker)
-  const HERO_HEIGHT = 180;
+  useEffect(() => {
+    const id = scrollY.addListener(({ value }) => setHeroVisible(value < 60));
+    return () => scrollY.removeListener(id);
+  }, [scrollY]);
+
   const heroOpacity = scrollY.interpolate({ inputRange: [0, 80], outputRange: [1, 0], extrapolate: 'clamp' });
   const compactOpacity = scrollY.interpolate({ inputRange: [40, 90], outputRange: [0, 1], extrapolate: 'clamp' });
 
@@ -228,18 +233,26 @@ export function CaptureScreen({
   const scanReceipt = async () => {
     setScanningReceipt(true);
     try {
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        quality: 0.7,
-        allowsEditing: false,
-      });
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Camera access needed',
+          'LUCY needs camera access to scan receipts. Go to Settings → LUCY → Camera and turn it on.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ],
+        );
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: false });
       if (result.canceled || !result.assets[0]) return;
       const { processReceiptImage, receiptToCapture } = await import('../processing/receiptOCR');
       const receipt = await processReceiptImage(result.assets[0].uri);
       const captureText = receiptToCapture(receipt);
       setText(captureText);
     } catch {
-      Alert.alert('Could not scan receipt', 'Make sure camera permission is granted.');
+      Alert.alert('Could not scan', 'Something went wrong with the camera.');
     } finally {
       setScanningReceipt(false);
     }
@@ -296,6 +309,20 @@ export function CaptureScreen({
       setVoiceRecording(true);
     } else {
       try {
+        // Request mic permission explicitly before recording
+        const { requestPermissionsAsync } = await import('expo-audio');
+        const { status } = await requestPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(
+            'Microphone access needed',
+            'LUCY needs microphone access to record voice. Go to Settings → LUCY → Microphone and turn it on.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            ],
+          );
+          return;
+        }
         await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
         audioRecorder.current = new AR(RecordingPresets.HIGH_QUALITY);
         await audioRecorder.current.prepareToRecordAsync();
@@ -303,7 +330,7 @@ export function CaptureScreen({
         animateMicToRecording();
         setVoiceRecording(true);
       } catch {
-        Alert.alert('Microphone unavailable', 'Could not start recording.');
+        Alert.alert('Could not start recording', 'Check microphone permission in Settings → LUCY.');
       }
     }
   };
@@ -360,36 +387,35 @@ export function CaptureScreen({
 
   return (
     <View style={[styles.container, { paddingBottom: keyboardOffset }]}>
-      {/* Compact header fades in on scroll */}
-      <Animated.View style={[styles.compactHeader, { opacity: compactOpacity }]} pointerEvents="box-none">
-        <Text style={styles.compactLogo}>LUC<Text style={{ color: LUCY_COLORS.primary }}>Y</Text></Text>
-        <View style={styles.compactPills}>
-          {onMeeting ? (
-            <TouchableOpacity style={styles.meetingCompactPill} onPress={onMeeting}>
-              <View style={[styles.compactDot, { backgroundColor: '#ef4444' }]} />
-              <Text style={[styles.compactPillText, { color: '#ef4444' }]}>Meeting</Text>
-            </TouchableOpacity>
-          ) : null}
-          <TouchableOpacity
-            style={[styles.compactPill, passiveState?.status === 'listening' && styles.compactPillActive]}
-            onPress={onToggleListen}
-          >
-            <View style={[styles.compactDot, passiveState?.status === 'listening' && { backgroundColor: '#ef4444' }]} />
-            <Text style={[styles.compactPillText, passiveState?.status === 'listening' && { color: LUCY_COLORS.primary }]}>
-              {listenPillLabel()}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.compactBgPill} onPress={onBackgroundPress}>
-            <View style={[styles.compactDot, { backgroundColor: LUCY_COLORS.primary }]} />
-            <Text style={[styles.compactPillText, { color: LUCY_COLORS.primary }]}>
-              {backgroundEnabled ? 'Background on' : 'Local-first'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
 
-      {/* Hero section — fixed height, fades with native driver (no flickering) */}
-      <Animated.View style={[styles.hero, { opacity: heroOpacity }]} pointerEvents={heroOpacity === 0 ? 'none' : 'auto'}>
+      {/* Permanent control bar — always visible */}
+      <View style={styles.controlBar}>
+        {onMeeting ? (
+          <TouchableOpacity style={styles.controlMeetingPill} onPress={onMeeting}>
+            <View style={[styles.compactDot, { backgroundColor: '#ef4444' }]} />
+            <Text style={[styles.compactPillText, { color: '#ef4444' }]}>Meeting</Text>
+          </TouchableOpacity>
+        ) : null}
+        <TouchableOpacity
+          style={[styles.controlPill, passiveState?.status === 'listening' && styles.compactPillActive]}
+          onPress={onToggleListen}
+        >
+          <View style={[styles.compactDot, passiveState?.status === 'listening' && { backgroundColor: '#ef4444' }]} />
+          <Text style={[styles.compactPillText, passiveState?.status === 'listening' && { color: LUCY_COLORS.primary }]}>
+            {listenPillLabel()}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.controlBgPill} onPress={onBackgroundPress}>
+          <View style={[styles.compactDot, { backgroundColor: LUCY_COLORS.primary }]} />
+          <Text style={[styles.compactPillText, { color: LUCY_COLORS.primary }]}>
+            {backgroundEnabled ? 'Background on' : 'Local-first'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Hero section — hidden (display:none) once scrolled to eliminate black gap */}
+      {heroVisible ? (
+      <Animated.View style={[styles.hero, { opacity: heroOpacity }]}>
         <View style={styles.heroGlow} />
         <Text style={styles.heroGreeting}>{getGreeting()}{userName ? `, ${userName}` : ''}</Text>
         <Text style={styles.heroTitle}>LUCY</Text>
@@ -401,6 +427,7 @@ export function CaptureScreen({
           </Text>
         </View>
       </Animated.View>
+      ) : null}
 
       <Animated.ScrollView
         style={styles.board}
@@ -621,6 +648,10 @@ export function CaptureScreen({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   board: { flex: 1 },
+  controlBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8, paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.divider },
+  controlPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
+  controlBgPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
+  controlMeetingPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
   // Hero
   hero: { backgroundColor: '#1a0f00', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 16, position: 'relative', overflow: 'hidden' },
   heroGlow: { position: 'absolute', top: -40, right: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,140,66,0.12)' },

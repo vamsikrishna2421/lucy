@@ -40,20 +40,53 @@ interface DoneEntry {
   notes: string;
 }
 
-function groupTodos(todos: TodoRow[]): Array<{ label: string; items: TodoRow[] }> {
-  const map = new Map<string, TodoRow[]>();
+interface TaskCategory {
+  id: string;
+  label: string;
+  icon: string;
+  color: string;
+  items: TodoRow[];
+}
+
+const CATEGORY_RULES: Array<{ id: string; label: string; icon: string; color: string; pattern: RegExp }> = [
+  { id: 'grocery',  label: 'Grocery List',    icon: '🛒', color: '#4ADE80', pattern: /grocery|groceries|food|milk|vegetable|onion|tomato|garlic|spinach|mango|bread|butter|eggs|cereal|buy.*food|shopping list|produce/i },
+  { id: 'habits',   label: 'Daily Habits',    icon: '✦',  color: '#60A5FA', pattern: /habit|routine|morning|evening|workout|exercise|run|yoga|meditation|daily|wake|sleep|stretc|vitamin|water/i },
+  { id: 'work',     label: 'Work & Deadlines',icon: '⌘',  color: '#FF8C42', pattern: /work|office|project|deadline|meeting|client|team|sprint|deploy|engineering|presentation|report|email.*work|standup|review|submit/i },
+  { id: 'calls',    label: 'Calls & Messages', icon: '◉',  color: '#F472B6', pattern: /call|phone|text|sms|message|whatsapp|ping|contact|follow.up|reach out/i },
+  { id: 'health',   label: 'Health',          icon: '♡',  color: '#FCA5A5', pattern: /health|doctor|dentist|medical|physio|appointment|clinic|pharmacy|medicine|pill|prescription/i },
+  { id: 'personal', label: 'Personal',        icon: '◈',  color: '#A78BFA', pattern: /family|home|personal|mom|dad|kids|children|house|clean|laundry|bills|bank/i },
+];
+
+function categorizeTodos(todos: TodoRow[]): TaskCategory[] {
+  const buckets = new Map<string, TodoRow[]>();
+  const uncategorized: TodoRow[] = [];
+
   for (const todo of todos) {
-    const key = todo.context?.trim() || (todo.urgency === 'high' ? 'Urgent' : 'Pending');
-    const existing = map.get(key) ?? [];
-    existing.push(todo);
-    map.set(key, existing);
+    const haystack = [todo.task, todo.context ?? '', todo.category ?? ''].join(' ');
+    let matched = false;
+    for (const rule of CATEGORY_RULES) {
+      if (rule.pattern.test(haystack)) {
+        const existing = buckets.get(rule.id) ?? [];
+        existing.push(todo);
+        buckets.set(rule.id, existing);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) uncategorized.push(todo);
   }
-  const sorted = [...map.entries()].sort(([a], [b]) => {
-    if (a === 'Urgent') return -1;
-    if (b === 'Urgent') return 1;
-    return a.localeCompare(b);
-  });
-  return sorted.map(([label, items]) => ({ label, items }));
+
+  const result: TaskCategory[] = [];
+  for (const rule of CATEGORY_RULES) {
+    const items = buckets.get(rule.id);
+    if (items && items.length > 0) {
+      result.push({ ...rule, items });
+    }
+  }
+  if (uncategorized.length > 0) {
+    result.push({ id: 'general', label: 'General', icon: '▦', color: LUCY_COLORS.textSubtle, items: uncategorized });
+  }
+  return result;
 }
 
 function formatDoneTime(iso: string): string {
@@ -113,6 +146,150 @@ function AnimatedTodoRow({ todo, onPress, onLongPress }: { todo: TodoRow; onPres
   );
 }
 
+function CategoryModal({
+  category,
+  onClose,
+  onComplete,
+  onAdd,
+}: {
+  category: TaskCategory;
+  onClose: () => void;
+  onComplete: (todo: TodoRow) => void;
+  onAdd: (text: string) => void;
+}) {
+  const [addText, setAddText] = useState('');
+  const slideAnim = useRef(new Animated.Value(400)).current;
+
+  useEffect(() => {
+    Animated.spring(slideAnim, { toValue: 0, friction: 9, tension: 70, useNativeDriver: true }).start();
+  }, []);
+
+  const close = () => {
+    Animated.timing(slideAnim, { toValue: 400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(onClose);
+  };
+
+  const urgentCount = category.items.filter((t) => t.urgency === 'high').length;
+
+  return (
+    <Modal transparent animationType="none" visible onRequestClose={close}>
+      <Pressable style={cmStyles.backdrop} onPress={close}>
+        <Animated.View style={[cmStyles.sheet, { transform: [{ translateY: slideAnim }] }]}>
+          <Pressable>
+            {/* Header */}
+            <View style={[cmStyles.header, { borderBottomColor: category.color + '33' }]}>
+              <Text style={cmStyles.icon}>{category.icon}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={cmStyles.title}>{category.label}</Text>
+                <Text style={cmStyles.subtitle}>
+                  {category.items.length} item{category.items.length !== 1 ? 's' : ''}
+                  {urgentCount > 0 ? ` · ${urgentCount} urgent` : ''}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={close} style={cmStyles.closeBtn}>
+                <Text style={cmStyles.closeBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Checklist */}
+            <ScrollView style={cmStyles.list} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              {category.items.map((todo) => (
+                <AnimatedTodoRow
+                  key={todo.id}
+                  todo={todo}
+                  onPress={() => onComplete(todo)}
+                  onLongPress={() => {}}
+                />
+              ))}
+              <View style={{ height: 8 }} />
+            </ScrollView>
+
+            {/* Quick add */}
+            <View style={cmStyles.addBar}>
+              <TextInput
+                style={cmStyles.addInput}
+                placeholder={`Add to ${category.label}...`}
+                placeholderTextColor={LUCY_COLORS.textSubtle}
+                value={addText}
+                onChangeText={setAddText}
+                returnKeyType="done"
+                onSubmitEditing={() => {
+                  if (addText.trim()) { onAdd(addText.trim()); setAddText(''); }
+                }}
+              />
+              <TouchableOpacity
+                style={[cmStyles.addBtn, !addText.trim() && { opacity: 0.4 }]}
+                disabled={!addText.trim()}
+                onPress={() => { if (addText.trim()) { onAdd(addText.trim()); setAddText(''); } }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>+</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Animated.View>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const cmStyles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: LUCY_COLORS.border, maxHeight: '80%' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 20, borderBottomWidth: 1 },
+  icon: { fontSize: 26 },
+  title: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '800' },
+  subtitle: { color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 2 },
+  closeBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 10 },
+  closeBtnText: { color: LUCY_COLORS.textMuted, fontSize: 13, fontWeight: '700' },
+  list: { paddingHorizontal: 16, paddingTop: 8 },
+  addBar: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider },
+  addInput: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, color: LUCY_COLORS.textDark, fontSize: 15, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  addBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center' },
+});
+
+// ─── Category Card ────────────────────────────────────────────────────────────
+
+function CategoryCard({ category, onPress }: { category: TaskCategory; onPress: () => void }) {
+  const urgentCount = category.items.filter((t) => t.urgency === 'high').length;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      onPressIn={() => Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true }).start()}
+      onPressOut={() => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }).start()}
+    >
+      <Animated.View style={[ccStyles.card, { transform: [{ scale: scaleAnim }], borderLeftColor: category.color }]}>
+        <View style={[ccStyles.iconWrap, { backgroundColor: category.color + '22' }]}>
+          <Text style={ccStyles.iconText}>{category.icon}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={ccStyles.label}>{category.label}</Text>
+          <Text style={ccStyles.count}>
+            {category.items.length} item{category.items.length !== 1 ? 's' : ''}
+            {urgentCount > 0 ? <Text style={[ccStyles.urgent, { color: category.color }]}> · {urgentCount} urgent</Text> : null}
+          </Text>
+        </View>
+        {urgentCount > 0 ? (
+          <View style={[ccStyles.urgentDot, { backgroundColor: category.color }]} />
+        ) : null}
+        <Text style={ccStyles.chevron}>›</Text>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
+
+const ccStyles = StyleSheet.create({
+  card: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, borderLeftWidth: 4, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, marginBottom: 10 },
+  iconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  iconText: { fontSize: 20 },
+  label: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '700' },
+  count: { color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 2 },
+  urgent: { fontWeight: '800' },
+  urgentDot: { width: 8, height: 8, borderRadius: 4 },
+  chevron: { color: LUCY_COLORS.textSubtle, fontSize: 22, fontWeight: '300' },
+});
+
 function getGreeting(): string {
   const h = new Date().getHours();
   if (h < 12) return 'Good morning';
@@ -158,6 +335,7 @@ export function CaptureScreen({
   const [replayExtraction, setReplayExtraction] = useState<ExtractionResult | null>(null);
   const [pendingAction, setPendingAction] = useState<ExtractedAction | null>(null);
   const [executingAction, setExecutingAction] = useState(false);
+  const [openCategory, setOpenCategory] = useState<TaskCategory | null>(null);
   type RecInst = { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void };
   const audioRecorder = useRef<RecInst | null>(null);
 
@@ -359,7 +537,7 @@ export function CaptureScreen({
     }
   };
 
-  const groups = groupTodos(todos);
+  const categories = categorizeTodos(todos);
   const signalCount = todos.filter((t) => t.urgency === 'high').length;
 
   // Label shown in the listen pill — gives real feedback in batch (Whisper) mode
@@ -401,26 +579,23 @@ export function CaptureScreen({
           </View>
         </Animated.View>
 
-        {groups.length === 0 && done.length === 0 ? (
+        {categories.length === 0 && done.length === 0 ? (
           <View style={styles.emptyBoard}>
             <Text style={styles.emptyTitle}>Your board is clear</Text>
             <Text style={styles.emptyHint}>Capture something and LUCY will organize it here by category.</Text>
           </View>
         ) : (
           <>
-            {groups.map((group) => (
-              <View key={group.label} style={styles.group}>
-                <Text style={styles.groupLabel}>{group.label.toUpperCase()}</Text>
-                {group.items.map((todo) => (
-                  <AnimatedTodoRow
-                    key={todo.id}
-                    todo={todo}
-                    onPress={() => openDoneModal(todo)}
-                    onLongPress={() => { setEditText(todo.task); setEditTodo(todo); }}
-                  />
-                ))}
-              </View>
-            ))}
+            {/* Category cards — tap to open overlay checklist */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+              {categories.map((cat) => (
+                <CategoryCard
+                  key={cat.id}
+                  category={cat}
+                  onPress={() => setOpenCategory(cat)}
+                />
+              ))}
+            </View>
 
             {done.length > 0 ? (
               <View style={styles.doneSection}>
@@ -598,6 +773,33 @@ export function CaptureScreen({
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Category checklist modal */}
+      {openCategory ? (
+        <CategoryModal
+          category={openCategory}
+          onClose={() => setOpenCategory(null)}
+          onComplete={(todo) => {
+            openDoneModal(todo);
+            setOpenCategory(null);
+          }}
+          onAdd={async (text) => {
+            const db = await getDatabase();
+            await db.runAsync(
+              'INSERT INTO todos (task, category, urgency, context, privacy_level, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+              text, 'other', 'medium', openCategory.label, 'normal', new Date().toISOString(),
+            );
+            const newTodo = await db.getFirstAsync<TodoRow>(
+              'SELECT * FROM todos WHERE id = last_insert_rowid()',
+            );
+            if (newTodo) {
+              setTodos((prev) => [...prev, newTodo]);
+              const updatedCat = { ...openCategory, items: [...openCategory.items, newTodo] };
+              setOpenCategory(updatedCat);
+            }
+          }}
+        />
+      ) : null}
 
       {/* Live Capture Replay — the "wow moment" */}
       {replayExtraction ? (

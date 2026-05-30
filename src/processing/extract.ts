@@ -314,14 +314,19 @@ async function chunkAndMergeExtract(
     if (sentenceChunks.length > 1) chunks.splice(0, chunks.length, ...sentenceChunks);
   }
 
-  // Process each chunk (sequential to respect rate limits)
+  // Process each chunk sequentially — each labeled so the LLM knows its position
   const results: ExtractionResult[] = [];
-  for (let i = 0; i < chunks.length; i++) {
+  const total = chunks.length;
+  for (let i = 0; i < total; i++) {
     try {
-      const chunkLabel = chunks.length > 1 ? `[Part ${i + 1} of ${chunks.length}]\n` : '';
-      const result = await analyzeTranscript(chunkLabel + chunks[i], { privacyLevel });
+      const position = i === 0 ? 'START' : i === total - 1 ? 'END' : `MIDDLE (${i + 1}/${total})`;
+      const chunkHeader = total > 1
+        ? `[CHUNK ${i + 1} OF ${total} — ${position}]\n` +
+          `[This is segment ${i + 1} of a ${total}-part document. Extract only what is in THIS segment. Do not repeat items from other chunks.]\n\n`
+        : '';
+      const result = await analyzeTranscript(chunkHeader + chunks[i], { privacyLevel });
       results.push(result);
-    } catch { /* skip failed chunks — partial extraction is better than none */ }
+    } catch { /* skip failed chunks — partial result beats none */ }
   }
 
   if (results.length === 0) throw new Error('All chunks failed to extract.');

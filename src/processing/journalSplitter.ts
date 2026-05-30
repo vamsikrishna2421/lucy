@@ -103,10 +103,20 @@ export async function ingestJournal(
   if (sections.length < 3) return 0;
 
   const { insertCapture } = await import('../db/captures');
+  const total = sections.length;
 
-  for (const section of sections) {
-    const id = await insertCapture(db, 'text', section.text, privacyLevel, false);
-    // Override created_at with the journal date
+  for (let i = 0; i < total; i++) {
+    const section = sections[i];
+    const dateLabel = section.date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const position = i === 0 ? 'START' : i === total - 1 ? 'END' : `MIDDLE (${i + 1}/${total})`;
+
+    // Prepend chunk context so LLM knows this is day N of a multi-day journal
+    const labeledText =
+      `[JOURNAL ENTRY ${i + 1} OF ${total} — ${position}]\n` +
+      `[Date: ${dateLabel} — extract only events/tasks from this specific date]\n\n` +
+      section.text;
+
+    const id = await insertCapture(db, 'text', labeledText, privacyLevel, false);
     await db.runAsync(
       'UPDATE captures SET created_at = ? WHERE id = ?',
       section.date.toISOString(),
@@ -114,5 +124,5 @@ export async function ingestJournal(
     );
   }
 
-  return sections.length;
+  return total;
 }

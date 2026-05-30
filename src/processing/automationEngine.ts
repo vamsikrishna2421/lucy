@@ -315,14 +315,23 @@ export async function executeAction(action: ExtractedAction): Promise<{ success:
       case 'timer': {
         const seconds = parseInt(action.params.seconds ?? '60', 10);
         if (Platform.OS === 'android') {
-          // Android native clock timer intent
-          const worked = await Linking.canOpenURL('android.timer://');
-          if (worked) {
-            await Linking.openURL(`android.timer://?duration=${seconds}`);
-          } else {
-            await Linking.openURL(`intent:#Intent;action=android.intent.action.SET_TIMER;S.android.intent.extra.alarm.LENGTH=${seconds};S.android.intent.extra.alarm.SKIP_UI=true;end`);
+          // Try the system clock's SET_TIMER intent (correct extra types: LENGTH=int, SKIP_UI=bool).
+          try {
+            await Linking.openURL(
+              'intent:#Intent;action=android.intent.action.SET_TIMER;' +
+              `i.android.intent.extra.alarm.LENGTH=${seconds};` +
+              'B.android.intent.extra.alarm.SKIP_UI=true;' +
+              'S.android.intent.extra.alarm.MESSAGE=LUCY%20timer;end',
+            );
+            return { success: true, message: `${action.params.label} timer started in your clock app` };
+          } catch {
+            // No clock app handled it — guarantee the timer with a scheduled notification.
+            await Notifications.scheduleNotificationAsync({
+              content: { title: '⏰ Timer done', body: `Your ${action.params.label} timer is complete`, sound: true },
+              trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, repeats: false },
+            });
+            return { success: true, message: `${action.params.label} timer set — you'll get a notification when it's done` };
           }
-          return { success: true, message: `${action.params.label} timer started` };
         } else {
           // iOS: schedule a local notification — no Shortcuts setup required
           await Notifications.scheduleNotificationAsync({

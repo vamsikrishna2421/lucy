@@ -231,18 +231,29 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
             try {
               const db = await getDatabase();
               const tables = [
-                'captures', 'todos', 'reminders', 'expenses', 'ideas', 'places',
+                'todos', 'reminders', 'expenses', 'ideas', 'places',
                 'people', 'interests', 'open_loops', 'follow_ups', 'context_requests',
                 'knowledge_entities', 'knowledge_connections', 'knowledge_insights',
                 'organization_runs', 'extractions', 'capture_embeddings',
                 'person_contexts', 'mood_entries', 'questions', 'ask_threads',
                 'ask_messages', 'battery_snapshots', 'music_captures',
+                // captures last — child tables (and its own parent_capture_id self-reference)
+                // reference it; with foreign_keys = ON, deleting it first would fail.
+                'captures',
               ];
-              await db.withTransactionAsync(async () => {
-                for (const table of tables) {
-                  await db.runAsync(`DELETE FROM ${table}`).catch(() => { /* table may not exist */ });
-                }
-              });
+              // FK is enabled (PRAGMA foreign_keys = ON). Disable it for the bulk wipe so
+              // table order / self-references can't trigger constraint failures that the
+              // per-statement catch would silently swallow (left captures undeleted before).
+              await db.execAsync('PRAGMA foreign_keys = OFF;');
+              try {
+                await db.withTransactionAsync(async () => {
+                  for (const table of tables) {
+                    await db.runAsync(`DELETE FROM ${table}`).catch(() => { /* table may not exist */ });
+                  }
+                });
+              } finally {
+                await db.execAsync('PRAGMA foreign_keys = ON;');
+              }
               Alert.alert('Done', 'All memories have been deleted. LUCY starts fresh.');
               setLocalRefresh((v) => v + 1);
             } catch (e) {

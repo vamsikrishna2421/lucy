@@ -175,10 +175,16 @@ async function persistExtraction(
 
   await db.withTransactionAsync(async () => {
     const existingTodos = await listPendingTodos(db);
+    // Track tasks inserted in THIS extraction too — otherwise a chunked/merged capture
+    // that yields the same task many times (e.g. a 90-day journal repeating "drink water")
+    // bypasses dedup, since existingTodos is only the pre-existing DB snapshot.
+    const insertedThisRound: string[] = [];
     for (const task of extraction.tasks) {
-      const isDuplicate = existingTodos.some((existing) => isSimilarTask(existing.task, task.task));
+      const isDuplicate = existingTodos.some((existing) => isSimilarTask(existing.task, task.task))
+        || insertedThisRound.some((seen) => isSimilarTask(seen, task.task));
       if (!isDuplicate) {
         await insertTodo(db, capture.id, task, extraction.privacy_level);
+        insertedThisRound.push(task.task);
       }
     }
     for (const expense of extraction.expenses) {

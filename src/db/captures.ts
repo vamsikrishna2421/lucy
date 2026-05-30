@@ -148,6 +148,47 @@ export async function archiveCapture(db: SQLiteDatabase, id: number, reason: str
   );
 }
 
+/** Tables that hold rows derived from a capture's extraction. Deleting a memory must
+ *  purge these so it disappears from the Brain/Library and Ask, not just the timeline. */
+const CAPTURE_DERIVED_TABLES = [
+  'todos', 'expenses', 'ideas', 'places', 'reminders',
+  'open_loops', 'follow_ups', 'context_requests', 'mood_entries',
+  'extractions', 'capture_embeddings',
+] as const;
+
+/**
+ * Fully removes a memory from the "brain": purges every derived row (tasks, ideas,
+ * expenses, embeddings, extraction evidence, …) for the capture and any child update
+ * captures, then soft-archives the capture itself (kept for audit, hidden everywhere).
+ * Callers should run organizeMemory() afterwards to rebuild the knowledge projection.
+ */
+export async function deleteCaptureCompletely(db: SQLiteDatabase, id: number, reason = 'deleted by user'): Promise<void> {
+  const children = await db.getAllAsync<{ id: number }>(
+    'SELECT id FROM captures WHERE parent_capture_id = ?', id,
+  );
+  const ids = [id, ...children.map((c) => c.id)];
+  await db.withTransactionAsync(async () => {
+    for (const captureId of ids) {
+      for (const table of CAPTURE_DERIVED_TABLES) {
+        await db.runAsync(`DELETE FROM ${table} WHERE capture_id = ?`, captureId);
+      }
+    }
+    // Detach + archive child update captures so they don't dangle, then archive the parent.
+    for (const child of children) {
+      await db.runAsync(
+        `UPDATE captures SET parent_capture_id = NULL, processed = 3, processing_error = NULL,
+         next_attempt_at = NULL, archived_at = CURRENT_TIMESTAMP, archive_reason = ? WHERE id = ?`,
+        reason, child.id,
+      );
+    }
+    await db.runAsync(
+      `UPDATE captures SET processed = 3, processing_error = NULL, next_attempt_at = NULL,
+       archived_at = CURRENT_TIMESTAMP, archive_reason = ? WHERE id = ?`,
+      reason, id,
+    );
+  });
+}
+
 export async function resetInterruptedCaptures(db: SQLiteDatabase): Promise<void> {
   await db.runAsync(
     `UPDATE captures SET processed = 0, processing_error = NULL, next_attempt_at = NULL

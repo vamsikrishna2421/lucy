@@ -22,6 +22,17 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": ["audio"],
+        "LSApplicationQueriesSchemes": [
+          "tel",
+          "sms",
+          "maps",
+          "comgooglemaps",
+          "spotify",
+          "music",
+          "shortcuts",
+          "x-apple-reminderkit",
+          "calshow"
+        ],
         "NSMicrophoneUsageDescription": "LUCY listens in the background to capture your thoughts, ideas, and songs automatically.",
         "NSSpeechRecognitionUsageDescription": "LUCY uses on-device speech recognition to transcribe what you say during passive listening mode.",
         "NSPhotoLibraryUsageDescription": "LUCY may save audio recordings to your library when capturing memories.",
@@ -42,6 +53,9 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.INTERNET",
         "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.READ_CONTACTS",
+        "android.permission.SET_ALARM",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"
       ]
@@ -82,12 +96,43 @@
       "expo-localization",
       "expo-asset",
       [
+        "expo-contacts",
+        {
+          "contactsPermission": "LUCY looks up a contact's number only when you confirm an action like calling or messaging them. Contacts are never uploaded."
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "LUCY adds events you confirm (like meetings) to your calendar and reads it to prepare your daily brief.",
+          "remindersPermission": "LUCY adds reminders you confirm to your Reminders lists."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {
             "minSdkVersion": 33,
             "enableProguardInReleaseBuilds": true,
-            "abiFilters": ["arm64-v8a"]
+            "abiFilters": ["arm64-v8a"],
+            "manifestQueries": {
+              "package": [
+                "com.spotify.music",
+                "com.google.android.apps.maps",
+                "com.android.deskclock",
+                "com.google.android.deskclock"
+              ],
+              "intent": [
+                { "action": "android.intent.action.VIEW", "data": { "scheme": "tel" } },
+                { "action": "android.intent.action.DIAL", "data": { "scheme": "tel" } },
+                { "action": "android.intent.action.VIEW", "data": { "scheme": "sms" } },
+                { "action": "android.intent.action.SENDTO", "data": { "scheme": "smsto" } },
+                { "action": "android.intent.action.VIEW", "data": { "scheme": "geo" } },
+                { "action": "android.intent.action.VIEW", "data": { "scheme": "mailto" } },
+                { "action": "android.intent.action.SET_TIMER" },
+                { "action": "android.intent.action.INSERT", "data": { "mimeType": "vnd.android.cursor.item/event" } }
+              ]
+            }
           },
           "ios": {
             "deploymentTarget": "17.0",

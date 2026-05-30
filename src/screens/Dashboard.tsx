@@ -447,6 +447,40 @@ function TimelineView({
   const [quickAck, setQuickAck] = useState('');
   const [pendingAction, setPendingAction] = useState<import('../processing/automationEngine').ExtractedAction | null>(null);
   const [executingAction, setExecutingAction] = useState(false);
+  const [menuTarget, setMenuTarget] = useState<CaptureRow | null>(null);
+
+  const reprocessCapture = async (capture: CaptureRow) => {
+    const db = await getDatabase();
+    await db.runAsync(
+      'UPDATE captures SET processed = 0, processing_error = NULL, attempt_count = 0, extracted_title = NULL, structured_text = NULL WHERE id = ?',
+      capture.id,
+    );
+    onFeedback();
+  };
+
+  const confirmDeleteCapture = (capture: CaptureRow) => {
+    Alert.alert(
+      'Delete memory?',
+      'This thought will be permanently removed from your timeline.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            const db = await getDatabase();
+            const { deleteCaptureCompletely } = await import('../db/captures');
+            await deleteCaptureCompletely(db, capture.id, 'deleted by user');
+            // Rebuild the knowledge projection so the deleted memory leaves the Brain too.
+            try {
+              const { organizeMemory } = await import('../processing/organizer');
+              await organizeMemory(db, 'after-delete');
+            } catch { /* non-critical — derived rows are already purged */ }
+            onFeedback();
+          },
+        },
+      ],
+    );
+  };
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -624,51 +658,14 @@ function TimelineView({
 
                       <View style={styles.tlCardFooter}>
                         <PrivacyBadge level={item.privacy_level} />
-                        <View style={{ flexDirection: 'row', gap: 4 }}>
-                          {/* Feedback / correct */}
-                          <TouchableOpacity style={styles.feedbackBtn} onPress={() => { setFeedbackText(''); setFeedbackTarget(item); }}>
-                            <Text style={styles.feedbackBtnText}>?</Text>
-                          </TouchableOpacity>
-                          {/* Reprocess — disabled while already organizing */}
-                          <TouchableOpacity
-                            disabled={item.processed === 0 || item.processed === 1}
-                            style={[styles.feedbackBtn, { backgroundColor: LUCY_COLORS.primarySoft, opacity: (item.processed === 0 || item.processed === 1) ? 0.3 : 1 }]}
-                            onPress={async () => {
-                              const db = await getDatabase();
-                              await db.runAsync(
-                                'UPDATE captures SET processed = 0, processing_error = NULL, attempt_count = 0, extracted_title = NULL, structured_text = NULL WHERE id = ?',
-                                item.id,
-                              );
-                              onFeedback();
-                            }}
-                          >
-                            <Text style={[styles.feedbackBtnText, { color: LUCY_COLORS.primary }]}>↻</Text>
-                          </TouchableOpacity>
-                          {/* Delete */}
-                          <TouchableOpacity
-                            style={[styles.feedbackBtn, { backgroundColor: 'rgba(239,68,68,0.1)' }]}
-                            onPress={() => {
-                              Alert.alert(
-                                'Delete memory?',
-                                'This thought will be permanently removed from your timeline.',
-                                [
-                                  { text: 'Cancel', style: 'cancel' },
-                                  {
-                                    text: 'Delete', style: 'destructive',
-                                    onPress: async () => {
-                                      const db = await getDatabase();
-                                      const { archiveCapture } = await import('../db/captures');
-                                      await archiveCapture(db, item.id, 'deleted by user');
-                                      onFeedback();
-                                    },
-                                  },
-                                ],
-                              );
-                            }}
-                          >
-                            <Text style={[styles.feedbackBtnText, { color: '#ef4444' }]}>✕</Text>
-                          </TouchableOpacity>
-                        </View>
+                        {/* Actions collapsed under a three-dot menu */}
+                        <TouchableOpacity
+                          style={styles.tlMenuBtn}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          onPress={() => setMenuTarget(item)}
+                        >
+                          <Text style={styles.tlMenuBtnText}>⋯</Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
                   </View>
@@ -679,6 +676,40 @@ function TimelineView({
         ))}
         <View style={{ height: 20 }} />
       </ScrollView>
+
+      {/* Card action menu (⋯) */}
+      <Modal transparent animationType="fade" visible={menuTarget !== null} onRequestClose={() => setMenuTarget(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setMenuTarget(null)}>
+          <Pressable style={styles.actionSheet}>
+            <Text style={styles.actionSheetTitle} numberOfLines={1}>
+              {menuTarget?.extracted_title ?? menuTarget?.raw_transcript?.slice(0, 48) ?? 'Memory'}
+            </Text>
+            <TouchableOpacity
+              style={styles.actionSheetItem}
+              onPress={() => { const t = menuTarget; setMenuTarget(null); setFeedbackText(''); setFeedbackTarget(t); }}
+            >
+              <Text style={styles.actionSheetIcon}>?</Text>
+              <Text style={styles.actionSheetLabel}>Correct this memory</Text>
+            </TouchableOpacity>
+            {menuTarget && menuTarget.processed !== 0 && menuTarget.processed !== 1 ? (
+              <TouchableOpacity
+                style={styles.actionSheetItem}
+                onPress={() => { const t = menuTarget; setMenuTarget(null); if (t) void reprocessCapture(t); }}
+              >
+                <Text style={[styles.actionSheetIcon, { color: LUCY_COLORS.primary }]}>↻</Text>
+                <Text style={styles.actionSheetLabel}>Reprocess</Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity
+              style={styles.actionSheetItem}
+              onPress={() => { const t = menuTarget; setMenuTarget(null); if (t) confirmDeleteCapture(t); }}
+            >
+              <Text style={[styles.actionSheetIcon, { color: '#ef4444' }]}>✕</Text>
+              <Text style={[styles.actionSheetLabel, { color: '#ef4444' }]}>Delete</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Feedback modal */}
       <Modal transparent animationType="fade" visible={feedbackTarget !== null} onRequestClose={() => setFeedbackTarget(null)}>
@@ -1014,6 +1045,13 @@ const styles = StyleSheet.create({
   modalSkipText: { color: LUCY_COLORS.textMuted, fontSize: 15, fontWeight: '600' },
   feedbackBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', justifyContent: 'center' },  // was 22 (too small)
   feedbackBtnText: { color: LUCY_COLORS.textMuted, fontSize: 14, fontWeight: '700' },
+  tlMenuBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  tlMenuBtnText: { color: LUCY_COLORS.textMuted, fontSize: 20, fontWeight: '800', lineHeight: 20, marginTop: -4 },
+  actionSheet: { backgroundColor: LUCY_COLORS.surface, borderRadius: 20, paddingVertical: 8, width: '100%', borderWidth: 1, borderColor: LUCY_COLORS.border },
+  actionSheetTitle: { color: LUCY_COLORS.textSubtle, fontSize: 12, fontWeight: '700', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 8 },
+  actionSheetItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 14 },
+  actionSheetIcon: { width: 22, textAlign: 'center', color: LUCY_COLORS.textMuted, fontSize: 16, fontWeight: '700' },
+  actionSheetLabel: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '600' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   feedbackModal: { backgroundColor: LUCY_COLORS.surface, borderRadius: 20, padding: 24, width: '100%', borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 12 },
   feedbackModalTitle: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },

@@ -5,10 +5,30 @@ import { analyzeWithDevice, promptDevice } from './device';
 import { analyzeWithOllama, promptOllama } from './ollama';
 import { analyzeWithOpenAI, promptOpenAI } from './openai';
 import { dailySummaryPrompt, privateRemoteRedactionPrompt, urgentScanPrompt } from './prompts';
-import { getRemoteAccessState, getRemoteOpenAIKey } from './remoteAccess';
+import { getRemoteAccessState, getRemoteOpenAIKey, getClaudeApiKey } from './remoteAccess';
 import { redactForRemote } from '../processing/redaction';
+import { getPreferredModel } from './modelPreference';
 import { getDatabase } from '../db';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
+
+/** Resolves whether remote analysis is available for the *currently selected* model,
+ *  checking the correct provider's key (Anthropic for claude-*, OpenAI otherwise).
+ *  Fixes the bug where a Claude-only setup never went remote because availability
+ *  was gated solely on the OpenAI key + OpenAI "remote enabled" toggle. */
+async function resolveRemoteForAnalyze(): Promise<{ available: boolean; openAIKey: string }> {
+  if (config.aiMode === 'offline') {
+    return { available: false, openAIKey: '' };
+  }
+  const model = getPreferredModel(config.openAIModel);
+  if (model.startsWith('claude-')) {
+    const claudeKey = (await getClaudeApiKey()) ?? process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY?.trim() ?? null;
+    // promptClaude fetches its own key internally, so openAIKey is unused for Claude.
+    return { available: Boolean(claudeKey), openAIKey: '' };
+  }
+  const remote = await getRemoteAccessState();
+  const openAIKey = remote.enabled && remote.hasKey ? await getRemoteOpenAIKey() : null;
+  return { available: Boolean(openAIKey), openAIKey: openAIKey ?? '' };
+}
 
 function localAnalyze(transcript: string): Promise<ExtractionResult> {
   return config.localInference === 'ollama-dev'
@@ -45,28 +65,21 @@ export const AIProvider = {
   async analyzeLocally(transcript: string): Promise<ExtractionResult> {
     return localAnalyze(transcript);
   },
-  async analyze(transcript: string, privacyLevel: PrivacyLevel): Promise<ExtractionResult> {
-    const remote = await getRemoteAccessState();
-    const apiKey = remote.enabled && remote.hasKey ? await getRemoteOpenAIKey() : null;
-    const remoteUnavailable = !remote.enabled
-      || !apiKey
-      || config.aiMode === 'offline';
-    if (remoteUnavailable) {
+  async analyze(transcript: string, _privacyLevel: PrivacyLevel): Promise<ExtractionResult> {
+    // User directive: process EVERYTHING remotely regardless of privacy level — the
+    // on-device model is intentionally disconnected. On-device privacy redaction
+    // (sanitizePrivatelyForRemote) is deliberately NOT used here; privacy masking will
+    // be revisited later. Sending the raw transcript to the configured remote provider.
+    const { available, openAIKey } = await resolveRemoteForAnalyze();
+    if (!available) {
       return localAnalyze(transcript);
     }
     const db = await getDatabase();
     const profile = await getUserProfile(db);
     const userContextPrefix = buildUserContextPrefix(profile);
-    // Private/local captures must never leave the device unredacted: mask sensitive
-    // spans on-device first. If masking can't run (e.g. local model unavailable),
-    // sanitizePrivatelyForRemote throws and processQueue marks the capture failed —
-    // we fail closed rather than send raw protected content to the remote API.
-    const remoteTranscript = privacyLevel === 'normal'
-      ? transcript
-      : await sanitizePrivatelyForRemote(transcript);
-    // Remote AI always — no silent fallback to device model.
+    // analyzeWithOpenAI → promptAI routes to Claude or OpenAI based on the selected model.
     // If this throws, processQueue sees the real error and marks the capture as failed.
-    return await analyzeWithOpenAI(remoteTranscript, apiKey, userContextPrefix);
+    return await analyzeWithOpenAI(transcript, openAIKey, userContextPrefix);
   },
   async urgentScan(transcript: string, privacyLevel: PrivacyLevel = 'local'): Promise<string> {
     const prompt = `${urgentScanPrompt}\nTranscript:\n${transcript}`;

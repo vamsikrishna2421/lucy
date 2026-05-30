@@ -6,8 +6,8 @@ export const config = {
   // Development-only asset relay; model inference still executes on the phone.
   deviceModelAssetBaseUrl: (process.env.EXPO_PUBLIC_DEVICE_MODEL_ASSET_BASE_URL ?? '').replace(/\/$/, ''),
   allowExternalAI: process.env.EXPO_PUBLIC_ALLOW_EXTERNAL_AI === 'true',
-  openAIModel: process.env.EXPO_PUBLIC_OPENAI_MODEL ?? 'gpt-5.4-nano',
-  openAISummaryModel: process.env.EXPO_PUBLIC_OPENAI_SUMMARY_MODEL ?? 'gpt-5.4-nano',
+  openAIModel: process.env.EXPO_PUBLIC_OPENAI_MODEL ?? 'gpt-4o-mini',
+  openAISummaryModel: process.env.EXPO_PUBLIC_OPENAI_SUMMARY_MODEL ?? 'gpt-4o-mini',
   claudeExtractionModel: process.env.EXPO_PUBLIC_CLAUDE_EXTRACTION_MODEL ?? 'claude-haiku-4-5-20251001',
   claudeSummaryModel: process.env.EXPO_PUBLIC_CLAUDE_SUMMARY_MODEL ?? 'claude-sonnet-4-6',
   tier1IntervalMinutes: 5,

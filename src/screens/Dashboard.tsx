@@ -381,6 +381,9 @@ function CapturedView({ captures, updates, onFeedback }: { captures: CaptureRow[
   const displayCaptures = searchResults ?? captures;
   const [feedbackText, setFeedbackText] = useState('');
   const [sending, setSending] = useState(false);
+  const [actionTarget, setActionTarget] = useState<CaptureRow | null>(null);
+  const [actionResult, setActionResult] = useState<string | null>(null);
+  const [actionRunning, setActionRunning] = useState(false);
 
   const submitFeedback = async () => {
     if (!feedbackTarget || !feedbackText.trim()) return;
@@ -450,9 +453,14 @@ function CapturedView({ captures, updates, onFeedback }: { captures: CaptureRow[
             <View style={styles.captureMeta}>
               <Text style={styles.captureStatus}>{captureStatus(item) === 'complete' ? 'Remembered' : captureStatus(item)}</Text>
               {captureStatus(item) === 'complete' ? <PrivacyBadge level={item.privacy_level} /> : null}
-              <TouchableOpacity style={styles.feedbackBtn} onPress={() => { setFeedbackText(''); setFeedbackTarget(item); }}>
-                <Text style={styles.feedbackBtnText}>?</Text>
-              </TouchableOpacity>
+              <View style={styles.captureActions}>
+                <TouchableOpacity style={styles.actionBtn} onPress={() => { setActionTarget(item); }}>
+                  <Text style={styles.actionBtnText}>✦ AI</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.feedbackBtn} onPress={() => { setFeedbackText(''); setFeedbackTarget(item); }}>
+                  <Text style={styles.feedbackBtnText}>?</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             {(updates[item.id] ?? []).map((update) => (
               <View key={update.id} style={styles.activity}>
@@ -464,6 +472,55 @@ function CapturedView({ captures, updates, onFeedback }: { captures: CaptureRow[
         ))}
         {displayCaptures.length === 0 && !searchQuery ? <EmptyLine text="New captures will show here." /> : null}
       </ScrollView>
+
+      {/* Text Actions Modal */}
+      <Modal transparent animationType="slide" visible={actionTarget !== null} onRequestClose={() => { setActionTarget(null); setActionResult(null); }}>
+        <Pressable style={styles.modalBackdrop} onPress={() => { setActionTarget(null); setActionResult(null); }}>
+          <Pressable style={[styles.feedbackModal, { maxHeight: '80%' }]}>
+            <Text style={styles.feedbackModalTitle}>AI Actions</Text>
+            <Text style={styles.feedbackModalSub} numberOfLines={2}>{actionTarget?.extracted_title ?? actionTarget?.raw_transcript?.slice(0, 80)}</Text>
+            {!actionResult ? (
+              <View style={{ gap: 8, marginTop: 4 }}>
+                {(['summarize','improve','action_items','translate','explain','structure'] as const).map((action) => (
+                  <TouchableOpacity
+                    key={action}
+                    style={[styles.actionOptionBtn, actionRunning && { opacity: 0.5 }]}
+                    disabled={actionRunning}
+                    onPress={async () => {
+                      if (!actionTarget?.raw_transcript) return;
+                      setActionRunning(true);
+                      try {
+                        const { runTextAction, TEXT_ACTION_LABELS } = await import('../processing/textActions');
+                        const res = await runTextAction(action, actionTarget.raw_transcript);
+                        setActionResult(`${TEXT_ACTION_LABELS[action]}:\n\n${res.result}`);
+                      } finally {
+                        setActionRunning(false);
+                      }
+                    }}
+                  >
+                    <Text style={styles.actionOptionText}>
+                      {action === 'summarize' ? 'Summarize' : action === 'improve' ? 'Improve writing' : action === 'action_items' ? 'Extract action items' : action === 'translate' ? 'Translate to English' : action === 'explain' ? 'Explain this' : 'Structure notes'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                {actionRunning ? <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, textAlign: 'center' }}>LUCY is working...</Text> : null}
+              </View>
+            ) : (
+              <View style={{ gap: 12 }}>
+                <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
+                  <Text style={{ color: LUCY_COLORS.textDark, fontSize: 14, lineHeight: 22 }}>{actionResult}</Text>
+                </ScrollView>
+                <TouchableOpacity style={styles.modalDone} onPress={() => setActionResult(null)}>
+                  <Text style={styles.modalDoneText}>Try another action</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalSkip} onPress={() => { setActionTarget(null); setActionResult(null); }}>
+                  <Text style={styles.modalSkipText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal transparent animationType="fade" visible={feedbackTarget !== null} onRequestClose={() => setFeedbackTarget(null)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setFeedbackTarget(null)}>
@@ -674,6 +731,15 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, color: LUCY_COLORS.textDark, fontSize: 14 },
   searchClear: { color: LUCY_COLORS.textSubtle, fontSize: 14, fontWeight: '700' },
   searchResultsLabel: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginBottom: 8, fontWeight: '600' },
+  captureActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  actionBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderColor: LUCY_COLORS.primarySoft },
+  actionBtnText: { color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800' },
+  actionOptionBtn: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 12, padding: 14 },
+  actionOptionText: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '600' },
+  modalDone: { backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingVertical: 13, alignItems: 'center' as const },
+  modalDoneText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  modalSkip: { borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 12, paddingVertical: 13, alignItems: 'center' as const },
+  modalSkipText: { color: LUCY_COLORS.textMuted, fontSize: 15, fontWeight: '600' },
   feedbackBtn: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', justifyContent: 'center' },
   feedbackBtnText: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '700' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', alignItems: 'center', padding: 24 },

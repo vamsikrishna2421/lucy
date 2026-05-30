@@ -37,6 +37,13 @@ export interface LucySpendingCategory {
   count: number;
 }
 
+export interface CitedSource {
+  captureId: number;
+  title: string;
+  snippet: string;
+  capturedAt: string;
+}
+
 export interface LucyAnswer {
   supported: boolean;
   answerKind?: 'today' | 'memory' | 'spending' | 'llm';
@@ -49,6 +56,7 @@ export interface LucyAnswer {
   memorySubject?: string;
   connections?: LucyMemoryConnection[];
   sources?: LucyMemorySource[];
+  citedSources?: CitedSource[];
   expenses?: ExpenseRow[];
   expenseTotal?: number;
   spendingCategories?: LucySpendingCategory[];
@@ -199,19 +207,35 @@ function detectsCaptureIntent(text: string): boolean {
 
 async function answerWithLLM(question: string): Promise<LucyAnswer> {
   const db = await getDatabase();
-  const [captures, profile] = await Promise.all([
-    listRecentCaptures(db, 20),
-    getUserProfile(db),
-  ]);
+  const [profile] = await Promise.all([getUserProfile(db)]);
 
-  // Build context from non-private captures only (private stays on device).
-  const context = captures
-    .filter((c) => c.privacy_level !== 'private' && c.raw_transcript?.trim())
-    .slice(0, 15)
+  // Use semantic search for relevant captures, fall back to recent if no embeddings
+  let relevantCaptures: import('../db/captures').CaptureRow[] = [];
+  try {
+    const { findSimilarCaptures } = await import('./vectorSearch');
+    const similar = await findSimilarCaptures(db, question, 8, 0.1);
+    relevantCaptures = similar
+      .filter((s) => s.capture.privacy_level !== 'private' && s.capture.raw_transcript?.trim())
+      .map((s) => s.capture);
+  } catch { /* fall through */ }
+
+  if (relevantCaptures.length < 3) {
+    const recent = await listRecentCaptures(db, 20);
+    const seen = new Set(relevantCaptures.map((c) => c.id));
+    for (const c of recent) {
+      if (!seen.has(c.id) && c.privacy_level !== 'private' && c.raw_transcript?.trim()) {
+        relevantCaptures.push(c);
+      }
+    }
+  }
+
+  const contextCaptures = relevantCaptures.slice(0, 12);
+
+  const context = contextCaptures
     .map((c) => {
       const date = new Date(c.created_at.includes('T') ? c.created_at : `${c.created_at.replace(' ', 'T')}Z`).toLocaleDateString();
       const title = c.extracted_title ? `[${c.extracted_title}]` : '';
-      return `${date} ${title}\n${c.raw_transcript?.slice(0, 400) ?? ''}`;
+      return `[ID:${c.id}] ${date} ${title}\n${c.raw_transcript?.slice(0, 400) ?? ''}`;
     })
     .join('\n---\n');
 
@@ -248,6 +272,14 @@ async function answerWithLLM(question: string): Promise<LucyAnswer> {
 
   await insertQuestionSignal(db, question, 'llm_answer', llmResponse.slice(0, 200), 'LLM answered from memory context.');
 
+  // Build cited sources from captures that were used as context
+  const citedSources: CitedSource[] = contextCaptures.slice(0, 5).map((c) => ({
+    captureId: c.id,
+    title: c.extracted_title ?? 'Memory',
+    snippet: (c.raw_transcript ?? '').slice(0, 80) + ((c.raw_transcript?.length ?? 0) > 80 ? '...' : ''),
+    capturedAt: c.created_at,
+  }));
+
   return {
     supported: true,
     answerKind: 'llm',
@@ -257,6 +289,7 @@ async function answerWithLLM(question: string): Promise<LucyAnswer> {
     deadlines: [],
     recordedSignal: '',
     llmResponse: llmResponse.trim(),
+    citedSources,
   };
 }
 

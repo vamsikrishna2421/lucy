@@ -247,6 +247,17 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       <View style={[styles.bubble, styles.lucyBubble]}>
         <Text style={styles.responseLabel}>LUCY</Text>
         <Text style={styles.llmResponse}>{answer.llmResponse}</Text>
+        {answer.citedSources && answer.citedSources.length > 0 ? (
+          <View style={styles.sourcesSection}>
+            <Text style={styles.sourcesLabel}>From your memory</Text>
+            {answer.citedSources.map((src) => (
+              <View key={src.captureId} style={styles.sourceChip}>
+                <Text style={styles.citedSourceTitle} numberOfLines={1}>{src.title}</Text>
+                <Text style={styles.sourceSnippet} numberOfLines={1}>{src.snippet}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
     );
   }
@@ -402,7 +413,12 @@ const styles = StyleSheet.create({
   tipList: { gap: 8, marginBottom: 12 },
   tipItem: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 20, paddingLeft: 4 },
   tipHint: { color: LUCY_COLORS.textSubtle, fontSize: 12, lineHeight: 18, fontStyle: 'italic' },
-  llmResponse: { color: LUCY_COLORS.textDark, fontSize: 15, lineHeight: 23 },
+  llmResponse: { color: LUCY_COLORS.textDark, fontSize: 15, lineHeight: 23, marginBottom: 10 },
+  sourcesSection: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, paddingTop: 10, gap: 6 },
+  sourcesLabel: { color: LUCY_COLORS.primary, fontSize: 10, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
+  sourceChip: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 8, padding: 8, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  citedSourceTitle: { color: LUCY_COLORS.textDark, fontSize: 12, fontWeight: '700' },
+  sourceSnippet: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 1 },
   section: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginTop: 8, marginBottom: 7 },
   emptySection: { color: LUCY_COLORS.textMuted, fontSize: 13, paddingVertical: 7 },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.border },

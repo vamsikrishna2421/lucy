@@ -24,6 +24,7 @@ import { isInvalidDeadline, isInvalidPendingTask } from '../processing/artifactC
 import { protectedPreview } from '../processing/privacy';
 import { enqueueTranscript } from '../processing/extract';
 import { getStoredInsights, generateDailyInsights, type GeneratedInsight } from '../processing/insightEngine';
+import { detectAutomationIntent, executeAction, type ExtractedAction } from '../processing/automationEngine';
 
 const exampleQuestion = 'What tasks and deadlines need my attention today?';
 
@@ -50,6 +51,8 @@ export function AskScreen() {
   const [insights, setInsights] = useState<GeneratedInsight[]>([]);
   const [expandedInsight, setExpandedInsight] = useState<number | null>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
+  const [pendingAction, setPendingAction] = useState<ExtractedAction | null>(null);
+  const [executingAction, setExecutingAction] = useState(false);
   const conversationRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -138,9 +141,16 @@ export function AskScreen() {
 
   async function ask(presetQuestion?: string) {
     const trimmed = (presetQuestion ?? question).trim();
-    if (!trimmed || asking) {
+    if (!trimmed || asking) return;
+
+    // Check for automation intent FIRST (before sending to LLM)
+    const autoAction = detectAutomationIntent(trimmed);
+    if (autoAction && autoAction.confidence >= 0.85) {
+      setQuestion('');
+      setPendingAction(autoAction);
       return;
     }
+
     const messageId = `${Date.now()}`;
     const db = await getDatabase();
     let currentThreadId = threadId;
@@ -192,6 +202,38 @@ export function AskScreen() {
         </View>
         <Text style={styles.subtitle}>{view === 'history' ? 'Past conversations, stored privately on this device.' : 'Private answers from your memory, on this device.'}</Text>
       </View>
+      {/* Automation Action Confirmation Card */}
+      {pendingAction ? (
+        <View style={styles.actionConfirmCard}>
+          <Text style={styles.actionConfirmLabel}>LUCY can do this</Text>
+          <Text style={styles.actionConfirmTitle}>{pendingAction.displayText}</Text>
+          <View style={styles.actionConfirmButtons}>
+            <TouchableOpacity
+              style={[styles.actionConfirmBtn, executingAction && { opacity: 0.5 }]}
+              disabled={executingAction}
+              onPress={async () => {
+                setExecutingAction(true);
+                const result = await executeAction(pendingAction);
+                setExecutingAction(false);
+                setPendingAction(null);
+                // Add result as a LUCY message
+                const messageId = `action-${Date.now()}`;
+                setMessages((prev) => [...prev, {
+                  id: messageId,
+                  role: 'lucy',
+                  text: result.success ? `Done — ${result.message}` : `Hmm, ${result.message}`,
+                }]);
+              }}
+            >
+              <Text style={styles.actionConfirmBtnText}>{executingAction ? '...' : pendingAction.confirmText}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionCancelBtn} onPress={() => setPendingAction(null)}>
+              <Text style={styles.actionCancelText}>Not now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
       {view === 'insights' ? (
         <InsightsView
           insights={insights}
@@ -526,6 +568,14 @@ const styles = StyleSheet.create({
   tipList: { gap: 8, marginBottom: 12 },
   tipItem: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 20, paddingLeft: 4 },
   tipHint: { color: LUCY_COLORS.textSubtle, fontSize: 12, lineHeight: 18, fontStyle: 'italic' },
+  actionConfirmCard: { margin: 16, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,140,66,0.3)', padding: 20, gap: 12 },
+  actionConfirmLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, color: LUCY_COLORS.primary, textTransform: 'uppercase' },
+  actionConfirmTitle: { fontSize: 18, fontWeight: '800', color: LUCY_COLORS.textDark, lineHeight: 25 },
+  actionConfirmButtons: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  actionConfirmBtn: { flex: 2, backgroundColor: LUCY_COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  actionConfirmBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  actionCancelBtn: { flex: 1, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  actionCancelText: { color: LUCY_COLORS.textMuted, fontSize: 15, fontWeight: '600' },
   insightsHeader: { marginBottom: 16 },
   insightsTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '800', marginBottom: 6 },
   insightsSub: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 20 },

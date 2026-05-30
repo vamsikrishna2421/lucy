@@ -1,187 +1,263 @@
 /**
- * LUCY Eye Logo Animation
+ * LUCY Eye → Name Reveal Animation
  *
- * Meaning:
- *   Y (Yield)     = the sun/pupil at center — the moment of insight
- *   L (Listen)    = planet 1, orbiting the eye
- *   U (Understand)= planet 2, orbiting the eye
- *   C (Connect)   = planet 3, orbiting the eye
- *   Comet tails   = connecting the dots — LUCY always watching, always linking
- *   Eye shape     = the guardian eye — a second brain that never sleeps
+ * Phase 1 (0–1.8s):   L, U, C orbit around Y (the sun/pupil) in eye shape
+ * Phase 2 (1.8–2.8s): Planets slow, drift outward, settle in a line → L U C Y
+ * Phase 3 (2.8–4s):   Letters expand, transform into full LUCY wordmark
+ * Phase 4 (4s+):      LUCY wordmark holds; app loads behind it
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, View, Dimensions } from 'react-native';
 
-// Eye geometry — very flat ellipse (ratio ~3:1) reads as an eye shape
-const CX = 145;  // center x
-const CY = 100;  // center y
-const RX = 118;  // semi-major axis (wide)
-const RY = 40;   // semi-minor axis (narrow) → eye shape
+const { width: SW } = Dimensions.get('window');
 
-const TAIL_DOTS = 8;
-const TAIL_STEP = 0.14;
+// Eye orbit geometry
+const CX = SW / 2;
+const CY = 130;
+const RX = 110;
+const RY = 38;
 
-const PRIMARY = '#FF8C42';
-const GLOW    = '#FFA05C';
-const DIM     = '#FDDCB0';
-
-interface PlanetConfig {
-  phase: number;
-  letter: string;
-  speed: number;
-  color: string;
-  size: number;
-}
-
-const PLANETS: PlanetConfig[] = [
-  { phase: 0,                   letter: 'L', speed: 1,    color: PRIMARY, size: 11 },
-  { phase: (Math.PI * 2) / 3,  letter: 'U', speed: 1.3,  color: GLOW,    size: 9  },
-  { phase: (Math.PI * 4) / 3,  letter: 'C', speed: 0.78, color: DIM,     size: 8  },
+// Final horizontal positions for each letter (L U C Y)
+// Y stays at center (CX), L/U/C spread left
+const LETTER_SPACING = 58;
+const SETTLE_Y = CY;
+const FINAL_POSITIONS = [
+  { x: CX - LETTER_SPACING * 1.5, y: SETTLE_Y, letter: 'L', color: '#FF8C42' },
+  { x: CX - LETTER_SPACING * 0.5, y: SETTLE_Y, letter: 'U', color: '#FFA05C' },
+  { x: CX + LETTER_SPACING * 0.5, y: SETTLE_Y, letter: 'C', color: '#FDDCB0' },
+  { x: CX + LETTER_SPACING * 1.5, y: SETTLE_Y, letter: 'Y', color: '#FF8C42' },
 ];
 
-function useAnimatedAngle(phase: number, speed: number): number {
-  const [angle, setAngle] = useState(phase);
-  const rafRef = useRef<number>(0);
-  const lastRef = useRef<number>(0);
+// Starting orbit angles for L, U, C (Y stays fixed at center as sun)
+const ORBIT_PHASES = [0, (Math.PI * 2) / 3, (Math.PI * 4) / 3];
+const ORBIT_SPEED  = 1.0; // radians per second
 
+type Phase = 'orbit' | 'settle' | 'expand' | 'done';
+
+interface LetterState {
+  x: number;
+  y: number;
+  size: number;
+  opacity: number;
+  letter: string;
+  color: string;
+}
+
+export function SplashAnimation({ fadeAnim }: { fadeAnim: Animated.Value }) {
+  const [phase, setPhase] = useState<Phase>('orbit');
+  const [orbitAngle, setOrbitAngle] = useState(0);          // shared orbit progress
+  const rafRef   = useRef<number>(0);
+  const startRef = useRef<number>(0);
+  const lastRef  = useRef<number>(0);
+
+  // Animated values for settle + expand phases
+  const settleProgress = useRef(new Animated.Value(0)).current;
+  const expandProgress = useRef(new Animated.Value(0)).current;
+  const wordmarkOpacity = useRef(new Animated.Value(0)).current;
+  const wordmarkScale   = useRef(new Animated.Value(0.4)).current;
+  const eyeOpacity      = useRef(new Animated.Value(1)).current;
+  const sunPulse        = useRef(new Animated.Value(1)).current;
+
+  // Eye open
+  const eyeOpen = useRef(new Animated.Value(0.3)).current;
   useEffect(() => {
+    Animated.timing(eyeOpen, { toValue: 1, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(sunPulse, { toValue: 1.18, duration: 800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(sunPulse, { toValue: 1,    duration: 800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    ).start();
+  }, []);
+
+  // Phase 1: orbit animation via rAF
+  useEffect(() => {
+    if (phase !== 'orbit') return;
+    const ORBIT_DURATION = 1800; // ms
+
     const tick = (ts: number) => {
+      if (!startRef.current) startRef.current = ts;
+      const elapsed = ts - startRef.current;
       const delta = lastRef.current ? (ts - lastRef.current) / 1000 : 0;
       lastRef.current = ts;
-      setAngle((prev) => prev + delta * 1.2 * speed);
+
+      setOrbitAngle((prev) => prev + delta * ORBIT_SPEED);
+
+      if (elapsed >= ORBIT_DURATION) {
+        setPhase('settle');
+        return;
+      }
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [speed]);
+  }, [phase]);
 
-  return angle;
-}
-
-function Planet({ cfg }: { cfg: PlanetConfig }) {
-  const angle = useAnimatedAngle(cfg.phase, cfg.speed);
-  const x = CX + RX * Math.cos(angle);
-  const y = CY + RY * Math.sin(angle);
-
-  // Depth: bottom of orbit (near side of eye) = larger, brighter
-  const depth = (y - (CY - RY)) / (2 * RY); // 0→1
-  const size  = cfg.size + depth * 4;
-  const alpha = 0.5 + depth * 0.5;
-
-  return (
-    <>
-      {/* Comet tail — traces the eye's orbit */}
-      {Array.from({ length: TAIL_DOTS }).map((_, j) => {
-        const ta = angle - (j + 1) * TAIL_STEP;
-        const tx = CX + RX * Math.cos(ta);
-        const ty = CY + RY * Math.sin(ta);
-        const tailDepth = (ty - (CY - RY)) / (2 * RY);
-        const ts = Math.max(2, (size - j * 1.1) * 0.72);
-        const to = ((1 - (j + 1) / (TAIL_DOTS + 2)) * alpha * 0.75) * (0.4 + tailDepth * 0.6);
-        return (
-          <View
-            key={j}
-            style={{
-              position: 'absolute',
-              left: tx - ts / 2,
-              top: ty - ts / 2,
-              width: ts,
-              height: ts,
-              borderRadius: ts / 2,
-              backgroundColor: cfg.color,
-              opacity: to,
-            }}
-          />
-        );
-      })}
-
-      {/* Planet body */}
-      <View
-        style={{
-          position: 'absolute',
-          left: x - size / 2,
-          top: y - size / 2,
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: cfg.color,
-          opacity: alpha,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Text style={{ fontSize: size * 0.55, fontWeight: '900', color: '#0F0E0B', lineHeight: size }}>
-          {cfg.letter}
-        </Text>
-      </View>
-    </>
-  );
-}
-
-export function SplashAnimation({ fadeAnim }: { fadeAnim: Animated.Value }) {
-  const sunPulse  = useRef(new Animated.Value(1)).current;
-  const textFade  = useRef(new Animated.Value(0)).current;
-  const eyeOpen   = useRef(new Animated.Value(0.3)).current;  // eyelid "opening"
-
+  // Phase 2: settle — planets drift to final positions
   useEffect(() => {
-    // Eye "opens" on load
-    Animated.timing(eyeOpen, {
-      toValue: 1, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: true,
-    }).start();
+    if (phase !== 'settle') return;
+    Animated.timing(settleProgress, {
+      toValue: 1,
+      duration: 900,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start(() => setPhase('expand'));
+  }, [phase]);
 
-    // Sun pulse
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(sunPulse, { toValue: 1.2, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(sunPulse, { toValue: 1,   duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+  // Phase 3: expand — letters grow into LUCY wordmark
+  useEffect(() => {
+    if (phase !== 'expand') return;
+    Animated.sequence([
+      Animated.delay(100),
+      Animated.parallel([
+        Animated.timing(expandProgress,  { toValue: 1, duration: 400, easing: Easing.in(Easing.quad), useNativeDriver: false }),
+        Animated.timing(eyeOpacity,      { toValue: 0, duration: 300, useNativeDriver: true }),
       ]),
-    ).start();
+      Animated.parallel([
+        Animated.spring(wordmarkScale,   { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
+        Animated.timing(wordmarkOpacity, { toValue: 1, duration: 350, useNativeDriver: true }),
+      ]),
+    ]).start(() => setPhase('done'));
+  }, [phase]);
 
-    // Wordmark fades in after eye opens
-    Animated.timing(textFade, {
-      toValue: 1, duration: 700, delay: 600, easing: Easing.out(Easing.quad), useNativeDriver: true,
-    }).start();
-  }, []);
+  // Compute planet positions during orbit
+  const planetPositions: LetterState[] = ORBIT_PHASES.map((phase0, i) => {
+    const angle = phase0 + orbitAngle;
+    const depth = ((CY + RY * Math.sin(angle)) - (CY - RY)) / (2 * RY);
+    return {
+      x: CX + RX * Math.cos(angle),
+      y: CY + RY * Math.sin(angle),
+      size: 22 + depth * 6,
+      opacity: 0.55 + depth * 0.45,
+      letter: FINAL_POSITIONS[i].letter,
+      color:  FINAL_POSITIONS[i].color,
+    };
+  });
+
+  const isOrbit  = phase === 'orbit';
+  const isSettle = phase === 'settle' || phase === 'expand' || phase === 'done';
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
 
-      {/* Eye opening animation wrapper */}
-      <Animated.View style={{ transform: [{ scaleY: eyeOpen }] }}>
-
-        {/* Eye outline — the whites of the eye */}
-        <View style={styles.eyeOutline} />
-
-        {/* Subtle upper eyelid highlight */}
-        <View style={styles.upperLid} />
-        <View style={styles.lowerLid} />
-
-        {/* Iris ring */}
-        <View style={styles.iris} />
-
-        {/* Orbital canvas */}
-        <View style={styles.orbitArea}>
-
-          {/* Faint orbit path */}
+      {/* Eye frame — shown during orbit + settle */}
+      <Animated.View style={{ opacity: eyeOpacity }}>
+        <Animated.View style={{ transform: [{ scaleY: eyeOpen }] }}>
+          {/* Eye outline */}
+          <View style={styles.eyeOutline} />
+          {/* Iris */}
+          <View style={styles.iris} />
+          {/* Orbit path */}
           <View style={styles.orbitPath} />
 
-          {/* Planets: L, U, C */}
-          {PLANETS.map((cfg, i) => <Planet key={i} cfg={cfg} />)}
-
-          {/* Sun / Pupil — Y (Yield) */}
+          {/* Sun / Y pupil */}
           <Animated.View style={[styles.sunWrap, { transform: [{ scale: sunPulse }] }]}>
             <View style={styles.sunGlow} />
             <View style={styles.sunCore}>
               <Text style={styles.sunLabel}>Y</Text>
             </View>
           </Animated.View>
-
-        </View>
+        </Animated.View>
       </Animated.View>
 
-      {/* LUCY wordmark */}
-      <Animated.View style={[styles.wordmark, { opacity: textFade }]}>
+      {/* L, U, C planets / letters */}
+      {ORBIT_PHASES.map((_, i) => {
+        const orbitPos = planetPositions[i];
+        const finalPos = FINAL_POSITIONS[i];
+
+        if (isOrbit) {
+          // Orbit phase: render at computed orbit position
+          return (
+            <View
+              key={i}
+              style={{
+                position: 'absolute',
+                left:    orbitPos.x - orbitPos.size / 2,
+                top:     orbitPos.y - orbitPos.size / 2 + CY - 10,
+                width:   orbitPos.size,
+                height:  orbitPos.size,
+                borderRadius: orbitPos.size / 2,
+                backgroundColor: orbitPos.color,
+                opacity: orbitPos.opacity,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ fontSize: orbitPos.size * 0.48, fontWeight: '900', color: '#0F0E0B' }}>
+                {orbitPos.letter}
+              </Text>
+            </View>
+          );
+        }
+
+        if (isSettle) {
+          // Settle phase: interpolate from last orbit pos to final pos
+          const interpX = settleProgress.interpolate({ inputRange: [0, 1], outputRange: [orbitPos.x, finalPos.x] });
+          const interpY = settleProgress.interpolate({ inputRange: [0, 1], outputRange: [orbitPos.y + CY - 10, finalPos.y + CY - 10] });
+          const interpSize = settleProgress.interpolate({ inputRange: [0, 1], outputRange: [orbitPos.size, 38] });
+          const interpOpacity = phase === 'expand' || phase === 'done'
+            ? expandProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
+            : 1;
+
+          return (
+            <Animated.View
+              key={i}
+              style={{
+                position: 'absolute',
+                left:   Animated.subtract(interpX, Animated.divide(interpSize, 2)) as any,
+                top:    Animated.subtract(interpY, Animated.divide(interpSize, 2)) as any,
+                width:  interpSize,
+                height: interpSize,
+                borderRadius: 999,
+                backgroundColor: finalPos.color,
+                opacity: interpOpacity,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Animated.Text style={{ fontSize: 18, fontWeight: '900', color: '#0F0E0B' }}>
+                {finalPos.letter}
+              </Animated.Text>
+            </Animated.View>
+          );
+        }
+
+        return null;
+      })}
+
+      {/* Y settle bubble (comes from center) */}
+      {isSettle && (() => {
+        const finalY = FINAL_POSITIONS[3];
+        const interpX = settleProgress.interpolate({ inputRange: [0, 1], outputRange: [CX, finalY.x] });
+        const interpY = settleProgress.interpolate({ inputRange: [0, 1], outputRange: [CY + CY - 10, finalY.y + CY - 10] });
+        const interpSize = settleProgress.interpolate({ inputRange: [0, 1], outputRange: [30, 38] });
+        const interpOpacity = phase === 'expand' || phase === 'done'
+          ? expandProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
+          : 1;
+
+        return (
+          <Animated.View
+            style={{
+              position: 'absolute',
+              left:   Animated.subtract(interpX, Animated.divide(interpSize, 2)) as any,
+              top:    Animated.subtract(interpY, Animated.divide(interpSize, 2)) as any,
+              width:  interpSize,
+              height: interpSize,
+              borderRadius: 999,
+              backgroundColor: '#FF8C42',
+              opacity: interpOpacity,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Animated.Text style={{ fontSize: 18, fontWeight: '900', color: '#0F0E0B' }}>Y</Animated.Text>
+          </Animated.View>
+        );
+      })()}
+
+      {/* LUCY wordmark — expands in after planets settle */}
+      <Animated.View style={[styles.wordmarkWrap, { opacity: wordmarkOpacity, transform: [{ scale: wordmarkScale }] }]}>
         <Text style={styles.lucyText}>
           LUC<Text style={styles.lucyY}>Y</Text>
         </Text>
@@ -192,69 +268,34 @@ export function SplashAnimation({ fadeAnim }: { fadeAnim: Animated.Value }) {
   );
 }
 
-const CANVAS_W = CX * 2;
-const CANVAS_H = CY * 2;
-const IRIS_R = 52;
-
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFill,
     backgroundColor: '#0F0E0B',
     alignItems: 'center',
-    justifyContent: 'center',
     zIndex: 999,
   },
-
-  // Eye whites — elongated thin ring
   eyeOutline: {
     position: 'absolute',
-    width:  RX * 2 + 18,
-    height: RY * 2 + 18,
-    borderRadius: RY + 9,
+    width:  RX * 2 + 20,
+    height: RY * 2 + 20,
+    borderRadius: RY + 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,140,66,0.18)',
-    left: CX - RX - 9,
-    top:  CY - RY - 9,
+    borderColor: 'rgba(255,140,66,0.15)',
+    left: CX - RX - 10,
+    top:  CY - RY - 10,
   },
-
-  upperLid: {
-    position: 'absolute',
-    width: RX * 2 + 18,
-    height: 2,
-    backgroundColor: 'rgba(255,140,66,0.08)',
-    left: CX - RX - 9,
-    top:  CY - RY - 9,
-    borderRadius: 1,
-  },
-  lowerLid: {
-    position: 'absolute',
-    width: RX * 2 + 18,
-    height: 2,
-    backgroundColor: 'rgba(255,140,66,0.08)',
-    left: CX - RX - 9,
-    top:  CY + RY + 8,
-    borderRadius: 1,
-  },
-
-  // Iris — soft glowing ring around the pupil
   iris: {
     position: 'absolute',
-    width: IRIS_R * 2,
-    height: IRIS_R * 2,
-    borderRadius: IRIS_R,
-    left: CX - IRIS_R,
-    top:  CY - IRIS_R,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    left: CX - 50,
+    top:  CY - 50,
     borderWidth: 1,
-    borderColor: 'rgba(255,140,66,0.1)',
-    backgroundColor: 'rgba(255,140,66,0.04)',
+    borderColor: 'rgba(255,140,66,0.08)',
+    backgroundColor: 'rgba(255,140,66,0.03)',
   },
-
-  orbitArea: {
-    width:  CANVAS_W,
-    height: CANVAS_H,
-    position: 'relative',
-  },
-
   orbitPath: {
     position: 'absolute',
     left: CX - RX,
@@ -263,10 +304,8 @@ const styles = StyleSheet.create({
     height: RY * 2,
     borderRadius: RY,
     borderWidth: 0.4,
-    borderColor: 'rgba(255,140,66,0.1)',
+    borderColor: 'rgba(255,140,66,0.08)',
   },
-
-  // Y — the sun / pupil at center
   sunWrap: {
     position: 'absolute',
     left: CX - 22,
@@ -278,47 +317,39 @@ const styles = StyleSheet.create({
   },
   sunGlow: {
     position: 'absolute',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,140,66,0.22)',
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(255,140,66,0.2)',
   },
   sunCore: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 30, height: 30, borderRadius: 15,
     backgroundColor: '#FF8C42',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
     position: 'absolute',
   },
   sunLabel: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0F0E0B',
-    lineHeight: 18,
+    fontSize: 13, fontWeight: '900', color: '#0F0E0B', lineHeight: 17,
   },
-
-  wordmark: {
-    marginTop: 28,
+  wordmarkWrap: {
+    position: 'absolute',
+    top: CY + RY + 60,
     alignItems: 'center',
   },
   lucyText: {
-    fontSize: 48,
+    fontSize: 72,
     fontWeight: '900',
-    letterSpacing: -2,
+    letterSpacing: -3,
     color: '#F5EFE6',
-    lineHeight: 54,
+    lineHeight: 80,
   },
   lucyY: {
     color: '#FF8C42',
   },
   tagline: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: '#8A7560',
-    letterSpacing: 2.5,
+    letterSpacing: 2,
     textTransform: 'uppercase',
-    marginTop: 6,
+    marginTop: 8,
   },
 });

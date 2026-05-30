@@ -61,6 +61,10 @@ export async function findPendingPaymentTodo(
   );
 }
 
+export async function deleteTodo(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync('DELETE FROM todos WHERE id = ?', id);
+}
+
 export async function markTodoCompleted(db: SQLiteDatabase, id: number): Promise<void> {
   await db.runAsync('UPDATE todos SET status = ? WHERE id = ?', 'completed', id);
 }

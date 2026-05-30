@@ -21,7 +21,7 @@ import { insertPlace } from '../db/places';
 import { insertOpenLoop } from '../db/openLoops';
 import { insertFollowUp } from '../db/followUps';
 import { insertReminder, markReminderScheduled, reminderAlreadyExists } from '../db/reminders';
-import { archiveTodo, insertTodo, listPendingTodos } from '../db/todos';
+import { deleteTodo, insertTodo, listPendingTodos } from '../db/todos';
 import type { CaptureSource, ExtractionResult } from '../types/extraction';
 import { extractExplicitEnglishFact } from './explicitEnglish';
 import { resolveCompletionFollowUp } from './followUp';
@@ -54,25 +54,25 @@ function isSimilarTask(a: string, b: string): boolean {
 /**
  * One-time cleanup for duplicate pending todos left by the pre-1.0.53 dedup gap
  * (e.g. a chunked 90-day journal inserting "drink water" many times). Keeps the
- * earliest todo of each similar group and archives the rest. Idempotent — safe to
- * re-run, but App gates it behind a settings flag so it only runs once.
- * Returns the number of duplicates archived.
+ * earliest todo of each similar group and permanently deletes the rest so they can
+ * never be reprocessed or resurface. Idempotent — safe to re-run, but App gates it
+ * behind a settings flag so it only runs once. Returns the number of duplicates deleted.
  */
 export async function dedupePendingTodos(db: import('expo-sqlite').SQLiteDatabase): Promise<number> {
   const pending = await db.getAllAsync<{ id: number; task: string }>(
     "SELECT id, task FROM todos WHERE status = 'pending' ORDER BY created_at ASC, id ASC",
   );
   const kept: string[] = [];
-  let archived = 0;
+  let deleted = 0;
   for (const todo of pending) {
     if (kept.some((seen) => isSimilarTask(seen, todo.task))) {
-      await archiveTodo(db, todo.id, 'duplicate cleanup');
-      archived += 1;
+      await deleteTodo(db, todo.id);
+      deleted += 1;
     } else {
       kept.push(todo.task);
     }
   }
-  return archived;
+  return deleted;
 }
 
 function hasMeaningfulExtraction(result: ExtractionResult): boolean {

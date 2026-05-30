@@ -177,6 +177,17 @@ export async function enrichWithUsagePatterns(ctx: DeviceContext): Promise<strin
       usage.push(`Peak LUCY usage time this week: ${label} (${h}:00)`);
     }
 
+    // Try step count via Pedometer (expo-sensors, no special permission on iOS)
+    try {
+      const { Pedometer } = await import('expo-sensors');
+      const available = await Pedometer.isAvailableAsync();
+      if (available) {
+        const start = new Date(); start.setHours(0,0,0,0);
+        const { steps } = await Pedometer.getStepCountAsync(start, new Date());
+        if (steps > 0) usage.push(`Steps today: ${steps.toLocaleString()}`);
+      }
+    } catch { /* Pedometer not available */ }
+
     const usageStr = usage.join('\n');
     _usagePatternsCache = { value: usageStr, expiresAt: Date.now() + 5 * 60 * 1000 };
     return `${base}\n${usageStr}`;

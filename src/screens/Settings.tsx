@@ -427,9 +427,41 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           actionLabel="Grant access"
         />
         <SettingsRow
-          title="Export my data"
-          value="Download all memories as JSON"
+          title="Export as JSON"
+          value="All memories, tasks, expenses as structured data"
           onAction={exportAllData}
+          actionLabel="Export"
+        />
+        <SettingsRow
+          title="Export as Markdown"
+          value="Human-readable notes you can use anywhere"
+          onAction={async () => {
+            try {
+              const db = await getDatabase();
+              const captures = await db.getAllAsync<{ extracted_title: string | null; raw_transcript: string | null; created_at: string; privacy_level: string }>(
+                `SELECT extracted_title, raw_transcript, created_at, privacy_level FROM captures WHERE privacy_level != 'private' ORDER BY created_at DESC LIMIT 100`,
+              );
+              const md = [
+                '# LUCY Memory Export',
+                `*Exported: ${new Date().toLocaleDateString()}*`,
+                '',
+                ...captures.map((c) => [
+                  `## ${c.extracted_title ?? 'Memory'} — ${new Date(c.created_at.includes('T') ? c.created_at : `${c.created_at.replace(' ','T')}Z`).toLocaleDateString()}`,
+                  '',
+                  c.raw_transcript ?? '',
+                  '',
+                  '---',
+                  '',
+                ].join('\n')),
+              ].join('\n');
+
+              const { cacheDirectory, writeAsStringAsync } = await import('expo-file-system') as any;
+              const documentDirectory = cacheDirectory;
+              const path = `${documentDirectory}lucy-export-${Date.now()}.md`;
+              await writeAsStringAsync(path, md);
+              await shareAsync(path, { mimeType: 'text/markdown', dialogTitle: 'Export LUCY as Markdown' });
+            } catch { Alert.alert('Export failed', 'Please try again.'); }
+          }}
           actionLabel="Export"
         />
         <SettingsRow

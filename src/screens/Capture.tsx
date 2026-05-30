@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import type { PassiveListenerState } from '../audio/PassiveListener';
 import { RecordingPresets, setAudioModeAsync } from 'expo-audio';
+import * as ImagePicker from 'expo-image-picker';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { AudioRecorder: AR } = require('expo-audio') as { AudioRecorder: new (opts: unknown) => { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void } };
 import { LUCY_COLORS } from '../config/colors';
@@ -156,6 +157,7 @@ export function CaptureScreen({
   const [editTodo, setEditTodo] = useState<TodoRow | null>(null);
   const [editText, setEditText] = useState('');
   const [voiceRecording, setVoiceRecording] = useState(false);
+  const [scanningReceipt, setScanningReceipt] = useState(false);
   type RecInst = { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void };
   const audioRecorder = useRef<RecInst | null>(null);
 
@@ -216,6 +218,26 @@ export function CaptureScreen({
     // Put the task back in todos list (re-insert visually; DB is archived but UX restores it)
     setDone((prev) => prev.filter((e) => e.todo.id !== entry.todo.id));
     setTodos((prev) => [entry.todo, ...prev]);
+  };
+
+  const scanReceipt = async () => {
+    setScanningReceipt(true);
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.7,
+        allowsEditing: false,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const { processReceiptImage, receiptToCapture } = await import('../processing/receiptOCR');
+      const receipt = await processReceiptImage(result.assets[0].uri);
+      const captureText = receiptToCapture(receipt);
+      setText(captureText);
+    } catch {
+      Alert.alert('Could not scan receipt', 'Make sure camera permission is granted.');
+    } finally {
+      setScanningReceipt(false);
+    }
   };
 
   const animateMicToRecording = () => {
@@ -412,6 +434,9 @@ export function CaptureScreen({
 
       <View style={styles.composerDock}>
         <View style={styles.composer}>
+          <TouchableOpacity style={styles.cameraButton} onPress={() => void scanReceipt()} disabled={scanningReceipt} activeOpacity={0.8}>
+            <Text style={styles.cameraIcon}>{scanningReceipt ? '⏳' : '📷'}</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => void toggleVoiceInput()} activeOpacity={0.8}>
             <Animated.View style={[
               styles.micButton,
@@ -636,6 +661,8 @@ const styles = StyleSheet.create({
   ackText: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700' },
   composerDock: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, paddingTop: 4 },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, paddingTop: 8 },
+  cameraButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', justifyContent: 'center' },
+  cameraIcon: { fontSize: 18 },
   micButton: { width: 46, height: 46, borderRadius: 23, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', justifyContent: 'center' },
   micButtonActive: { backgroundColor: '#3B0000', borderColor: '#ef4444' },
   micIcon: { fontSize: 18, color: LUCY_COLORS.textMuted },

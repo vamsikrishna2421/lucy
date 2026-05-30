@@ -25,6 +25,7 @@ export type ActionType =
   | 'navigate'
   | 'play'
   | 'remind'
+  | 'event'
   | 'message'
   | 'email'
   | 'shortcut'
@@ -78,6 +79,12 @@ const REMIND_PATTERNS = [
 const MESSAGE_PATTERNS = [
   /(?:text|message|sms|send a message to) (\w[\w\s]+?)[:\s]+(.+)/i,
   /tell (\w[\w\s]+?) (?:that )?(.+)/i,
+];
+
+const EVENT_PATTERNS = [
+  /schedule (?:a )?(?:meeting|call|appointment|lunch|dinner|event)? ?(?:with (\w[\w\s]+?))? ?(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday)?(?:\s+at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?))?/i,
+  /add (?:a )?(?:meeting|call|appointment|event) (?:with (\w[\w\s]+?))? ?(tomorrow|today)?(?:\s+at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?))?/i,
+  /book (?:a )?(?:meeting|call|appointment) (?:with (\w[\w\s]+?))? ?(tomorrow|today)?(?:\s+at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?))?/i,
 ];
 
 const SHORTCUT_PATTERNS = [
@@ -204,6 +211,27 @@ export function detectAutomationIntent(text: string): ExtractedAction | null {
     }
   }
 
+  // EVENT / MEETING
+  for (const pattern of EVENT_PATTERNS) {
+    const m = t.match(pattern);
+    if (m) {
+      const person = m[1]?.trim();
+      const day = m[2]?.trim();
+      const time = m[3]?.trim();
+      const titleParts = ['Meeting'];
+      if (person) titleParts.push(`with ${person}`);
+      const title = titleParts.join(' ');
+      const display = `Schedule: ${title}${day ? ` ${day}` : ''}${time ? ` at ${time}` : ''}`;
+      return {
+        type: 'event',
+        confidence: 0.88,
+        params: { title, person: person ?? '', day: day ?? '', time: time ?? '' },
+        displayText: display,
+        confirmText: `Create calendar event: ${title}`,
+      };
+    }
+  }
+
   // REMIND / ADD TO LIST
   for (const pattern of REMIND_PATTERNS) {
     const m = t.match(pattern);
@@ -310,6 +338,47 @@ export async function executeAction(action: ExtractedAction): Promise<{ success:
         // Fallback: open Reminders app
         await Linking.openURL('x-apple-reminderkit://');
         return { success: false, message: 'Could not create reminder — calendar permission needed' };
+      }
+
+      case 'event': {
+        try {
+          const { status } = await Calendar.requestCalendarPermissionsAsync();
+          if (status !== 'granted') {
+            await Linking.openURL(Platform.OS === 'ios' ? 'calshow://' : 'content://com.android.calendar/time/');
+            return { success: false, message: 'Calendar permission needed — opened calendar to add manually' };
+          }
+          const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+          const defaultCal = calendars.find((c) => c.allowsModifications) ?? calendars[0];
+          if (!defaultCal) return { success: false, message: 'No editable calendar found' };
+
+          const now = new Date();
+          let startDate = new Date(now);
+          // Parse day
+          if (/tomorrow/i.test(action.params.day ?? '')) startDate.setDate(now.getDate() + 1);
+          // Parse time
+          const timeMatch = (action.params.time ?? '').match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+          if (timeMatch) {
+            let h = parseInt(timeMatch[1], 10);
+            const m = parseInt(timeMatch[2] ?? '0', 10);
+            const meridiem = timeMatch[3]?.toLowerCase();
+            if (meridiem === 'pm' && h < 12) h += 12;
+            if (meridiem === 'am' && h === 12) h = 0;
+            startDate.setHours(h, m, 0, 0);
+          } else {
+            startDate.setHours(10, 0, 0, 0); // default 10am
+          }
+          const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // 1 hour
+
+          await Calendar.createEventAsync(defaultCal.id, {
+            title: action.params.title ?? 'Meeting',
+            startDate,
+            endDate,
+            notes: action.params.person ? `With ${action.params.person}` : '',
+          });
+          return { success: true, message: `Created: ${action.params.title}` };
+        } catch (err) {
+          return { success: false, message: 'Could not create calendar event' };
+        }
       }
 
       case 'message': {

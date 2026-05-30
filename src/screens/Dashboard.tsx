@@ -11,7 +11,7 @@ import { listInterests, type InterestRow } from '../db/interests';
 import { getLatestOrganizationRun, listKnowledgeConnections, listKnowledgeEntities, listKnowledgeInsights, type KnowledgeConnectionRow, type KnowledgeEntityRow, type KnowledgeInsightRow, type OrganizationRunRow } from '../db/knowledge';
 import { listOpenLoops, resolveOpenLoop, type OpenLoopRow } from '../db/openLoops';
 import { listFollowUps, resolveFollowUp, type FollowUpRow } from '../db/followUps';
-import { listRecentMusicCaptures, markMusicCaptureDismissed, type MusicCaptureRow } from '../db/musicCaptures';
+// Music detection removed
 import { listPlaces, type PlaceRow } from '../db/places';
 import { listReminders, type ReminderRow } from '../db/reminders';
 import { listTodos, type TodoRow } from '../db/todos';
@@ -74,7 +74,6 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   const [organizationRun, setOrganizationRun] = useState<OrganizationRunRow | null>(null);
   const [openLoops, setOpenLoops] = useState<OpenLoopRow[]>([]);
   const [followUps, setFollowUps] = useState<FollowUpRow[]>([]);
-  const [musicCaptures, setMusicCaptures] = useState<MusicCaptureRow[]>([]);
   const [contextRefresh, setContextRefresh] = useState(0);
 
   useEffect(() => {
@@ -95,7 +94,6 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
         getLatestOrganizationRun(db),
         listOpenLoops(db),
         listFollowUps(db),
-        listRecentMusicCaptures(db),
       ]);
       setTodos(results[0]);
       setIdeas(results[1]);
@@ -111,7 +109,6 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
       setOrganizationRun(results[11]);
       setOpenLoops(results[12]);
       setFollowUps(results[13]);
-      setMusicCaptures(results[14]);
       const nextUpdates = await listCaptureUpdates(db, results[6].map((capture) => capture.id));
       setUpdates(groupUpdates(nextUpdates));
     })();
@@ -133,7 +130,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
           </TouchableOpacity>
         ))}
       </View>
-      {view === 'Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} musicCaptures={musicCaptures} onOpenContext={() => setView('Context')} onLoopResolved={() => setContextRefresh((v) => v + 1)} onMusicDismissed={() => setContextRefresh((v) => v + 1)} /> : null}
+      {view === 'Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} onOpenContext={() => setView('Context')} onLoopResolved={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Context' ? (
         <NeedsContextView requests={contextRequests} onAnswered={() => setContextRefresh((value) => value + 1)} />
       ) : null}
@@ -163,10 +160,8 @@ function NowView({
   contextCount,
   openLoops,
   followUps,
-  musicCaptures,
   onOpenContext,
   onLoopResolved,
-  onMusicDismissed,
 }: {
   todos: TodoRow[];
   reminders: ReminderRow[];
@@ -174,10 +169,8 @@ function NowView({
   contextCount: number;
   openLoops: OpenLoopRow[];
   followUps: FollowUpRow[];
-  musicCaptures: MusicCaptureRow[];
   onOpenContext: () => void;
   onLoopResolved: () => void;
-  onMusicDismissed: () => void;
 }) {
   const organizing = captures.filter((item) => captureStatus(item) !== 'complete').length;
   const scheduledReminders = reminders.filter((item) => Boolean(item.notification_id) && Boolean(item.remind_at));
@@ -237,39 +230,6 @@ function NowView({
               <TouchableOpacity style={styles.resolveButton} onPress={() => void handleResolveFollowUp(item.id)}>
                 <Text style={styles.resolveText}>Done</Text>
               </TouchableOpacity>
-            </View>
-          ))}
-        </>
-      ) : null}
-      {musicCaptures.length > 0 ? (
-        <>
-          <SectionTitle title="Heard" />
-          {musicCaptures.map((item) => (
-            <View style={styles.musicCard} key={item.id}>
-              <View style={styles.musicInfo}>
-                <Text style={styles.musicTitle}>{item.title}</Text>
-                <Text style={styles.musicArtist}>{item.artist}{item.album ? ` · ${item.album}` : ''}</Text>
-                <Text style={styles.musicTime}>{displayTimestamp(item.created_at)}</Text>
-              </View>
-              <View style={styles.musicActions}>
-                {item.spotify_url ? (
-                  <TouchableOpacity style={styles.streamButton} onPress={() => void Linking.openURL(item.spotify_url!)}>
-                    <Text style={styles.streamButtonText}>Spotify</Text>
-                  </TouchableOpacity>
-                ) : null}
-                {item.apple_music_url ? (
-                  <TouchableOpacity style={[styles.streamButton, styles.streamButtonApple]} onPress={() => void Linking.openURL(item.apple_music_url!)}>
-                    <Text style={styles.streamButtonText}>Apple Music</Text>
-                  </TouchableOpacity>
-                ) : null}
-                <TouchableOpacity onPress={async () => {
-                  const db = await getDatabase();
-                  await markMusicCaptureDismissed(db, item.id);
-                  onMusicDismissed();
-                }}>
-                  <Text style={styles.dismissText}>dismiss</Text>
-                </TouchableOpacity>
-              </View>
             </View>
           ))}
         </>

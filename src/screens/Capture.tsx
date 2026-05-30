@@ -12,7 +12,9 @@ import {
   TouchableOpacity,
   View,
   Alert,
+  Easing,
 } from 'react-native';
+import type { PassiveListenerState } from '../audio/PassiveListener';
 import { RecordingPresets, setAudioModeAsync } from 'expo-audio';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { AudioRecorder: AR } = require('expo-audio') as { AudioRecorder: new (opts: unknown) => { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void } };
@@ -106,9 +108,42 @@ function AnimatedTodoRow({ todo, onPress, onLongPress }: { todo: TodoRow; onPres
   );
 }
 
-export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number; onQueued: () => void }) {
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+export function CaptureScreen({
+  refreshToken,
+  onQueued,
+  passiveState,
+  onToggleListen,
+  backgroundEnabled,
+  onBackgroundPress,
+}: {
+  refreshToken: number;
+  onQueued: () => void;
+  passiveState?: PassiveListenerState;
+  onToggleListen?: () => void;
+  backgroundEnabled?: boolean;
+  onBackgroundPress?: () => void;
+}) {
   const [text, setText] = useState('');
   const [todos, setTodos] = useState<TodoRow[]>([]);
+  const [userName, setUserName] = useState('');
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Hero animation interpolations
+  const HERO_HEIGHT = 200;
+  const heroOpacity = scrollY.interpolate({ inputRange: [0, 100], outputRange: [1, 0], extrapolate: 'clamp' });
+  const heroHeight = scrollY.interpolate({ inputRange: [0, 120], outputRange: [HERO_HEIGHT, 0], extrapolate: 'clamp' });
+  const compactOpacity = scrollY.interpolate({ inputRange: [60, 120], outputRange: [0, 1], extrapolate: 'clamp' });
+
+  // WhatsApp-style voice button animation
+  const micScale = useRef(new Animated.Value(1)).current;
+  const micRadius = useRef(new Animated.Value(23)).current;
   const [done, setDone] = useState<DoneEntry[]>([]);
   const [sending, setSending] = useState(false);
   const [acknowledgement, setAcknowledgement] = useState('');
@@ -133,7 +168,13 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
   useEffect(() => {
     void (async () => {
       const db = await getDatabase();
-      setTodos(await listPendingTodos(db));
+      const [pendingTodosResult, { getUserProfile }] = await Promise.all([
+        listPendingTodos(db),
+        import('../db/userProfile'),
+      ]);
+      setTodos(pendingTodosResult);
+      const profile = await getUserProfile(db);
+      setUserName(profile.name || '');
     })();
   }, [refreshToken]);
 
@@ -175,12 +216,26 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
     setTodos((prev) => [entry.todo, ...prev]);
   };
 
+  const animateMicToRecording = () => {
+    Animated.parallel([
+      Animated.spring(micScale, { toValue: 1.18, useNativeDriver: false }),
+      Animated.timing(micRadius, { toValue: 14, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+    ]).start();
+  };
+
+  const animateMicToIdle = () => {
+    Animated.parallel([
+      Animated.spring(micScale, { toValue: 1, useNativeDriver: false }),
+      Animated.timing(micRadius, { toValue: 23, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+    ]).start();
+  };
+
   const toggleVoiceInput = async () => {
     if (voiceRecording) {
       // Stop recording
+      animateMicToIdle();
       setVoiceRecording(false);
       if (Voice?.default) {
-        // On-device STT: stop and get result via onSpeechResults
         await Voice.default.stop().catch(() => {});
         await Voice.default.destroy().catch(() => {});
       } else if (audioRecorder.current) {
@@ -208,14 +263,15 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
       Voice.default.onSpeechEnd = () => setVoiceRecording(false);
       Voice.default.onSpeechError = () => setVoiceRecording(false);
       await Voice.default.start('en-US');
+      animateMicToRecording();
       setVoiceRecording(true);
     } else {
-      // Audio recording fallback → Whisper on stop
       try {
         await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
         audioRecorder.current = new AR(RecordingPresets.HIGH_QUALITY);
         await audioRecorder.current.prepareToRecordAsync();
         audioRecorder.current.record();
+        animateMicToRecording();
         setVoiceRecording(true);
       } catch {
         Alert.alert('Microphone unavailable', 'Could not start recording.');
@@ -243,9 +299,53 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
 
   const groups = groupTodos(todos);
 
+  const signalCount = todos.filter((t) => t.urgency === 'high').length;
+
   return (
     <View style={[styles.container, { paddingBottom: keyboardOffset }]}>
-      <ScrollView style={styles.board} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      {/* Compact header fades in on scroll */}
+      <Animated.View style={[styles.compactHeader, { opacity: compactOpacity }]} pointerEvents="box-none">
+        <Text style={styles.compactLogo}>LUC<Text style={{ color: LUCY_COLORS.primary }}>Y</Text></Text>
+        <View style={styles.compactPills}>
+          <TouchableOpacity
+            style={[styles.compactPill, passiveState?.status === 'listening' && styles.compactPillActive]}
+            onPress={onToggleListen}
+          >
+            <View style={[styles.compactDot, passiveState?.status === 'listening' && { backgroundColor: '#ef4444' }]} />
+            <Text style={[styles.compactPillText, passiveState?.status === 'listening' && { color: LUCY_COLORS.primary }]}>
+              {passiveState?.status === 'listening' ? `${passiveState.wordsHeard}w` : 'Listen'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.compactBgPill} onPress={onBackgroundPress}>
+            <View style={[styles.compactDot, { backgroundColor: LUCY_COLORS.primary }]} />
+            <Text style={[styles.compactPillText, { color: LUCY_COLORS.primary }]}>
+              {backgroundEnabled ? 'Background on' : 'Local-first'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+
+      {/* Hero section */}
+      <Animated.View style={[styles.hero, { opacity: heroOpacity, height: heroHeight, overflow: 'hidden' }]}>
+        <View style={styles.heroGlow} />
+        <Text style={styles.heroGreeting}>{getGreeting()}{userName ? `, ${userName}` : ''}</Text>
+        <Text style={styles.heroTitle}>LUCY</Text>
+        <Text style={styles.heroPillars}>Listen · Understand · Connect · Yield</Text>
+        <View style={styles.heroCard}>
+          <Text style={styles.heroCardLabel}>LUCY IS ACTIVE</Text>
+          <Text style={styles.heroCardTitle}>
+            {signalCount > 0 ? `${signalCount} urgent signal${signalCount !== 1 ? 's' : ''} for you` : 'All caught up'}
+          </Text>
+        </View>
+      </Animated.View>
+
+      <Animated.ScrollView
+        style={styles.board}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+        scrollEventThrottle={16}
+      >
         {groups.length === 0 && done.length === 0 ? (
           <View style={styles.emptyBoard}>
             <Text style={styles.emptyTitle}>Your board is clear</Text>
@@ -294,7 +394,7 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
           </>
         )}
         <View style={{ height: 12 }} />
-      </ScrollView>
+      </Animated.ScrollView>
 
       {acknowledgement ? (
         <View style={styles.ack}>
@@ -304,13 +404,20 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
 
       <View style={styles.composerDock}>
         <View style={styles.composer}>
-          <TouchableOpacity
-            style={[styles.micButton, voiceRecording && styles.micButtonActive]}
-            onPress={() => void toggleVoiceInput()}
-          >
-            <Text style={[styles.micIcon, voiceRecording && styles.micIconActive]}>
-              {voiceRecording ? '■' : '♪'}
-            </Text>
+          <TouchableOpacity onPress={() => void toggleVoiceInput()} activeOpacity={0.8}>
+            <Animated.View style={[
+              styles.micButton,
+              {
+                transform: [{ scale: micScale }],
+                borderRadius: micRadius,
+                backgroundColor: voiceRecording ? LUCY_COLORS.primary : LUCY_COLORS.surfaceRaised,
+                borderColor: voiceRecording ? LUCY_COLORS.primary : LUCY_COLORS.border,
+              },
+            ]}>
+              <Text style={[styles.micIcon, voiceRecording && { color: '#fff' }]}>
+                {voiceRecording ? '⏹' : '⏺'}
+              </Text>
+            </Animated.View>
           </TouchableOpacity>
           <TextInput
             multiline
@@ -406,6 +513,24 @@ export function CaptureScreen({ refreshToken, onQueued }: { refreshToken: number
 const styles = StyleSheet.create({
   container: { flex: 1 },
   board: { flex: 1 },
+  // Hero
+  hero: { backgroundColor: '#1a0f00', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 16, position: 'relative', overflow: 'hidden' },
+  heroGlow: { position: 'absolute', top: -40, right: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,140,66,0.12)' },
+  heroGreeting: { fontSize: 12, fontWeight: '700', color: LUCY_COLORS.primary, letterSpacing: 0.5, marginBottom: 2 },
+  heroTitle: { fontSize: 42, fontWeight: '900', letterSpacing: -2, color: LUCY_COLORS.textDark, lineHeight: 46, marginBottom: 2 },
+  heroPillars: { fontSize: 11, color: LUCY_COLORS.textSubtle, marginBottom: 12 },
+  heroCard: { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,140,66,0.25)', borderRadius: 14, padding: 12 },
+  heroCardLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1.2, color: LUCY_COLORS.primary, marginBottom: 3 },
+  heroCardTitle: { fontSize: 15, fontWeight: '800', color: LUCY_COLORS.textDark },
+  // Compact header
+  compactHeader: { paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: LUCY_COLORS.background, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.border },
+  compactLogo: { fontSize: 20, fontWeight: '900', letterSpacing: 1.5, color: LUCY_COLORS.textDark },
+  compactPills: { flexDirection: 'row', gap: 8 },
+  compactPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
+  compactPillActive: { backgroundColor: '#1a0a00', borderColor: LUCY_COLORS.primary },
+  compactBgPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
+  compactDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: LUCY_COLORS.textSubtle },
+  compactPillText: { fontSize: 11, fontWeight: '700', color: LUCY_COLORS.textMuted },
   emptyBoard: { paddingTop: 40, alignItems: 'center', gap: 10 },
   emptyTitle: { color: LUCY_COLORS.textMuted, fontSize: 18, fontWeight: '700' },
   emptyHint: { color: LUCY_COLORS.textSubtle, fontSize: 14, textAlign: 'center', lineHeight: 20, paddingHorizontal: 20 },

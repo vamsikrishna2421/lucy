@@ -221,33 +221,40 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
         <StatusBar style="light" />
-        <View style={styles.brand}>
-          <View style={styles.brandRow}>
-            <Text style={styles.brandName}>LUCY</Text>
-            <View style={styles.headerActions}>
-              <TouchableOpacity style={[styles.listenPill, passiveState.status === 'listening' && styles.listenPillActive]} onPress={togglePassiveListening}>
-                <View style={[styles.listenDot, passiveState.status === 'listening' && styles.listenDotActive]} />
-                <Text style={[styles.listenText, passiveState.status === 'listening' && styles.listenTextActive]}>
-                  {passiveState.status === 'listening'
-                    ? `Listening · ${passiveState.wordsHeard}w`
-                    : passiveState.status === 'starting' || passiveState.status === 'stopping'
-                    ? '...'
-                    : 'Listen'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.localPill} onPress={showBackgroundChoice}>
-              <View style={styles.localDot} />
-              <Text style={styles.localText}>{backgroundEnabled ? 'Background on' : 'Local-first'}</Text>
-            </TouchableOpacity>
+        {/* Fixed header only shown on non-Board screens */}
+        {screen !== 'capture' ? (
+          <View style={styles.brand}>
+            <View style={styles.brandRow}>
+              <Text style={styles.brandName}>LUCY</Text>
+              <View style={styles.headerActions}>
+                <TouchableOpacity style={[styles.listenPill, passiveState.status === 'listening' && styles.listenPillActive]} onPress={togglePassiveListening}>
+                  <View style={[styles.listenDot, passiveState.status === 'listening' && styles.listenDotActive]} />
+                  <Text style={[styles.listenText, passiveState.status === 'listening' && styles.listenTextActive]}>
+                    {passiveState.status === 'listening'
+                      ? `Listening · ${passiveState.wordsHeard}w`
+                      : passiveState.status === 'starting' || passiveState.status === 'stopping'
+                      ? '...'
+                      : 'Listen'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.localPill} onPress={showBackgroundChoice}>
+                  <View style={styles.localDot} />
+                  <Text style={styles.localText}>{backgroundEnabled ? 'Background on' : 'Local-first'}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
+        ) : null}
         <View style={styles.container}>
           {startupError ? <Text style={styles.error}>{startupError}</Text> : null}
           {!ready && !startupError ? <Text style={styles.loading}>Opening your private memory...</Text> : null}
           {ready && screen === 'capture' ? (
             <CaptureScreen
               refreshToken={refreshToken}
+              passiveState={passiveState}
+              onToggleListen={togglePassiveListening}
+              backgroundEnabled={backgroundEnabled}
+              onBackgroundPress={showBackgroundChoice}
               onQueued={() => {
                 setRefreshToken((value) => value + 1);
                 void drainQueue();

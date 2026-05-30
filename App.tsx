@@ -136,9 +136,13 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
           }
         } catch { /* non-critical */ }
 
-        // Start Eleanor's seed silently in background after main brain is ready
-        // Uses module-level singleton — progress shown inline in Settings
-        void import('./src/db/eleanorSeedState').then(({ startEleanorSeed }) => startEleanorSeed());
+        // Start Eleanor's seed in background — but ONLY when on main brain.
+        // If Eleanor's brain is already active, lucy_demo.db is already open;
+        // opening a second connection causes a SQLCipher deadlock → freeze.
+        const { getActiveUser: _getUser } = await import('./src/db/userManager');
+        if (_getUser().id !== 'demo') {
+          void import('./src/db/eleanorSeedState').then(({ startEleanorSeed }) => startEleanorSeed());
+        }
 
         setReady(true);
         void drainQueue();

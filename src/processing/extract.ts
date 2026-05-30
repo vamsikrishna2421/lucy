@@ -36,6 +36,7 @@ import { getRelatedContext } from './vectorSearch';
 import { updatePersonContext } from './relationshipEngine';
 import { jsonrepair } from 'jsonrepair';
 import { journalSegmentationPrompt } from '../ai/prompts';
+import { logError } from '../db/errorLog';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 function normText(s: string): string {
@@ -510,6 +511,7 @@ export async function processQueue(onChange?: () => void, maxCaptures = Number.P
       const message = error instanceof Error ? error.message : 'Processing failed.';
       console.warn(`Capture processing deferred: ${message}`);
       await markCaptureFailed(db, capture.id, message);
+      void logError(`processQueue#${capture.id}`, error, db);
     }
     processedCount += 1;
     onChange?.();

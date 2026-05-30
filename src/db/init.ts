@@ -370,6 +370,14 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_battery_recorded ON battery_snapshots(recorded_at);
 
+    CREATE TABLE IF NOT EXISTS error_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      occurred_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      context TEXT NOT NULL,
+      message TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_error_log_occurred ON error_log(occurred_at);
+
     CREATE INDEX IF NOT EXISTS idx_open_loops_status ON open_loops(status, created_at);
     CREATE INDEX IF NOT EXISTS idx_follow_ups_status ON follow_ups(status, created_at);
     CREATE INDEX IF NOT EXISTS idx_music_captures_status ON music_captures(status, created_at);

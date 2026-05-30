@@ -94,9 +94,11 @@ if (!TaskManager.isTaskDefined(BACKGROUND_PROCESSING_TASK)) {
         processed ? 'Organized one waiting thought.' : 'Nothing was waiting to be organized.',
       );
       return BackgroundTask.BackgroundTaskResult.Success;
-    } catch {
+    } catch (error) {
       await setSetting(db, BACKGROUND_LAST_RUN_SETTING, new Date().toISOString());
       await setSetting(db, BACKGROUND_LAST_RESULT_SETTING, 'A background attempt failed. LUCY will retry automatically.');
+      const { logError } = await import('../db/errorLog');
+      void logError('backgroundTask', error, db);
       return BackgroundTask.BackgroundTaskResult.Failed;
     }
   });

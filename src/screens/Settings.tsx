@@ -1017,6 +1017,8 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
   const [stuck, setStuck] = useState<Array<{ id: number; raw_transcript: string | null; extracted_title: string | null; processing_error: string | null }>>([]);
   const [queued, setQueued] = useState<Array<{ id: number; raw_transcript: string | null; extracted_title: string | null }>>([]);
   const [diag, setDiag] = useState<{ model: string; available: boolean } | null>(null);
+  const [errors, setErrors] = useState<Array<{ id: number; occurred_at: string; context: string; message: string }>>([]);
+  const [showErrors, setShowErrors] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -1026,6 +1028,11 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
       const model = getPreferredModel(config.openAIModel);
       const { available } = await resolveRemoteAvailability();
       setDiag({ model, available });
+      try {
+        const db = await getDatabase();
+        const { listRecentErrors } = await import('../db/errorLog');
+        setErrors(await listRecentErrors(db, 20));
+      } catch { /* non-critical */ }
     })();
   }, [queue.queued, queue.complete, queue.retrying]);
 
@@ -1122,6 +1129,36 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
       <Text style={[styles.detail, { marginTop: 8 }]}>
         Unfinished thoughts retry automatically. Tap "Retry now" to force them immediately.
       </Text>
+
+      {errors.length > 0 ? (
+        <View style={{ marginTop: 14 }}>
+          <TouchableOpacity
+            onPress={() => setShowErrors((v) => !v)}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          >
+            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '800', letterSpacing: 1.2 }}>
+              RECENT ERRORS ({errors.length})
+            </Text>
+            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 14 }}>{showErrors ? '▾' : '▸'}</Text>
+          </TouchableOpacity>
+          {showErrors ? (
+            <>
+              {errors.map((e) => (
+                <View key={e.id} style={{ backgroundColor: LUCY_COLORS.surface, borderRadius: 8, padding: 8, marginTop: 6, borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)' }}>
+                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10 }}>{e.context} · {e.occurred_at}</Text>
+                  <Text style={{ color: '#ef4444', fontSize: 11 }} numberOfLines={3}>{e.message}</Text>
+                </View>
+              ))}
+              <TouchableOpacity
+                onPress={async () => { const db = await getDatabase(); const { clearErrorLog } = await import('../db/errorLog'); await clearErrorLog(db); setErrors([]); }}
+                style={{ marginTop: 8, alignSelf: 'flex-start' }}
+              >
+                <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '700' }}>Clear errors</Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
+        </View>
+      ) : null}
     </>
   );
 }

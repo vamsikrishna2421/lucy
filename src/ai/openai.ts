@@ -35,14 +35,27 @@ export async function promptOpenAI(
       input,
     }),
   });
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`OpenAI request failed (${response.status}): ${detail}`);
+  const rawText = await response.text();
+
+  // Guard: if server returned HTML instead of JSON (proxy error, rate limit page, etc.)
+  if (rawText.trimStart().startsWith('<')) {
+    throw new Error(`OpenAI returned an error page (status ${response.status}). Check your API key and internet connection.`);
   }
-  return textFromResponse(await response.json() as {
-    output_text?: string;
-    output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
-  });
+
+  if (!response.ok) {
+    let detail = rawText.slice(0, 200);
+    try { detail = (JSON.parse(rawText) as { error?: { message?: string } }).error?.message ?? detail; } catch { /* use raw */ }
+    throw new Error(`OpenAI error ${response.status}: ${detail}`);
+  }
+
+  try {
+    return textFromResponse(JSON.parse(rawText) as {
+      output_text?: string;
+      output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
+    });
+  } catch {
+    throw new Error(`Could not parse OpenAI response. The API may be temporarily unavailable.`);
+  }
 }
 
 export async function analyzeWithOpenAI(

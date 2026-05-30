@@ -867,19 +867,35 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
     })();
   }, [queue.queued, queue.retrying]);
 
+  const deleteQueueItem = async (id: number) => {
+    const db = await getDatabase();
+    const { archiveCapture } = await import('../db/captures');
+    await archiveCapture(db, id, 'deleted from queue by user');
+    setQueued((prev) => prev.filter((c) => c.id !== id));
+    setStuck((prev) => prev.filter((c) => c.id !== id));
+  };
+
   const renderCapture = (c: { id: number; raw_transcript: string | null; extracted_title: string | null; processing_error?: string | null }, color = LUCY_COLORS.surface) => (
-    <View key={c.id} style={{ backgroundColor: color, borderRadius: 10, padding: 10, marginTop: 6, gap: 3 }}>
-      <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '600' }} numberOfLines={1}>
-        {c.extracted_title ?? c.raw_transcript?.slice(0, 80) ?? '(no text)'}
-      </Text>
-      {c.raw_transcript && !c.extracted_title ? (
-        <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }} numberOfLines={1}>
-          {c.raw_transcript.slice(0, 100)}
+    <View key={c.id} style={{ backgroundColor: color, borderRadius: 10, padding: 10, marginTop: 6, gap: 3, flexDirection: 'row', alignItems: 'flex-start' }}>
+      <View style={{ flex: 1, gap: 3 }}>
+        <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '600' }} numberOfLines={1}>
+          {c.extracted_title ?? c.raw_transcript?.slice(0, 80) ?? '(no text)'}
         </Text>
-      ) : null}
-      {c.processing_error ? (
-        <Text style={{ color: '#ef4444', fontSize: 11 }} numberOfLines={1}>Error: {c.processing_error}</Text>
-      ) : null}
+        {c.raw_transcript && !c.extracted_title ? (
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }} numberOfLines={1}>
+            {c.raw_transcript.slice(0, 100)}
+          </Text>
+        ) : null}
+        {c.processing_error ? (
+          <Text style={{ color: '#ef4444', fontSize: 11 }} numberOfLines={1}>Error: {c.processing_error}</Text>
+        ) : null}
+      </View>
+      <TouchableOpacity
+        onPress={() => void deleteQueueItem(c.id)}
+        style={{ padding: 4, marginLeft: 6 }}
+      >
+        <Text style={{ color: '#ef4444', fontSize: 16, fontWeight: '700' }}>✕</Text>
+      </TouchableOpacity>
     </View>
   );
 

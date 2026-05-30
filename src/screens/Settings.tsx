@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { shareAsync } from 'expo-sharing';
-import { Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { clearDownloadedDeviceModels, getDeviceModelState, prepareDeviceModel, selectDeviceModel, subscribeToDeviceModel, type DeviceModelState } from '../ai/device';
 import { localModelOptions, type LocalModelId } from '../ai/modelCatalog';
 import { getRemoteAccessState, removeRemoteOpenAIKey, setRemoteEnabled, storeRemoteOpenAIKey, type RemoteAccessState } from '../ai/remoteAccess';
@@ -28,6 +28,27 @@ type SettingsPanel = 'intelligence' | 'remote' | 'background' | 'organization' |
 const emptyQueue: CaptureQueueSummary = { queued: 0, processing: 0, retrying: 0, complete: 0, archived: 0 };
 const emptyRemote: RemoteAccessState = { enabled: false, hasKey: false, usingDevelopmentKey: false, modelName: 'gpt-5.4-nano' };
 
+interface ModelOption { id: string; label: string; desc: string; provider: 'openai' | 'anthropic'; }
+const OPENAI_MODELS: ModelOption[] = [
+  { id: 'gpt-4o-mini',   label: 'gpt-4o-mini',   desc: 'Fast · affordable',     provider: 'openai' },
+  { id: 'gpt-4o',        label: 'gpt-4o',         desc: 'Smarter · higher cost', provider: 'openai' },
+  { id: 'gpt-4.1-mini',  label: 'gpt-4.1-mini',  desc: 'Fast · latest mini',    provider: 'openai' },
+  { id: 'gpt-4.1',       label: 'gpt-4.1',        desc: 'Most capable GPT-4',    provider: 'openai' },
+  { id: 'gpt-5-mini',    label: 'gpt-5-mini',     desc: 'Fast GPT-5',            provider: 'openai' },
+  { id: 'gpt-5',         label: 'gpt-5',          desc: 'GPT-5 full',            provider: 'openai' },
+  { id: 'gpt-5.4',       label: 'gpt-5.4',        desc: 'GPT-5.4',               provider: 'openai' },
+  { id: 'gpt-5.5',       label: 'gpt-5.5',        desc: 'GPT-5.5 latest',        provider: 'openai' },
+];
+const CLAUDE_MODELS: ModelOption[] = [
+  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',  desc: 'Fastest · cheapest Claude', provider: 'anthropic' },
+  { id: 'claude-sonnet-4-6',          label: 'Claude Sonnet 4.6', desc: 'Balanced · recommended',    provider: 'anthropic' },
+  { id: 'claude-opus-4-7',            label: 'Claude Opus 4.7',   desc: 'Most capable Claude',       provider: 'anthropic' },
+];
+const ALL_MODELS: ModelOption[] = [...OPENAI_MODELS, ...CLAUDE_MODELS];
+function findModel(id: string): ModelOption | undefined {
+  return ALL_MODELS.find((m) => m.id === id);
+}
+
 export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll }: SettingsScreenProps) {
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
   const [queue, setQueue] = useState(emptyQueue);
@@ -52,6 +73,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [savingProfile, setSavingProfile] = useState(false);
   const [checkInEnabled, setCheckInEnabled] = useState(false);
   const [aiModel, setAiModel] = useState('gpt-4o-mini');
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [claudeKey, setClaudeKey] = useState('');
   const [hasClaudeKey, setHasClaudeKey] = useState(false);
   const [savingClaudeKey, setSavingClaudeKey] = useState(false);
@@ -129,6 +151,19 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
     } finally {
       setSelectingModel(false);
     }
+  };
+
+  const chooseAiModel = async (m: ModelOption) => {
+    if (m.provider === 'anthropic' && !hasClaudeKey) {
+      Alert.alert('Claude API key required', 'Add your Anthropic API key below first, then pick a Claude model.');
+      return;
+    }
+    setAiModel(m.id);
+    setModelMenuOpen(false);
+    const db = await getDatabase();
+    await setSetting(db, 'ai_model_override', m.id);
+    const { setPreferredModel } = await import('../ai/modelPreference');
+    setPreferredModel(m.id);
   };
 
   const runBenchmark = async () => {
@@ -391,43 +426,47 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
             Select which model LUCY uses to understand your captures. Claude models require an Anthropic API key.
           </Text>
 
-          {/* OpenAI section */}
-          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 6 }}>OPENAI</Text>
-          {([
-            { id: 'gpt-4o-mini',   label: 'gpt-4o-mini',   desc: 'Fast · affordable' },
-            { id: 'gpt-4o',        label: 'gpt-4o',         desc: 'Smarter · higher cost' },
-            { id: 'gpt-4.1-mini',  label: 'gpt-4.1-mini',  desc: 'Fast · latest mini' },
-            { id: 'gpt-4.1',       label: 'gpt-4.1',        desc: 'Most capable GPT-4' },
-            { id: 'gpt-5-mini',    label: 'gpt-5-mini',     desc: 'Fast GPT-5' },
-            { id: 'gpt-5',         label: 'gpt-5',           desc: 'GPT-5 full' },
-            { id: 'gpt-5.4',       label: 'gpt-5.4',         desc: 'GPT-5.4' },
-            { id: 'gpt-5.5',       label: 'gpt-5.5',         desc: 'GPT-5.5 latest' },
-          ] as Array<{ id: string; label: string; desc: string }>).map((m) => (
-            <ModelRow key={m.id} m={m} selected={aiModel === m.id} color={LUCY_COLORS.primary} onSelect={async () => {
-              setAiModel(m.id);
-              const db = await getDatabase();
-              await setSetting(db, 'ai_model_override', m.id);
-              const { setPreferredModel } = await import('../ai/modelPreference');
-              setPreferredModel(m.id);
-            }} />
-          ))}
+          {/* Dropdown trigger — shows the currently selected model */}
+          {(() => {
+            const current = findModel(aiModel);
+            const accent = current?.provider === 'anthropic' ? '#60A5FA' : LUCY_COLORS.primary;
+            return (
+              <TouchableOpacity
+                onPress={() => setModelMenuOpen(true)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 14, backgroundColor: LUCY_COLORS.surface, borderRadius: 12, borderWidth: 1, borderColor: accent }}
+              >
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: accent }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700' }}>{current?.label ?? aiModel}</Text>
+                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>
+                    {current ? `${current.provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} · ${current.desc}` : 'Tap to choose a model'}
+                  </Text>
+                </View>
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 16, fontWeight: '700' }}>⌄</Text>
+              </TouchableOpacity>
+            );
+          })()}
 
-          {/* Anthropic section */}
-          <Text style={{ color: '#60A5FA', fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginTop: 14, marginBottom: 6 }}>ANTHROPIC (requires Claude API key below)</Text>
-          {([
-            { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', desc: 'Fastest · cheapest Claude' },
-            { id: 'claude-sonnet-4-6',          label: 'Claude Sonnet 4.6', desc: 'Balanced · recommended' },
-            { id: 'claude-opus-4-7',            label: 'Claude Opus 4.7',   desc: 'Most capable Claude' },
-          ] as Array<{ id: string; label: string; desc: string }>).map((m) => (
-            <ModelRow key={m.id} m={m} selected={aiModel === m.id} color='#60A5FA' onSelect={async () => {
-              if (!hasClaudeKey) { Alert.alert('Claude API key required', 'Add your Anthropic API key below first.'); return; }
-              setAiModel(m.id);
-              const db = await getDatabase();
-              await setSetting(db, 'ai_model_override', m.id);
-              const { setPreferredModel } = await import('../ai/modelPreference');
-              setPreferredModel(m.id);
-            }} />
-          ))}
+          {/* Model dropdown menu */}
+          <Modal transparent animationType="fade" visible={modelMenuOpen} onRequestClose={() => setModelMenuOpen(false)}>
+            <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', alignItems: 'center', padding: 24 }} onPress={() => setModelMenuOpen(false)}>
+              <Pressable style={{ backgroundColor: LUCY_COLORS.surface, borderRadius: 18, padding: 16, width: '100%', maxHeight: '80%', borderWidth: 1, borderColor: LUCY_COLORS.border }}>
+                <Text style={{ color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '800', marginBottom: 10 }}>Choose AI model</Text>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 6 }}>OPENAI</Text>
+                  {OPENAI_MODELS.map((m) => (
+                    <ModelRow key={m.id} m={m} selected={aiModel === m.id} color={LUCY_COLORS.primary} onSelect={() => void chooseAiModel(m)} />
+                  ))}
+                  <Text style={{ color: '#60A5FA', fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginTop: 14, marginBottom: 6 }}>
+                    ANTHROPIC {hasClaudeKey ? '' : '(add Claude API key below first)'}
+                  </Text>
+                  {CLAUDE_MODELS.map((m) => (
+                    <ModelRow key={m.id} m={m} selected={aiModel === m.id} color="#60A5FA" onSelect={() => void chooseAiModel(m)} />
+                  ))}
+                </ScrollView>
+              </Pressable>
+            </Pressable>
+          </Modal>
 
           {/* Claude API key */}
           <View style={{ marginTop: 14, gap: 8 }}>

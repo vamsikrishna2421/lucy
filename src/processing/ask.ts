@@ -15,6 +15,7 @@ import { promptOpenAI } from '../ai/openai';
 import { promptDevice } from '../ai/device';
 import { memoryAnswerSystemPrompt } from '../ai/prompts';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
+import { getDeviceContext, formatDeviceContext } from '../ai/deviceContext';
 
 export interface LucyMemoryConnection {
   statement: string;
@@ -207,7 +208,7 @@ function detectsCaptureIntent(text: string): boolean {
 
 async function answerWithLLM(question: string): Promise<LucyAnswer> {
   const db = await getDatabase();
-  const [profile] = await Promise.all([getUserProfile(db)]);
+  const [profile, deviceCtx] = await Promise.all([getUserProfile(db), getDeviceContext()]);
 
   // Use semantic search for relevant captures, fall back to recent if no embeddings
   let relevantCaptures: import('../db/captures').CaptureRow[] = [];
@@ -254,8 +255,8 @@ async function answerWithLLM(question: string): Promise<LucyAnswer> {
 
   const userPrefix = buildUserContextPrefix(profile);
   const systemPrompt = `${userPrefix}${memoryAnswerSystemPrompt}`;
-  const today = new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const input = `TODAY IS: ${today}\n\nCAPTURED MEMORIES:\n---\n${context}\n---\n\nQuestion: ${question}`;
+  const deviceInfo = formatDeviceContext(deviceCtx);
+  const input = `DEVICE CONTEXT (live data — always accurate):\n${deviceInfo}\n\nCAPTURED MEMORIES:\n---\n${context}\n---\n\nQuestion: ${question}`;
 
   let llmResponse: string;
   try {

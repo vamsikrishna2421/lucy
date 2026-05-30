@@ -110,9 +110,12 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
   useEffect(() => {
     void (async () => {
       try {
-        // Load whichever brain was last active (including Eleanor if user switched to her)
-        const { loadActiveUser } = await import('./src/db/userManager');
+        // Always boot into the user's own brain — Eleanor is session-only
+        const { loadActiveUser, getActiveUser, switchUser } = await import('./src/db/userManager');
         await loadActiveUser();
+        if (getActiveUser().id === 'demo') {
+          await switchUser({ id: 'main', name: 'My Brain' });
+        }
 
         const db = await getDatabase();
         await initializeDeviceModelSelection();
@@ -136,13 +139,8 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
           }
         } catch { /* non-critical */ }
 
-        // Start Eleanor's seed in background — but ONLY when on main brain.
-        // If Eleanor's brain is already active, lucy_demo.db is already open;
-        // opening a second connection causes a SQLCipher deadlock → freeze.
-        const { getActiveUser: _getUser } = await import('./src/db/userManager');
-        if (_getUser().id !== 'demo') {
-          void import('./src/db/eleanorSeedState').then(({ startEleanorSeed }) => startEleanorSeed());
-        }
+        // Start Eleanor's background seed (always safe — active user is always main here)
+        void import('./src/db/eleanorSeedState').then(({ startEleanorSeed }) => startEleanorSeed());
 
         setReady(true);
         void drainQueue();

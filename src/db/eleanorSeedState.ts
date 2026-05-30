@@ -26,6 +26,17 @@ function notify() {
 /** Start seeding Eleanor's brain in the background. Safe to call multiple times. */
 export async function startEleanorSeed(): Promise<void> {
   if (_status === 'seeding' || _status === 'ready') return;
+
+  // Guard: never open a second connection if demo brain is already the active DB
+  const { getActiveUser } = await import('./userManager');
+  if (getActiveUser().id === 'demo') {
+    // Already in Eleanor's brain — just mark ready
+    _status = 'ready';
+    _progress = 100;
+    notify();
+    return;
+  }
+
   _status = 'seeding';
   _progress = 0;
   notify();

@@ -5,6 +5,7 @@ import { getSetting, setSetting } from '../db/settings';
 
 const REMOTE_ENABLED_SETTING = 'remote_openai_enabled';
 const OPENAI_KEY_STORE = 'lucy_openai_api_key';
+const CLAUDE_KEY_STORE = 'lucy_claude_api_key';
 
 export interface RemoteAccessState {
   enabled: boolean;
@@ -56,4 +57,20 @@ export async function storeRemoteOpenAIKey(key: string): Promise<void> {
 export async function removeRemoteOpenAIKey(): Promise<void> {
   await SecureStore.deleteItemAsync(OPENAI_KEY_STORE);
   await setRemoteEnabled(false);
+}
+
+// ─── Claude key ──────────────────────────────────────────────────────────────
+
+export async function getClaudeApiKey(): Promise<string | null> {
+  return SecureStore.getItemAsync(CLAUDE_KEY_STORE);
+}
+
+export async function storeClaudeApiKey(key: string): Promise<void> {
+  const trimmed = key.trim();
+  if (!trimmed) throw new Error('Enter a Claude API key before saving.');
+  await SecureStore.setItemAsync(CLAUDE_KEY_STORE, trimmed);
+}
+
+export async function removeClaudeApiKey(): Promise<void> {
+  await SecureStore.deleteItemAsync(CLAUDE_KEY_STORE);
 }

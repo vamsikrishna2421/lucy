@@ -1,6 +1,16 @@
 import { config } from '../config';
 import { getPreferredModel } from './modelPreference';
 import type { ExtractionResult } from '../types/extraction';
+
+/** Routes to Claude or OpenAI depending on the active model. Use this everywhere instead of promptOpenAI directly. */
+export async function promptAI(system: string, input: string, apiKey: string): Promise<string> {
+  const model = getPreferredModel(config.openAIModel);
+  if (model.startsWith('claude-')) {
+    const { promptClaude } = await import('./claude');
+    return promptClaude(system, input, model);
+  }
+  return promptOpenAI(system, input, apiKey, model);
+}
 import { extractionSchemaPrompt, extractionSystemPrompt, localReferenceTimestamp } from './prompts';
 
 function textFromResponse(result: {
@@ -63,7 +73,7 @@ export async function analyzeWithOpenAI(
   apiKey: string,
   userContextPrefix = '',
 ): Promise<ExtractionResult> {
-  const raw = await promptOpenAI(
+  const raw = await promptAI(
     `${userContextPrefix}${extractionSystemPrompt}\nReference local timestamp: ${localReferenceTimestamp()}\n${extractionSchemaPrompt}`,
     transcript,
     apiKey,

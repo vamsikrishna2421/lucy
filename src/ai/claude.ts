@@ -1,13 +1,14 @@
 import { config } from '../config';
 import type { ExtractionResult } from '../types/extraction';
 import { extractionSchemaPrompt, extractionSystemPrompt, localReferenceTimestamp } from './prompts';
+import { getClaudeApiKey } from './remoteAccess';
 
-function getApiKey(): string {
-  const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error('Set EXPO_PUBLIC_ANTHROPIC_API_KEY to process normal captures with Claude.');
-  }
-  return apiKey;
+async function getApiKey(): Promise<string> {
+  const stored = await getClaudeApiKey();
+  if (stored) return stored;
+  const env = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY?.trim();
+  if (env) return env;
+  throw new Error('No Claude API key found. Add your Anthropic key in Settings → Remote intelligence.');
 }
 
 export async function analyzeWithClaude(transcript: string): Promise<ExtractionResult> {
@@ -25,12 +26,13 @@ export async function analyzeWithClaude(transcript: string): Promise<ExtractionR
 }
 
 export async function promptClaude(system: string, input: string, model = config.claudeExtractionModel): Promise<string> {
+  const apiKey = await getApiKey();
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'anthropic-version': '2023-06-01',
-      'x-api-key': getApiKey(),
+      'x-api-key': apiKey,
     },
     body: JSON.stringify({
       model,

@@ -52,6 +52,9 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [savingProfile, setSavingProfile] = useState(false);
   const [checkInEnabled, setCheckInEnabled] = useState(false);
   const [aiModel, setAiModel] = useState('gpt-4o-mini');
+  const [claudeKey, setClaudeKey] = useState('');
+  const [hasClaudeKey, setHasClaudeKey] = useState(false);
+  const [savingClaudeKey, setSavingClaudeKey] = useState(false);
 
 
   useEffect(() => {
@@ -67,6 +70,10 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       const { getSetting: gs } = await import('../db/settings');
       const storedModel = await gs(db, 'ai_model_override');
       if (storedModel) setAiModel(storedModel);
+
+      const { getClaudeApiKey } = await import('../ai/remoteAccess');
+      const ck = await getClaudeApiKey();
+      setHasClaudeKey(!!ck);
 
       setQueue(queueSummary);
       setBackground(state);
@@ -361,30 +368,91 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         {/* AI Model Picker */}
         <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider }}>
           <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700', marginBottom: 4 }}>AI extraction model</Text>
-          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginBottom: 12 }}>Which OpenAI model LUCY uses for understanding your captures.</Text>
-          {(['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1'] as const).map((m) => (
-            <TouchableOpacity
-              key={m}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: aiModel === m ? LUCY_COLORS.primarySoft : LUCY_COLORS.surface, borderRadius: 10, marginBottom: 6, borderWidth: 1, borderColor: aiModel === m ? LUCY_COLORS.primary : LUCY_COLORS.border }}
-              onPress={async () => {
-                setAiModel(m);
-                const db = await getDatabase();
-                await setSetting(db, 'ai_model_override', m);
-                const { setPreferredModel } = await import('../ai/modelPreference');
-                setPreferredModel(m);
-                Alert.alert('Model updated', `LUCY will now use ${m} for new captures.`);
-              }}
-            >
-              <View style={{ width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: LUCY_COLORS.primary, backgroundColor: aiModel === m ? LUCY_COLORS.primary : 'transparent' }} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700' }}>{m}</Text>
-                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>
-                  {m === 'gpt-4o-mini' ? 'Fast, cheap — recommended' : m === 'gpt-4o' ? 'Smarter, higher cost' : m === 'gpt-4.1-mini' ? 'Fast, latest mini' : 'Most capable, highest cost'}
-                </Text>
-              </View>
-              {aiModel === m ? <Text style={{ color: LUCY_COLORS.primary, fontSize: 13, fontWeight: '800' }}>✓</Text> : null}
-            </TouchableOpacity>
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginBottom: 12 }}>
+            Select which model LUCY uses to understand your captures. Claude models require an Anthropic API key.
+          </Text>
+
+          {/* OpenAI section */}
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 6 }}>OPENAI</Text>
+          {([
+            { id: 'gpt-4o-mini',   label: 'gpt-4o-mini',   desc: 'Fast · affordable' },
+            { id: 'gpt-4o',        label: 'gpt-4o',         desc: 'Smarter · higher cost' },
+            { id: 'gpt-4.1-mini',  label: 'gpt-4.1-mini',  desc: 'Fast · latest mini' },
+            { id: 'gpt-4.1',       label: 'gpt-4.1',        desc: 'Most capable GPT-4' },
+            { id: 'gpt-5-mini',    label: 'gpt-5-mini',     desc: 'Fast GPT-5' },
+            { id: 'gpt-5',         label: 'gpt-5',           desc: 'GPT-5 full' },
+            { id: 'gpt-5.4',       label: 'gpt-5.4',         desc: 'GPT-5.4' },
+            { id: 'gpt-5.5',       label: 'gpt-5.5',         desc: 'GPT-5.5 latest' },
+          ] as Array<{ id: string; label: string; desc: string }>).map((m) => (
+            <ModelRow key={m.id} m={m} selected={aiModel === m.id} color={LUCY_COLORS.primary} onSelect={async () => {
+              setAiModel(m.id);
+              const db = await getDatabase();
+              await setSetting(db, 'ai_model_override', m.id);
+              const { setPreferredModel } = await import('../ai/modelPreference');
+              setPreferredModel(m.id);
+            }} />
           ))}
+
+          {/* Anthropic section */}
+          <Text style={{ color: '#60A5FA', fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginTop: 14, marginBottom: 6 }}>ANTHROPIC (requires Claude API key below)</Text>
+          {([
+            { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', desc: 'Fastest · cheapest Claude' },
+            { id: 'claude-sonnet-4-6',          label: 'Claude Sonnet 4.6', desc: 'Balanced · recommended' },
+            { id: 'claude-opus-4-7',            label: 'Claude Opus 4.7',   desc: 'Most capable Claude' },
+          ] as Array<{ id: string; label: string; desc: string }>).map((m) => (
+            <ModelRow key={m.id} m={m} selected={aiModel === m.id} color='#60A5FA' onSelect={async () => {
+              if (!hasClaudeKey) { Alert.alert('Claude API key required', 'Add your Anthropic API key below first.'); return; }
+              setAiModel(m.id);
+              const db = await getDatabase();
+              await setSetting(db, 'ai_model_override', m.id);
+              const { setPreferredModel } = await import('../ai/modelPreference');
+              setPreferredModel(m.id);
+            }} />
+          ))}
+
+          {/* Claude API key */}
+          <View style={{ marginTop: 14, gap: 8 }}>
+            <Text style={{ color: '#60A5FA', fontSize: 12, fontWeight: '700' }}>
+              Anthropic API key {hasClaudeKey ? '· saved ✓' : '· not set'}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TextInput
+                style={[styles.keyInput, { flex: 1, fontSize: 12 }]}
+                placeholder={hasClaudeKey ? '••••••••••••••••' : 'sk-ant-...'}
+                placeholderTextColor={LUCY_COLORS.textSubtle}
+                value={claudeKey}
+                onChangeText={setClaudeKey}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                style={{ backgroundColor: '#60A5FA', borderRadius: 10, paddingHorizontal: 14, justifyContent: 'center', opacity: (!claudeKey.trim() && !hasClaudeKey) ? 0.4 : 1 }}
+                onPress={async () => {
+                  setSavingClaudeKey(true);
+                  try {
+                    if (!claudeKey.trim() && hasClaudeKey) {
+                      const { removeClaudeApiKey } = await import('../ai/remoteAccess');
+                      await removeClaudeApiKey();
+                      setHasClaudeKey(false);
+                      Alert.alert('Removed', 'Claude API key cleared.');
+                    } else if (claudeKey.trim()) {
+                      const { storeClaudeApiKey } = await import('../ai/remoteAccess');
+                      await storeClaudeApiKey(claudeKey.trim());
+                      setHasClaudeKey(true);
+                      setClaudeKey('');
+                      Alert.alert('Saved', 'Claude API key saved.');
+                    }
+                  } catch (e) { Alert.alert('Error', String(e)); }
+                  finally { setSavingClaudeKey(false); }
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
+                  {savingClaudeKey ? '...' : hasClaudeKey && !claudeKey.trim() ? 'Remove' : 'Save'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
         <SettingsRow
@@ -845,6 +913,22 @@ function SecondaryButton({ disabled, label, onPress }: { disabled: boolean; labe
   return (
     <TouchableOpacity disabled={disabled} onPress={onPress} style={[styles.button, disabled && styles.dim]}>
       <Text style={styles.buttonLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function ModelRow({ m, selected, color, onSelect }: { m: { id: string; label: string; desc: string }; selected: boolean; color: string; onSelect: () => void }) {
+  return (
+    <TouchableOpacity
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 12, backgroundColor: selected ? color + '18' : LUCY_COLORS.surface, borderRadius: 10, marginBottom: 5, borderWidth: 1, borderColor: selected ? color : LUCY_COLORS.border }}
+      onPress={onSelect}
+    >
+      <View style={{ width: 13, height: 13, borderRadius: 7, borderWidth: 2, borderColor: color, backgroundColor: selected ? color : 'transparent' }} />
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700' }}>{m.label}</Text>
+        <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>{m.desc}</Text>
+      </View>
+      {selected ? <Text style={{ color, fontSize: 13, fontWeight: '800' }}>✓</Text> : null}
     </TouchableOpacity>
   );
 }

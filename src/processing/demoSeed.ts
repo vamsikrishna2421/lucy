@@ -40,66 +40,60 @@ export async function seedDemoDataIfNeeded(db: SQLiteDatabase): Promise<void> {
     return;
   }
 
-  // Load pre-parsed entries (dynamic import keeps the 750KB off the startup critical path)
+  // Load pre-parsed entries via dynamic import
   const entriesModule = await import('./eleanor_seed_data.json');
   const entries: RawEntry[] = (entriesModule.default ?? entriesModule) as unknown as RawEntry[];
 
-  await db.withTransactionAsync(async () => {
-    // Insert Eleanor's profile capture first
-    await db.runAsync(
-      `INSERT INTO captures (created_at, source, raw_transcript, privacy_level, processed, extracted_title, structured_text, processed_at)
-       VALUES (?, 'text', ?, 'normal', 3, ?, ?, ?)`,
-      PROFILE_CAPTURE.d, PROFILE_CAPTURE.transcript, PROFILE_CAPTURE.title,
-      `Title: ${PROFILE_CAPTURE.title}`, PROFILE_CAPTURE.d,
+  // Build all SQL as a single execAsync batch — one bridge call instead of 4000+
+  const captureRows: string[] = [];
+  const moodRows: string[] = [];
+  const todoRows: string[] = [];
+
+  const esc = (s: string) => s.replace(/'/g, "''");
+
+  // Profile capture (id = 1)
+  captureRows.push(
+    `('${PROFILE_CAPTURE.d}','text','${esc(PROFILE_CAPTURE.transcript)}','normal',3,'${esc(PROFILE_CAPTURE.title)}','Title: ${esc(PROFILE_CAPTURE.title)}','${PROFILE_CAPTURE.d}')`,
+  );
+
+  // Daily entries (ids 2..1462)
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const id = i + 2; // 1-based, profile took id 1
+    const title = `Eleanor — ${entry.d.slice(0, 10)}`;
+    const structured = `Title: ${esc(title)}\nPeople: ${entry.p.join(', ')}`;
+
+    captureRows.push(
+      `('${entry.d}','text','${esc(entry.tr)}','normal',3,'${esc(title)}','${esc(structured)}','${entry.d}')`,
     );
-    const profileId = (await db.getFirstAsync<{ id: number }>('SELECT last_insert_rowid() as id'))?.id;
-    if (profileId) {
-      await db.runAsync(
-        'INSERT INTO mood_entries (capture_id, tone, energy, created_at) VALUES (?, ?, ?, ?)',
-        profileId, 'positive', 'high', PROFILE_CAPTURE.d,
-      );
+
+    const energy = entry.m === 'negative' ? 'low' : 'medium';
+    moodRows.push(`(${id},'${entry.m}','${energy}','${entry.d}')`);
+
+    for (const task of entry.pt) {
+      todoRows.push(`(${id},'${esc(task)}','other','medium','Eleanor','normal','${entry.d}')`);
     }
+  }
+  // Profile mood
+  moodRows.unshift(`(1,'positive','high','${PROFILE_CAPTURE.d}')`);
 
-    // Insert all daily log entries
-    for (const entry of entries) {
-      const title = `Eleanor — ${entry.d.slice(0, 10)}`;
-      await db.runAsync(
-        `INSERT INTO captures (created_at, source, raw_transcript, privacy_level, processed, extracted_title, structured_text, processed_at)
-         VALUES (?, 'text', ?, 'normal', 3, ?, ?, ?)`,
-        entry.d, entry.tr, title,
-        `Title: ${title}\nPeople: ${entry.p.join(', ')}`, entry.d,
-      );
-
-      const captureId = (await db.getFirstAsync<{ id: number }>('SELECT last_insert_rowid() as id'))?.id;
-      if (!captureId) continue;
-
-      // Insert pending tasks
-      for (const task of entry.pt) {
-        await db.runAsync(
-          'INSERT INTO todos (capture_id, task, category, urgency, context, privacy_level, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          captureId, task, 'other', 'medium', 'Eleanor', 'normal', entry.d,
-        );
-      }
-
-      // Insert people mentions
-      for (const person of entry.p) {
-        await db.runAsync(
-          `INSERT OR IGNORE INTO people (name, last_mentioned) VALUES (?, ?)`,
-          person, entry.d,
-        ).catch(() => {});
-        await db.runAsync(
-          `UPDATE people SET last_mentioned = ?, mention_count = mention_count + 1 WHERE name = ?`,
-          entry.d, person,
-        ).catch(() => {});
-      }
-
-      // Insert mood
-      await db.runAsync(
-        'INSERT INTO mood_entries (capture_id, tone, energy, created_at) VALUES (?, ?, ?, ?)',
-        captureId, entry.m, entry.m === 'negative' ? 'low' : 'medium', entry.d,
-      );
+  const CHUNK = 400; // Insert in chunks to avoid SQLite statement length limits
+  const insertChunks = async (table: string, cols: string, rows: string[]) => {
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK).join(',');
+      await db.execAsync(`INSERT INTO ${table} (${cols}) VALUES ${chunk};`);
     }
-  });
+  };
+
+  await insertChunks(
+    'captures',
+    'created_at,source,raw_transcript,privacy_level,processed,extracted_title,structured_text,processed_at',
+    captureRows,
+  );
+  await insertChunks('mood_entries', 'capture_id,tone,energy,created_at', moodRows);
+  if (todoRows.length > 0) {
+    await insertChunks('todos', 'capture_id,task,category,urgency,context,privacy_level,created_at', todoRows);
+  }
 
   await setSetting(db, DEMO_SEED_KEY, 'true');
 }

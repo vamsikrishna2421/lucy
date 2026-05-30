@@ -479,8 +479,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
               await switchUser(DEMO_USER);
               await resetDatabase();
               const db = await getDatabase();
-              const { setSetting: ss } = await import('../db/settings');
-              await ss(db, 'demo_data_seeded', '');
+              // Only seed if demo brain is empty — never wipe existing data
               const { seedDemoDataIfNeeded } = await import('../processing/demoSeed');
               await seedDemoDataIfNeeded(db);
               setBrainUsers((prev) => [...prev.filter((u) => u.id !== 'demo'), DEMO_USER]);

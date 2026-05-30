@@ -429,7 +429,7 @@ export function CaptureScreen({
           </TouchableOpacity>
           <TextInput
             multiline
-            placeholder="Capture anything..."
+            placeholder="What's on your mind?"
             placeholderTextColor={LUCY_COLORS.textSubtle}
             style={styles.input}
             textAlignVertical="top"
@@ -528,8 +528,8 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 42, fontWeight: '900', letterSpacing: -2, color: LUCY_COLORS.textDark, lineHeight: 46, marginBottom: 2 },
   heroPillars: { fontSize: 11, color: LUCY_COLORS.textSubtle, marginBottom: 12 },
   heroCard: { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,140,66,0.25)', borderRadius: 14, padding: 12 },
-  heroCardLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1.2, color: LUCY_COLORS.primary, marginBottom: 3 },
-  heroCardTitle: { fontSize: 15, fontWeight: '800', color: LUCY_COLORS.textDark },
+  heroCardLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, color: LUCY_COLORS.primary, marginBottom: 4 },
+  heroCardTitle: { fontSize: 18, fontWeight: '800', color: LUCY_COLORS.textDark },  // was 15 — more punchy
   // Compact header
   compactHeader: { paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: LUCY_COLORS.background, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.border },
   compactLogo: { fontSize: 20, fontWeight: '900', letterSpacing: 1.5, color: LUCY_COLORS.textDark },
@@ -634,7 +634,7 @@ const styles = StyleSheet.create({
   // Capture
   ack: { alignSelf: 'center', backgroundColor: LUCY_COLORS.primarySoft, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, marginBottom: 8 },
   ackText: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700' },
-  composerDock: {},
+  composerDock: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, paddingTop: 4 },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, paddingTop: 8 },
   micButton: { width: 46, height: 46, borderRadius: 23, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', justifyContent: 'center' },
   micButtonActive: { backgroundColor: '#3B0000', borderColor: '#ef4444' },

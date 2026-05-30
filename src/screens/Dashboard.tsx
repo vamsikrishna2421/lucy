@@ -131,6 +131,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.todayDate}>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
       <Text style={styles.title}>Today</Text>
       <Text style={styles.subtitle}>What matters now, pulled from your memory.</Text>
       <View style={styles.viewNav}>
@@ -685,15 +686,16 @@ function Card({ title, detail, privacy }: { title: string; detail: string; priva
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  title: { fontSize: 30, letterSpacing: -0.8, fontWeight: '700', color: LUCY_COLORS.textDark },
+  title: { fontSize: 30, letterSpacing: -0.8, fontWeight: '800', color: LUCY_COLORS.textDark },
   subtitle: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 4, marginBottom: 16 },
   viewNav: { flexDirection: 'row', padding: 4, borderRadius: 18, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, marginBottom: 17 },
-  viewTab: { flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: 14 },
+  viewTab: { flex: 1, alignItems: 'center', paddingVertical: 13, borderRadius: 14 },  // larger tap target
   activeView: { backgroundColor: LUCY_COLORS.surfaceRaised },
-  viewText: { color: LUCY_COLORS.textMuted, fontWeight: '700' },
+  viewText: { color: LUCY_COLORS.textMuted, fontWeight: '700', fontSize: 13 },  // was 11 (too small)
   activeViewText: { color: LUCY_COLORS.primaryGlow },
   content: { flex: 1 },
   tonight: { backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderRadius: 24, padding: 19, marginBottom: 19 },
+  todayDate: { color: LUCY_COLORS.textSubtle, fontSize: 12, fontWeight: '600', letterSpacing: 0.3, marginBottom: 2 },
   eyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
   tonightTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '700', marginTop: 9 },
   tonightDetail: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 7 },
@@ -708,8 +710,8 @@ const styles = StyleSheet.create({
   moodDot: { width: 8, height: 8, borderRadius: 4 },
   contextPrompt: { backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderRadius: 20, padding: 16, marginBottom: 19 },
   contextPromptTitle: { color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700', marginTop: 8 },
-  contextIntro: { backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderRadius: 22, padding: 18, marginBottom: 14 },
-  contextCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, marginBottom: 12, gap: 9 },
+  contextIntro: { backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderRadius: 22, padding: 22, marginBottom: 14 },  // was 18
+  contextCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 18, marginBottom: 12, gap: 9 },  // was 15
   contextLucyLabel: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700', letterSpacing: 0.3, textTransform: 'uppercase', marginBottom: 2 },
   contextSnippet: { color: LUCY_COLORS.textMuted, fontSize: 13, fontStyle: 'italic' },
   contextQuestion: { color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '800', lineHeight: 24 },
@@ -751,8 +753,8 @@ const styles = StyleSheet.create({
   streamButtonText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   dismissText: { color: LUCY_COLORS.textSubtle, fontSize: 13, paddingVertical: 7 },
   captureRow: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, marginBottom: 10 },
-  captureTitle: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700', lineHeight: 20, marginBottom: 4 },
-  captureText: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 18 },
+  captureTitle: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '800', lineHeight: 21, marginBottom: 4 },  // was 700 — clearer hierarchy
+  captureText: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 19 },
   captureTime: { color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 7 },
   keyPoints: { marginTop: 8, gap: 3 },
   keyPoint: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 19 },
@@ -768,16 +770,16 @@ const styles = StyleSheet.create({
   searchClear: { color: LUCY_COLORS.textSubtle, fontSize: 14, fontWeight: '700' },
   searchResultsLabel: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginBottom: 8, fontWeight: '600' },
   captureActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  actionBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderColor: LUCY_COLORS.primarySoft },
-  actionBtnText: { color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800' },
+  actionBtn: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, backgroundColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderColor: LUCY_COLORS.primarySoft },  // bigger tap target
+  actionBtnText: { color: LUCY_COLORS.primary, fontSize: 12, fontWeight: '800' },
   actionOptionBtn: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 12, padding: 14 },
   actionOptionText: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '600' },
   modalDone: { backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingVertical: 13, alignItems: 'center' as const },
   modalDoneText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   modalSkip: { borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 12, paddingVertical: 13, alignItems: 'center' as const },
   modalSkipText: { color: LUCY_COLORS.textMuted, fontSize: 15, fontWeight: '600' },
-  feedbackBtn: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', justifyContent: 'center' },
-  feedbackBtnText: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '700' },
+  feedbackBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', justifyContent: 'center' },  // was 22 (too small)
+  feedbackBtnText: { color: LUCY_COLORS.textMuted, fontSize: 14, fontWeight: '700' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   feedbackModal: { backgroundColor: LUCY_COLORS.surface, borderRadius: 20, padding: 24, width: '100%', borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 12 },
   feedbackModalTitle: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },

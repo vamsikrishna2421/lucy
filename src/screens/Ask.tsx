@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
   suggestionLabel: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 7 },
   suggestionText: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 19 },
   thinking: { color: LUCY_COLORS.textMuted, fontSize: 14 },
-  responseLabel: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 7 },
+  responseLabel: { color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800', letterSpacing: 0.8, marginBottom: 8 },  // was invisible at 10px
   answerTitle: { color: LUCY_COLORS.textDark, fontSize: 18, fontWeight: '700', marginBottom: 6 },
   answerMessage: { color: LUCY_COLORS.textMuted, fontSize: 14, marginBottom: 10 },
   tipList: { gap: 8, marginBottom: 12 },
@@ -539,9 +539,9 @@ const styles = StyleSheet.create({
   insightAskBtn: { alignSelf: 'flex-start', backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
   insightAskBtnText: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700' },
   llmResponse: { color: LUCY_COLORS.textDark, fontSize: 15, lineHeight: 23, marginBottom: 10 },
-  sourcesSection: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, paddingTop: 10, gap: 6 },
-  sourcesLabel: { color: LUCY_COLORS.primary, fontSize: 10, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  sourceChip: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 8, padding: 8, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  sourcesSection: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, marginTop: 4, paddingTop: 12, gap: 6 },
+  sourcesLabel: { color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 },
+  sourceChip: { backgroundColor: LUCY_COLORS.surface, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: LUCY_COLORS.border },  // more separated from answer
   citedSourceTitle: { color: LUCY_COLORS.textDark, fontSize: 12, fontWeight: '700' },
   sourceSnippet: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 1 },
   section: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginTop: 8, marginBottom: 7 },
@@ -560,7 +560,7 @@ const styles = StyleSheet.create({
   historyMeta: { color: LUCY_COLORS.textMuted, fontSize: 12 },
   emptyHistory: { color: LUCY_COLORS.textMuted, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, padding: 16 },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, paddingTop: 8 },
-  input: { flex: 1, minHeight: 48, maxHeight: 108, borderRadius: 24, backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.border, borderWidth: 1, color: LUCY_COLORS.textDark, paddingHorizontal: 16, paddingTop: 13, paddingBottom: 12, fontSize: 15, textAlignVertical: 'top' },
+  input: { flex: 1, minHeight: 52, maxHeight: 120, borderRadius: 26, backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.border, borderWidth: 1, color: LUCY_COLORS.textDark, paddingHorizontal: 18, paddingTop: 14, paddingBottom: 14, fontSize: 15, textAlignVertical: 'top' },  // taller, easier to tap
   send: { height: 48, borderRadius: 24, backgroundColor: LUCY_COLORS.primary, paddingHorizontal: 19, alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.4 },
   sendText: { color: LUCY_COLORS.white, fontSize: 14, fontWeight: '700' },

@@ -31,6 +31,12 @@ import { ConnectorsScreen } from './src/screens/Connectors';
 import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
 
 export default function App() {
+  // appKey increments on brain switch — forces full remount
+  const [appKey, setAppKey] = useState(0);
+  return <AppInner key={appKey} onBrainSwitch={() => setAppKey((k) => k + 1)} />;
+}
+
+function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
   const [screen, setScreen] = useState<'capture' | 'dashboard' | 'ask' | 'settings'>('dashboard');
   const [refreshToken, setRefreshToken] = useState(0);
   const [ready, setReady] = useState(false);
@@ -104,6 +110,10 @@ export default function App() {
   useEffect(() => {
     void (async () => {
       try {
+        // Load active brain user FIRST (determines which DB to open)
+        const { loadActiveUser } = await import('./src/db/userManager');
+        await loadActiveUser();
+
         const db = await getDatabase();
         await initializeDeviceModelSelection();
         void autoRestoreDeviceModel();
@@ -301,6 +311,7 @@ export default function App() {
               backgroundEnabled={backgroundEnabled}
               onChangeBackground={setBackgroundPreference}
               onReprocessAll={reprocessAllMemories}
+              onBrainSwitch={onBrainSwitch}
             />
           ) : null}
         </View>

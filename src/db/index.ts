@@ -2,24 +2,22 @@ import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import * as SQLite from 'expo-sqlite';
 import { initializeSchema } from './init';
+import { getDbName, getDbKeyName } from './userManager';
 
-const DB_NAME = 'lucy.db';
-const DATABASE_KEY_SETTING = 'lucy_database_key';
 let databasePromise: Promise<SQLite.SQLiteDatabase> | undefined;
 
 async function getDatabaseKey(): Promise<string> {
-  const existing = await SecureStore.getItemAsync(DATABASE_KEY_SETTING);
-  if (existing) {
-    return existing;
-  }
+  const keyName = getDbKeyName();
+  const existing = await SecureStore.getItemAsync(keyName);
+  if (existing) return existing;
   const bytes = await Crypto.getRandomBytesAsync(32);
   const created = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-  await SecureStore.setItemAsync(DATABASE_KEY_SETTING, created);
+  await SecureStore.setItemAsync(keyName, created);
   return created;
 }
 
 async function openDatabase(): Promise<SQLite.SQLiteDatabase> {
-  const db = await SQLite.openDatabaseAsync(DB_NAME);
+  const db = await SQLite.openDatabaseAsync(getDbName());
   const key = await getDatabaseKey();
   await db.execAsync(`PRAGMA key = "x'${key}'";`);
   const cipher = await db.getFirstAsync<{ cipher_version: string }>('PRAGMA cipher_version;');
@@ -34,4 +32,15 @@ async function openDatabase(): Promise<SQLite.SQLiteDatabase> {
 export function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   databasePromise ??= openDatabase();
   return databasePromise;
+}
+
+/** Close current DB and reset promise — call after switching users */
+export async function resetDatabase(): Promise<void> {
+  if (databasePromise) {
+    try {
+      const db = await databasePromise;
+      await db.closeAsync();
+    } catch { /* ignore close errors */ }
+  }
+  databasePromise = undefined;
 }

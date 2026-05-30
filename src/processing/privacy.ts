@@ -40,8 +40,11 @@ export function containsCredentialSecret(text: string): boolean {
   return credentialSignals.some((signal) => signal.test(text));
 }
 
+/** Shows the actual text to the owner — they should see their own data.
+ *  Only blocks sending to remote AI. Adds a lock prefix so user knows it's stored privately. */
 export function protectedPreview(text: string): string {
-  return containsCredentialSecret(text) ? 'Protected credential content stored on this device.' : text;
+  if (!text) return text;
+  return containsCredentialSecret(text) ? `🔒 ${text}` : text;
 }
 
 export function protectCredentialExtraction(
@@ -51,34 +54,23 @@ export function protectCredentialExtraction(
   if (!containsCredentialSecret(originalInput)) {
     return extraction;
   }
-  const shouldCreateTask = /\b(change|update|reset|rotate|replace)\b/i.test(originalInput);
+  // Keep extraction as-is for local display — just mark it private so it never leaves the device.
+  // The actual content is stored and readable by the owner; remote AI never sees the raw value.
+  const shouldCreateTask = /\b(change|update|reset|rotate|replace|need to|todo)\b/i.test(originalInput);
+  const task = shouldCreateTask
+    ? [{
+        task: extraction.tasks[0]?.task ?? 'Update credential',
+        category: 'other' as const,
+        urgency: 'medium' as const,
+        context: '',
+      }]
+    : extraction.tasks;
+
   return {
     ...extraction,
-    title: 'Protected credential thought',
-    summary: 'Credential-related thought stored privately on this device.',
-    projects: [],
-    areas: [],
-    people: [],
-    tasks: shouldCreateTask
-      ? [{
-          task: 'Change protected credential',
-          category: 'other',
-          urgency: 'medium',
-          context: 'Stored privately on this device.',
-        }]
-      : [],
-    expenses: [],
-    ideas: [],
-    places: [],
-    interests: [],
-    decisions: [],
-    reminders: extraction.reminders.map((reminder) => ({
-      ...reminder,
-      text: 'Review protected credential',
-    })),
-    tags: ['protected-credential'],
-    suggested_folders: [],
-    clarifications: [],
+    privacy_level: 'private',
+    tasks: task,
+    tags: [...(extraction.tags ?? []), 'private-credential'],
   };
 }
 

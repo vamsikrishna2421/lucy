@@ -21,6 +21,7 @@ interface SettingsScreenProps {
   refreshToken: number;
   onChangeBackground: (enabled: boolean) => Promise<boolean>;
   onReprocessAll: () => Promise<number>;
+  onBrainSwitch: () => void;
 }
 
 type SettingsPanel = 'intelligence' | 'remote' | 'background' | 'organization' | 'queue' | 'privacy' | 'profile' | 'connectors' | null;
@@ -28,7 +29,7 @@ type SettingsPanel = 'intelligence' | 'remote' | 'background' | 'organization' |
 const emptyQueue: CaptureQueueSummary = { queued: 0, processing: 0, retrying: 0, complete: 0, archived: 0 };
 const emptyRemote: RemoteAccessState = { enabled: false, hasKey: false, usingDevelopmentKey: false, modelName: 'gpt-5.4-nano' };
 
-export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll }: SettingsScreenProps) {
+export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll, onBrainSwitch }: SettingsScreenProps) {
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
   const [queue, setQueue] = useState(emptyQueue);
   const [background, setBackground] = useState<BackgroundProcessingState>();
@@ -53,6 +54,10 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [checkInEnabled, setCheckInEnabled] = useState(false);
   const [aiModel, setAiModel] = useState('gpt-4o-mini');
   const [seedingDemo, setSeedingDemo] = useState(false);
+  const [brainUsers, setBrainUsers] = useState<Array<{ id: string; name: string; isDemo?: boolean }>>([]);
+  const [activeBrainId, setActiveBrainId] = useState('main');
+  const [newBrainName, setNewBrainName] = useState('');
+  const [switchingBrain, setSwitchingBrain] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -67,6 +72,11 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       const { getSetting: gs } = await import('../db/settings');
       const storedModel = await gs(db, 'ai_model_override');
       if (storedModel) setAiModel(storedModel);
+
+      const { listUsers, getActiveUser } = await import('../db/userManager');
+      const users = await listUsers();
+      setBrainUsers(users);
+      setActiveBrainId(getActiveUser().id);
       setQueue(queueSummary);
       setBackground(state);
       setOrganizationRun(latestRun);
@@ -394,29 +404,99 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           ))}
         </View>
 
-        {/* Demo seed */}
+        {/* Brain Switcher */}
+        <View style={{ paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider }}>
+          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '800', marginBottom: 4 }}>
+            ◉ Brains on this device
+          </Text>
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginBottom: 12 }}>
+            Each brain is a completely separate memory — your own, a family member's, or a demo.
+          </Text>
+          {brainUsers.map((u) => (
+            <TouchableOpacity
+              key={u.id}
+              disabled={u.id === activeBrainId || switchingBrain}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 12, backgroundColor: u.id === activeBrainId ? LUCY_COLORS.primarySoft : LUCY_COLORS.surface, borderRadius: 12, marginBottom: 6, borderWidth: 1, borderColor: u.id === activeBrainId ? LUCY_COLORS.primary : LUCY_COLORS.border }}
+              onPress={async () => {
+                setSwitchingBrain(true);
+                try {
+                  const { switchUser } = await import('../db/userManager');
+                  const { resetDatabase } = await import('../db');
+                  await switchUser(u);
+                  await resetDatabase();
+                  setActiveBrainId(u.id);
+                  onBrainSwitch();
+                } finally { setSwitchingBrain(false); }
+              }}
+            >
+              <Text style={{ fontSize: 20 }}>{u.isDemo ? '🎭' : '◈'}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700' }}>{u.name}</Text>
+                {u.id === activeBrainId ? <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '700' }}>Active</Text> : null}
+              </View>
+              {u.id === activeBrainId
+                ? <Text style={{ color: LUCY_COLORS.primary, fontSize: 16 }}>✓</Text>
+                : <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13 }}>{switchingBrain ? '...' : 'Switch'}</Text>}
+            </TouchableOpacity>
+          ))}
+
+          {/* Add new brain */}
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+            <TextInput
+              style={{ flex: 1, backgroundColor: LUCY_COLORS.surface, borderRadius: 10, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingHorizontal: 12, paddingVertical: 9, color: LUCY_COLORS.textDark, fontSize: 14 }}
+              placeholder="New brain name (e.g. Nisha)"
+              placeholderTextColor={LUCY_COLORS.textSubtle}
+              value={newBrainName}
+              onChangeText={setNewBrainName}
+            />
+            <TouchableOpacity
+              style={{ backgroundColor: LUCY_COLORS.primary, borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center', opacity: newBrainName.trim() ? 1 : 0.4 }}
+              disabled={!newBrainName.trim()}
+              onPress={async () => {
+                const id = newBrainName.trim().toLowerCase().replace(/\s+/g, '_');
+                const user = { id, name: newBrainName.trim() };
+                const { addUser } = await import('../db/userManager');
+                await addUser(user);
+                setBrainUsers((prev) => [...prev.filter((u) => u.id !== id), user]);
+                setNewBrainName('');
+                Alert.alert('Brain created', `"${user.name}" is ready. Tap Switch to open it.`);
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Add</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Demo Brain button */}
         <TouchableOpacity
-          style={{ marginHorizontal: 16, marginVertical: 8, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          style={{ marginHorizontal: 16, marginVertical: 8, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#F472B6' + '55', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
           onPress={async () => {
             setSeedingDemo(true);
             try {
+              const { switchUser, addUser, DEMO_USER } = await import('../db/userManager');
+              const { resetDatabase } = await import('../db');
+              await addUser(DEMO_USER);
+              await switchUser(DEMO_USER);
+              await resetDatabase();
               const db = await getDatabase();
               const { setSetting: ss } = await import('../db/settings');
-              await ss(db, 'demo_data_seeded', ''); // clear flag so seed runs again
+              await ss(db, 'demo_data_seeded', '');
               const { seedDemoDataIfNeeded } = await import('../processing/demoSeed');
               await seedDemoDataIfNeeded(db);
-              Alert.alert('Demo data loaded', '5 realistic captures added. Go to Timeline to see them.');
+              setBrainUsers((prev) => [...prev.filter((u) => u.id !== 'demo'), DEMO_USER]);
+              setActiveBrainId('demo');
+              onBrainSwitch();
             } catch (e) {
-              Alert.alert('Could not load demo data', String(e));
+              Alert.alert('Could not switch to demo brain', String(e));
             } finally { setSeedingDemo(false); }
           }}
           disabled={seedingDemo}
         >
           <View style={{ flex: 1 }}>
-            <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700' }}>Load demo data</Text>
-            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 2 }}>Adds 5 realistic captures for demo / testing</Text>
+            <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700' }}>🎭 Switch to Demo Brain</Text>
+            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 2 }}>Your brain stays safe. Switch back above.</Text>
           </View>
-          <Text style={{ color: LUCY_COLORS.primary, fontSize: 22 }}>{seedingDemo ? '⏳' : '▶'}</Text>
+          <Text style={{ color: '#F472B6', fontSize: 22 }}>{seedingDemo ? '⏳' : '→'}</Text>
         </TouchableOpacity>
         <SettingsRow
           title="On-device intelligence"

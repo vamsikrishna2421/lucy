@@ -158,14 +158,14 @@ function CategoryModal({
   onAdd: (text: string) => void;
 }) {
   const [addText, setAddText] = useState('');
-  const [visibleItems, setVisibleItems] = useState<TodoRow[]>(category.items);
-  const [recentlyDone, setRecentlyDone] = useState<TodoRow[]>([]);
-  const undoTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  // allItems tracks every item with its state: pending or done-pending-undo
+  const [allItems, setAllItems] = useState<Array<{ todo: TodoRow; doneAt: number | null }>>(() =>
+    category.items.map((todo) => ({ todo, doneAt: null })),
+  );
   const slideAnim = useRef(new Animated.Value(400)).current;
 
   useEffect(() => {
     Animated.spring(slideAnim, { toValue: 0, friction: 9, tension: 70, useNativeDriver: true }).start();
-    return () => { undoTimers.current.forEach(clearTimeout); };
   }, []);
 
   const close = () => {
@@ -173,27 +173,23 @@ function CategoryModal({
   };
 
   const handleCheck = (todo: TodoRow) => {
-    // Remove from visible list immediately
-    setVisibleItems((prev) => prev.filter((t) => t.id !== todo.id));
-    setRecentlyDone((prev) => [...prev, todo]);
-
-    // Auto-commit after 4 seconds if not undone
-    const timer = setTimeout(() => {
-      onComplete(todo);
-      setRecentlyDone((prev) => prev.filter((t) => t.id !== todo.id));
-      undoTimers.current.delete(todo.id);
-    }, 4000);
-    undoTimers.current.set(todo.id, timer);
+    // Mark done inline — no auto-archive, stays undoable until modal is closed
+    setAllItems((prev) => prev.map((item) => item.todo.id === todo.id ? { ...item, doneAt: Date.now() } : item));
   };
 
   const handleUndo = (todo: TodoRow) => {
-    const timer = undoTimers.current.get(todo.id);
-    if (timer) { clearTimeout(timer); undoTimers.current.delete(todo.id); }
-    setRecentlyDone((prev) => prev.filter((t) => t.id !== todo.id));
-    setVisibleItems((prev) => [...prev, todo]);
+    setAllItems((prev) => prev.map((item) => item.todo.id === todo.id ? { ...item, doneAt: null } : item));
   };
 
-  const urgentCount = visibleItems.filter((t) => t.urgency === 'high').length;
+  const handleClose = () => {
+    // Commit all checked items when closing
+    const doneItems = allItems.filter((i) => i.doneAt !== null).map((i) => i.todo);
+    doneItems.forEach((todo) => onComplete(todo));
+    close();
+  };
+
+  const pendingCount = allItems.filter((i) => i.doneAt === null).length;
+  const urgentCount = allItems.filter((i) => i.doneAt === null && i.todo.urgency === 'high').length;
 
   return (
     <Modal transparent animationType="none" visible onRequestClose={close}>
@@ -206,46 +202,45 @@ function CategoryModal({
               <View style={{ flex: 1 }}>
                 <Text style={cmStyles.title}>{category.label}</Text>
                 <Text style={cmStyles.subtitle}>
-                  {visibleItems.length} item{visibleItems.length !== 1 ? 's' : ''}
-                  {urgentCount > 0 ? ` · ${urgentCount} urgent` : ''}
+                  {pendingCount} remaining{urgentCount > 0 ? ` · ${urgentCount} urgent` : ''}
                 </Text>
               </View>
-              <TouchableOpacity onPress={close} style={cmStyles.closeBtn}>
+              <TouchableOpacity onPress={handleClose} style={cmStyles.closeBtn}>
                 <Text style={cmStyles.closeBtnText}>Done</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Checklist */}
+            {/* Checklist — pending + done items shown together */}
             <ScrollView style={cmStyles.list} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              {visibleItems.map((todo) => (
-                <AnimatedTodoRow
-                  key={todo.id}
-                  todo={todo}
-                  onPress={() => handleCheck(todo)}
-                  onLongPress={() => {}}
-                />
-              ))}
-              {visibleItems.length === 0 && recentlyDone.length === 0 ? (
+              {allItems.map(({ todo, doneAt }) =>
+                doneAt === null ? (
+                  // Pending item — normal animated row
+                  <AnimatedTodoRow
+                    key={todo.id}
+                    todo={todo}
+                    onPress={() => handleCheck(todo)}
+                    onLongPress={() => {}}
+                  />
+                ) : (
+                  // Done item — inline with undo button
+                  <View key={todo.id} style={cmStyles.doneInlineRow}>
+                    <View style={cmStyles.doneInlineCheck}>
+                      <Text style={{ color: '#4ADE80', fontSize: 13, fontWeight: '900' }}>✓</Text>
+                    </View>
+                    <Text style={cmStyles.doneInlineText} numberOfLines={1}>{todo.task}</Text>
+                    <TouchableOpacity style={cmStyles.undoBtn} onPress={() => handleUndo(todo)}>
+                      <Text style={cmStyles.undoBtnText}>Undo</Text>
+                    </TouchableOpacity>
+                  </View>
+                )
+              )}
+              {allItems.length === 0 ? (
                 <Text style={{ color: LUCY_COLORS.textSubtle, textAlign: 'center', padding: 24, fontSize: 14 }}>
                   All done! ✓
                 </Text>
               ) : null}
               <View style={{ height: 8 }} />
             </ScrollView>
-
-            {/* Undo bar — shows recently checked items */}
-            {recentlyDone.length > 0 ? (
-              <View style={cmStyles.undoBar}>
-                {recentlyDone.map((todo) => (
-                  <View key={todo.id} style={cmStyles.undoItem}>
-                    <Text style={cmStyles.undoItemText} numberOfLines={1}>✓ {todo.task}</Text>
-                    <TouchableOpacity style={cmStyles.undoBtn} onPress={() => handleUndo(todo)}>
-                      <Text style={cmStyles.undoBtnText}>Undo</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            ) : null}
 
             {/* Quick add */}
             <View style={cmStyles.addBar}>
@@ -288,9 +283,9 @@ const cmStyles = StyleSheet.create({
   addBar: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider },
   addInput: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, color: LUCY_COLORS.textDark, fontSize: 15, borderWidth: 1, borderColor: LUCY_COLORS.border },
   addBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center' },
-  undoBar: { backgroundColor: LUCY_COLORS.surfaceRaised, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, paddingHorizontal: 16, paddingVertical: 8, gap: 6 },
-  undoItem: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  undoItemText: { flex: 1, color: LUCY_COLORS.textSubtle, fontSize: 13, textDecorationLine: 'line-through' },
+  doneInlineRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 4, opacity: 0.7 },
+  doneInlineCheck: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(74,222,128,0.15)', alignItems: 'center', justifyContent: 'center' },
+  doneInlineText: { flex: 1, color: LUCY_COLORS.textSubtle, fontSize: 14, textDecorationLine: 'line-through' },
   undoBtn: { paddingHorizontal: 12, paddingVertical: 5, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 8, borderWidth: 1, borderColor: LUCY_COLORS.primary + '55' },
   undoBtnText: { color: LUCY_COLORS.primary, fontSize: 12, fontWeight: '700' },
 });

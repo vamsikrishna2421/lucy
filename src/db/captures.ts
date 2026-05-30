@@ -156,6 +156,31 @@ const CAPTURE_DERIVED_TABLES = [
   'extractions', 'capture_embeddings',
 ] as const;
 
+/** Deletes every derived row for a capture (tasks, ideas, expenses, embeddings,
+ *  extraction evidence, …) WITHOUT touching the capture row. Used by both delete and
+ *  reprocess so re-running extraction can't leave stale/duplicate derived items. */
+export async function purgeCaptureDerivedData(db: SQLiteDatabase, id: number): Promise<void> {
+  for (const table of CAPTURE_DERIVED_TABLES) {
+    await db.runAsync(`DELETE FROM ${table} WHERE capture_id = ?`, id);
+  }
+}
+
+/**
+ * Resets a capture for reprocessing: purges its previously-extracted derived rows and
+ * clears the extracted result so re-running extraction starts clean (no duplicates),
+ * then re-queues it. Returns it to the processing queue (processed = 0).
+ */
+export async function resetCaptureForReprocess(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await purgeCaptureDerivedData(db, id);
+    await db.runAsync(
+      `UPDATE captures SET processed = 0, processing_error = NULL, attempt_count = 0,
+       next_attempt_at = NULL, extracted_title = NULL, structured_text = NULL WHERE id = ?`,
+      id,
+    );
+  });
+}
+
 /**
  * Fully removes a memory from the "brain": purges every derived row (tasks, ideas,
  * expenses, embeddings, extraction evidence, …) for the capture and any child update
@@ -169,9 +194,7 @@ export async function deleteCaptureCompletely(db: SQLiteDatabase, id: number, re
   const ids = [id, ...children.map((c) => c.id)];
   await db.withTransactionAsync(async () => {
     for (const captureId of ids) {
-      for (const table of CAPTURE_DERIVED_TABLES) {
-        await db.runAsync(`DELETE FROM ${table} WHERE capture_id = ?`, captureId);
-      }
+      await purgeCaptureDerivedData(db, captureId);
     }
     // Detach + archive child update captures so they don't dangle, then archive the parent.
     for (const child of children) {

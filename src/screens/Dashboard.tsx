@@ -451,10 +451,9 @@ function TimelineView({
 
   const reprocessCapture = async (capture: CaptureRow) => {
     const db = await getDatabase();
-    await db.runAsync(
-      'UPDATE captures SET processed = 0, processing_error = NULL, attempt_count = 0, extracted_title = NULL, structured_text = NULL WHERE id = ?',
-      capture.id,
-    );
+    // Purge previously-extracted items first so reprocessing can't leave duplicates.
+    const { resetCaptureForReprocess } = await import('../db/captures');
+    await resetCaptureForReprocess(db, capture.id);
     onFeedback();
   };
 
@@ -625,6 +624,26 @@ function TimelineView({
                         <Text style={styles.tlTitle} numberOfLines={isExpanded ? undefined : 2}>
                           {protectedPreview(item.extracted_title)}
                         </Text>
+                      ) : item.processed === -1 ? (
+                        // Failed / retrying — surface it instead of an endless "Organizing..."
+                        <View style={{ gap: 4 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#F59E0B' }} />
+                            <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>
+                              Couldn't organize — tap ⋯ to retry
+                            </Text>
+                          </View>
+                          {item.raw_transcript ? (
+                            <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 18 }} numberOfLines={2}>
+                              {item.raw_transcript.slice(0, 120)}
+                            </Text>
+                          ) : null}
+                          {isExpanded && item.processing_error ? (
+                            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, fontStyle: 'italic' }} numberOfLines={3}>
+                              {item.processing_error}
+                            </Text>
+                          ) : null}
+                        </View>
                       ) : (
                         // Not yet processed — show "Organizing..." + brief snippet so user knows what it is
                         <View style={{ gap: 4 }}>

@@ -22,9 +22,11 @@ const { AudioRecorder: AR } = require('expo-audio') as { AudioRecorder: new (opt
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import { listPendingTodos, archiveTodo, type TodoRow } from '../db/todos';
-import { enqueueTranscript } from '../processing/extract';
+import { enqueueTranscript, analyzeTranscript } from '../processing/extract';
 import { transcribeAudioFile } from '../audio/WhisperTranscriber';
 import { getRemoteAccessState } from '../ai/remoteAccess';
+import { CaptureReplay } from '../components/CaptureReplay';
+import type { ExtractionResult } from '../types/extraction';
 
 // On-device STT for the voice button (iOS: SFSpeechRecognizer)
 let Voice: { default: { onSpeechResults: ((e: { value?: string[] }) => void) | null; onSpeechEnd: ((e: unknown) => void) | null; onSpeechError: ((e: unknown) => void) | null; start(l: string): Promise<void>; stop(): Promise<void>; destroy(): Promise<void> } } | null = null;
@@ -158,6 +160,7 @@ export function CaptureScreen({
   const [editText, setEditText] = useState('');
   const [voiceRecording, setVoiceRecording] = useState(false);
   const [scanningReceipt, setScanningReceipt] = useState(false);
+  const [replayExtraction, setReplayExtraction] = useState<ExtractionResult | null>(null);
   type RecInst = { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void };
   const audioRecorder = useRef<RecInst | null>(null);
 
@@ -312,8 +315,14 @@ export function CaptureScreen({
       setText('');
       setAcknowledgement(markedPrivate ? 'Protected thought queued' : 'Got it');
       setMarkedPrivate(false);
-      setTimeout(() => setAcknowledgement(''), 2000);
       onQueued();
+
+      // Run extraction in background to power the Live Capture Replay
+      if (!markedPrivate) {
+        analyzeTranscript(outgoing).then(setReplayExtraction).catch(() => {});
+      }
+
+      setTimeout(() => setAcknowledgement(''), 2000);
     } catch (error) {
       Alert.alert('Could not save this', error instanceof Error ? error.message : 'Unknown error');
     } finally {
@@ -539,6 +548,14 @@ export function CaptureScreen({
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Live Capture Replay — the "wow moment" */}
+      {replayExtraction ? (
+        <CaptureReplay
+          extraction={replayExtraction}
+          onDismiss={() => setReplayExtraction(null)}
+        />
+      ) : null}
     </View>
   );
 }

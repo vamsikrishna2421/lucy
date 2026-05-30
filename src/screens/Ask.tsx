@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   Keyboard,
   Platform,
   ScrollView,
@@ -79,6 +81,11 @@ export function AskScreen() {
     try {
       const db = await getDatabase();
       let stored = await getStoredInsights(db);
+
+      // Always prepend HealthKit insights (real-time steps / sleep / HR)
+      const { generateHealthInsights } = await import('../processing/healthInsights');
+      const healthInsights = await generateHealthInsights().catch(() => [] as typeof stored);
+
       if (stored.length === 0) {
         // Also add device intelligence as insights
         const { generateDeviceIntelligence } = await import('../processing/deviceInsights');
@@ -97,7 +104,7 @@ export function AskScreen() {
           stored = generated;
         }
       }
-      setInsights(stored);
+      setInsights([...healthInsights, ...stored]);
     } finally {
       setLoadingInsights(false);
     }
@@ -291,14 +298,109 @@ export function AskScreen() {
   );
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  habits: '#FF8C42',
-  relationships: '#60A5FA',
-  progress: '#4ADE80',
-  wellbeing: '#F472B6',
-  memory: '#FFA05C',
-  device: '#A78BFA',
+const CATEGORY_META: Record<string, { color: string; icon: string; label: string }> = {
+  habits:        { color: '#FF8C42', icon: '◈', label: 'Habit' },
+  relationships: { color: '#60A5FA', icon: '◉', label: 'People' },
+  progress:      { color: '#4ADE80', icon: '▲', label: 'Progress' },
+  wellbeing:     { color: '#F472B6', icon: '♡', label: 'Health' },
+  memory:        { color: '#FFA05C', icon: '⟳', label: 'Memory' },
+  device:        { color: '#A78BFA', icon: '⌘', label: 'Device' },
 };
+
+function InsightCard({
+  insight,
+  index,
+  expanded,
+  onToggle,
+  onAskThis,
+}: {
+  insight: GeneratedInsight;
+  index: number;
+  expanded: boolean;
+  onToggle: () => void;
+  onAskThis: (q: string) => void;
+}) {
+  const meta = CATEGORY_META[insight.category] ?? { color: LUCY_COLORS.primary, icon: '✦', label: 'Insight' };
+  const expandAnim = useRef(new Animated.Value(0)).current;
+  const mountAnim = useRef(new Animated.Value(0)).current;
+  const chevronAnim = useRef(new Animated.Value(0)).current;
+
+  // Staggered mount animation
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      Animated.spring(mountAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 60,
+        useNativeDriver: true,
+      }).start();
+    }, index * 80);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Expand / collapse
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(expandAnim, {
+        toValue: expanded ? 1 : 0,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }),
+      Animated.timing(chevronAnim, {
+        toValue: expanded ? 1 : 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [expanded]);
+
+  const answerMaxHeight = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 300] });
+  const answerOpacity   = expandAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0, 1] });
+  const chevronRotate   = chevronAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+
+  return (
+    <Animated.View
+      style={[
+        icStyles.card,
+        {
+          borderLeftColor: meta.color,
+          opacity: mountAnim,
+          transform: [
+            { translateY: mountAnim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) },
+            { scale: mountAnim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) },
+          ],
+        },
+      ]}
+    >
+      <TouchableOpacity onPress={onToggle} activeOpacity={0.75} style={icStyles.header}>
+        <View style={[icStyles.iconBadge, { backgroundColor: meta.color + '20' }]}>
+          <Text style={[icStyles.icon, { color: meta.color }]}>{meta.icon}</Text>
+        </View>
+        <View style={icStyles.headerText}>
+          <Text style={[icStyles.category, { color: meta.color }]}>{meta.label.toUpperCase()}</Text>
+          <Text style={icStyles.question}>{insight.question}</Text>
+        </View>
+        <Animated.Text style={[icStyles.chevron, { transform: [{ rotate: chevronRotate }] }]}>▾</Animated.Text>
+      </TouchableOpacity>
+
+      <Animated.View style={{ maxHeight: answerMaxHeight, opacity: answerOpacity, overflow: 'hidden' }}>
+        <View style={icStyles.answerBody}>
+          <View style={[icStyles.answerAccent, { backgroundColor: meta.color }]} />
+          <View style={{ flex: 1, gap: 12 }}>
+            <Text style={icStyles.answerText}>{insight.answer}</Text>
+            <TouchableOpacity
+              style={[icStyles.askBtn, { borderColor: meta.color + '66' }]}
+              onPress={() => onAskThis(insight.question)}
+            >
+              <Text style={[icStyles.askBtnText, { color: meta.color }]}>Ask follow-up →</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Animated.View>
+    </Animated.View>
+  );
+}
 
 function InsightsView({
   insights,
@@ -313,12 +415,20 @@ function InsightsView({
   onToggle: (i: number) => void;
   onAskThis: (q: string) => void;
 }) {
+  const healthInsights = insights.filter((i) => i.category === 'wellbeing' && i.generatedAt);
+  const otherInsights  = insights.filter((i) => !(i.category === 'wellbeing' && healthInsights.includes(i)));
+
   return (
-    <ScrollView style={styles.conversation} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+    <ScrollView
+      style={styles.conversation}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 48 }}
+    >
       <View style={styles.insightsHeader}>
         <Text style={styles.insightsTitle}>What LUCY noticed</Text>
-        <Text style={styles.insightsSub}>Questions LUCY can answer today, based on your memories and patterns. Tap to reveal.</Text>
+        <Text style={styles.insightsSub}>Tap any card to reveal the insight.</Text>
       </View>
+
       {loading ? (
         <Text style={{ color: LUCY_COLORS.textSubtle, textAlign: 'center', marginTop: 40, fontSize: 14 }}>LUCY is thinking...</Text>
       ) : insights.length === 0 ? (
@@ -331,30 +441,99 @@ function InsightsView({
             <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 21 }}>
               1. Enable Remote Intelligence in Settings{'\n'}
               2. Add your OpenAI API key{'\n'}
-              3. Capture a few thoughts — LUCY generates observations overnight or tap here to generate now
+              3. Capture a few thoughts — LUCY generates them automatically
             </Text>
           </View>
         </View>
-      ) : insights.map((insight, i) => (
-        <TouchableOpacity key={i} style={styles.insightCard} onPress={() => onToggle(i)} activeOpacity={0.75}>
-          <View style={styles.insightCardTop}>
-            <View style={[styles.insightDot, { backgroundColor: CATEGORY_COLORS[insight.category] ?? LUCY_COLORS.primary }]} />
-            <Text style={styles.insightQuestion}>{insight.question}</Text>
-            <Text style={styles.insightChevron}>{expanded === i ? '▲' : '▼'}</Text>
-          </View>
-          {expanded === i ? (
-            <View style={styles.insightAnswer}>
-              <Text style={styles.insightAnswerText}>{insight.answer}</Text>
-              <TouchableOpacity style={styles.insightAskBtn} onPress={() => onAskThis(insight.question)}>
-                <Text style={styles.insightAskBtnText}>Ask follow-up →</Text>
-              </TouchableOpacity>
-            </View>
+      ) : (
+        <>
+          {healthInsights.length > 0 ? (
+            <>
+              <Text style={icStyles.sectionLabel}>♡  Health & Activity</Text>
+              {healthInsights.map((insight, i) => (
+                <InsightCard
+                  key={`health-${i}`}
+                  insight={insight}
+                  index={i}
+                  expanded={expanded === insights.indexOf(insight)}
+                  onToggle={() => onToggle(insights.indexOf(insight))}
+                  onAskThis={onAskThis}
+                />
+              ))}
+            </>
           ) : null}
-        </TouchableOpacity>
-      ))}
+
+          {otherInsights.length > 0 ? (
+            <>
+              {healthInsights.length > 0 ? <Text style={[icStyles.sectionLabel, { marginTop: 8 }]}>✦  Memory & Patterns</Text> : null}
+              {otherInsights.map((insight, i) => (
+                <InsightCard
+                  key={`insight-${i}`}
+                  insight={insight}
+                  index={healthInsights.length + i}
+                  expanded={expanded === insights.indexOf(insight)}
+                  onToggle={() => onToggle(insights.indexOf(insight))}
+                  onAskThis={onAskThis}
+                />
+              ))}
+            </>
+          ) : null}
+        </>
+      )}
     </ScrollView>
   );
 }
+
+const icStyles = StyleSheet.create({
+  sectionLabel: {
+    fontSize: 11, fontWeight: '800', letterSpacing: 1.4, color: LUCY_COLORS.textSubtle,
+    textTransform: 'uppercase', marginBottom: 10, marginTop: 4,
+  },
+  card: {
+    backgroundColor: LUCY_COLORS.surfaceRaised,
+    borderRadius: 18,
+    borderLeftWidth: 3,
+    marginBottom: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: LUCY_COLORS.border,
+  },
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: 16,
+  },
+  iconBadge: {
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  icon: { fontSize: 17, fontWeight: '800' },
+  headerText: { flex: 1, gap: 3 },
+  category: {
+    fontSize: 10, fontWeight: '800', letterSpacing: 1.2,
+  },
+  question: {
+    fontSize: 15, fontWeight: '600', color: LUCY_COLORS.textDark, lineHeight: 21,
+  },
+  chevron: {
+    fontSize: 18, color: LUCY_COLORS.textSubtle, flexShrink: 0,
+  },
+  answerBody: {
+    flexDirection: 'row', gap: 12,
+    paddingHorizontal: 16, paddingBottom: 18,
+  },
+  answerAccent: {
+    width: 2, borderRadius: 1, alignSelf: 'stretch', flexShrink: 0, opacity: 0.6,
+  },
+  answerText: {
+    fontSize: 14, color: LUCY_COLORS.textMuted, lineHeight: 22,
+  },
+  askBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 8, borderWidth: 1,
+  },
+  askBtnText: { fontSize: 13, fontWeight: '600' },
+});
 
 function HistoryView({
   history,

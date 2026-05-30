@@ -117,6 +117,12 @@ export default function App() {
         if (backgroundPreference === 'true') {
           setBackgroundEnabled(await enableBackgroundProcessing());
         }
+        // Seed demo data for judges on first launch
+        try {
+          const { seedDemoDataIfNeeded } = await import('./src/processing/demoSeed');
+          await seedDemoDataIfNeeded(db);
+        } catch { /* non-critical */ }
+
         setReady(true);
         void drainQueue();
         // Show onboarding for first-time users

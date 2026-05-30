@@ -15,7 +15,7 @@ import { getDatabase } from './src/db';
 import { resetInterruptedCaptures } from './src/db/captures';
 import { getSetting, setSetting } from './src/db/settings';
 import { disableBackgroundProcessing, enableBackgroundProcessing } from './src/processing/background';
-import { enqueueTranscript, processQueue } from './src/processing/extract';
+import { dedupePendingTodos, enqueueTranscript, processQueue } from './src/processing/extract';
 import { autoRestoreDeviceModel, initializeDeviceModelSelection } from './src/ai/device';
 import { archiveUnmatchedCompletionRetries } from './src/processing/followUp';
 import { initializeNotifications } from './src/processing/notifications';
@@ -110,6 +110,11 @@ export default function App() {
         await resetInterruptedCaptures(db);
         await archiveUnmatchedCompletionRetries(db);
         await archiveMisclassifiedArtifacts(db);
+        // One-time cleanup of duplicate pending todos from the pre-1.0.53 dedup gap.
+        if (await getSetting(db, 'todo_dedup_v1_done') !== 'true') {
+          try { await dedupePendingTodos(db); } catch { /* non-critical */ }
+          await setSetting(db, 'todo_dedup_v1_done', 'true');
+        }
         await organizeMemory(db, 'startup');
         initializeVault();
         await initializeNotifications();

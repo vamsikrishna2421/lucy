@@ -8,7 +8,6 @@ import { answerContextRequest, listOpenContextRequests, type ContextRequestRow }
 import { listExpenses, type ExpenseRow } from '../db/expenses';
 import { listIdeas, type IdeaRow } from '../db/ideas';
 import { listInterests, type InterestRow } from '../db/interests';
-import { getLatestOrganizationRun, listKnowledgeConnections, listKnowledgeEntities, listKnowledgeInsights, type KnowledgeConnectionRow, type KnowledgeEntityRow, type KnowledgeInsightRow, type OrganizationRunRow } from '../db/knowledge';
 import { listOpenLoops, resolveOpenLoop, type OpenLoopRow } from '../db/openLoops';
 import { listFollowUps, resolveFollowUp, type FollowUpRow } from '../db/followUps';
 // Music detection removed
@@ -21,7 +20,7 @@ import { enqueueTranscript } from '../processing/extract';
 import { archiveTodo } from '../db/todos';
 
 type ViewMode = 'Focus Now' | 'Timeline' | 'Brain';
-type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'Places' | 'Interests' | 'People';
+type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'People';
 
 function displayTimestamp(value: string): string {
   return new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`).toLocaleString();
@@ -68,10 +67,6 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   const [captures, setCaptures] = useState<CaptureRow[]>([]);
   const [updates, setUpdates] = useState<Record<number, CaptureRow[]>>({});
   const [contextRequests, setContextRequests] = useState<ContextRequestRow[]>([]);
-  const [knowledgeEntities, setKnowledgeEntities] = useState<KnowledgeEntityRow[]>([]);
-  const [knowledgeConnections, setKnowledgeConnections] = useState<KnowledgeConnectionRow[]>([]);
-  const [knowledgeInsights, setKnowledgeInsights] = useState<KnowledgeInsightRow[]>([]);
-  const [organizationRun, setOrganizationRun] = useState<OrganizationRunRow | null>(null);
   const [openLoops, setOpenLoops] = useState<OpenLoopRow[]>([]);
   const [followUps, setFollowUps] = useState<FollowUpRow[]>([]);
   const [moodTrend, setMoodTrend] = useState<{ dominant: string; positiveRatio: number; recentTones: string[] }>({ dominant: 'neutral', positiveRatio: 0.5, recentTones: [] });
@@ -91,10 +86,6 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
         listReminders(db),
         listRecentCaptures(db, 12),
         listOpenContextRequests(db),
-        listKnowledgeEntities(db),
-        listKnowledgeConnections(db),
-        listKnowledgeInsights(db),
-        getLatestOrganizationRun(db),
         listOpenLoops(db),
         listFollowUps(db),
       ]);
@@ -106,12 +97,8 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
       setReminders(results[5]);
       setCaptures(results[6]);
       setContextRequests(results[7]);
-      setKnowledgeEntities(results[8]);
-      setKnowledgeConnections(results[9]);
-      setKnowledgeInsights(results[10]);
-      setOrganizationRun(results[11]);
-      setOpenLoops(results[12]);
-      setFollowUps(results[13]);
+      setOpenLoops(results[8]);
+      setFollowUps(results[9]);
       try {
         const { getMoodTrend } = await import('../processing/temporalEngine');
         setMoodTrend(await getMoodTrend(db, 7));
@@ -336,57 +323,6 @@ function NeedsContextView({
         {!requests.length ? <EmptyLine text="Nothing needs clarification right now. LUCY will ask only when extra context can help." /> : null}
       </ScrollView>
     </KeyboardAvoidingView>
-  );
-}
-
-function KnowledgeView({
-  run,
-  entities,
-  connections,
-  insights,
-}: {
-  run: OrganizationRunRow | null;
-  entities: KnowledgeEntityRow[];
-  connections: KnowledgeConnectionRow[];
-  insights: KnowledgeInsightRow[];
-}) {
-  return (
-    <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.knowledgeHero}>
-        <Text style={styles.eyebrow}>UNDERSTAND + CONNECT</Text>
-        <Text style={styles.tonightTitle}>Memory Map</Text>
-        <Text style={styles.tonightDetail}>
-          {run?.summary ?? 'LUCY will form a map as structured memories accumulate.'}
-        </Text>
-        {run ? <Text style={styles.runTime}>Last organized {displayTimestamp(run.created_at)} / {run.trigger}</Text> : null}
-      </View>
-      <SectionTitle title="Learned Signals" />
-      {insights.map((insight) => (
-        <View style={styles.knowledgeCard} key={insight.id}>
-          <View style={styles.cardTop}>
-            <Text style={styles.cardTitle}>{protectedPreview(insight.title)}</Text>
-            <Text style={styles.confidence}>{insight.confidence}</Text>
-          </View>
-          <Text style={styles.detail}>{protectedPreview(insight.detail)}</Text>
-        </View>
-      ))}
-      {!insights.length ? <EmptyLine text="Clarifications and repeated questions will appear here as local learning signals." /> : null}
-      <SectionTitle title="Connections" />
-      {connections.map((connection) => (
-        <View style={styles.knowledgeCard} key={connection.id}>
-          <Text style={styles.connection}>
-            {connection.source_name} <Text style={styles.relation}>{connection.relation}</Text> {connection.target_name}
-          </Text>
-          <Text style={styles.detail}>{connection.explanation} / {connection.confidence}</Text>
-        </View>
-      ))}
-      {!connections.length ? <EmptyLine text="Connections appear when a memory contains related projects, people, areas, or interests." /> : null}
-      <SectionTitle title="Known Topics" />
-      {entities.slice(0, 12).map((entity) => (
-        <Card key={entity.id} title={entity.name} detail={`${entity.entity_type} / ${entity.confidence} / ${entity.evidence_count} observation${entity.evidence_count === 1 ? '' : 's'}`} privacy={entity.privacy_level} />
-      ))}
-      {!entities.length ? <EmptyLine text="No stable topics extracted yet." /> : null}
-    </ScrollView>
   );
 }
 
@@ -813,7 +749,7 @@ function LibraryView({
   places: PlaceRow[];
   interests: InterestRow[];
 }) {
-  const tabs: LibraryTab[] = ['Todos', 'Ideas', 'Expenses', 'Places', 'Interests', 'People'];
+  const tabs: LibraryTab[] = ['Todos', 'Ideas', 'Expenses', 'People'];
   return (
     <View style={styles.library}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs}>
@@ -827,8 +763,6 @@ function LibraryView({
         {tab === 'Todos' && todos.map((item) => <Card key={item.id} title={item.task} detail={`${item.category} / ${item.urgency} / ${item.status}`} privacy={item.privacy_level} />)}
         {tab === 'Ideas' && ideas.map((item) => <Card key={item.id} title={item.title} detail={item.description} privacy={item.privacy_level} />)}
         {tab === 'Expenses' && expenses.map((item) => <Card key={item.id} title={`${item.amount ?? '-'} - ${item.description}`} detail={item.category} privacy={item.privacy_level} />)}
-        {tab === 'Places' && places.map((item) => <Card key={item.id} title={item.name} detail={item.reason} privacy={item.privacy_level} />)}
-        {tab === 'Interests' && interests.map((item) => <Card key={item.id} title={item.topic} detail={`${item.strength} / mentioned ${item.mention_count} time(s)`} />)}
         {tab === 'People' && <PeopleTab />}
       </ScrollView>
     </View>

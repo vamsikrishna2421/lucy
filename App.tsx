@@ -110,13 +110,9 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
   useEffect(() => {
     void (async () => {
       try {
-        // Load active brain — but never auto-restore Demo brain on cold start
-        // Demo brain must be switched to explicitly by the user each session
-        const { loadActiveUser, getActiveUser, switchUser } = await import('./src/db/userManager');
+        // Load whichever brain was last active (including Eleanor if user switched to her)
+        const { loadActiveUser } = await import('./src/db/userManager');
         await loadActiveUser();
-        if (getActiveUser().id === 'demo') {
-          await switchUser({ id: 'main', name: 'My Brain' });
-        }
 
         const db = await getDatabase();
         await initializeDeviceModelSelection();

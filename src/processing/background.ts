@@ -12,6 +12,8 @@ import { sendMorningBrief, shouldSendMorningBrief } from './morningBrief';
 import { weeklyInsightIfDue } from './weeklyInsight';
 import { storeEmbedding } from '../ai/embeddings';
 import { listRecentCaptures } from '../db/captures';
+import { recordBatterySnapshot } from '../db/deviceStats';
+import * as Battery from 'expo-battery';
 
 export const BACKGROUND_PROCESSING_TASK = 'lucy-background-organizing';
 export const BACKGROUND_LAST_RUN_SETTING = 'background_processing_last_run';
@@ -43,6 +45,15 @@ if (!TaskManager.isTaskDefined(BACKGROUND_PROCESSING_TASK)) {
           await setSetting(db, 'daily_digest_last_sent', today);
         }
       }
+      // Record battery snapshot for device intelligence
+      try {
+        const [level, state] = await Promise.all([Battery.getBatteryLevelAsync(), Battery.getBatteryStateAsync()]);
+        const recentCount = await db.getFirstAsync<{ n: number }>(
+          `SELECT COUNT(*) as n FROM captures WHERE created_at > datetime('now', '-2 hours')`,
+        );
+        await recordBatterySnapshot(db, level, state === Battery.BatteryState.CHARGING, recentCount?.n ?? 0);
+      } catch { /* non-critical */ }
+
       // Backfill embeddings for any captures missing them
       try {
         const recentCaptures = await listRecentCaptures(db, 30);

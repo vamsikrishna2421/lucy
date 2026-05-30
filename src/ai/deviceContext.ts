@@ -1,5 +1,6 @@
 import * as Device from 'expo-device';
 import * as Battery from 'expo-battery';
+import { getDatabase } from '../db';
 
 export interface DeviceContext {
   timezone: string;
@@ -56,4 +57,33 @@ export function formatDeviceContext(ctx: DeviceContext): string {
     lines.push(`Battery: ${ctx.batteryLevel}%`);
   }
   return lines.join('\n');
+}
+
+// Enrich device context with LUCY usage patterns from DB
+export async function enrichWithUsagePatterns(ctx: DeviceContext): Promise<string> {
+  const base = formatDeviceContext(ctx);
+  try {
+    const db = await getDatabase();
+    const [captureCountToday, captureCountWeek, topHour] = await Promise.all([
+      db.getFirstAsync<{ n: number }>(`SELECT COUNT(*) as n FROM captures WHERE date(created_at) = date('now')`),
+      db.getFirstAsync<{ n: number }>(`SELECT COUNT(*) as n FROM captures WHERE created_at > datetime('now', '-7 days')`),
+      db.getFirstAsync<{ hour: number; cnt: number }>(
+        `SELECT strftime('%H', created_at) * 1 as hour, COUNT(*) as cnt
+         FROM captures WHERE created_at > datetime('now', '-7 days')
+         GROUP BY hour ORDER BY cnt DESC LIMIT 1`,
+      ),
+    ]);
+    const patterns = [
+      `Thoughts captured today: ${captureCountToday?.n ?? 0}`,
+      `Thoughts captured this week: ${captureCountWeek?.n ?? 0}`,
+    ];
+    if (topHour) {
+      const h = topHour.hour;
+      const label = h < 9 ? 'early morning' : h < 12 ? 'morning' : h < 15 ? 'midday' : h < 18 ? 'afternoon' : 'evening';
+      patterns.push(`Most active LUCY usage time: ${label} (${h}:00)`);
+    }
+    return `${base}\n${patterns.join('\n')}`;
+  } catch {
+    return base;
+  }
 }

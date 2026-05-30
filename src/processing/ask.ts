@@ -15,7 +15,7 @@ import { promptOpenAI } from '../ai/openai';
 import { promptDevice } from '../ai/device';
 import { memoryAnswerSystemPrompt } from '../ai/prompts';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
-import { getDeviceContext, formatDeviceContext } from '../ai/deviceContext';
+import { getDeviceContext, enrichWithUsagePatterns } from '../ai/deviceContext';
 
 export interface LucyMemoryConnection {
   statement: string;
@@ -255,7 +255,7 @@ async function answerWithLLM(question: string): Promise<LucyAnswer> {
 
   const userPrefix = buildUserContextPrefix(profile);
   const systemPrompt = `${userPrefix}${memoryAnswerSystemPrompt}`;
-  const deviceInfo = formatDeviceContext(deviceCtx);
+  const deviceInfo = await enrichWithUsagePatterns(deviceCtx);
   const input = `DEVICE CONTEXT (live data — always accurate):\n${deviceInfo}\n\nCAPTURED MEMORIES:\n---\n${context}\n---\n\nQuestion: ${question}`;
 
   let llmResponse: string;

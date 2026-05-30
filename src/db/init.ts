@@ -359,6 +359,17 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     await db.execAsync('ALTER TABLE reminders ADD COLUMN archive_reason TEXT;');
   }
   await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS battery_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      battery_level REAL NOT NULL,
+      is_charging INTEGER DEFAULT 0,
+      hour_of_day INTEGER NOT NULL,
+      day_of_week INTEGER NOT NULL,
+      captures_since_last INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_battery_recorded ON battery_snapshots(recorded_at);
+
     CREATE INDEX IF NOT EXISTS idx_open_loops_status ON open_loops(status, created_at);
     CREATE INDEX IF NOT EXISTS idx_follow_ups_status ON follow_ups(status, created_at);
     CREATE INDEX IF NOT EXISTS idx_music_captures_status ON music_captures(status, created_at);

@@ -7,11 +7,9 @@ import { captureStatus, listCaptureUpdates, listRecentCaptures, type CaptureRow 
 import { answerContextRequest, listOpenContextRequests, type ContextRequestRow } from '../db/contextRequests';
 import { listExpenses, type ExpenseRow } from '../db/expenses';
 import { listIdeas, type IdeaRow } from '../db/ideas';
-import { listInterests, type InterestRow } from '../db/interests';
 import { listOpenLoops, resolveOpenLoop, type OpenLoopRow } from '../db/openLoops';
 import { listFollowUps, resolveFollowUp, type FollowUpRow } from '../db/followUps';
 // Music detection removed
-import { listPlaces, type PlaceRow } from '../db/places';
 import { listReminders, type ReminderRow } from '../db/reminders';
 import { listTodos, type TodoRow } from '../db/todos';
 import { protectedPreview } from '../processing/privacy';
@@ -61,8 +59,6 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   const [todos, setTodos] = useState<TodoRow[]>([]);
   const [ideas, setIdeas] = useState<IdeaRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
-  const [places, setPlaces] = useState<PlaceRow[]>([]);
-  const [interests, setInterests] = useState<InterestRow[]>([]);
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [captures, setCaptures] = useState<CaptureRow[]>([]);
   const [updates, setUpdates] = useState<Record<number, CaptureRow[]>>({});
@@ -81,8 +77,6 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
         listTodos(db),
         listIdeas(db),
         listExpenses(db),
-        listPlaces(db),
-        listInterests(db),
         listReminders(db),
         listRecentCaptures(db, 12),
         listOpenContextRequests(db),
@@ -92,13 +86,11 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
       setTodos(results[0]);
       setIdeas(results[1]);
       setExpenses(results[2]);
-      setPlaces(results[3]);
-      setInterests(results[4]);
-      setReminders(results[5]);
-      setCaptures(results[6]);
-      setContextRequests(results[7]);
-      setOpenLoops(results[8]);
-      setFollowUps(results[9]);
+      setReminders(results[3]);
+      setCaptures(results[4]);
+      setContextRequests(results[5]);
+      setOpenLoops(results[6]);
+      setFollowUps(results[7]);
       try {
         const { getMoodTrend } = await import('../processing/temporalEngine');
         setMoodTrend(await getMoodTrend(db, 7));
@@ -117,7 +109,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
         }
         setMoodsByCapture(map);
       } catch { /* non-critical */ }
-      const nextUpdates = await listCaptureUpdates(db, results[6].map((capture) => capture.id));
+      const nextUpdates = await listCaptureUpdates(db, results[4].map((capture) => capture.id));
       setUpdates(groupUpdates(nextUpdates));
     })();
   }, [refreshToken, contextRefresh]);
@@ -148,8 +140,6 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
           todos={todos}
           ideas={ideas}
           expenses={expenses}
-          places={places}
-          interests={interests}
         />
       ) : null}
     </View>
@@ -738,16 +728,12 @@ function LibraryView({
   todos,
   ideas,
   expenses,
-  places,
-  interests,
 }: {
   tab: LibraryTab;
   setTab: (tab: LibraryTab) => void;
   todos: TodoRow[];
   ideas: IdeaRow[];
   expenses: ExpenseRow[];
-  places: PlaceRow[];
-  interests: InterestRow[];
 }) {
   const tabs: LibraryTab[] = ['Todos', 'Ideas', 'Expenses', 'People'];
   return (

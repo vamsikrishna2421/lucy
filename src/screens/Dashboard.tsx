@@ -75,6 +75,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   const [openLoops, setOpenLoops] = useState<OpenLoopRow[]>([]);
   const [followUps, setFollowUps] = useState<FollowUpRow[]>([]);
   const [moodTrend, setMoodTrend] = useState<{ dominant: string; positiveRatio: number; recentTones: string[] }>({ dominant: 'neutral', positiveRatio: 0.5, recentTones: [] });
+  const [onThisDay, setOnThisDay] = useState<import('../processing/onThisDay').OnThisDayMemory[]>([]);
   const [contextRefresh, setContextRefresh] = useState(0);
 
   useEffect(() => {
@@ -114,6 +115,10 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
         const { getMoodTrend } = await import('../processing/temporalEngine');
         setMoodTrend(await getMoodTrend(db, 7));
       } catch { /* non-critical */ }
+      try {
+        const { getOnThisDayMemories } = await import('../processing/onThisDay');
+        setOnThisDay(await getOnThisDayMemories(db));
+      } catch { /* non-critical */ }
       const nextUpdates = await listCaptureUpdates(db, results[6].map((capture) => capture.id));
       setUpdates(groupUpdates(nextUpdates));
     })();
@@ -135,7 +140,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
           </TouchableOpacity>
         ))}
       </View>
-      {view === 'Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onOpenContext={() => setView('Context')} onLoopResolved={() => setContextRefresh((v) => v + 1)} /> : null}
+      {view === 'Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => setView('Context')} onLoopResolved={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Context' ? (
         <NeedsContextView requests={contextRequests} onAnswered={() => setContextRefresh((value) => value + 1)} />
       ) : null}
@@ -166,6 +171,7 @@ function NowView({
   openLoops,
   followUps,
   moodTrend,
+  onThisDay,
   onOpenContext,
   onLoopResolved,
 }: {
@@ -176,6 +182,7 @@ function NowView({
   openLoops: OpenLoopRow[];
   followUps: FollowUpRow[];
   moodTrend: { dominant: string; positiveRatio: number; recentTones: string[] };
+  onThisDay: import('../processing/onThisDay').OnThisDayMemory[];
   onOpenContext: () => void;
   onLoopResolved: () => void;
 }) {
@@ -220,6 +227,18 @@ function NowView({
           </View>
         ) : null}
       </View>
+      {onThisDay.length > 0 ? (
+        <View style={styles.otdCard}>
+          <Text style={styles.otdLabel}>On this day</Text>
+          <Text style={styles.otdTitle}>
+            {onThisDay[0].yearsAgo === 1 ? 'A year ago' : `${onThisDay[0].yearsAgo} years ago`} — {onThisDay[0].title}
+          </Text>
+          {onThisDay[0].snippet ? <Text style={styles.otdSnippet} numberOfLines={2}>{onThisDay[0].snippet}</Text> : null}
+          {onThisDay.length > 1 ? (
+            <Text style={styles.otdMore}>+ {onThisDay.length - 1} more from this day</Text>
+          ) : null}
+        </View>
+      ) : null}
       {contextCount ? (
         <TouchableOpacity style={styles.contextPrompt} onPress={onOpenContext}>
           <Text style={styles.eyebrow}>NEEDS CONTEXT</Text>
@@ -678,6 +697,11 @@ const styles = StyleSheet.create({
   eyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
   tonightTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '700', marginTop: 9 },
   tonightDetail: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 7 },
+  otdCard: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: 'rgba(255,140,66,0.2)', borderRadius: 18, padding: 16, marginBottom: 14 },
+  otdLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, color: LUCY_COLORS.primaryGlow, textTransform: 'uppercase', marginBottom: 6 },
+  otdTitle: { fontSize: 15, fontWeight: '700', color: LUCY_COLORS.textDark, lineHeight: 22, marginBottom: 4 },
+  otdSnippet: { fontSize: 13, color: LUCY_COLORS.textMuted, lineHeight: 19, fontStyle: 'italic' },
+  otdMore: { fontSize: 11, color: LUCY_COLORS.textSubtle, marginTop: 6 },
   moodBar: { marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   moodLabel: { fontSize: 12, fontWeight: '700' },
   moodDots: { flexDirection: 'row', gap: 5 },

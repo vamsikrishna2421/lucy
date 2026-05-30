@@ -12,6 +12,7 @@ import { sendMorningBrief, shouldSendMorningBrief } from './morningBrief';
 import { weeklyInsightIfDue } from './weeklyInsight';
 import { generateDailyInsights } from './insightEngine';
 import { checkAndSendPreMeetingBrief, checkAndSendPostMeetingPrompt } from './calendarConnector';
+import { sendOnThisDayIfDue } from './onThisDay';
 import { storeEmbedding } from '../ai/embeddings';
 import { listRecentCaptures } from '../db/captures';
 import { recordBatterySnapshot } from '../db/deviceStats';
@@ -68,6 +69,9 @@ if (!TaskManager.isTaskDefined(BACKGROUND_PROCESSING_TASK)) {
           }
         }
       } catch { /* non-critical */ }
+
+      // On This Day retrospective (once per day)
+      try { await sendOnThisDayIfDue(db); } catch { /* non-critical */ }
 
       // Calendar: pre-meeting brief + post-meeting prompt
       try { await checkAndSendPreMeetingBrief(db); } catch { /* non-critical */ }

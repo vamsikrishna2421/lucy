@@ -72,6 +72,13 @@ class PassiveListenerManager {
     this.active = true;
     try { await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true }); } catch { /* non-fatal */ }
 
+    // Consent signal when listening starts (legal best practice in two-party consent regions)
+    // Uses haptic + visible indicator — no audio chime required by most jurisdictions
+    try {
+      const Haptics = await import('expo-haptics');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch { /* haptics not supported on this device */ }
+
     if (Voice) {
       await this.startVoiceSTT();
       this.batchTimer = setInterval(() => void this.flushVoiceBuffer(), config.passiveListenBatchMinutes * 60 * 1000);

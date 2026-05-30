@@ -5,7 +5,12 @@ export type NotificationDetailPayload =
   | { kind: 'guardian'; entityNames: string[]; evidenceCount: number }
   | { kind: 'digest'; openCount: number; followCount: number }
   | { kind: 'open-loop'; description: string }
-  | { kind: 'captured-reminder'; text?: string | null };
+  | { kind: 'captured-reminder'; text?: string | null }
+  | { kind: 'pre-meeting'; eventTitle: string }
+  | { kind: 'post-meeting'; eventTitle: string }
+  | { kind: 'on-this-day'; memoryCount: number; yearsAgo: number }
+  | { kind: 'morning-brief' }
+  | { kind: 'weekly-insight' };
 
 function buildExplanation(payload: NotificationDetailPayload): { headline: string; explanation: string } {
   if (payload.kind === 'guardian') {
@@ -37,6 +42,35 @@ function buildExplanation(payload: NotificationDetailPayload): { headline: strin
       explanation: description
         ? `You mentioned "${description}" but didn't close the loop — so I kept it here instead of letting it disappear. The things we park are usually the ones that matter most.`
         : `You said you'd come back to this, so I held onto it. The things we park are usually the ones that matter most.`,
+    };
+  }
+
+  if (payload.kind === 'pre-meeting') {
+    return {
+      headline: `meeting coming up`,
+      explanation: `Your "${payload.eventTitle}" is starting soon. I pulled together everything I know about the people and topics involved — check your memories for context.`,
+    };
+  }
+
+  if (payload.kind === 'post-meeting') {
+    return {
+      headline: `good time to capture`,
+      explanation: `Your "${payload.eventTitle}" just ended. Capturing notes now — while it's fresh — will help me surface the right context next time.`,
+    };
+  }
+
+  if (payload.kind === 'on-this-day') {
+    const yearLabel = payload.yearsAgo === 1 ? 'a year ago' : `${payload.yearsAgo} years ago`;
+    return {
+      headline: `on this day ${yearLabel}`,
+      explanation: `You captured ${payload.memoryCount} memory${payload.memoryCount !== 1 ? ' (and more)' : ''} on this exact date in a past year. Open Today to see what your past self was thinking.`,
+    };
+  }
+
+  if (payload.kind === 'morning-brief' || payload.kind === 'weekly-insight') {
+    return {
+      headline: `a note from me`,
+      explanation: `I went through your memories and patterns to put this together. It's not a statistic — it's something I actually noticed about how you've been living lately.`,
     };
   }
 

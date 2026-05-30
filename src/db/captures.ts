@@ -239,7 +239,13 @@ export async function nextQueuedCapture(db: SQLiteDatabase): Promise<CaptureRow 
   return db.getFirstAsync<CaptureRow>(
     `SELECT * FROM captures
      WHERE processed = 0 OR (processed = -1 AND next_attempt_at IS NOT NULL AND next_attempt_at <= CURRENT_TIMESTAMP)
-     ORDER BY CASE WHEN processed = 0 THEN 0 ELSE 1 END, created_at ASC, id ASC LIMIT 1`,
+     ORDER BY
+       CASE WHEN processed = 0 THEN 0 ELSE 1 END,
+       -- Large captures (journals that chunk into many sequential LLM calls) go LAST so a
+       -- quick thought never waits behind a 90-day journal monopolizing the queue.
+       CASE WHEN length(raw_transcript) > 3000 THEN 1 ELSE 0 END,
+       created_at ASC, id ASC
+     LIMIT 1`,
   );
 }
 

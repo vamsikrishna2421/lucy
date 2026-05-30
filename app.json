@@ -74,6 +74,7 @@
       "expo-background-task",
       "expo-splash-screen",
       "expo-audio",
+      "expo-localization",
       "expo-asset",
       [
         "expo-build-properties",

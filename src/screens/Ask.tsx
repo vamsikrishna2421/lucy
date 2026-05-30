@@ -23,6 +23,7 @@ import { askLucy, type LucyAnswer } from '../processing/ask';
 import { isInvalidDeadline, isInvalidPendingTask } from '../processing/artifactCleanup';
 import { protectedPreview } from '../processing/privacy';
 import { enqueueTranscript } from '../processing/extract';
+import { getStoredInsights, generateDailyInsights, type GeneratedInsight } from '../processing/insightEngine';
 
 const exampleQuestion = 'What tasks and deadlines need my attention today?';
 
@@ -42,10 +43,13 @@ export function AskScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
   const [asking, setAsking] = useState(false);
   const [threadId, setThreadId] = useState<number>();
-  const [view, setView] = useState<'new' | 'history' | 'thread'>('new');
+  const [view, setView] = useState<'new' | 'history' | 'insights' | 'thread'>('new');
   const [history, setHistory] = useState<AskThreadSummaryRow[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [insights, setInsights] = useState<GeneratedInsight[]>([]);
+  const [expandedInsight, setExpandedInsight] = useState<number | null>(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
   const conversationRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -66,6 +70,20 @@ export function AskScreen() {
     setQuestion('');
     setMessages([welcomeMessage]);
   }
+
+  const loadInsights = async () => {
+    setLoadingInsights(true);
+    try {
+      const db = await getDatabase();
+      let stored = await getStoredInsights(db);
+      if (stored.length === 0) {
+        stored = await generateDailyInsights(db);
+      }
+      setInsights(stored);
+    } finally {
+      setLoadingInsights(false);
+    }
+  };
 
   async function openHistory() {
     setLoadingHistory(true);
@@ -149,10 +167,25 @@ export function AskScreen() {
             <TouchableOpacity style={styles.actionButton} onPress={() => void openHistory()}>
               <Text style={styles.actionText}>History</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, view === 'insights' && { backgroundColor: 'rgba(255,140,66,0.15)' }]}
+              onPress={() => { setView('insights'); void loadInsights(); }}
+            >
+              <Text style={[styles.actionText, view === 'insights' && { color: '#FF8C42' }]}>✦ Insights</Text>
+            </TouchableOpacity>
           </View>
         </View>
         <Text style={styles.subtitle}>{view === 'history' ? 'Past conversations, stored privately on this device.' : 'Private answers from your memory, on this device.'}</Text>
       </View>
+      {view === 'insights' ? (
+        <InsightsView
+          insights={insights}
+          loading={loadingInsights}
+          expanded={expandedInsight}
+          onToggle={(i) => setExpandedInsight(expandedInsight === i ? null : i)}
+          onAskThis={(q) => { setView('new'); setQuestion(q); }}
+        />
+      ) : null}
       {view === 'history' ? (
         <HistoryView history={history} loading={loadingHistory} onSelect={openThread} />
       ) : (
@@ -198,6 +231,63 @@ export function AskScreen() {
         </>
       )}
     </View>
+  );
+}
+
+const CATEGORY_COLORS: Record<string, string> = {
+  habits: '#FF8C42',
+  relationships: '#60A5FA',
+  progress: '#4ADE80',
+  wellbeing: '#F472B6',
+  memory: '#FFA05C',
+  device: '#A78BFA',
+};
+
+function InsightsView({
+  insights,
+  loading,
+  expanded,
+  onToggle,
+  onAskThis,
+}: {
+  insights: GeneratedInsight[];
+  loading: boolean;
+  expanded: number | null;
+  onToggle: (i: number) => void;
+  onAskThis: (q: string) => void;
+}) {
+  return (
+    <ScrollView style={styles.conversation} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+      <View style={styles.insightsHeader}>
+        <Text style={styles.insightsTitle}>What LUCY noticed</Text>
+        <Text style={styles.insightsSub}>Questions LUCY can answer today, based on your memories and patterns. Tap to reveal.</Text>
+      </View>
+      {loading ? (
+        <Text style={{ color: LUCY_COLORS.textSubtle, textAlign: 'center', marginTop: 40, fontSize: 14 }}>LUCY is thinking...</Text>
+      ) : insights.length === 0 ? (
+        <View style={{ padding: 20 }}>
+          <Text style={{ color: LUCY_COLORS.textSubtle, textAlign: 'center', fontSize: 14, lineHeight: 22 }}>
+            No insights yet. Capture some thoughts and enable Remote Intelligence in Settings — LUCY will generate observations overnight.
+          </Text>
+        </View>
+      ) : insights.map((insight, i) => (
+        <TouchableOpacity key={i} style={styles.insightCard} onPress={() => onToggle(i)} activeOpacity={0.75}>
+          <View style={styles.insightCardTop}>
+            <View style={[styles.insightDot, { backgroundColor: CATEGORY_COLORS[insight.category] ?? LUCY_COLORS.primary }]} />
+            <Text style={styles.insightQuestion}>{insight.question}</Text>
+            <Text style={styles.insightChevron}>{expanded === i ? '▲' : '▼'}</Text>
+          </View>
+          {expanded === i ? (
+            <View style={styles.insightAnswer}>
+              <Text style={styles.insightAnswerText}>{insight.answer}</Text>
+              <TouchableOpacity style={styles.insightAskBtn} onPress={() => onAskThis(insight.question)}>
+                <Text style={styles.insightAskBtnText}>Ask follow-up →</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
   );
 }
 
@@ -413,6 +503,18 @@ const styles = StyleSheet.create({
   tipList: { gap: 8, marginBottom: 12 },
   tipItem: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 20, paddingLeft: 4 },
   tipHint: { color: LUCY_COLORS.textSubtle, fontSize: 12, lineHeight: 18, fontStyle: 'italic' },
+  insightsHeader: { marginBottom: 16 },
+  insightsTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '800', marginBottom: 6 },
+  insightsSub: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 20 },
+  insightCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 16, marginBottom: 10, overflow: 'hidden' },
+  insightCardTop: { flexDirection: 'row', alignItems: 'flex-start', padding: 16, gap: 12 },
+  insightDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5, flexShrink: 0 },
+  insightQuestion: { flex: 1, color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '600', lineHeight: 21 },
+  insightChevron: { color: LUCY_COLORS.textSubtle, fontSize: 10, marginTop: 4 },
+  insightAnswer: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, padding: 16, gap: 12 },
+  insightAnswerText: { color: LUCY_COLORS.textDark, fontSize: 14, lineHeight: 22 },
+  insightAskBtn: { alignSelf: 'flex-start', backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
+  insightAskBtnText: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700' },
   llmResponse: { color: LUCY_COLORS.textDark, fontSize: 15, lineHeight: 23, marginBottom: 10 },
   sourcesSection: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, paddingTop: 10, gap: 6 },
   sourcesLabel: { color: LUCY_COLORS.primary, fontSize: 10, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },

@@ -229,19 +229,6 @@ function NowView({
           <Text style={styles.tonightDetail}>Add a little context when you have time. LUCY keeps your original thought unchanged.</Text>
         </TouchableOpacity>
       ) : null}
-      {openLoops.length > 0 ? (
-        <>
-          <SectionTitle title="Loose ends" />
-          {openLoops.map((item) => (
-            <View style={styles.loopCard} key={item.id}>
-              <Text style={styles.loopDescription}>{protectedPreview(item.description)}</Text>
-              <TouchableOpacity style={styles.resolveButton} onPress={() => void handleResolveLoop(item.id)}>
-                <Text style={styles.resolveText}>Done with this</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </>
-      ) : null}
       {followUps.length > 0 ? (
         <>
           <SectionTitle title="Follow-ups" />

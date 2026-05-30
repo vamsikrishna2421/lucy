@@ -10,6 +10,7 @@ import { processQueue } from './extract';
 import { organizeMemory } from './organizer';
 import { sendMorningBrief, shouldSendMorningBrief } from './morningBrief';
 import { weeklyInsightIfDue } from './weeklyInsight';
+import { generateDailyInsights } from './insightEngine';
 import { storeEmbedding } from '../ai/embeddings';
 import { listRecentCaptures } from '../db/captures';
 import { recordBatterySnapshot } from '../db/deviceStats';
@@ -66,6 +67,9 @@ if (!TaskManager.isTaskDefined(BACKGROUND_PROCESSING_TASK)) {
           }
         }
       } catch { /* non-critical */ }
+
+      // Generate daily AI insights (once per day, any time)
+      try { await generateDailyInsights(db); } catch { /* non-critical */ }
 
       // Morning brief (7-9am, once per day)
       if (await shouldSendMorningBrief()) {

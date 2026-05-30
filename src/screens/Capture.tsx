@@ -713,8 +713,8 @@ export function CaptureScreen({
             {markedPrivate ? <Text style={styles.checkMark}>{'✓'}</Text> : null}
           </View>
           <View style={styles.protectionText}>
-            <Text style={styles.protectionTitle}>Contains private details</Text>
-            <Text style={styles.protectionHint}>Mask locally before remote intelligence</Text>
+            <Text style={styles.protectionTitle}>Mark as private</Text>
+            <Text style={styles.protectionHint}>Stored with private flag — you control this</Text>
           </View>
         </TouchableOpacity>
       </View>

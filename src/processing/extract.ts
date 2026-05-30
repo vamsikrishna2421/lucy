@@ -25,7 +25,7 @@ import { insertTodo, listPendingTodos } from '../db/todos';
 import type { CaptureSource, ExtractionResult } from '../types/extraction';
 import { extractExplicitEnglishFact } from './explicitEnglish';
 import { resolveCompletionFollowUp } from './followUp';
-import { enforcePrivacy, protectByUserChoice, protectCredentialExtraction } from './privacy';
+import { protectByUserChoice } from './privacy';
 import { repairReminderTimes } from './reminderTime';
 import { normalizeExtraction } from './schema';
 import { scheduleCapturedReminder, sendGuardianNotification } from './notifications';
@@ -77,17 +77,19 @@ export async function analyzeTranscript(
   if (!trimmed) {
     throw new Error('Enter text before processing.');
   }
-  const preflight = protectByUserChoice(trimmed, options.privacyLevel === 'private');
-  const explicitFact = preflight.level === 'normal' ? extractExplicitEnglishFact(trimmed) : null;
+  // Always use remote AI — on-device model disconnected until further notice.
+  // localOnly flag is intentionally ignored.
+  const privacyLevel = options.privacyLevel ?? 'normal';
+  const explicitFact = extractExplicitEnglishFact(trimmed);
   const result = explicitFact
     ? normalizeExtraction(explicitFact)
-    : options.localOnly
-      ? await AIProvider.analyzeLocally(trimmed)
-      : await AIProvider.analyze(trimmed, preflight.level);
-  const extraction = protectCredentialExtraction(
-    repairReminderTimes(enforcePrivacy(normalizeExtraction(result), preflight), trimmed),
-    trimmed,
-  );
+    : await AIProvider.analyze(trimmed, privacyLevel);
+
+  // Credential auto-detection disabled — user manually marks sensitive content.
+  const extraction = repairReminderTimes(normalizeExtraction(result), trimmed);
+  if (privacyLevel === 'private') {
+    extraction.privacy_level = 'private';
+  }
   if (!hasMeaningfulExtraction(extraction)) {
     // For questions / device queries, don't retry — just store with a note summary
     const isQuestion = trimmed.trim().endsWith('?') || /^(what|where|when|who|why|how|is|are|do|does|can|will)\b/i.test(trimmed.trim());
@@ -292,8 +294,7 @@ export async function processQueue(onChange?: () => void, maxCaptures = Number.P
       const isPrivate = capture.privacy_level === 'private' || capture.user_marked_private === 1;
       const extraction = await analyzeTranscript(transcriptWithContext, {
         privacyLevel: isPrivate ? 'private' : (capture.privacy_level as 'private' | 'local' | 'normal'),
-        // Private captures always use local LLM — never sent to remote AI
-        localOnly: isPrivate,
+        // localOnly intentionally not set — always use remote AI
       });
       await persistExtraction(capture, extraction);
 

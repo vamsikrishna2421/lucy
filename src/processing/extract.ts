@@ -34,6 +34,9 @@ import { formatStructuredMemory } from './structuredMemory';
 import { storeEmbedding } from '../ai/embeddings';
 import { getRelatedContext } from './vectorSearch';
 import { updatePersonContext } from './relationshipEngine';
+import { jsonrepair } from 'jsonrepair';
+import { journalSegmentationPrompt } from '../ai/prompts';
+import type { SQLiteDatabase } from 'expo-sqlite';
 
 function normText(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -388,6 +391,53 @@ async function chunkAndMergeExtract(
   return merged;
 }
 
+/** Heuristic gate: only ask the LLM to segment longer, multi-sentence entries
+ *  (day logs / journals), not short single thoughts — avoids needless LLM calls. */
+function shouldSegmentDayJournal(text: string): boolean {
+  if (text.length < 600) return false;
+  const sentenceEnders = (text.match(/[.!?](?:\s|$)/g) ?? []).length;
+  return sentenceEnders >= 3;
+}
+
+/**
+ * Splits a single-day journal / multi-event log into one capture per distinct event
+ * (via the LLM), so the day reads as separate timeline headlines instead of one giant
+ * entry. Returns the number of segment captures created (0 if it shouldn't be split).
+ */
+async function segmentAndIngestDayJournal(
+  db: SQLiteDatabase,
+  text: string,
+  privacyLevel: 'private' | 'local' | 'normal',
+): Promise<number> {
+  let segments: string[] = [];
+  try {
+    const raw = await AIProvider.prompt(journalSegmentationPrompt, text);
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start === -1 || end === -1) return 0;
+    const parsed = JSON.parse(jsonrepair(raw.slice(start, end + 1))) as { segments?: unknown };
+    segments = Array.isArray(parsed.segments)
+      ? parsed.segments
+          .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+          .map((s) => s.trim())
+      : [];
+  } catch {
+    return 0; // segmentation failed — caller falls back to normal extraction
+  }
+  // Guard against pathological output and no-op splits.
+  if (segments.length < 2 || segments.length > 40) return 0;
+
+  const { insertCapture } = await import('../db/captures');
+  const base = Date.now();
+  for (let i = 0; i < segments.length; i++) {
+    const id = await insertCapture(db, 'text', segments[i], privacyLevel, false);
+    // Preserve chronological order: earliest event oldest, last event = newest (top of timeline).
+    const ts = new Date(base - (segments.length - 1 - i) * 1000).toISOString();
+    await db.runAsync('UPDATE captures SET created_at = ? WHERE id = ?', ts, id);
+  }
+  return segments.length;
+}
+
 export async function processQueue(onChange?: () => void, maxCaptures = Number.POSITIVE_INFINITY): Promise<number> {
   const db = await getDatabase();
   let processedCount = 0;
@@ -420,21 +470,34 @@ export async function processQueue(onChange?: () => void, maxCaptures = Number.P
 
       const rawText = capture.raw_transcript ?? '';
       let extraction;
-      if (rawText.length > 3000) {
-        // For dated journals: split into per-date captures and archive the original
-        const { isMultiDateJournal, ingestJournal } = await import('./journalSplitter');
-        if (isMultiDateJournal(rawText)) {
-          const count = await ingestJournal(db, rawText, privacyLevel);
-          if (count >= 2) {
-            // Archive the original oversized capture — the dated splits replace it
-            const { archiveCapture } = await import('../db/captures');
-            await archiveCapture(db, capture.id, `split into ${count} dated captures`);
-            processedCount += 1;
-            onChange?.();
-            continue;
-          }
+      const { isMultiDateJournal, ingestJournal } = await import('./journalSplitter');
+
+      // Multi-date journal → split into per-date captures with historical timestamps.
+      if (rawText.length > 3000 && isMultiDateJournal(rawText)) {
+        const count = await ingestJournal(db, rawText, privacyLevel);
+        if (count >= 2) {
+          const { archiveCapture } = await import('../db/captures');
+          await archiveCapture(db, capture.id, `split into ${count} dated captures`);
+          processedCount += 1;
+          onChange?.();
+          continue;
         }
-        // No date structure — chunk by paragraph boundaries (never by word count)
+      }
+
+      // Single-day journal / multi-event log → one timeline memory per event.
+      if (shouldSegmentDayJournal(rawText) && !isMultiDateJournal(rawText)) {
+        const segCount = await segmentAndIngestDayJournal(db, rawText, privacyLevel);
+        if (segCount >= 2) {
+          const { archiveCapture } = await import('../db/captures');
+          await archiveCapture(db, capture.id, `split into ${segCount} timeline memories`);
+          processedCount += 1;
+          onChange?.();
+          continue;
+        }
+      }
+
+      if (rawText.length > 3000) {
+        // No date/event structure to split on — chunk by paragraph boundaries.
         extraction = await chunkAndMergeExtract(rawText, privacyLevel);
       } else {
         extraction = await analyzeTranscript(transcriptWithContext, { privacyLevel });

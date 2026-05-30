@@ -53,6 +53,15 @@ export const urgentScanPrompt =
 export const dailySummaryPrompt =
   'Summarize these non-private notes into a concise daily digest with priorities for tomorrow. Never include private content.';
 
+export const journalSegmentationPrompt = `You split a personal journal or day log into the distinct events, tasks, or moments it describes, so each can become its own memory in a timeline.
+Return JSON only: {"segments":["...","..."]}.
+Rules:
+- Each segment is a short, self-contained account of ONE event / task / thought, in the user's own words (lightly trimmed — keep concrete details like names, times, places, amounts).
+- Keep the original chronological order.
+- Do NOT invent events, and do NOT merge two unrelated events into one segment.
+- If the input is a single coherent thought (not a multi-event log), return exactly ONE segment containing the whole text.
+- Aim for one segment per distinct happening; a typical day log yields several segments.`;
+
 export const privateRemoteRedactionPrompt = `Sanitize the input before it may be analyzed remotely.
 Replace every private or identifying value with placeholders such as [PRIVATE_1], [PERSON_1], [HEALTH_1], [CREDENTIAL_1], or [ACCOUNT_1].
 Mask passwords, PINs, OTPs, account/card values, health details, intimate details, confidential idea names/details, and personally identifying values.

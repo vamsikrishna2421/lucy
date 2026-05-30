@@ -97,4 +97,12 @@ export const AIProvider = {
     }
     return promptAI(dailySummaryPrompt, notes, openAIKey);
   },
+  /** Generic provider-aware prompt (Claude or OpenAI based on selected model). */
+  async prompt(system: string, input: string): Promise<string> {
+    const { available, openAIKey } = await resolveRemoteAvailability();
+    if (!available) {
+      return localPrompt(`${system}\n${input}`);
+    }
+    return promptAI(system, input, openAIKey);
+  },
 };

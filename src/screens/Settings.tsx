@@ -54,11 +54,26 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [checkInEnabled, setCheckInEnabled] = useState(false);
   const [aiModel, setAiModel] = useState('gpt-4o-mini');
   const [seedingDemo, setSeedingDemo] = useState(false);
-  const [seedProgress, setSeedProgress] = useState(0); // 0-100
+  const [seedProgress, setSeedProgress] = useState(0);
+  const [eleanorStatus, setEleanorStatus] = useState<import('../db/eleanorSeedState').EleanorSeedStatus>('idle');
+  const [eleanorProgress, setEleanorProgress] = useState(0);
   const [brainUsers, setBrainUsers] = useState<Array<{ id: string; name: string; isDemo?: boolean }>>([]);
   const [activeBrainId, setActiveBrainId] = useState('main');
   const [newBrainName, setNewBrainName] = useState('');
   const [switchingBrain, setSwitchingBrain] = useState(false);
+
+  // Subscribe to Eleanor background seed progress
+  useEffect(() => {
+    void import('../db/eleanorSeedState').then(({ getSeedState, subscribeSeedState }) => {
+      const update = () => {
+        const s = getSeedState();
+        setEleanorStatus(s.status);
+        setEleanorProgress(s.progress);
+      };
+      update();
+      return subscribeSeedState(update);
+    });
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -469,57 +484,63 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           </View>
         </View>
 
-        {/* Demo Brain button */}
-        <TouchableOpacity
-          style={{ marginHorizontal: 16, marginVertical: 8, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#F472B6' + '55', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-          onPress={async () => {
-            setSeedingDemo(true);
-            setSeedProgress(0);
-            try {
-              const { switchUser, addUser, DEMO_USER } = await import('../db/userManager');
-              const { resetDatabase, openNamedDatabase } = await import('../db');
-              await addUser(DEMO_USER);
-
-              // Check if Eleanor is already seeded BEFORE switching
-              setSeedProgress(10);
-              const eleanorDb = await openNamedDatabase('lucy_demo.db', 'lucy_database_key_demo');
-              const count = await eleanorDb.getFirstAsync<{n:number}>('SELECT COUNT(*) as n FROM captures');
-              const needsSeed = (count?.n ?? 0) === 0;
-
-              if (needsSeed) {
-                setSeedProgress(20);
-                const { seedDemoDataIfNeeded } = await import('../processing/demoSeed');
-                // Seed with progress callback
-                await seedDemoDataIfNeeded(eleanorDb, (pct: number) => setSeedProgress(20 + Math.round(pct * 0.75)));
-              } else {
-                setSeedProgress(95);
-              }
-
-              await eleanorDb.closeAsync();
-              setSeedProgress(98);
-
-              // NOW switch — seeding is complete, no freeze
-              await switchUser(DEMO_USER);
-              await resetDatabase();
-              setBrainUsers((prev) => [...prev.filter((u) => u.id !== 'demo'), DEMO_USER]);
-              setActiveBrainId('demo');
-              setSeedProgress(100);
-              onBrainSwitch();
-            } catch (e) {
-              Alert.alert('Could not switch to Eleanor\'s brain', String(e));
-            } finally {
-              setSeedingDemo(false);
-              setSeedProgress(0);
-            }
-          }}
-          disabled={seedingDemo}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700' }}>🎭 Switch to Demo Brain</Text>
-            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 2 }}>Your brain stays safe. Switch back above.</Text>
+        {/* Eleanor / Demo Brain — inline progress, background seeding */}
+        <View style={{ marginHorizontal: 16, marginVertical: 8, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#F472B6' + '44' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <Text style={{ fontSize: 22 }}>🎭</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700' }}>Eleanor's Brain</Text>
+              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 1 }}>Eleanor Vance · 1,461 daily logs · 2020–2024</Text>
+            </View>
           </View>
-          <Text style={{ color: '#F472B6', fontSize: 22 }}>{seedingDemo ? '⏳' : '→'}</Text>
-        </TouchableOpacity>
+
+          {eleanorStatus === 'idle' ? (
+            <TouchableOpacity
+              style={{ backgroundColor: '#F472B6', borderRadius: 10, paddingVertical: 11, alignItems: 'center' }}
+              onPress={async () => {
+                const { startEleanorSeed } = await import('../db/eleanorSeedState');
+                void startEleanorSeed();
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Load Eleanor's brain in background →</Text>
+            </TouchableOpacity>
+          ) : eleanorStatus === 'seeding' ? (
+            <View style={{ gap: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 12 }}>
+                  {eleanorProgress < 20 ? 'Opening brain...' : 'Loading memories...'}
+                </Text>
+                <Text style={{ color: '#F472B6', fontSize: 12, fontWeight: '700' }}>{eleanorProgress}%</Text>
+              </View>
+              <View style={{ height: 6, backgroundColor: LUCY_COLORS.surface, borderRadius: 3, overflow: 'hidden' }}>
+                <View style={{ width: `${eleanorProgress}%` as any, height: 6, backgroundColor: '#F472B6', borderRadius: 3 }} />
+              </View>
+              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>You can keep using your brain — we'll notify you when Eleanor is ready.</Text>
+            </View>
+          ) : eleanorStatus === 'ready' ? (
+            <TouchableOpacity
+              style={{ backgroundColor: '#F472B6', borderRadius: 10, paddingVertical: 11, alignItems: 'center' }}
+              onPress={async () => {
+                try {
+                  const { switchUser, addUser, DEMO_USER } = await import('../db/userManager');
+                  const { resetDatabase } = await import('../db');
+                  await addUser(DEMO_USER);
+                  await switchUser(DEMO_USER);
+                  await resetDatabase();
+                  setBrainUsers((prev) => [...prev.filter((u) => u.id !== 'demo'), DEMO_USER]);
+                  setActiveBrainId('demo');
+                  onBrainSwitch();
+                } catch (e) {
+                  Alert.alert('Could not switch', String(e));
+                }
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>✓ Eleanor is ready — Switch now</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={{ color: LUCY_COLORS.error, fontSize: 13 }}>Something went wrong loading Eleanor's brain.</Text>
+          )}
+        </View>
         <SettingsRow
           title="On-device intelligence"
           value={modelStatus}
@@ -867,22 +888,6 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
 
     </ScrollView>
 
-    {/* Progress overlay OUTSIDE ScrollView so absoluteFill covers the full screen */}
-    {seedingDemo ? (
-      <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,14,11,0.95)', alignItems: 'center', justifyContent: 'center', gap: 24, zIndex: 999 }}>
-        <Text style={{ fontSize: 56 }}>🎭</Text>
-        <Text style={{ color: LUCY_COLORS.textDark, fontSize: 22, fontWeight: '800', textAlign: 'center' }}>
-          {seedProgress < 15 ? "Opening Eleanor's brain..." : seedProgress < 95 ? 'Loading 4 years of memories...' : 'Almost ready...'}
-        </Text>
-        <View style={{ width: 280, height: 8, backgroundColor: LUCY_COLORS.surface, borderRadius: 4, overflow: 'hidden' }}>
-          <View style={{ width: `${seedProgress}%` as any, height: 8, backgroundColor: '#F472B6', borderRadius: 4 }} />
-        </View>
-        <Text style={{ color: '#F472B6', fontSize: 16, fontWeight: '800' }}>{seedProgress}%</Text>
-        <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, textAlign: 'center', paddingHorizontal: 40, lineHeight: 20 }}>
-          Eleanor Vance · Marketing Director{'\n'}1,461 daily logs · Dec 2020 – Nov 2024
-        </Text>
-      </View>
-    ) : null}
     </View>
   );
 }

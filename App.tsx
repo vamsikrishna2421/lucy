@@ -140,7 +140,9 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
           }
         } catch { /* non-critical */ }
 
-        // Eleanor's brain seeds when user explicitly switches to it (with progress screen)
+        // Start Eleanor's seed silently in background after main brain is ready
+        // Uses module-level singleton — progress shown inline in Settings
+        void import('./src/db/eleanorSeedState').then(({ startEleanorSeed }) => startEleanorSeed());
 
         setReady(true);
         void drainQueue();

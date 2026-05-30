@@ -823,18 +823,14 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         ) : null}
 
         {activePanel === 'queue' ? (
-          <>
-            <View style={styles.metrics}>
-              <Metric label="Queued" value={queue.queued} />
-              <Metric label="Organizing" value={queue.processing} />
-              <Metric label="Will retry" value={queue.retrying} warm />
-              <Metric label="Remembered" value={queue.complete} />
-              <Metric label="Archived" value={queue.archived} />
-            </View>
-            <Text style={styles.detail}>
-              Unfinished thoughts retry automatically. Unmatched short updates are archived locally instead of repeatedly spending processing time.
-            </Text>
-          </>
+          <QueuePanel queue={queue} onRetry={async () => {
+            const db = await getDatabase();
+            const { forceRetryAll } = await import('../db/captures');
+            const n = await forceRetryAll(db);
+            setQueue(await import('../db/captures').then(m => m.getCaptureQueueSummary(db)));
+            await import('../processing/extract').then(m => m.processQueue(() => {})).catch(() => {});
+            Alert.alert('Retry started', `${n} capture${n !== 1 ? 's' : ''} queued for processing.`);
+          }} />
         ) : null}
 
         {activePanel === 'privacy' ? (
@@ -1004,6 +1000,57 @@ function SecondaryButton({ disabled, label, onPress }: { disabled: boolean; labe
     <TouchableOpacity disabled={disabled} onPress={onPress} style={[styles.button, disabled && styles.dim]}>
       <Text style={styles.buttonLabel}>{label}</Text>
     </TouchableOpacity>
+  );
+}
+
+function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: () => Promise<void> }) {
+  const [retrying, setRetrying] = useState(false);
+  const [stuck, setStuck] = useState<Array<{ id: number; raw_transcript: string | null; processing_error: string | null }>>([]);
+
+  useEffect(() => {
+    void (async () => {
+      const db = await getDatabase();
+      const { getRetryingCaptures } = await import('../db/captures');
+      setStuck(await getRetryingCaptures(db));
+    })();
+  }, [queue.retrying]);
+
+  return (
+    <>
+      <View style={styles.metrics}>
+        <Metric label="Queued" value={queue.queued} />
+        <Metric label="Organizing" value={queue.processing} />
+        <Metric label="Will retry" value={queue.retrying} warm />
+        <Metric label="Remembered" value={queue.complete} />
+        <Metric label="Archived" value={queue.archived} />
+      </View>
+
+      {queue.retrying > 0 ? (
+        <>
+          {stuck.map((c) => (
+            <View key={c.id} style={{ backgroundColor: LUCY_COLORS.surface, borderRadius: 10, padding: 10, marginTop: 8, gap: 4 }}>
+              <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '600' }} numberOfLines={2}>
+                {c.raw_transcript?.slice(0, 120) ?? '(no text)'}
+              </Text>
+              {c.processing_error ? (
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }} numberOfLines={1}>Error: {c.processing_error}</Text>
+              ) : null}
+            </View>
+          ))}
+          <TouchableOpacity
+            style={{ marginTop: 12, backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingVertical: 12, alignItems: 'center', opacity: retrying ? 0.6 : 1 }}
+            disabled={retrying}
+            onPress={async () => { setRetrying(true); await onRetry().finally(() => setRetrying(false)); }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{retrying ? 'Retrying...' : `Retry now (${queue.retrying})`}</Text>
+          </TouchableOpacity>
+        </>
+      ) : null}
+
+      <Text style={[styles.detail, { marginTop: 8 }]}>
+        Unfinished thoughts retry automatically. Tap "Retry now" to force them immediately.
+      </Text>
+    </>
   );
 }
 

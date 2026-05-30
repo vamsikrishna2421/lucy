@@ -155,6 +155,22 @@ export async function resetInterruptedCaptures(db: SQLiteDatabase): Promise<void
   );
 }
 
+/** Force-retry ALL stuck captures (retrying or failed) immediately */
+export async function forceRetryAll(db: SQLiteDatabase): Promise<number> {
+  const result = await db.runAsync(
+    `UPDATE captures SET processed = 0, processing_error = NULL, next_attempt_at = NULL, attempt_count = 0
+     WHERE processed = -1 OR processed = 2`,
+  );
+  return result.changes;
+}
+
+/** Get the first retrying capture so user can see what's stuck */
+export async function getRetryingCaptures(db: SQLiteDatabase): Promise<CaptureRow[]> {
+  return db.getAllAsync<CaptureRow>(
+    `SELECT * FROM captures WHERE (processed = -1 OR processed = 2) AND archived_at IS NULL ORDER BY created_at DESC LIMIT 5`,
+  );
+}
+
 export async function nextQueuedCapture(db: SQLiteDatabase): Promise<CaptureRow | null> {
   return db.getFirstAsync<CaptureRow>(
     `SELECT * FROM captures

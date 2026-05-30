@@ -264,6 +264,86 @@ async function persistExtraction(
   }
 }
 
+/**
+ * Splits large text into logical chunks and processes each independently,
+ * then merges all ExtractionResults into one. This is LUCY's "agent parallelism" —
+ * each chunk is a separate LLM call (worker), results are unified at the end.
+ *
+ * Splits on paragraph breaks, preferring ~600-word chunks so each
+ * call is fast and within token limits.
+ */
+async function chunkAndMergeExtract(
+  text: string,
+  privacyLevel: 'private' | 'local' | 'normal',
+): Promise<ExtractionResult> {
+  const WORDS_PER_CHUNK = 600;
+  const paragraphs = text.split(/\n\s*\n/).filter((p) => p.trim().length > 10);
+  const chunks: string[] = [];
+  let current: string[] = [];
+  let wordCount = 0;
+
+  for (const para of paragraphs) {
+    const words = para.trim().split(/\s+/).length;
+    if (wordCount + words > WORDS_PER_CHUNK && current.length > 0) {
+      chunks.push(current.join('\n\n'));
+      current = [para];
+      wordCount = words;
+    } else {
+      current.push(para);
+      wordCount += words;
+    }
+  }
+  if (current.length > 0) chunks.push(current.join('\n\n'));
+
+  // If still only one chunk (no paragraph breaks), force-split by word count
+  if (chunks.length <= 1) {
+    const words = text.split(/\s+/);
+    const forcedChunks: string[] = [];
+    for (let i = 0; i < words.length; i += WORDS_PER_CHUNK) {
+      forcedChunks.push(words.slice(i, i + WORDS_PER_CHUNK).join(' '));
+    }
+    chunks.splice(0, chunks.length, ...forcedChunks);
+  }
+
+  // Process each chunk (sequential to respect rate limits)
+  const results: ExtractionResult[] = [];
+  for (let i = 0; i < chunks.length; i++) {
+    try {
+      const chunkLabel = chunks.length > 1 ? `[Part ${i + 1} of ${chunks.length}]\n` : '';
+      const result = await analyzeTranscript(chunkLabel + chunks[i], { privacyLevel });
+      results.push(result);
+    } catch { /* skip failed chunks — partial extraction is better than none */ }
+  }
+
+  if (results.length === 0) throw new Error('All chunks failed to extract.');
+  if (results.length === 1) return results[0];
+
+  // Merge all results into the first one
+  const merged = { ...results[0] };
+  for (const r of results.slice(1)) {
+    merged.tasks = [...merged.tasks, ...r.tasks];
+    merged.expenses = [...merged.expenses, ...r.expenses];
+    merged.ideas = [...merged.ideas, ...r.ideas];
+    merged.places = [...merged.places, ...r.places];
+    merged.people = [...new Set([...merged.people, ...r.people])];
+    merged.interests = [...merged.interests, ...r.interests];
+    merged.decisions = [...merged.decisions, ...r.decisions];
+    merged.reminders = [...merged.reminders, ...r.reminders];
+    merged.open_loops = [...merged.open_loops, ...r.open_loops];
+    merged.follow_ups = [...merged.follow_ups, ...r.follow_ups];
+    merged.tags = [...new Set([...merged.tags, ...r.tags])];
+    merged.clarifications = [...merged.clarifications, ...r.clarifications];
+    merged.memory_gaps = [...merged.memory_gaps, ...r.memory_gaps];
+    if (!merged.summary && r.summary) merged.summary = r.summary;
+    if (merged.title === 'Untitled capture' && r.title !== 'Untitled capture') merged.title = r.title;
+  }
+  // Better title for chunked captures
+  if (merged.title === 'Untitled capture' || merged.title.startsWith('[Part')) {
+    merged.title = `${chunks.length}-part journal — ${merged.tasks.length} tasks, ${merged.people.length} people`;
+  }
+  return merged;
+}
+
 export async function processQueue(onChange?: () => void, maxCaptures = Number.POSITIVE_INFINITY): Promise<number> {
   const db = await getDatabase();
   let processedCount = 0;
@@ -292,10 +372,17 @@ export async function processQueue(onChange?: () => void, maxCaptures = Number.P
       }
 
       const isPrivate = capture.privacy_level === 'private' || capture.user_marked_private === 1;
-      const extraction = await analyzeTranscript(transcriptWithContext, {
-        privacyLevel: isPrivate ? 'private' : (capture.privacy_level as 'private' | 'local' | 'normal'),
-        // localOnly intentionally not set — always use remote AI
-      });
+      const privacyLevel = isPrivate ? 'private' : (capture.privacy_level as 'private' | 'local' | 'normal');
+
+      // Large captures (>3000 chars) get chunked into parallel agent extractions then merged
+      const CHUNK_THRESHOLD = 3000;
+      const rawText = capture.raw_transcript ?? '';
+      let extraction;
+      if (rawText.length > CHUNK_THRESHOLD) {
+        extraction = await chunkAndMergeExtract(rawText, privacyLevel);
+      } else {
+        extraction = await analyzeTranscript(transcriptWithContext, { privacyLevel });
+      }
       await persistExtraction(capture, extraction);
 
       // Store embedding for this capture (enables future semantic search)

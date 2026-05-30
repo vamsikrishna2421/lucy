@@ -169,7 +169,15 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
               </View>
               <Text style={styles.meetingTitleDisplay}>{meetingTitle || 'Meeting'}</Text>
               <Text style={styles.durationDisplay}>{formatDuration(elapsed)}</Text>
-              <Text style={styles.wordCount}>{passiveListener.getState().wordsHeard} words captured</Text>
+              <Text style={styles.wordCount}>{(() => {
+                const s = passiveListener.getState();
+                if (s.noApiKey) return 'Enable Remote Intelligence in Settings to count words';
+                if (s.mode === 'batch' && s.wordsHeard === 0) {
+                  const sec = s.recordingSeconds;
+                  return sec < 60 ? `Recording... ${sec}s` : `Recording... ${Math.floor(sec / 60)}m${sec % 60 > 0 ? `${sec % 60}s` : ''}`;
+                }
+                return `${s.wordsHeard} words captured`;
+              })()}</Text>
               <TouchableOpacity style={styles.stopBtn} onPress={() => void stopMeeting()}>
                 <View style={styles.stopIcon} />
                 <Text style={styles.stopBtnText}>End meeting</Text>

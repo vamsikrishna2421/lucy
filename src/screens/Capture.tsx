@@ -331,8 +331,20 @@ export function CaptureScreen({
   };
 
   const groups = groupTodos(todos);
-
   const signalCount = todos.filter((t) => t.urgency === 'high').length;
+
+  // Label shown in the listen pill — gives real feedback in batch (Whisper) mode
+  function listenPillLabel(): string {
+    if (!passiveState || passiveState.status !== 'listening') return 'Listen';
+    if (passiveState.noApiKey) return 'No key';
+    if (passiveState.mode === 'batch') {
+      if (passiveState.wordsHeard > 0) return `${passiveState.wordsHeard}w`;
+      const s = passiveState.recordingSeconds;
+      if (s < 60) return `Rec ${s}s`;
+      return `Rec ${Math.floor(s / 60)}m${s % 60 > 0 ? `${s % 60}s` : ''}`;
+    }
+    return `${passiveState.wordsHeard}w`;
+  }
 
   return (
     <View style={[styles.container, { paddingBottom: keyboardOffset }]}>
@@ -352,7 +364,7 @@ export function CaptureScreen({
           >
             <View style={[styles.compactDot, passiveState?.status === 'listening' && { backgroundColor: '#ef4444' }]} />
             <Text style={[styles.compactPillText, passiveState?.status === 'listening' && { color: LUCY_COLORS.primary }]}>
-              {passiveState?.status === 'listening' ? `${passiveState.wordsHeard}w` : 'Listen'}
+              {listenPillLabel()}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.compactBgPill} onPress={onBackgroundPress}>

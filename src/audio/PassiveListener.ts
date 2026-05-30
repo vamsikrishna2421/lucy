@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system';
 import { config } from '../config';
 import { enqueueTranscript } from '../processing/extract';
 import { transcribeAudioFile } from './WhisperTranscriber';
+import { getRemoteOpenAIKey } from '../ai/remoteAccess';
 
 // AudioRecorder is type-only in expo-audio — use require() to get the runtime class.
 type RecorderInstance = { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void };
@@ -30,17 +31,27 @@ export interface PassiveListenerState {
   status: ListeningStatus;
   wordsHeard: number;
   sessionStartedAt: number | null;
+  /** Seconds elapsed since recording started (batch mode only). Updates every second. */
+  recordingSeconds: number;
+  /** Whether this session uses on-device STT or batch+Whisper */
+  mode: 'stt' | 'batch' | 'none';
+  /** True when API key is missing and word count will never update */
+  noApiKey: boolean;
 }
 
 class PassiveListenerManager {
-  private state: PassiveListenerState = { status: 'off', wordsHeard: 0, sessionStartedAt: null };
+  private state: PassiveListenerState = {
+    status: 'off', wordsHeard: 0, sessionStartedAt: null,
+    recordingSeconds: 0, mode: 'none', noApiKey: false,
+  };
   private stateListeners: Array<(s: PassiveListenerState) => void> = [];
   private recorder: RecorderInstance | null = null;
   private batchTimer: ReturnType<typeof setInterval> | null = null;
+  private secondTimer: ReturnType<typeof setInterval> | null = null;
   private active = false;
   private voiceBuffer: string[] = [];
   private voiceRestartTimer: ReturnType<typeof setTimeout> | null = null;
-  private transcriptAccumulator: string[] = []; // full session transcript for Meeting Mode
+  private transcriptAccumulator: string[] = [];
 
   subscribe(fn: (s: PassiveListenerState) => void): () => void {
     this.stateListeners.push(fn);
@@ -67,24 +78,39 @@ class PassiveListenerManager {
 
   async start(): Promise<void> {
     if (this.state.status !== 'off') return;
-    this.patch({ status: 'starting', wordsHeard: 0, sessionStartedAt: Date.now() });
-    this.transcriptAccumulator = []; // fresh transcript for new session
+    this.patch({ status: 'starting', wordsHeard: 0, sessionStartedAt: Date.now(), recordingSeconds: 0 });
+    this.transcriptAccumulator = [];
     this.active = true;
     try { await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true }); } catch { /* non-fatal */ }
 
-    // Consent signal when listening starts (legal best practice in two-party consent regions)
-    // Uses haptic + visible indicator — no audio chime required by most jurisdictions
+    // Consent signal when listening starts
     try {
       const Haptics = await import('expo-haptics');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch { /* haptics not supported on this device */ }
 
+    // Check if API key is present (batch mode needs it to count words)
+    let noApiKey = false;
+    if (!Voice) {
+      try {
+        const key = await getRemoteOpenAIKey();
+        noApiKey = !key;
+      } catch { noApiKey = true; }
+    }
+
     if (Voice) {
+      this.patch({ mode: 'stt', noApiKey: false });
       await this.startVoiceSTT();
       this.batchTimer = setInterval(() => void this.flushVoiceBuffer(), config.passiveListenBatchMinutes * 60 * 1000);
     } else {
+      this.patch({ mode: 'batch', noApiKey });
       await this.startRecordingBatch();
-      this.batchTimer = setInterval(() => void this.rotateBatch(), config.passiveListenBatchMinutes * 60 * 1000);
+      // Rotate every 3 minutes (was 10) for more responsive feedback
+      this.batchTimer = setInterval(() => void this.rotateBatch(), 3 * 60 * 1000);
+      // Tick recording seconds every second so the UI can show progress
+      this.secondTimer = setInterval(() => {
+        this.patch({ recordingSeconds: this.state.recordingSeconds + 1 });
+      }, 1000);
     }
     this.patch({ status: 'listening' });
   }
@@ -147,8 +173,10 @@ class PassiveListenerManager {
     this.patch({ status: 'stopping' });
     this.active = false;
     clearInterval(this.batchTimer!);
+    clearInterval(this.secondTimer!);
     clearTimeout(this.voiceRestartTimer!);
     this.batchTimer = null;
+    this.secondTimer = null;
     this.voiceRestartTimer = null;
     if (Voice) { try { await Voice.destroy(); } catch { /* ignore */ } await this.flushVoiceBuffer(); }
     if (this.recorder) {

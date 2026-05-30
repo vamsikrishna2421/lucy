@@ -629,9 +629,10 @@ function TimelineView({
                           <TouchableOpacity style={styles.feedbackBtn} onPress={() => { setFeedbackText(''); setFeedbackTarget(item); }}>
                             <Text style={styles.feedbackBtnText}>?</Text>
                           </TouchableOpacity>
-                          {/* Reprocess */}
+                          {/* Reprocess — disabled while already organizing */}
                           <TouchableOpacity
-                            style={[styles.feedbackBtn, { backgroundColor: LUCY_COLORS.primarySoft }]}
+                            disabled={item.processed === 0 || item.processed === 1}
+                            style={[styles.feedbackBtn, { backgroundColor: LUCY_COLORS.primarySoft, opacity: (item.processed === 0 || item.processed === 1) ? 0.3 : 1 }]}
                             onPress={async () => {
                               const db = await getDatabase();
                               await db.runAsync(

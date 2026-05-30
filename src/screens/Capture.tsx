@@ -548,7 +548,7 @@ export function CaptureScreen({
           </TouchableOpacity>
           <TextInput
             multiline
-            placeholder="What's on your mind?"
+            placeholder="Something missing from your todo list?"
             placeholderTextColor={LUCY_COLORS.textSubtle}
             style={styles.input}
             textAlignVertical="top"

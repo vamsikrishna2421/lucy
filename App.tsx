@@ -4,8 +4,9 @@ import * as SplashScreen from 'expo-splash-screen';
 import { splashShownAt } from './src/splashTime';
 import { useIncomingShare } from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, AppState, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, AppState, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { passiveListener, type PassiveListenerState } from './src/audio/PassiveListener';
+import { SplashAnimation } from './src/components/SplashAnimation';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { LUCY_COLORS } from './src/config/colors';
 import { getDatabase } from './src/db';
@@ -34,6 +35,8 @@ export default function App() {
   const [backgroundEnabled, setBackgroundEnabled] = useState(false);
   const [notificationDetail, setNotificationDetail] = useState<NotificationDetailPayload | null>(null);
   const [passiveState, setPassiveState] = useState<PassiveListenerState>(passiveListener.getState());
+  const [showSplash, setShowSplash] = useState(true);
+  const splashFade = useRef(new Animated.Value(1)).current;
   const processing = useRef(false);
   const queueRequested = useRef(false);
   const receivingShare = useRef(false);
@@ -118,10 +121,15 @@ export default function App() {
         // Wait until 1 second has elapsed since launch, then hide splash.
         const elapsed = Date.now() - splashShownAt;
         const remaining = Math.max(0, 2000 - elapsed);
-        setTimeout(() => void SplashScreen.hideAsync(), remaining);
+        setTimeout(() => {
+          void SplashScreen.hideAsync();
+          // Fade out the JS animated splash
+          Animated.timing(splashFade, { toValue: 0, duration: 600, useNativeDriver: true }).start(() => setShowSplash(false));
+        }, remaining);
       } catch (error) {
         setStartupError(error instanceof Error ? error.message : 'Storage initialization failed.');
         void SplashScreen.hideAsync();
+        Animated.timing(splashFade, { toValue: 0, duration: 400, useNativeDriver: true }).start(() => setShowSplash(false));
       }
     })();
   }, [drainQueue]);
@@ -247,7 +255,7 @@ export default function App() {
         ) : null}
         <View style={styles.container}>
           {startupError ? <Text style={styles.error}>{startupError}</Text> : null}
-          {!ready && !startupError ? <Text style={styles.loading}>Opening your private memory...</Text> : null}
+          {/* Loading is handled by SplashAnimation overlay */}
           {ready && screen === 'capture' ? (
             <CaptureScreen
               refreshToken={refreshToken}
@@ -298,6 +306,7 @@ export default function App() {
         payload={notificationDetail}
         onDismiss={() => setNotificationDetail(null)}
       />
+      {showSplash ? <SplashAnimation fadeAnim={splashFade} /> : null}
     </SafeAreaProvider>
   );
 }

@@ -8,9 +8,7 @@
     "icon": "./assets/lucy-icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/lucy-splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0D1015"
+      "backgroundColor": "#0F0E0B"
     },
     "ios": {
       "supportsTablet": true,

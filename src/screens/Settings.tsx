@@ -325,7 +325,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
     : 'Not run yet';
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>Settings</Text>
       <Text style={styles.subtitle}>Quiet controls for your memory.</Text>
 
@@ -703,7 +703,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           </KeyboardAvoidingView>
         ) : null}
       </SettingsSheet>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -833,6 +833,7 @@ function Metric({ label, value, warm }: { label: string; value: number; warm?: b
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  listContent: { paddingBottom: 48 },
   title: { fontSize: 30, letterSpacing: -0.8, fontWeight: '700', color: LUCY_COLORS.textDark },
   subtitle: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 4, marginBottom: 18, lineHeight: 20 },
   list: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 21, borderWidth: 1, borderColor: LUCY_COLORS.border, overflow: 'hidden' },

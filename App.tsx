@@ -31,7 +31,7 @@ import { ConnectorsScreen } from './src/screens/Connectors';
 import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
 
 export default function App() {
-  const [screen, setScreen] = useState<'capture' | 'dashboard' | 'ask' | 'settings'>('capture');
+  const [screen, setScreen] = useState<'capture' | 'dashboard' | 'ask' | 'settings'>('dashboard');
   const [refreshToken, setRefreshToken] = useState(0);
   const [ready, setReady] = useState(false);
   const [startupError, setStartupError] = useState('');
@@ -297,8 +297,8 @@ export default function App() {
         </View>
         <View style={styles.bottomNav}>
           {([
-            { key: 'capture', label: 'Board', icon: '\u25a6' },
-            { key: 'dashboard', label: 'Today', icon: '\u25c8' },
+            { key: 'dashboard', label: 'Home', icon: '\u25c8' },
+            { key: 'capture', label: 'Tasks', icon: '\u25a6' },
             { key: 'ask', label: 'Ask', icon: '\u25ce' },
             { key: 'settings', label: 'Settings', icon: '\u25c9' },
           ] as const).map((tab) => (

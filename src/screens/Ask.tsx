@@ -46,7 +46,7 @@ export function AskScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
   const [asking, setAsking] = useState(false);
   const [threadId, setThreadId] = useState<number>();
-  const [view, setView] = useState<'new' | 'history' | 'insights' | 'thread'>('new');
+  const [view, setView] = useState<'new' | 'history' | 'insights' | 'thread'>('insights');
   const [history, setHistory] = useState<AskThreadSummaryRow[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
@@ -64,6 +64,9 @@ export function AskScreen() {
     const hide = Keyboard.addListener(hideEvent, () => setKeyboardOffset(0));
     return () => { show.remove(); hide.remove(); };
   }, []);
+
+  // Load insights on mount since it's the default view
+  useEffect(() => { void loadInsights(); }, []);
 
   function scrollToLatest() {
     setTimeout(() => conversationRef.current?.scrollToEnd({ animated: true }), 20);
@@ -256,9 +259,9 @@ export function AskScreen() {
           expanded={expandedInsight}
           onToggle={(i) => setExpandedInsight(expandedInsight === i ? null : i)}
           onAskThis={(q) => { setView('new'); setQuestion(q); }}
+          onOpenChat={() => { setView('new'); setQuestion(''); }}
         />
-      ) : null}
-      {view === 'history' ? (
+      ) : view === 'history' ? (
         <HistoryView history={history} loading={loadingHistory} onSelect={openThread} />
       ) : (
         <>
@@ -416,12 +419,14 @@ function InsightsView({
   expanded,
   onToggle,
   onAskThis,
+  onOpenChat,
 }: {
   insights: GeneratedInsight[];
   loading: boolean;
   expanded: number | null;
   onToggle: (i: number) => void;
   onAskThis: (q: string) => void;
+  onOpenChat: () => void;
 }) {
   const healthInsights = insights.filter((i) => i.category === 'wellbeing' && i.generatedAt);
   const otherInsights  = insights.filter((i) => !(i.category === 'wellbeing' && healthInsights.includes(i)));
@@ -435,6 +440,12 @@ function InsightsView({
       <View style={styles.insightsHeader}>
         <Text style={styles.insightsTitle}>What LUCY noticed</Text>
         <Text style={styles.insightsSub}>Tap any card to reveal the insight.</Text>
+        <TouchableOpacity
+          style={styles.insightsAskBtn}
+          onPress={onOpenChat}
+        >
+          <Text style={styles.insightsAskBtnText}>✦ Ask LUCY something →</Text>
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -765,7 +776,9 @@ const styles = StyleSheet.create({
   actionCancelText: { color: LUCY_COLORS.textMuted, fontSize: 15, fontWeight: '600' },
   insightsHeader: { marginBottom: 16 },
   insightsTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '800', marginBottom: 6 },
-  insightsSub: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 20 },
+  insightsSub: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 20, marginBottom: 12 },
+  insightsAskBtn: { alignSelf: 'flex-start', backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: LUCY_COLORS.primary + '55' },
+  insightsAskBtnText: { color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '700' },
   insightCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 16, marginBottom: 10, overflow: 'hidden' },
   insightCardTop: { flexDirection: 'row', alignItems: 'flex-start', padding: 16, gap: 12 },
   insightDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5, flexShrink: 0 },

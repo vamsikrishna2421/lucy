@@ -26,6 +26,7 @@ import { enqueueTranscript, analyzeTranscript } from '../processing/extract';
 import { transcribeAudioFile } from '../audio/WhisperTranscriber';
 import { getRemoteAccessState } from '../ai/remoteAccess';
 import { CaptureReplay } from '../components/CaptureReplay';
+import { detectAutomationIntent, executeAction, type ExtractedAction } from '../processing/automationEngine';
 import type { ExtractionResult } from '../types/extraction';
 
 // On-device STT for the voice button (iOS: SFSpeechRecognizer)
@@ -140,11 +141,10 @@ export function CaptureScreen({
   const [userName, setUserName] = useState('');
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  // Hero animation interpolations
-  const HERO_HEIGHT = 200;
-  const heroOpacity = scrollY.interpolate({ inputRange: [0, 100], outputRange: [1, 0], extrapolate: 'clamp' });
-  const heroHeight = scrollY.interpolate({ inputRange: [0, 120], outputRange: [HERO_HEIGHT, 0], extrapolate: 'clamp' });
-  const compactOpacity = scrollY.interpolate({ inputRange: [60, 120], outputRange: [0, 1], extrapolate: 'clamp' });
+  // Hero animation — opacity only (native driver = no JS thread blocking = no flicker)
+  const HERO_HEIGHT = 180;
+  const heroOpacity = scrollY.interpolate({ inputRange: [0, 80], outputRange: [1, 0], extrapolate: 'clamp' });
+  const compactOpacity = scrollY.interpolate({ inputRange: [40, 90], outputRange: [0, 1], extrapolate: 'clamp' });
 
   // WhatsApp-style voice button animation
   const micScale = useRef(new Animated.Value(1)).current;
@@ -161,6 +161,8 @@ export function CaptureScreen({
   const [voiceRecording, setVoiceRecording] = useState(false);
   const [scanningReceipt, setScanningReceipt] = useState(false);
   const [replayExtraction, setReplayExtraction] = useState<ExtractionResult | null>(null);
+  const [pendingAction, setPendingAction] = useState<ExtractedAction | null>(null);
+  const [executingAction, setExecutingAction] = useState(false);
   type RecInst = { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void };
   const audioRecorder = useRef<RecInst | null>(null);
 
@@ -309,6 +311,16 @@ export function CaptureScreen({
   const sendCapture = async () => {
     const outgoing = text.trim();
     if (!outgoing) return;
+
+    // Detect automation intent FIRST — if high confidence, show confirmation instead of queuing
+    const autoAction = detectAutomationIntent(outgoing);
+    if (autoAction && autoAction.confidence >= 0.8) {
+      setText('');
+      Keyboard.dismiss();
+      setPendingAction(autoAction);
+      return;
+    }
+
     try {
       setSending(true);
       await enqueueTranscript(outgoing, 'text', markedPrivate);
@@ -376,8 +388,8 @@ export function CaptureScreen({
         </View>
       </Animated.View>
 
-      {/* Hero section */}
-      <Animated.View style={[styles.hero, { opacity: heroOpacity, height: heroHeight, overflow: 'hidden' }]}>
+      {/* Hero section — fixed height, fades with native driver (no flickering) */}
+      <Animated.View style={[styles.hero, { opacity: heroOpacity }]} pointerEvents={heroOpacity === 0 ? 'none' : 'auto'}>
         <View style={styles.heroGlow} />
         <Text style={styles.heroGreeting}>{getGreeting()}{userName ? `, ${userName}` : ''}</Text>
         <Text style={styles.heroTitle}>LUCY</Text>
@@ -394,7 +406,7 @@ export function CaptureScreen({
         style={styles.board}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
         scrollEventThrottle={16}
       >
         {groups.length === 0 && done.length === 0 ? (
@@ -451,6 +463,40 @@ export function CaptureScreen({
         <View style={styles.ack}>
           <Text style={styles.ackText}>{acknowledgement}</Text>
         </View>
+      ) : null}
+
+      {/* Automation confirmation card */}
+      {pendingAction ? (
+        <View style={styles.autoCard}>
+          <Text style={styles.autoCardLabel}>LUCY CAN DO THIS</Text>
+          <Text style={styles.autoCardTitle}>{pendingAction.displayText}</Text>
+          <View style={styles.autoCardButtons}>
+            <TouchableOpacity
+              style={[styles.autoConfirmBtn, executingAction && { opacity: 0.5 }]}
+              disabled={executingAction}
+              onPress={async () => {
+                setExecutingAction(true);
+                const result = await executeAction(pendingAction);
+                setExecutingAction(false);
+                setPendingAction(null);
+                setAcknowledgement(result.success ? `Done — ${result.message}` : `Could not — ${result.message}`);
+                setTimeout(() => setAcknowledgement(''), 3000);
+              }}
+            >
+              <Text style={styles.autoConfirmText}>{executingAction ? '...' : pendingAction.confirmText}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.autoCancelBtn} onPress={() => setPendingAction(null)}>
+              <Text style={styles.autoCancelText}>Not now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
+      {/* Keyboard dismiss bar — visible when keyboard is open */}
+      {keyboardOffset > 0 ? (
+        <TouchableOpacity style={styles.keyboardDismissBar} onPress={() => Keyboard.dismiss()}>
+          <Text style={styles.keyboardDismissText}>Done  ▾</Text>
+        </TouchableOpacity>
       ) : null}
 
       <View style={styles.composerDock}>
@@ -687,6 +733,16 @@ const styles = StyleSheet.create({
   undoText: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700' },
   // Capture
   ack: { alignSelf: 'center', backgroundColor: LUCY_COLORS.primarySoft, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, marginBottom: 8 },
+  keyboardDismissBar: { alignSelf: 'flex-end', paddingHorizontal: 18, paddingVertical: 6, marginBottom: 2 },
+  keyboardDismissText: { color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '700' },
+  autoCard: { marginHorizontal: 16, marginBottom: 10, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.primary + '44', padding: 16, gap: 10 },
+  autoCardLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.4, color: LUCY_COLORS.primary, textTransform: 'uppercase' },
+  autoCardTitle: { fontSize: 17, fontWeight: '700', color: LUCY_COLORS.textDark },
+  autoCardButtons: { flexDirection: 'row', gap: 10 },
+  autoConfirmBtn: { flex: 1, backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+  autoConfirmText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  autoCancelBtn: { paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center' },
+  autoCancelText: { color: LUCY_COLORS.textSubtle, fontSize: 14 },
   ackText: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700' },
   composerDock: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, paddingTop: 4 },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, paddingTop: 8 },

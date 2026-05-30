@@ -20,7 +20,7 @@ import { organizeMemory } from '../processing/organizer';
 import { enqueueTranscript } from '../processing/extract';
 import { archiveTodo } from '../db/todos';
 
-type ViewMode = 'Now' | 'Timeline' | 'Library';
+type ViewMode = 'Focus Now' | 'Timeline' | 'Brain';
 type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'Places' | 'Interests' | 'People';
 
 function displayTimestamp(value: string): string {
@@ -57,7 +57,7 @@ function groupUpdates(updates: CaptureRow[]): Record<number, CaptureRow[]> {
 }
 
 export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
-  const [view, setView] = useState<ViewMode>('Now');
+  const [view, setView] = useState<ViewMode>('Timeline');
   const [tab, setTab] = useState<LibraryTab>('Todos');
   const [todos, setTodos] = useState<TodoRow[]>([]);
   const [ideas, setIdeas] = useState<IdeaRow[]>([]);
@@ -138,7 +138,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   const pendingTodos = todos.filter((item) => item.status === 'pending');
   const focusTasks = pendingTodos.filter((item) => item.urgency === 'high').slice(0, 3);
   const displayTasks = focusTasks.length ? focusTasks : pendingTodos.slice(0, 3);
-  const views: ViewMode[] = ['Now', 'Timeline', 'Library'];
+  const views: ViewMode[] = ['Timeline', 'Focus Now', 'Brain'];
 
   return (
     <View style={styles.container}>
@@ -152,9 +152,9 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
           </TouchableOpacity>
         ))}
       </View>
-      {view === 'Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} /> : null}
-      {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} /> : null}
-      {view === 'Library' ? (
+      {view === 'Focus Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} /> : null}
+      {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} /> : null}
+      {view === 'Brain' ? (
         <LibraryView
           tab={tab}
           setTab={setTab}
@@ -428,10 +428,12 @@ function TimelineView({
   captures,
   moodsByCapture,
   onFeedback,
+  onQueued,
 }: {
   captures: CaptureRow[];
   moodsByCapture: Record<number, string>;
   onFeedback: () => void;
+  onQueued?: () => void;
 }) {
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [feedbackTarget, setFeedbackTarget] = useState<CaptureRow | null>(null);
@@ -440,6 +442,9 @@ function TimelineView({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<CaptureRow[] | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [quickText, setQuickText] = useState('');
+  const [quickSending, setQuickSending] = useState(false);
+  const [quickAck, setQuickAck] = useState('');
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -468,8 +473,42 @@ function TimelineView({
     } finally { setSending(false); }
   };
 
+  const sendQuick = async () => {
+    const t = quickText.trim();
+    if (!t || quickSending) return;
+    setQuickSending(true);
+    try {
+      await enqueueTranscript(t, 'text', false);
+      setQuickText('');
+      setQuickAck('Got it ✓');
+      setTimeout(() => setQuickAck(''), 2000);
+      onQueued?.();
+    } catch { /* non-critical */ } finally { setQuickSending(false); }
+  };
+
   return (
     <>
+      {/* Quick capture bar */}
+      <View style={styles.tlQuickBar}>
+        <TextInput
+          style={styles.tlQuickInput}
+          placeholder="Capture a thought..."
+          placeholderTextColor={LUCY_COLORS.textSubtle}
+          value={quickAck || quickText}
+          onChangeText={setQuickText}
+          editable={!quickAck}
+          returnKeyType="send"
+          onSubmitEditing={() => void sendQuick()}
+          blurOnSubmit={false}
+        />
+        <TouchableOpacity
+          style={[styles.tlQuickSend, (!quickText.trim() || quickSending) && { opacity: 0.4 }]}
+          onPress={() => void sendQuick()}
+          disabled={!quickText.trim() || quickSending}
+        >
+          <Text style={styles.tlQuickSendText}>{quickSending ? '...' : '→'}</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.searchBar}>
         <TextInput
           style={styles.searchInput}
@@ -988,6 +1027,10 @@ const styles = StyleSheet.create({
   structuredText: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 19 },
   captureMeta: { marginTop: 10, alignItems: 'center', justifyContent: 'flex-end', flexDirection: 'row', gap: 8 },
   captureStatus: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 12, textTransform: 'capitalize' },
+  tlQuickBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.primary + '44', paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, gap: 10 },
+  tlQuickInput: { flex: 1, color: LUCY_COLORS.textDark, fontSize: 15, paddingVertical: 0 },
+  tlQuickSend: { backgroundColor: LUCY_COLORS.primary, width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  tlQuickSendText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8, gap: 8 },
   searchInput: { flex: 1, color: LUCY_COLORS.textDark, fontSize: 14 },
   searchClear: { color: LUCY_COLORS.textSubtle, fontSize: 14, fontWeight: '700' },

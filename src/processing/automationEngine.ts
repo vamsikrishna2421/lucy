@@ -18,6 +18,7 @@
 
 import { Linking, Platform } from 'react-native';
 import * as Calendar from 'expo-calendar';
+import * as Notifications from 'expo-notifications';
 
 export type ActionType =
   | 'timer'
@@ -314,24 +315,39 @@ export async function executeAction(action: ExtractedAction): Promise<{ success:
       case 'timer': {
         const seconds = parseInt(action.params.seconds ?? '60', 10);
         if (Platform.OS === 'android') {
-          await Linking.openURL(`intent:#Intent;action=android.intent.action.SET_TIMER;S.android.intent.extra.alarm.LENGTH=${seconds};S.android.intent.extra.alarm.SKIP_UI=true;end`);
+          // Android native clock timer intent
+          const worked = await Linking.canOpenURL('android.timer://');
+          if (worked) {
+            await Linking.openURL(`android.timer://?duration=${seconds}`);
+          } else {
+            await Linking.openURL(`intent:#Intent;action=android.intent.action.SET_TIMER;S.android.intent.extra.alarm.LENGTH=${seconds};S.android.intent.extra.alarm.SKIP_UI=true;end`);
+          }
+          return { success: true, message: `${action.params.label} timer started` };
         } else {
-          // iOS: use Shortcuts or clock app deep link
-          const mins = Math.ceil(seconds / 60);
-          await Linking.openURL(`shortcuts://run-shortcut?name=Set%20Timer&input=${mins}`);
+          // iOS: schedule a local notification — no Shortcuts setup required
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `⏰ Timer done`,
+              body: `Your ${action.params.label} timer is complete`,
+              sound: true,
+            },
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, repeats: false },
+          });
+          return { success: true, message: `${action.params.label} timer set — you'll get a notification when it's done` };
         }
-        return { success: true, message: `${action.params.label} timer started` };
       }
 
       case 'call': {
         const phone = await findContactPhone(action.params.name ?? '');
         if (phone) {
-          await Linking.openURL(`tel:${phone.replace(/\s/g, '')}`);
+          await Linking.openURL(`tel:${phone.replace(/\D/g, '')}`);
           return { success: true, message: `Calling ${action.params.name}` };
         }
-        // No phone found — open dialer with name search
-        await Linking.openURL(`tel:`);
-        return { success: false, message: `Couldn't find ${action.params.name} in contacts` };
+        // No match — open Contacts app so user can find them
+        const contactsUrl = Platform.OS === 'ios' ? 'contacts://' : 'content://contacts/people/';
+        const canOpen = await Linking.canOpenURL(contactsUrl);
+        await Linking.openURL(canOpen ? contactsUrl : 'tel:');
+        return { success: false, message: `"${action.params.name}" not found in contacts — opened Contacts app` };
       }
 
       case 'navigate': {

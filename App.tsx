@@ -110,9 +110,13 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
   useEffect(() => {
     void (async () => {
       try {
-        // Load active brain user FIRST (determines which DB to open)
-        const { loadActiveUser } = await import('./src/db/userManager');
+        // Load active brain — but never auto-restore Demo brain on cold start
+        // Demo brain must be switched to explicitly by the user each session
+        const { loadActiveUser, getActiveUser, switchUser } = await import('./src/db/userManager');
         await loadActiveUser();
+        if (getActiveUser().id === 'demo') {
+          await switchUser({ id: 'main', name: 'My Brain' });
+        }
 
         const db = await getDatabase();
         await initializeDeviceModelSelection();
@@ -136,17 +140,7 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
           }
         } catch { /* non-critical */ }
 
-        // Seed Eleanor's brain silently in the background — doesn't block the UI
-        // Uses a separate DB handle so the active user's DB is never touched
-        void (async () => {
-          try {
-            const { openNamedDatabase } = await import('./src/db');
-            const demoDb = await openNamedDatabase('lucy_demo.db', 'lucy_database_key_demo');
-            const { seedDemoDataIfNeeded } = await import('./src/processing/demoSeed');
-            await seedDemoDataIfNeeded(demoDb);
-            await demoDb.closeAsync();
-          } catch { /* non-critical — Eleanor will seed on next launch or on switch */ }
-        })();
+        // Eleanor's brain seeds when user explicitly switches to it (with progress screen)
 
         setReady(true);
         void drainQueue();

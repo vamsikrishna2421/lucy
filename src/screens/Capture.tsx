@@ -383,32 +383,6 @@ export function CaptureScreen({
   return (
     <View style={[styles.container, { paddingBottom: keyboardOffset }]}>
 
-      {/* Permanent control bar — always visible */}
-      <View style={styles.controlBar}>
-        {onMeeting ? (
-          <TouchableOpacity style={styles.controlMeetingPill} onPress={onMeeting}>
-            <View style={[styles.compactDot, { backgroundColor: '#ef4444' }]} />
-            <Text style={[styles.compactPillText, { color: '#ef4444' }]}>Meeting</Text>
-          </TouchableOpacity>
-        ) : null}
-        <TouchableOpacity
-          style={[styles.controlPill, passiveState?.status === 'listening' && styles.compactPillActive]}
-          onPress={onToggleListen}
-        >
-          <View style={[styles.compactDot, passiveState?.status === 'listening' && { backgroundColor: '#ef4444' }]} />
-          <Text style={[styles.compactPillText, passiveState?.status === 'listening' && { color: LUCY_COLORS.primary }]}>
-            {listenPillLabel()}
-          </Text>
-        </TouchableOpacity>
-        {/* Brain switcher — replaces "Background on" */}
-        <TouchableOpacity style={styles.controlBrainPill} onPress={onBrainSwitch}>
-          <Text style={styles.compactPillText}>◈ </Text>
-          <Text style={[styles.compactPillText, { color: LUCY_COLORS.primary }]} numberOfLines={1}>
-            {activeBrainName}
-          </Text>
-          <Text style={[styles.compactPillText, { color: LUCY_COLORS.textSubtle }]}> ▾</Text>
-        </TouchableOpacity>
-      </View>
 
 
       <Animated.ScrollView

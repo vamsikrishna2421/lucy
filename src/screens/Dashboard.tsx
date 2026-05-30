@@ -74,6 +74,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   const [organizationRun, setOrganizationRun] = useState<OrganizationRunRow | null>(null);
   const [openLoops, setOpenLoops] = useState<OpenLoopRow[]>([]);
   const [followUps, setFollowUps] = useState<FollowUpRow[]>([]);
+  const [moodTrend, setMoodTrend] = useState<{ dominant: string; positiveRatio: number; recentTones: string[] }>({ dominant: 'neutral', positiveRatio: 0.5, recentTones: [] });
   const [contextRefresh, setContextRefresh] = useState(0);
 
   useEffect(() => {
@@ -109,6 +110,10 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
       setOrganizationRun(results[11]);
       setOpenLoops(results[12]);
       setFollowUps(results[13]);
+      try {
+        const { getMoodTrend } = await import('../processing/temporalEngine');
+        setMoodTrend(await getMoodTrend(db, 7));
+      } catch { /* non-critical */ }
       const nextUpdates = await listCaptureUpdates(db, results[6].map((capture) => capture.id));
       setUpdates(groupUpdates(nextUpdates));
     })();
@@ -130,7 +135,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
           </TouchableOpacity>
         ))}
       </View>
-      {view === 'Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} onOpenContext={() => setView('Context')} onLoopResolved={() => setContextRefresh((v) => v + 1)} /> : null}
+      {view === 'Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onOpenContext={() => setView('Context')} onLoopResolved={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Context' ? (
         <NeedsContextView requests={contextRequests} onAnswered={() => setContextRefresh((value) => value + 1)} />
       ) : null}
@@ -160,6 +165,7 @@ function NowView({
   contextCount,
   openLoops,
   followUps,
+  moodTrend,
   onOpenContext,
   onLoopResolved,
 }: {
@@ -169,9 +175,12 @@ function NowView({
   contextCount: number;
   openLoops: OpenLoopRow[];
   followUps: FollowUpRow[];
+  moodTrend: { dominant: string; positiveRatio: number; recentTones: string[] };
   onOpenContext: () => void;
   onLoopResolved: () => void;
 }) {
+  const moodEmoji: Record<string, string> = { positive: '😊', excited: '⚡', calm: '😌', neutral: '😐', stressed: '😤', frustrated: '😤', negative: '😔' };
+  const moodColor: Record<string, string> = { positive: '#4ADE80', excited: '#FFA05C', calm: '#60A5FA', neutral: LUCY_COLORS.textSubtle, stressed: '#F59E0B', frustrated: '#FB7185', negative: '#FB7185' };
   const organizing = captures.filter((item) => captureStatus(item) !== 'complete').length;
   const scheduledReminders = reminders.filter((item) => Boolean(item.notification_id) && Boolean(item.remind_at));
   const unscheduledCount = reminders.length - scheduledReminders.length;
@@ -198,6 +207,18 @@ function NowView({
         <Text style={styles.tonightDetail}>
           {organizing ? `${organizing} capture${organizing === 1 ? '' : 's'} still organizing.` : 'Everything captured has been organized.'}
         </Text>
+        {moodTrend.recentTones.length > 0 ? (
+          <View style={styles.moodBar}>
+            <Text style={[styles.moodLabel, { color: moodColor[moodTrend.dominant] ?? LUCY_COLORS.textSubtle }]}>
+              {moodEmoji[moodTrend.dominant] ?? '😐'} {moodTrend.dominant} this week
+            </Text>
+            <View style={styles.moodDots}>
+              {moodTrend.recentTones.slice(0, 7).map((tone, i) => (
+                <View key={i} style={[styles.moodDot, { backgroundColor: moodColor[tone] ?? LUCY_COLORS.textSubtle }]} />
+              ))}
+            </View>
+          </View>
+        ) : null}
       </View>
       {contextCount ? (
         <TouchableOpacity style={styles.contextPrompt} onPress={onOpenContext}>
@@ -670,6 +691,10 @@ const styles = StyleSheet.create({
   eyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
   tonightTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '700', marginTop: 9 },
   tonightDetail: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 7 },
+  moodBar: { marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  moodLabel: { fontSize: 12, fontWeight: '700' },
+  moodDots: { flexDirection: 'row', gap: 5 },
+  moodDot: { width: 8, height: 8, borderRadius: 4 },
   contextPrompt: { backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderRadius: 20, padding: 16, marginBottom: 19 },
   contextPromptTitle: { color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700', marginTop: 8 },
   contextIntro: { backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderRadius: 22, padding: 18, marginBottom: 14 },

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { shareAsync } from 'expo-sharing';
 import { Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { clearDownloadedDeviceModels, getDeviceModelState, prepareDeviceModel, selectDeviceModel, subscribeToDeviceModel, type DeviceModelState } from '../ai/device';
 import { localModelOptions, type LocalModelId } from '../ai/modelCatalog';
@@ -196,6 +197,87 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
     }
   };
 
+  const deleteAllData = () => {
+    Alert.alert(
+      'Delete all memories?',
+      'This permanently deletes all your captures, tasks, reminders, expenses, ideas, and organized memory. Your app settings are kept. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete everything',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const db = await getDatabase();
+              await db.execAsync(`
+                DELETE FROM captures;
+                DELETE FROM todos;
+                DELETE FROM reminders;
+                DELETE FROM expenses;
+                DELETE FROM ideas;
+                DELETE FROM places;
+                DELETE FROM people;
+                DELETE FROM interests;
+                DELETE FROM open_loops;
+                DELETE FROM follow_ups;
+                DELETE FROM context_requests;
+                DELETE FROM knowledge_entities;
+                DELETE FROM knowledge_connections;
+                DELETE FROM knowledge_insights;
+                DELETE FROM organization_runs;
+                DELETE FROM extractions;
+                DELETE FROM capture_embeddings;
+                DELETE FROM person_contexts;
+                DELETE FROM mood_entries;
+                DELETE FROM questions;
+              `);
+              Alert.alert('Done', 'All memories have been deleted. LUCY starts fresh.');
+              setLocalRefresh((v) => v + 1);
+            } catch (e) {
+              Alert.alert('Error', 'Could not delete all data. Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const exportAllData = async () => {
+    try {
+      const db = await getDatabase();
+      const [captures, todos, expenses, reminders, ideas, people, openLoops, followUps] = await Promise.all([
+        db.getAllAsync('SELECT * FROM captures ORDER BY created_at DESC'),
+        db.getAllAsync('SELECT * FROM todos ORDER BY created_at DESC'),
+        db.getAllAsync('SELECT * FROM expenses ORDER BY created_at DESC'),
+        db.getAllAsync('SELECT * FROM reminders ORDER BY created_at DESC'),
+        db.getAllAsync('SELECT * FROM ideas ORDER BY created_at DESC'),
+        db.getAllAsync('SELECT * FROM people ORDER BY name ASC'),
+        db.getAllAsync('SELECT * FROM open_loops ORDER BY created_at DESC'),
+        db.getAllAsync('SELECT * FROM follow_ups ORDER BY created_at DESC'),
+      ]);
+      const exportData = {
+        exported_at: new Date().toISOString(),
+        version: '1.0',
+        captures,
+        todos,
+        expenses,
+        reminders,
+        ideas,
+        people,
+        open_loops: openLoops,
+        follow_ups: followUps,
+      };
+      const json = JSON.stringify(exportData, null, 2);
+      // Write to a temp file and share
+      const { cacheDirectory, writeAsStringAsync } = require('expo-file-system') as { cacheDirectory: string; writeAsStringAsync: (path: string, content: string) => Promise<void> };
+      const exportPath = `${cacheDirectory}lucy-export-${Date.now()}.json`;
+      await writeAsStringAsync(exportPath, json);
+      await shareAsync(exportPath, { mimeType: 'application/json', dialogTitle: 'Export LUCY data' });
+    } catch (e) {
+      Alert.alert('Export failed', 'Could not export data. Please try again.');
+    }
+  };
+
   const confirmFullReprocess = () => {
     Alert.alert(
       'Reprocess all memories?',
@@ -317,6 +399,22 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           title="Privacy"
           value="Original private thoughts stay local"
           onInfo={() => setActivePanel('privacy')}
+        />
+      </View>
+
+      <View style={styles.list}>
+        <SettingsRow
+          title="Export my data"
+          value="Download all memories as JSON"
+          onAction={exportAllData}
+          actionLabel="Export"
+        />
+        <SettingsRow
+          title="Delete all memories"
+          value="Permanently erase everything LUCY knows"
+          onAction={deleteAllData}
+          actionLabel="Delete"
+          actionDestructive
         />
       </View>
 
@@ -570,6 +668,7 @@ function SettingsRow({
   active = false,
   actionLabel,
   actionDisabled,
+  actionDestructive,
   onAction,
   onInfo,
 }: {
@@ -579,8 +678,9 @@ function SettingsRow({
   active?: boolean;
   actionLabel?: string;
   actionDisabled?: boolean;
+  actionDestructive?: boolean;
   onAction?: () => void;
-  onInfo: () => void;
+  onInfo?: () => void;
 }) {
   return (
     <View style={styles.settingRow}>
@@ -600,8 +700,8 @@ function SettingsRow({
         </View>
       </TouchableOpacity>
       {actionLabel ? (
-        <TouchableOpacity disabled={actionDisabled} onPress={onAction} style={[styles.rowAction, actionDisabled && styles.dim]}>
-          <Text style={styles.rowActionText}>{actionLabel}</Text>
+        <TouchableOpacity disabled={actionDisabled} onPress={onAction} style={[styles.rowAction, actionDisabled && styles.dim, actionDestructive && styles.rowActionDestructive]}>
+          <Text style={[styles.rowActionText, actionDestructive && styles.rowActionTextDestructive]}>{actionLabel}</Text>
         </TouchableOpacity>
       ) : null}
     </View>
@@ -690,6 +790,8 @@ const styles = StyleSheet.create({
   statusTextActive: { color: LUCY_COLORS.primaryGlow },
   rowAction: { borderRadius: 14, backgroundColor: LUCY_COLORS.primarySoft, paddingHorizontal: 12, paddingVertical: 8 },
   rowActionText: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 12 },
+  rowActionDestructive: { backgroundColor: 'rgba(251,113,133,0.12)' },
+  rowActionTextDestructive: { color: '#FB7185' },
   infoButton: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, justifyContent: 'center', alignItems: 'center' },
   infoText: { color: LUCY_COLORS.textMuted, fontSize: 15, fontWeight: '700', fontStyle: 'italic' },
   button: { borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', paddingVertical: 13 },

@@ -252,9 +252,12 @@ export default function App() {
           <View style={styles.brandRow}>
             <Text style={styles.brandName}>LUC<Text style={{ color: '#FF8C42' }}>Y</Text></Text>
             <View style={styles.headerActions}>
-              <TouchableOpacity style={styles.meetingHeaderPill} onPress={() => setMeetingVisible(true)}>
-                <View style={[styles.listenDot, { backgroundColor: '#ef4444' }]} />
-                <Text style={[styles.listenText, { color: '#ef4444' }]}>Meeting</Text>
+              <TouchableOpacity
+                style={[styles.listenPill, meetingVisible && styles.listenPillActive]}
+                onPress={() => setMeetingVisible(true)}
+              >
+                <View style={[styles.listenDot, meetingVisible && styles.listenDotActive]} />
+                <Text style={[styles.listenText, meetingVisible && styles.listenTextActive]}>Meeting</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.listenPill, passiveState.status === 'listening' && styles.listenPillActive]} onPress={togglePassiveListening}>
                 <View style={[styles.listenDot, passiveState.status === 'listening' && styles.listenDotActive]} />

@@ -579,15 +579,31 @@ function TimelineView({
                     <View style={[styles.tlAccent, { backgroundColor: moodColor }]} />
                     <View style={styles.tlCardContent}>
                       {item.extracted_title ? (
-                        <Text style={styles.tlTitle} numberOfLines={isExpanded ? undefined : 2}>{protectedPreview(item.extracted_title)}</Text>
-                      ) : null}
-                      <Text style={styles.tlSnippet} numberOfLines={isExpanded ? undefined : 1}>{protectedPreview(item.raw_transcript ?? '')}</Text>
+                        // Extracted title — curated by LUCY
+                        <Text style={styles.tlTitle} numberOfLines={isExpanded ? undefined : 2}>
+                          {protectedPreview(item.extracted_title)}
+                        </Text>
+                      ) : (
+                        // Not yet processed — show neutral placeholder, never raw text
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: LUCY_COLORS.primary, opacity: 0.6 }} />
+                          <Text style={[styles.tlTitle, { color: LUCY_COLORS.textSubtle, fontStyle: 'italic' }]}>
+                            Organizing...
+                          </Text>
+                        </View>
+                      )}
 
-                      {isExpanded && item.structured_text ? (
+                      {/* Only show a snippet when expanded, and only from structured_text */}
+                      {isExpanded ? (
                         <View style={styles.tlKeyPoints}>
-                          {extractKeyPoints(item.structured_text).map((pt, i) => (
-                            <Text key={i} style={styles.tlKeyPoint}>{pt}</Text>
-                          ))}
+                          {item.structured_text
+                            ? extractKeyPoints(item.structured_text).map((pt, i) => (
+                                <Text key={i} style={styles.tlKeyPoint}>{pt}</Text>
+                              ))
+                            : item.extracted_title
+                              ? null
+                              : <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, fontStyle: 'italic' }}>LUCY is processing this thought...</Text>
+                          }
                         </View>
                       ) : null}
 

@@ -122,15 +122,46 @@ export async function enqueueTranscript(
       const { isMultiDateJournal, ingestJournal } = await import('./journalSplitter');
       if (isMultiDateJournal(trimmed)) {
         const count = await ingestJournal(db, trimmed, preflight.level);
-        if (count >= 3) return count; // returned count instead of a single ID
+        if (count >= 3) return count;
       }
-    } catch { /* fall through to normal capture */ }
+    } catch { /* fall through */ }
+
+    // Split multiple distinct thoughts into separate captures
+    try {
+      const { shouldSplitThoughts, splitThoughts } = await import('./thoughtSplitter');
+      if (shouldSplitThoughts(trimmed)) {
+        const thoughts = splitThoughts(trimmed);
+        if (thoughts.length >= 2) {
+          let lastId = 0;
+          for (const thought of thoughts) {
+            lastId = await insertCapture(db, source, thought, preflight.level, markedPrivate);
+            // Apply temporal anchor to each thought
+            const { extractTemporalAnchor } = await import('./temporalAnchor');
+            const anchor = extractTemporalAnchor(thought);
+            if (anchor) {
+              await db.runAsync('UPDATE captures SET created_at = ? WHERE id = ?', anchor.toISOString(), lastId);
+            }
+          }
+          return lastId;
+        }
+      }
+    } catch { /* fall through */ }
   }
 
-  if (source === 'android' || source === 'ios') {
-    return insertSharedCapture(db, source, trimmed, preflight.level, markedPrivate);
-  }
-  return insertCapture(db, source, trimmed, preflight.level, markedPrivate);
+  // Single capture — apply temporal anchor if date mentioned
+  const id = (source === 'android' || source === 'ios')
+    ? await insertSharedCapture(db, source, trimmed, preflight.level, markedPrivate)
+    : await insertCapture(db, source, trimmed, preflight.level, markedPrivate);
+
+  try {
+    const { extractTemporalAnchor } = await import('./temporalAnchor');
+    const anchor = extractTemporalAnchor(trimmed);
+    if (anchor) {
+      await db.runAsync('UPDATE captures SET created_at = ? WHERE id = ?', anchor.toISOString(), id);
+    }
+  } catch { /* non-critical */ }
+
+  return id;
 }
 
 async function persistExtraction(

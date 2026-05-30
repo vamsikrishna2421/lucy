@@ -1,0 +1,113 @@
+/**
+ * LUCY Meeting Mode
+ *
+ * Wraps passive listening with meeting-specific intelligence:
+ * - Named meeting sessions with duration tracking
+ * - Meeting-optimized extraction: decisions, action items, questions, attendees
+ * - Auto-summary when session ends
+ * - Saves meeting as a structured note with full transcript
+ */
+
+import type { SQLiteDatabase } from 'expo-sqlite';
+import { getRemoteAccessState, getRemoteOpenAIKey } from '../ai/remoteAccess';
+import { promptOpenAI } from '../ai/openai';
+import { enqueueTranscript } from './extract';
+import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
+
+export interface MeetingSession {
+  id: string;
+  title: string;
+  startedAt: Date;
+  endedAt?: Date;
+  durationMs?: number;
+  transcript: string;
+  summary?: MeetingSummary;
+}
+
+export interface MeetingSummary {
+  headline: string;               // 1 sentence: "Product roadmap discussion with Sam and Priya"
+  keyDecisions: string[];         // "We decided to..."
+  actionItems: ActionItem[];      // Who does what by when
+  openQuestions: string[];        // Things left unresolved
+  attendeesMentioned: string[];   // Names mentioned in transcript
+  nextSteps: string;              // 1-2 sentence narrative of what happens next
+  rawTranscript: string;
+}
+
+export interface ActionItem {
+  task: string;
+  owner?: string;
+  deadline?: string;
+}
+
+const MEETING_SYSTEM_PROMPT = `You are LUCY, extracting structured intelligence from a meeting transcript.
+Extract only what was explicitly said — never invent. Output valid JSON only.
+
+Schema:
+{
+  "headline": "one sentence summary of the meeting",
+  "keyDecisions": ["We decided to...", ...],
+  "actionItems": [{"task": "...", "owner": "person name or null", "deadline": "date or null"}],
+  "openQuestions": ["question that was raised but not resolved", ...],
+  "attendeesMentioned": ["Name1", "Name2"],
+  "nextSteps": "brief narrative of what happens next"
+}`;
+
+export async function generateMeetingSummary(
+  transcript: string,
+  title: string,
+  db: SQLiteDatabase,
+): Promise<MeetingSummary | null> {
+  if (!transcript.trim() || transcript.split(/\s+/).length < 20) return null;
+
+  const [remote, profile] = await Promise.all([getRemoteAccessState(), getUserProfile(db)]);
+  if (!remote.enabled || !remote.hasKey) return null;
+
+  const apiKey = await getRemoteOpenAIKey();
+  if (!apiKey) return null;
+
+  const userPrefix = buildUserContextPrefix(profile);
+  const input = `Meeting title: ${title}\n\nTranscript:\n${transcript.slice(0, 6000)}`;
+
+  try {
+    const raw = await promptOpenAI(`${userPrefix}${MEETING_SYSTEM_PROMPT}`, input, apiKey);
+    const start = raw.indexOf('{');
+    const end   = raw.lastIndexOf('}');
+    if (start === -1 || end === -1) return null;
+
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as Omit<MeetingSummary, 'rawTranscript'>;
+    return { ...parsed, rawTranscript: transcript };
+  } catch {
+    return null;
+  }
+}
+
+export async function saveMeetingToMemory(
+  summary: MeetingSummary,
+  title: string,
+  durationMs: number,
+): Promise<void> {
+  const durationMin = Math.round(durationMs / 60000);
+  const parts: string[] = [
+    `Meeting: ${title} (${durationMin} minutes)`,
+    summary.headline,
+  ];
+
+  if (summary.keyDecisions.length > 0) {
+    parts.push(`Decisions: ${summary.keyDecisions.join('; ')}`);
+  }
+  if (summary.actionItems.length > 0) {
+    const items = summary.actionItems
+      .map((a) => `${a.task}${a.owner ? ` (${a.owner})` : ''}${a.deadline ? ` by ${a.deadline}` : ''}`)
+      .join('; ');
+    parts.push(`Action items: ${items}`);
+  }
+  if (summary.openQuestions.length > 0) {
+    parts.push(`Open questions: ${summary.openQuestions.join('; ')}`);
+  }
+  if (summary.nextSteps) {
+    parts.push(`Next steps: ${summary.nextSteps}`);
+  }
+
+  await enqueueTranscript(parts.join('\n'), 'passive', false);
+}

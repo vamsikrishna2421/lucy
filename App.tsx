@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Animated, AppState, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { passiveListener, type PassiveListenerState } from './src/audio/PassiveListener';
 import { SplashAnimation } from './src/components/SplashAnimation';
+import { MeetingMode } from './src/components/MeetingMode';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { LUCY_COLORS } from './src/config/colors';
 import { getDatabase } from './src/db';
@@ -25,16 +26,18 @@ import { CaptureScreen } from './src/screens/Capture';
 import { DashboardScreen } from './src/screens/Dashboard';
 import { AskScreen } from './src/screens/Ask';
 import { SettingsScreen } from './src/screens/Settings';
+import { ConnectorsScreen } from './src/screens/Connectors';
 import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
 
 export default function App() {
-  const [screen, setScreen] = useState<'capture' | 'dashboard' | 'ask' | 'settings'>('capture');
+  const [screen, setScreen] = useState<'capture' | 'dashboard' | 'ask' | 'connectors' | 'settings'>('capture');
   const [refreshToken, setRefreshToken] = useState(0);
   const [ready, setReady] = useState(false);
   const [startupError, setStartupError] = useState('');
   const [backgroundEnabled, setBackgroundEnabled] = useState(false);
   const [notificationDetail, setNotificationDetail] = useState<NotificationDetailPayload | null>(null);
   const [passiveState, setPassiveState] = useState<PassiveListenerState>(passiveListener.getState());
+  const [meetingVisible, setMeetingVisible] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const splashFade = useRef(new Animated.Value(1)).current;
   const processing = useRef(false);
@@ -235,6 +238,10 @@ export default function App() {
             <View style={styles.brandRow}>
               <Text style={styles.brandName}>LUCY</Text>
               <View style={styles.headerActions}>
+                <TouchableOpacity style={styles.meetingPill} onPress={() => setMeetingVisible(true)}>
+                  <View style={[styles.listenDot, { backgroundColor: '#ef4444' }]} />
+                  <Text style={[styles.listenText, { color: '#ef4444' }]}>Meeting</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={[styles.listenPill, passiveState.status === 'listening' && styles.listenPillActive]} onPress={togglePassiveListening}>
                   <View style={[styles.listenDot, passiveState.status === 'listening' && styles.listenDotActive]} />
                   <Text style={[styles.listenText, passiveState.status === 'listening' && styles.listenTextActive]}>
@@ -271,6 +278,9 @@ export default function App() {
           ) : null}
           {ready && screen === 'dashboard' ? <DashboardScreen refreshToken={refreshToken} /> : null}
           {ready && screen === 'ask' ? <AskScreen /> : null}
+          {ready && screen === 'connectors' ? (
+            <ConnectorsScreen />
+          ) : null}
           {ready && screen === 'settings' ? (
             <SettingsScreen
               refreshToken={refreshToken}
@@ -285,6 +295,7 @@ export default function App() {
             { key: 'capture', label: 'Board', icon: '\u25a6' },
             { key: 'dashboard', label: 'Today', icon: '\u25c8' },
             { key: 'ask', label: 'Ask', icon: '\u25ce' },
+            { key: 'connectors', label: 'Connect', icon: '\u27c1' },
             { key: 'settings', label: 'Settings', icon: '\u25c9' },
           ] as const).map((tab) => (
             <TouchableOpacity
@@ -307,6 +318,7 @@ export default function App() {
         onDismiss={() => setNotificationDetail(null)}
       />
       {showSplash ? <SplashAnimation fadeAnim={splashFade} /> : null}
+      <MeetingMode visible={meetingVisible} onClose={() => setMeetingVisible(false)} />
     </SafeAreaProvider>
   );
 }
@@ -318,6 +330,7 @@ const styles = StyleSheet.create({
   brandLogo: { height: 32, width: 160 },
   brandName: { color: LUCY_COLORS.textDark, fontSize: 24, fontWeight: '800', letterSpacing: 1.3 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  meetingPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', flexDirection: 'row', alignItems: 'center', gap: 5 },
   listenPill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, flexDirection: 'row', alignItems: 'center', gap: 6 },
   listenPillActive: { backgroundColor: '#1a0a00', borderColor: LUCY_COLORS.primary },
   listenDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: LUCY_COLORS.textSubtle },

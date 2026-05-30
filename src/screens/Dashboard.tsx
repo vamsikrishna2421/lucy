@@ -526,6 +526,8 @@ function TimelineView({
     if (autoAction && autoAction.confidence >= 0.8) {
       setQuickText('');
       setPendingAction(autoAction);
+      // Still save the thought as a memory — a misfired detection must never lose it.
+      void enqueueTranscript(t, 'text', false).then(() => onQueued?.()).catch(() => {});
       return;
     }
 

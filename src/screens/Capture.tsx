@@ -557,6 +557,10 @@ export function CaptureScreen({
       setText('');
       Keyboard.dismiss();
       setPendingAction(autoAction);
+      // Still save the thought as a memory — a misfired detection must never lose it.
+      const wasPrivate = markedPrivate;
+      setMarkedPrivate(false);
+      void enqueueTranscript(outgoing, 'text', wasPrivate).then(() => onQueued()).catch(() => {});
       return;
     }
 

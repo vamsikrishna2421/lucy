@@ -860,15 +860,37 @@ function SecondaryButton({ disabled, label, onPress }: { disabled: boolean; labe
 
 function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: () => Promise<void> }) {
   const [retrying, setRetrying] = useState(false);
-  const [stuck, setStuck] = useState<Array<{ id: number; raw_transcript: string | null; processing_error: string | null }>>([]);
+  const [stuck, setStuck] = useState<Array<{ id: number; raw_transcript: string | null; extracted_title: string | null; processing_error: string | null }>>([]);
+  const [queued, setQueued] = useState<Array<{ id: number; raw_transcript: string | null; extracted_title: string | null }>>([]);
 
   useEffect(() => {
     void (async () => {
       const db = await getDatabase();
       const { getRetryingCaptures } = await import('../db/captures');
       setStuck(await getRetryingCaptures(db));
+      // Also show queued items so user can see what's pending
+      const queuedItems = await db.getAllAsync<{ id: number; raw_transcript: string | null; extracted_title: string | null }>(
+        `SELECT id, raw_transcript, extracted_title FROM captures WHERE processed = 0 AND archived_at IS NULL ORDER BY created_at DESC LIMIT 5`,
+      );
+      setQueued(queuedItems);
     })();
-  }, [queue.retrying]);
+  }, [queue.queued, queue.retrying]);
+
+  const renderCapture = (c: { id: number; raw_transcript: string | null; extracted_title: string | null; processing_error?: string | null }, color = LUCY_COLORS.surface) => (
+    <View key={c.id} style={{ backgroundColor: color, borderRadius: 10, padding: 10, marginTop: 6, gap: 3 }}>
+      <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '600' }} numberOfLines={1}>
+        {c.extracted_title ?? c.raw_transcript?.slice(0, 80) ?? '(no text)'}
+      </Text>
+      {c.raw_transcript && !c.extracted_title ? (
+        <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }} numberOfLines={1}>
+          {c.raw_transcript.slice(0, 100)}
+        </Text>
+      ) : null}
+      {c.processing_error ? (
+        <Text style={{ color: '#ef4444', fontSize: 11 }} numberOfLines={1}>Error: {c.processing_error}</Text>
+      ) : null}
+    </View>
+  );
 
   return (
     <>
@@ -880,20 +902,19 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
         <Metric label="Archived" value={queue.archived} />
       </View>
 
-      {queue.retrying > 0 ? (
+      {queued.length > 0 ? (
         <>
-          {stuck.map((c) => (
-            <View key={c.id} style={{ backgroundColor: LUCY_COLORS.surface, borderRadius: 10, padding: 10, marginTop: 8, gap: 4 }}>
-              <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '600' }} numberOfLines={2}>
-                {c.raw_transcript?.slice(0, 120) ?? '(no text)'}
-              </Text>
-              {c.processing_error ? (
-                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }} numberOfLines={1}>Error: {c.processing_error}</Text>
-              ) : null}
-            </View>
-          ))}
+          <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginTop: 12, marginBottom: 2 }}>WAITING TO PROCESS</Text>
+          {queued.map((c) => renderCapture(c))}
+        </>
+      ) : null}
+
+      {stuck.length > 0 ? (
+        <>
+          <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginTop: 12, marginBottom: 2 }}>STUCK — WILL RETRY</Text>
+          {stuck.map((c) => renderCapture(c, 'rgba(245,158,11,0.08)'))}
           <TouchableOpacity
-            style={{ marginTop: 12, backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingVertical: 12, alignItems: 'center', opacity: retrying ? 0.6 : 1 }}
+            style={{ marginTop: 10, backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingVertical: 12, alignItems: 'center', opacity: retrying ? 0.6 : 1 }}
             disabled={retrying}
             onPress={async () => { setRetrying(true); await onRetry().finally(() => setRetrying(false)); }}
           >

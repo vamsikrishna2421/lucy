@@ -469,8 +469,16 @@ function TimelineView({
     if (!feedbackTarget || !feedbackText.trim()) return;
     setSending(true);
     try {
-      const correction = `[Correction for: ${feedbackTarget.extracted_title ?? feedbackTarget.raw_transcript?.slice(0, 60)}]\n${feedbackText.trim()}`;
-      await enqueueTranscript(correction, 'text', feedbackTarget.privacy_level === 'private');
+      const db = await getDatabase();
+      // Append note to the SAME capture and re-queue — no new memory created
+      await db.runAsync(
+        `UPDATE captures SET
+           raw_transcript = raw_transcript || '\n\n[Added context: ' || ? || ']',
+           processed = 0, processing_error = NULL, attempt_count = 0,
+           extracted_title = NULL, structured_text = NULL
+         WHERE id = ?`,
+        feedbackText.trim(), feedbackTarget.id,
+      );
       setFeedbackTarget(null); setFeedbackText(''); onFeedback();
     } finally { setSending(false); }
   };
@@ -729,8 +737,15 @@ function CapturedView({ captures, updates, onFeedback }: { captures: CaptureRow[
     if (!feedbackTarget || !feedbackText.trim()) return;
     setSending(true);
     try {
-      const correction = `[Correction for previous capture: ${feedbackTarget.extracted_title ?? feedbackTarget.raw_transcript?.slice(0, 60)}]\n${feedbackText.trim()}`;
-      await enqueueTranscript(correction, 'text', feedbackTarget.privacy_level === 'private');
+      const db = await getDatabase();
+      await db.runAsync(
+        `UPDATE captures SET
+           raw_transcript = raw_transcript || '\n\n[Added context: ' || ? || ']',
+           processed = 0, processing_error = NULL, attempt_count = 0,
+           extracted_title = NULL, structured_text = NULL
+         WHERE id = ?`,
+        feedbackText.trim(), feedbackTarget.id,
+      );
       setFeedbackTarget(null);
       setFeedbackText('');
       onFeedback();

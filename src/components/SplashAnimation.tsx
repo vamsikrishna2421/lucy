@@ -1,78 +1,101 @@
+/**
+ * LUCY Eye Logo Animation
+ *
+ * Meaning:
+ *   Y (Yield)     = the sun/pupil at center — the moment of insight
+ *   L (Listen)    = planet 1, orbiting the eye
+ *   U (Understand)= planet 2, orbiting the eye
+ *   C (Connect)   = planet 3, orbiting the eye
+ *   Comet tails   = connecting the dots — LUCY always watching, always linking
+ *   Eye shape     = the guardian eye — a second brain that never sleeps
+ */
+
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
-const CX = 140;      // center x of the orbital system
-const CY = 110;      // center y
-const RX = 95;       // semi-major axis
-const RY = 32;       // semi-minor axis → makes it look elliptical
-const TAIL_LEN = 7;  // comet tail dots
-const TAIL_STEP = 0.18; // angle gap between tail dots
+// Eye geometry — very flat ellipse (ratio ~3:1) reads as an eye shape
+const CX = 145;  // center x
+const CY = 100;  // center y
+const RX = 118;  // semi-major axis (wide)
+const RY = 40;   // semi-minor axis (narrow) → eye shape
+
+const TAIL_DOTS = 8;
+const TAIL_STEP = 0.14;
+
+const PRIMARY = '#FF8C42';
+const GLOW    = '#FFA05C';
+const DIM     = '#FDDCB0';
 
 interface PlanetConfig {
-  phase: number;   // starting angle offset in radians
-  size: number;    // base planet size
-  speed: number;   // orbit speed multiplier
+  phase: number;
+  letter: string;
+  speed: number;
   color: string;
+  size: number;
 }
 
 const PLANETS: PlanetConfig[] = [
-  { phase: 0,                   size: 9,  speed: 1,    color: '#FF8C42' },
-  { phase: (Math.PI * 2) / 3,  size: 7,  speed: 1.35, color: '#FFA05C' },
-  { phase: (Math.PI * 4) / 3,  size: 6,  speed: 0.75, color: '#FDDCB0' },
+  { phase: 0,                   letter: 'L', speed: 1,    color: PRIMARY, size: 11 },
+  { phase: (Math.PI * 2) / 3,  letter: 'U', speed: 1.3,  color: GLOW,    size: 9  },
+  { phase: (Math.PI * 4) / 3,  letter: 'C', speed: 0.78, color: DIM,     size: 8  },
 ];
 
-function useOrbitAngle(phase: number, speed: number) {
+function useAnimatedAngle(phase: number, speed: number): number {
   const [angle, setAngle] = useState(phase);
+  const rafRef = useRef<number>(0);
+  const lastRef = useRef<number>(0);
+
   useEffect(() => {
-    let frame = 0;
-    const step = () => {
-      setAngle((prev) => prev + 0.018 * speed);
-      frame = requestAnimationFrame(step);
+    const tick = (ts: number) => {
+      const delta = lastRef.current ? (ts - lastRef.current) / 1000 : 0;
+      lastRef.current = ts;
+      setAngle((prev) => prev + delta * 1.2 * speed);
+      rafRef.current = requestAnimationFrame(tick);
     };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
   }, [speed]);
+
   return angle;
 }
 
-function Planet({ config }: { config: PlanetConfig }) {
-  const angle = useOrbitAngle(config.phase, config.speed);
-
-  // Ellipse position
+function Planet({ cfg }: { cfg: PlanetConfig }) {
+  const angle = useAnimatedAngle(cfg.phase, cfg.speed);
   const x = CX + RX * Math.cos(angle);
   const y = CY + RY * Math.sin(angle);
 
-  // Depth cue: planets at bottom (higher y) are "closer" — slightly larger
-  const depthFactor = (y - (CY - RY)) / (2 * RY); // 0 (far top) → 1 (near bottom)
-  const size = config.size + depthFactor * 4;
-  const opacity = 0.55 + depthFactor * 0.45;
+  // Depth: bottom of orbit (near side of eye) = larger, brighter
+  const depth = (y - (CY - RY)) / (2 * RY); // 0→1
+  const size  = cfg.size + depth * 4;
+  const alpha = 0.5 + depth * 0.5;
 
   return (
     <>
-      {/* Comet tail */}
-      {Array.from({ length: TAIL_LEN }).map((_, j) => {
+      {/* Comet tail — traces the eye's orbit */}
+      {Array.from({ length: TAIL_DOTS }).map((_, j) => {
         const ta = angle - (j + 1) * TAIL_STEP;
         const tx = CX + RX * Math.cos(ta);
         const ty = CY + RY * Math.sin(ta);
         const tailDepth = (ty - (CY - RY)) / (2 * RY);
-        const tailOpacity = ((1 - (j + 1) / (TAIL_LEN + 1)) * opacity * 0.7);
-        const tailSize = Math.max(2, (size - j * 0.9) * 0.75);
+        const ts = Math.max(2, (size - j * 1.1) * 0.72);
+        const to = ((1 - (j + 1) / (TAIL_DOTS + 2)) * alpha * 0.75) * (0.4 + tailDepth * 0.6);
         return (
           <View
             key={j}
             style={{
               position: 'absolute',
-              left: tx - tailSize / 2,
-              top: ty - tailSize / 2,
-              width: tailSize,
-              height: tailSize,
-              borderRadius: tailSize / 2,
-              backgroundColor: config.color,
-              opacity: tailOpacity * (0.5 + tailDepth * 0.5),
+              left: tx - ts / 2,
+              top: ty - ts / 2,
+              width: ts,
+              height: ts,
+              borderRadius: ts / 2,
+              backgroundColor: cfg.color,
+              opacity: to,
             }}
           />
         );
       })}
+
       {/* Planet body */}
       <View
         style={{
@@ -82,64 +105,96 @@ function Planet({ config }: { config: PlanetConfig }) {
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: config.color,
-          opacity,
-          shadowColor: config.color,
-          shadowRadius: 6,
-          shadowOpacity: 0.8,
-          elevation: 4,
+          backgroundColor: cfg.color,
+          opacity: alpha,
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
-      />
+      >
+        <Text style={{ fontSize: size * 0.55, fontWeight: '900', color: '#0F0E0B', lineHeight: size }}>
+          {cfg.letter}
+        </Text>
+      </View>
     </>
   );
 }
 
 export function SplashAnimation({ fadeAnim }: { fadeAnim: Animated.Value }) {
-  const sunPulse = useRef(new Animated.Value(1)).current;
-  const textFade = useRef(new Animated.Value(0)).current;
+  const sunPulse  = useRef(new Animated.Value(1)).current;
+  const textFade  = useRef(new Animated.Value(0)).current;
+  const eyeOpen   = useRef(new Animated.Value(0.3)).current;  // eyelid "opening"
 
   useEffect(() => {
+    // Eye "opens" on load
+    Animated.timing(eyeOpen, {
+      toValue: 1, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+    }).start();
+
     // Sun pulse
     Animated.loop(
       Animated.sequence([
-        Animated.timing(sunPulse, { toValue: 1.15, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(sunPulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(sunPulse, { toValue: 1.2, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(sunPulse, { toValue: 1,   duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]),
     ).start();
 
-    // Text fade in after 0.4s
-    Animated.timing(textFade, { toValue: 1, duration: 600, delay: 400, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    // Wordmark fades in after eye opens
+    Animated.timing(textFade, {
+      toValue: 1, duration: 700, delay: 600, easing: Easing.out(Easing.quad), useNativeDriver: true,
+    }).start();
   }, []);
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      {/* Orbital system */}
-      <View style={styles.orbitArea}>
-        {/* Orbit path ellipses (decorative) */}
-        <View style={styles.orbitPath} />
 
-        {/* Sun */}
-        <Animated.View style={[styles.sun, { transform: [{ scale: sunPulse }] }]}>
-          <View style={styles.sunCore} />
-          <View style={styles.sunGlow} />
-        </Animated.View>
+      {/* Eye opening animation wrapper */}
+      <Animated.View style={{ transform: [{ scaleY: eyeOpen }] }}>
 
-        {/* Planets */}
-        {PLANETS.map((planet, i) => (
-          <Planet key={i} config={planet} />
-        ))}
-      </View>
+        {/* Eye outline — the whites of the eye */}
+        <View style={styles.eyeOutline} />
+
+        {/* Subtle upper eyelid highlight */}
+        <View style={styles.upperLid} />
+        <View style={styles.lowerLid} />
+
+        {/* Iris ring */}
+        <View style={styles.iris} />
+
+        {/* Orbital canvas */}
+        <View style={styles.orbitArea}>
+
+          {/* Faint orbit path */}
+          <View style={styles.orbitPath} />
+
+          {/* Planets: L, U, C */}
+          {PLANETS.map((cfg, i) => <Planet key={i} cfg={cfg} />)}
+
+          {/* Sun / Pupil — Y (Yield) */}
+          <Animated.View style={[styles.sunWrap, { transform: [{ scale: sunPulse }] }]}>
+            <View style={styles.sunGlow} />
+            <View style={styles.sunCore}>
+              <Text style={styles.sunLabel}>Y</Text>
+            </View>
+          </Animated.View>
+
+        </View>
+      </Animated.View>
 
       {/* LUCY wordmark */}
       <Animated.View style={[styles.wordmark, { opacity: textFade }]}>
         <Text style={styles.lucyText}>
           LUC<Text style={styles.lucyY}>Y</Text>
         </Text>
-        <Text style={styles.tagline}>Personal AI Assistant</Text>
+        <Text style={styles.tagline}>Listen · Understand · Connect · Yield</Text>
       </Animated.View>
+
     </Animated.View>
   );
 }
+
+const CANVAS_W = CX * 2;
+const CANVAS_H = CY * 2;
+const IRIS_R = 52;
 
 const styles = StyleSheet.create({
   container: {
@@ -149,65 +204,121 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 999,
   },
+
+  // Eye whites — elongated thin ring
+  eyeOutline: {
+    position: 'absolute',
+    width:  RX * 2 + 18,
+    height: RY * 2 + 18,
+    borderRadius: RY + 9,
+    borderWidth: 1,
+    borderColor: 'rgba(255,140,66,0.18)',
+    left: CX - RX - 9,
+    top:  CY - RY - 9,
+  },
+
+  upperLid: {
+    position: 'absolute',
+    width: RX * 2 + 18,
+    height: 2,
+    backgroundColor: 'rgba(255,140,66,0.08)',
+    left: CX - RX - 9,
+    top:  CY - RY - 9,
+    borderRadius: 1,
+  },
+  lowerLid: {
+    position: 'absolute',
+    width: RX * 2 + 18,
+    height: 2,
+    backgroundColor: 'rgba(255,140,66,0.08)',
+    left: CX - RX - 9,
+    top:  CY + RY + 8,
+    borderRadius: 1,
+  },
+
+  // Iris — soft glowing ring around the pupil
+  iris: {
+    position: 'absolute',
+    width: IRIS_R * 2,
+    height: IRIS_R * 2,
+    borderRadius: IRIS_R,
+    left: CX - IRIS_R,
+    top:  CY - IRIS_R,
+    borderWidth: 1,
+    borderColor: 'rgba(255,140,66,0.1)',
+    backgroundColor: 'rgba(255,140,66,0.04)',
+  },
+
   orbitArea: {
-    width: CX * 2,
-    height: CY * 2,
+    width:  CANVAS_W,
+    height: CANVAS_H,
     position: 'relative',
   },
+
   orbitPath: {
     position: 'absolute',
     left: CX - RX,
-    top: CY - RY,
-    width: RX * 2,
+    top:  CY - RY,
+    width:  RX * 2,
     height: RY * 2,
-    borderRadius: RX,
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,140,66,0.12)',
-    transform: [{ scaleY: 1 }],
+    borderRadius: RY,
+    borderWidth: 0.4,
+    borderColor: 'rgba(255,140,66,0.1)',
   },
-  sun: {
+
+  // Y — the sun / pupil at center
+  sunWrap: {
     position: 'absolute',
-    left: CX - 20,
-    top: CY - 20,
-    width: 40,
-    height: 40,
+    left: CX - 22,
+    top:  CY - 22,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sunCore: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FF8C42',
-    position: 'absolute',
-  },
   sunGlow: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,140,66,0.25)',
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,140,66,0.22)',
+  },
+  sunCore: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FF8C42',
+    alignItems: 'center',
+    justifyContent: 'center',
     position: 'absolute',
   },
+  sunLabel: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0F0E0B',
+    lineHeight: 18,
+  },
+
   wordmark: {
-    marginTop: 24,
+    marginTop: 28,
     alignItems: 'center',
   },
   lucyText: {
-    fontSize: 52,
+    fontSize: 48,
     fontWeight: '900',
     letterSpacing: -2,
     color: '#F5EFE6',
-    lineHeight: 58,
+    lineHeight: 54,
   },
   lucyY: {
     color: '#FF8C42',
   },
   tagline: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 10,
+    fontWeight: '700',
     color: '#8A7560',
-    letterSpacing: 2,
+    letterSpacing: 2.5,
     textTransform: 'uppercase',
-    marginTop: 4,
+    marginTop: 6,
   },
 });

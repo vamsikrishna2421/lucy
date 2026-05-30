@@ -81,6 +81,13 @@ const MESSAGE_PATTERNS = [
   /tell (\w[\w\s]+?) (?:that )?(.+)/i,
 ];
 
+const GEOFENCE_PATTERNS = [
+  /remind me when i (?:get|arrive|reach|am at) (.+?)(?:\s+to (.+)|$)/i,
+  /when i get (?:home|to (.+?))(?:,?\s*remind me (?:to )?(.+))?/i,
+  /location reminder[:\s]+(.+)/i,
+  /remind me at (.+?) (?:when|to) (.+)/i,
+];
+
 const EVENT_PATTERNS = [
   /schedule (?:a )?(?:meeting|call|appointment|lunch|dinner|event)? ?(?:with (\w[\w\s]+?))? ?(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday)?(?:\s+at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?))?/i,
   /add (?:a )?(?:meeting|call|appointment|event) (?:with (\w[\w\s]+?))? ?(tomorrow|today)?(?:\s+at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?))?/i,
@@ -211,6 +218,22 @@ export function detectAutomationIntent(text: string): ExtractedAction | null {
     }
   }
 
+  // GEOFENCE REMINDER
+  for (const pattern of GEOFENCE_PATTERNS) {
+    const m = t.match(pattern);
+    if (m) {
+      const location = (m[1] ?? 'that location').trim();
+      const task = (m[2] ?? '').trim() || 'Check in';
+      return {
+        type: 'remind' as ActionType,
+        confidence: 0.87,
+        params: { item: task, listHint: '', geofence: 'true', locationLabel: location },
+        displayText: `Remind me when I get to ${location}: ${task}`,
+        confirmText: `Set location reminder for ${location}`,
+      };
+    }
+  }
+
   // EVENT / MEETING
   for (const pattern of EVENT_PATTERNS) {
     const m = t.match(pattern);
@@ -331,11 +354,20 @@ export async function executeAction(action: ExtractedAction): Promise<{ success:
       }
 
       case 'remind': {
+        // Check if it's a geofence reminder
+        if (action.params.geofence === 'true') {
+          const { createGeofenceReminder } = await import('./geofenceReminders');
+          const result = await createGeofenceReminder(
+            action.params.item ?? 'Check in',
+            action.params.locationLabel ?? 'that location',
+          );
+          return result;
+        }
+        // Regular reminder
         const created = await createReminder(action.params.item ?? '', action.params.listHint);
         if (created) {
           return { success: true, message: `Added "${action.params.item}" to ${action.params.listHint || 'Reminders'}` };
         }
-        // Fallback: open Reminders app
         await Linking.openURL('x-apple-reminderkit://');
         return { success: false, message: 'Could not create reminder — calendar permission needed' };
       }

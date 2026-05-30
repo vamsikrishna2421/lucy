@@ -216,6 +216,7 @@
     <a href="#features">Features</a>
     <a href="#meetings">Meetings</a>
     <a href="#privacy">Privacy</a>
+    <a href="#testing" style="color:#FF8C42;font-weight:800;">Testing ✓</a>
     <a href="#compare">Compare</a>
   </div>
   <div class="nav-badge">Private Beta</div>
@@ -804,6 +805,169 @@
     <p class="cta-note">Private beta · For authorized testers only</p>
   </div>
 </section>
+
+<!-- TESTING CHECKLIST SECTION -->
+<section id="testing" style="background:#0A0908;">
+<div class="container">
+  <div class="section-label">Beta Testing</div>
+  <h2 class="section-title">Test every feature</h2>
+  <p class="section-desc" style="margin-bottom:8px;">Tap each item to mark it tested. Progress is saved in your browser.</p>
+  <p style="font-size:12px;color:#6B5E4E;margin-bottom:40px;">Install the latest TestFlight build first. All tests assume iOS device.</p>
+
+  <div id="test-progress" style="background:#1A1510;border:1px solid #2D2218;border-radius:16px;padding:20px;margin-bottom:32px;display:flex;align-items:center;gap:16px;">
+    <div style="flex:1;">
+      <div style="font-size:13px;color:#C4A882;margin-bottom:8px;font-weight:600;">Progress</div>
+      <div style="height:6px;background:#2D2218;border-radius:3px;overflow:hidden;">
+        <div id="progress-bar" style="height:6px;background:linear-gradient(90deg,#FF8C42,#FFA05C);border-radius:3px;width:0%;transition:width 0.4s;"></div>
+      </div>
+    </div>
+    <div style="text-align:right;">
+      <div id="progress-count" style="font-size:22px;font-weight:900;color:#FF8C42;">0</div>
+      <div style="font-size:11px;color:#6B5E4E;">tested</div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:12px;margin-bottom:32px;flex-wrap:wrap;">
+    <button onclick="filterTests('all')" id="filter-all" class="test-filter active">All</button>
+    <button onclick="filterTests('core')" id="filter-core" class="test-filter">Core</button>
+    <button onclick="filterTests('automation')" id="filter-automation" class="test-filter">Automations</button>
+    <button onclick="filterTests('ai')" id="filter-ai" class="test-filter">AI Features</button>
+    <button onclick="filterTests('connectors')" id="filter-connectors" class="test-filter">Connectors</button>
+    <button onclick="filterTests('ui')" id="filter-ui" class="test-filter">UI/UX</button>
+  </div>
+
+  <div id="test-list"></div>
+
+  <div style="margin-top:32px;text-align:center;">
+    <button onclick="resetAll()" style="background:transparent;border:1px solid #2D2218;color:#6B5E4E;padding:10px 20px;border-radius:12px;cursor:pointer;font-size:13px;">Reset all</button>
+  </div>
+</div>
+</section>
+
+<style>
+.test-filter {
+  background:#1A1510;border:1px solid #2D2218;color:#8A7560;
+  padding:7px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;
+  font-family:inherit;transition:all 0.2s;
+}
+.test-filter.active,.test-filter:hover { background:rgba(255,140,66,0.12);border-color:rgba(255,140,66,0.3);color:#FFA05C; }
+.test-card {
+  background:#1A1510;border:1px solid #2D2218;border-radius:16px;
+  padding:18px 20px;margin-bottom:10px;cursor:pointer;
+  display:flex;align-items:flex-start;gap:14px;
+  transition:border-color 0.2s,background 0.2s;
+}
+.test-card:hover { border-color:rgba(255,140,66,0.2); }
+.test-card.done { background:rgba(74,222,128,0.06);border-color:rgba(74,222,128,0.25); }
+.test-check {
+  width:22px;height:22px;border-radius:11px;border:1.5px solid #3D3025;
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:800;margin-top:1px;transition:all 0.2s;
+}
+.test-card.done .test-check { background:#4ADE80;border-color:#4ADE80;color:#0F0E0B; }
+.test-name { font-size:14px;font-weight:700;color:#F5EFE6;margin-bottom:4px; }
+.test-steps { font-size:12px;color:#8A7560;line-height:1.6; }
+.test-tag { display:inline-block;background:rgba(255,140,66,0.1);color:#FFA05C;font-size:9px;font-weight:800;letter-spacing:0.8px;padding:2px 7px;border-radius:5px;text-transform:uppercase;margin-bottom:8px; }
+</style>
+
+<script>
+const TESTS = [
+  // CORE
+  { id:'board-capture', cat:'core', name:'Capture a thought', steps:'Type anything in Board input → tap Send → verify it appears organized in Today → Captured.' },
+  { id:'board-task-done', cat:'core', name:'Mark task as done', steps:'On Board, tap the circle on any task → see strikethrough animation → task moves to Done Today section.' },
+  { id:'board-task-edit', cat:'core', name:'Edit or delete a task', steps:'Tap ⋯ on any Board task → edit the text or delete it.' },
+  { id:'board-task-undo', cat:'core', name:'Undo a completion', steps:'Mark a task done → tap "undo" in Done Today section → task returns to pending.' },
+  { id:'board-hero', cat:'ui', name:'Hero header collapses on scroll', steps:'On Board screen, scroll down → hero (LUCY + greeting) should compress into compact header. Scroll back up to restore.' },
+  { id:'board-receipt', cat:'core', name:'Receipt OCR (📷 button)', steps:'Tap 📷 in Board composer → take photo of a receipt → LUCY fills in amount + merchant.' },
+  { id:'capture-voice', cat:'core', name:'Voice input mic button', steps:'Tap ⏺ mic button in Board composer → speak → stop → text appears in input box.' },
+  // TODAY
+  { id:'today-now', cat:'core', name:'Today → Now tab shows tasks', steps:'Go to Today → Now. Verify reminders, tasks, and follow-ups appear.' },
+  { id:'today-onthisday', cat:'ai', name:'On This Day card', steps:'After capturing notes over multiple days, check Today → Now for the "On this day" card surfacing past memories.' },
+  { id:'today-mood', cat:'ai', name:'Mood display in Tonight card', steps:'Capture a few notes → go Today → Now → Tonight card should show mood emoji + colored dots.' },
+  { id:'today-memory', cat:'ai', name:'Memory map connections', steps:'Today → Memory tab → verify entities and connections from your captures appear.' },
+  { id:'today-captured', cat:'core', name:'Captured cards with key points', steps:'Today → Captured tab → each card shows title + 1-line raw + key extracted points.' },
+  { id:'today-correct', cat:'core', name:'? button to correct a memory', steps:'Today → Captured → tap ? on any card → write correction → tap Send to LUCY → verify it re-processes.' },
+  { id:'today-ai-action', cat:'ai', name:'✦ AI text actions', steps:'Today → Captured → tap ✦ AI on any card → choose Summarize → verify AI returns a summary.' },
+  { id:'today-search', cat:'core', name:'Semantic search in Captured', steps:'Today → Captured → type a keyword in search bar → results should appear matching semantically.' },
+  // ASK
+  { id:'ask-llm', cat:'ai', name:'Ask LUCY free-form question', steps:'Go to Ask → type "What did I work on today?" → verify LUCY answers from your captures (not generic).' },
+  { id:'ask-sources', cat:'ai', name:'Source citations under answers', steps:'Ask any question → scroll below the answer → "From your memory" chips should show which captures were used.' },
+  { id:'ask-device', cat:'ai', name:'Ask device questions', steps:'Ask "What timezone am I in?" or "What is my battery level?" → LUCY should answer from live device data.' },
+  { id:'ask-insights', cat:'ai', name:'✦ Insights tab pre-generated questions', steps:'Ask → tap ✦ Insights → see 4+ questions LUCY generated. Tap any → answer reveals.' },
+  { id:'ask-device-habits', cat:'ai', name:'Device habit insights', steps:'In ✦ Insights → verify "What are my capture habits?" and battery + mood questions appear.' },
+  // AUTOMATIONS
+  { id:'auto-timer', cat:'automation', name:'Set timer via Ask', steps:'In Ask, type "Set a timer for 5 minutes" → LUCY shows confirmation card → tap to confirm → timer starts.' },
+  { id:'auto-call', cat:'automation', name:'Call a contact via Ask', steps:'Type "Call [name of contact]" → LUCY shows confirmation → tap → phone dialer opens.' },
+  { id:'auto-navigate', cat:'automation', name:'Navigate to location', steps:'Type "Navigate to [a place]" → confirmation appears → tap → Maps opens with destination.' },
+  { id:'auto-play', cat:'automation', name:'Play music via Ask', steps:'Type "Play my focus playlist" → confirmation → Spotify or Apple Music opens.' },
+  { id:'auto-remind', cat:'automation', name:'Add to grocery/reminder list', steps:'Type "Add milk to grocery list" → confirmation → creates in Reminders app.' },
+  { id:'auto-event', cat:'automation', name:'Schedule calendar event', steps:'Type "Schedule a meeting with Sam tomorrow at 3pm" → creates calendar event.' },
+  { id:'auto-shortcut', cat:'automation', name:'Trigger iOS Shortcut', steps:'Type "Run my morning routine" (if you have a Shortcut named that) → triggers it.' },
+  // AI FEATURES
+  { id:'meeting-mode', cat:'ai', name:'Meeting Mode capture + summary', steps:'Tap Meeting in Board header → name it → start → speak for 1-2 min → End meeting → verify AI summary shows decisions/actions.' },
+  { id:'morning-brief', cat:'ai', name:'Morning brief notification', steps:'Enable Background organizing → wait for 7-9am → check notification for LUCY morning brief.' },
+  { id:'onthisday-notif', cat:'ai', name:'On This Day notification', steps:'After several days of use → check notifications for "On this day X years ago..." message.' },
+  { id:'checkin-notif', cat:'ai', name:'Progress check-in notifications', steps:'Settings → Connectors → enable Progress check-ins → wait for 10am, 12pm or 2pm notification.' },
+  // CONNECTORS
+  { id:'connector-calendar', cat:'connectors', name:'Calendar integration', steps:'Settings → Connectors → tap Calendar toggle → grant permission → verify pre-meeting brief fires 30 min before a meeting.' },
+  { id:'connector-location', cat:'connectors', name:'Location context in Ask', steps:'Settings → Connectors → enable Location → Ask "Where am I?" → verify city/area response.' },
+  { id:'connector-passive', cat:'connectors', name:'Passive listening', steps:'Settings → Connectors → enable Passive listening → confirm Listen button works → speak for 2 min → stop → check Captured.' },
+  // UI/UX
+  { id:'ui-onboarding', cat:'ui', name:'First-run onboarding (fresh install)', steps:'Delete + reinstall → 3-slide onboarding should appear on first launch.' },
+  { id:'ui-splash', cat:'ui', name:'Animated splash screen', steps:'Force-close app completely → reopen → L·U·C planets orbit around Y → LUCY wordmark appears → fades to app.' },
+  { id:'ui-nav', cat:'ui', name:'Bottom navigation 4 tabs', steps:'Verify Board · Today · Ask · Settings tabs exist. Verify Connectors is inside Settings.' },
+  { id:'export-json', cat:'core', name:'Export data as JSON', steps:'Settings → Export as JSON → system share sheet appears with .json file.' },
+  { id:'export-md', cat:'core', name:'Export data as Markdown', steps:'Settings → Export as Markdown → system share sheet appears with .md file.' },
+  { id:'delete-data', cat:'core', name:'Delete all memories', steps:'Settings → Delete all memories → confirmation alert → all data cleared → board/today empty.' },
+];
+
+let currentFilter = 'all';
+const done = new Set(JSON.parse(localStorage.getItem('lucy-tests-done') || '[]'));
+
+function save() { localStorage.setItem('lucy-tests-done', JSON.stringify([...done])); }
+
+function updateProgress() {
+  const total = TESTS.length;
+  const count = done.size;
+  document.getElementById('progress-count').textContent = `${count}/${total}`;
+  document.getElementById('progress-bar').style.width = `${(count/total)*100}%`;
+}
+
+function filterTests(cat) {
+  currentFilter = cat;
+  document.querySelectorAll('.test-filter').forEach(b => b.classList.remove('active'));
+  document.getElementById(`filter-${cat}`).classList.add('active');
+  renderTests();
+}
+
+function renderTests() {
+  const list = document.getElementById('test-list');
+  const filtered = currentFilter === 'all' ? TESTS : TESTS.filter(t => t.cat === currentFilter);
+  list.innerHTML = filtered.map(t => `
+    <div class="test-card ${done.has(t.id) ? 'done' : ''}" onclick="toggle('${t.id}')">
+      <div class="test-check">${done.has(t.id) ? '✓' : ''}</div>
+      <div style="flex:1;">
+        <div class="test-tag">${t.cat}</div>
+        <div class="test-name">${t.name}</div>
+        <div class="test-steps">${t.steps}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggle(id) {
+  if (done.has(id)) done.delete(id); else done.add(id);
+  save(); updateProgress(); renderTests();
+}
+
+function resetAll() {
+  if (!confirm('Reset all test progress?')) return;
+  done.clear(); save(); updateProgress(); renderTests();
+}
+
+renderTests();
+updateProgress();
+</script>
 
 <footer>© 2026 LUCY · Private Beta · Scuts Technologies Private Limited · Listen · Understand · Connect · Yield</footer>
 

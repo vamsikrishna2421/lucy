@@ -227,6 +227,12 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
                         Mentioned: {summary.attendeesMentioned.join(', ')}
                       </Text>
                     )}
+                    {summary.speakerNotes ? (
+                      <View style={{ marginTop: 12, backgroundColor: 'rgba(255,140,66,0.07)', borderRadius: 10, padding: 10 }}>
+                        <Text style={{ color: LUCY_COLORS.primary, fontSize: 10, fontWeight: '800', letterSpacing: 1, marginBottom: 4 }}>SPEAKER CONTEXT</Text>
+                        <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 20 }}>{summary.speakerNotes}</Text>
+                      </View>
+                    ) : null}
                   </>
                 ) : (
                   <Text style={styles.noSummary}>

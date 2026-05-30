@@ -31,6 +31,7 @@ export interface MeetingSummary {
   openQuestions: string[];        // Things left unresolved
   attendeesMentioned: string[];   // Names mentioned in transcript
   nextSteps: string;              // 1-2 sentence narrative of what happens next
+  speakerNotes?: string | null;   // contextual speaker attribution from transcript
   rawTranscript: string;
 }
 
@@ -50,8 +51,11 @@ Schema:
   "actionItems": [{"task": "...", "owner": "person name or null", "deadline": "date or null"}],
   "openQuestions": ["question that was raised but not resolved", ...],
   "attendeesMentioned": ["Name1", "Name2"],
-  "nextSteps": "brief narrative of what happens next"
-}`;
+  "nextSteps": "brief narrative of what happens next",
+  "speakerNotes": "if transcript contains 'Sam said...' or 'Priya mentioned...' extract speaker context; otherwise null"
+}
+
+Important: look for contextual speaker clues in the transcript (names followed by 'said', 'mentioned', 'agreed', 'disagreed', 'will', etc.) to populate actionItem owners as accurately as possible.`;
 
 export async function generateMeetingSummary(
   transcript: string,

@@ -13,7 +13,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.16",
+      "buildNumber": "1.0.17",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
@@ -37,7 +37,7 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.anonymous.lucy",
-      "versionCode": 13,
+      "versionCode": 14,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.INTERNET",

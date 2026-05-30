@@ -321,7 +321,7 @@ export default function App() {
         payload={notificationDetail}
         onDismiss={() => setNotificationDetail(null)}
       />
-      {showSplash ? <SplashAnimation fadeAnim={splashFade} /> : null}
+      <SplashAnimation fadeAnim={splashFade} visible={showSplash} />
       <MeetingMode visible={meetingVisible} onClose={() => setMeetingVisible(false)} />
       <Onboarding visible={onboardingVisible} onComplete={async () => {
         setOnboardingVisible(false);

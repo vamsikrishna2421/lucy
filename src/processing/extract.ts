@@ -20,7 +20,7 @@ import { upsertPerson } from '../db/people';
 import { insertPlace } from '../db/places';
 import { insertOpenLoop } from '../db/openLoops';
 import { insertFollowUp } from '../db/followUps';
-import { insertReminder, markReminderScheduled } from '../db/reminders';
+import { insertReminder, markReminderScheduled, reminderAlreadyExists } from '../db/reminders';
 import { insertTodo, listPendingTodos } from '../db/todos';
 import type { CaptureSource, ExtractionResult } from '../types/extraction';
 import { extractExplicitEnglishFact } from './explicitEnglish';
@@ -136,6 +136,8 @@ async function persistExtraction(
       await insertPlace(db, capture.id, place, extraction.privacy_level);
     }
     for (const reminder of extraction.reminders) {
+      const isDupe = await reminderAlreadyExists(db, reminder.text);
+      if (isDupe) continue;
       const id = await insertReminder(db, capture.id, reminder, extraction.privacy_level);
       reminderRows.push({ id, reminder });
     }

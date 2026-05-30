@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View, Dimensions } from 'react-native';
+import { Animated, Easing, Modal, StyleSheet, Text, View, Dimensions } from 'react-native';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -44,7 +44,7 @@ interface LetterState {
   color: string;
 }
 
-export function SplashAnimation({ fadeAnim }: { fadeAnim: Animated.Value }) {
+export function SplashAnimation({ fadeAnim, visible }: { fadeAnim: Animated.Value; visible: boolean }) {
   const [phase, setPhase] = useState<Phase>('orbit');
   const [orbitAngle, setOrbitAngle] = useState(0);          // shared orbit progress
   const rafRef   = useRef<number>(0);
@@ -139,6 +139,7 @@ export function SplashAnimation({ fadeAnim }: { fadeAnim: Animated.Value }) {
   const isSettle = phase === 'settle' || phase === 'expand' || phase === 'done';
 
   return (
+    <Modal transparent animationType="none" visible={visible} statusBarTranslucent>
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
 
       {/* Eye frame — shown during orbit + settle */}
@@ -265,12 +266,13 @@ export function SplashAnimation({ fadeAnim }: { fadeAnim: Animated.Value }) {
       </Animated.View>
 
     </Animated.View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFill,
+    flex: 1,
     backgroundColor: '#0F0E0B',
     alignItems: 'center',
     zIndex: 999,

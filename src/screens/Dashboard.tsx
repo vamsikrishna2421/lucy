@@ -20,7 +20,7 @@ import { organizeMemory } from '../processing/organizer';
 import { enqueueTranscript } from '../processing/extract';
 import { archiveTodo } from '../db/todos';
 
-type ViewMode = 'Now' | 'Context' | 'Memory' | 'Timeline' | 'Library';
+type ViewMode = 'Now' | 'Timeline' | 'Library';
 type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'Places' | 'Interests' | 'People';
 
 function displayTimestamp(value: string): string {
@@ -138,7 +138,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   const pendingTodos = todos.filter((item) => item.status === 'pending');
   const focusTasks = pendingTodos.filter((item) => item.urgency === 'high').slice(0, 3);
   const displayTasks = focusTasks.length ? focusTasks : pendingTodos.slice(0, 3);
-  const views: ViewMode[] = ['Now', 'Context', 'Memory', 'Timeline', 'Library'];
+  const views: ViewMode[] = ['Now', 'Timeline', 'Library'];
 
   return (
     <View style={styles.container}>
@@ -152,13 +152,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
           </TouchableOpacity>
         ))}
       </View>
-      {view === 'Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => setView('Context')} onLoopResolved={() => setContextRefresh((v) => v + 1)} /> : null}
-      {view === 'Context' ? (
-        <NeedsContextView requests={contextRequests} onAnswered={() => setContextRefresh((value) => value + 1)} />
-      ) : null}
-      {view === 'Memory' ? (
-        <KnowledgeView run={organizationRun} entities={knowledgeEntities} connections={knowledgeConnections} insights={knowledgeInsights} />
-      ) : null}
+      {view === 'Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Library' ? (
         <LibraryView

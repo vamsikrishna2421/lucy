@@ -104,7 +104,15 @@ export function AskScreen() {
           stored = generated;
         }
       }
-      setInsights([...healthInsights, ...stored]);
+      // Dedup by question similarity before combining
+      const seenQuestions = new Set<string>();
+      const dedup = (list: typeof stored) => list.filter((ins) => {
+        const key = ins.question.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+        if (seenQuestions.has(key)) return false;
+        seenQuestions.add(key);
+        return true;
+      });
+      setInsights([...dedup(healthInsights), ...dedup(stored)]);
     } finally {
       setLoadingInsights(false);
     }

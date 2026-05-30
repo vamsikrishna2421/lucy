@@ -3,7 +3,7 @@ import { jsonrepair } from 'jsonrepair';
 import type { ExtractionResult, PrivacyLevel } from '../types/extraction';
 import { analyzeWithDevice, promptDevice } from './device';
 import { analyzeWithOllama, promptOllama } from './ollama';
-import { analyzeWithOpenAI, promptOpenAI } from './openai';
+import { analyzeWithOpenAI, promptAI } from './openai';
 import { dailySummaryPrompt, privateRemoteRedactionPrompt, urgentScanPrompt } from './prompts';
 import { getRemoteAccessState, getRemoteOpenAIKey, getClaudeApiKey } from './remoteAccess';
 import { redactForRemote } from '../processing/redaction';
@@ -81,21 +81,20 @@ export const AIProvider = {
     // If this throws, processQueue sees the real error and marks the capture as failed.
     return await analyzeWithOpenAI(transcript, openAIKey, userContextPrefix);
   },
-  async urgentScan(transcript: string, privacyLevel: PrivacyLevel = 'local'): Promise<string> {
-    const prompt = `${urgentScanPrompt}\nTranscript:\n${transcript}`;
-    const remote = await getRemoteAccessState();
-    const apiKey = remote.enabled && remote.hasKey ? await getRemoteOpenAIKey() : null;
-    if (privacyLevel !== 'normal' || !remote.enabled || !apiKey || config.aiMode === 'offline') {
-      return localPrompt(prompt);
+  async urgentScan(transcript: string, _privacyLevel: PrivacyLevel = 'local'): Promise<string> {
+    // Provider-aware + everything-remote (privacy deferred): promptAI routes to Claude
+    // when a claude-* model is selected, so Claude-only users still get urgent scans.
+    const { available, openAIKey } = await resolveRemoteForAnalyze();
+    if (!available) {
+      return localPrompt(`${urgentScanPrompt}\nTranscript:\n${transcript}`);
     }
-    return promptOpenAI(urgentScanPrompt, transcript, apiKey);
+    return promptAI(urgentScanPrompt, transcript, openAIKey);
   },
-  async summarize(notes: string, privacyLevel: PrivacyLevel = 'normal'): Promise<string> {
-    const remote = await getRemoteAccessState();
-    const apiKey = remote.enabled && remote.hasKey ? await getRemoteOpenAIKey() : null;
-    if (privacyLevel !== 'normal' || !remote.enabled || !apiKey || config.aiMode === 'offline') {
+  async summarize(notes: string, _privacyLevel: PrivacyLevel = 'normal'): Promise<string> {
+    const { available, openAIKey } = await resolveRemoteForAnalyze();
+    if (!available) {
       return localPrompt(`${dailySummaryPrompt}\nNotes:\n${notes}`);
     }
-    return promptOpenAI(dailySummaryPrompt, notes, apiKey, config.openAISummaryModel);
+    return promptAI(dailySummaryPrompt, notes, openAIKey);
   },
 };

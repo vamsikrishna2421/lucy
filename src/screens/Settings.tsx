@@ -341,6 +341,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
     : 'Not run yet';
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView style={styles.container} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>Settings</Text>
       <Text style={styles.subtitle}>Quiet controls for your memory.</Text>
@@ -864,23 +865,25 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         ) : null}
       </SettingsSheet>
 
-      {/* Demo brain seeding progress overlay */}
-      {seedingDemo ? (
-        <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,14,11,0.92)', alignItems: 'center', justifyContent: 'center', gap: 24, zIndex: 999 }}>
-          <Text style={{ fontSize: 48 }}>🎭</Text>
-          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '800', textAlign: 'center' }}>
-            {seedProgress < 20 ? 'Opening Eleanor\'s brain...' : seedProgress < 95 ? 'Loading 4 years of memories...' : 'Almost ready...'}
-          </Text>
-          <View style={{ width: 260, height: 6, backgroundColor: LUCY_COLORS.surface, borderRadius: 3, overflow: 'hidden' }}>
-            <View style={{ width: `${seedProgress}%` as any, height: 6, backgroundColor: '#F472B6', borderRadius: 3 }} />
-          </View>
-          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13 }}>{seedProgress}%</Text>
-          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, textAlign: 'center', paddingHorizontal: 40 }}>
-            Eleanor Vance · Marketing Director · 1,461 daily logs from 2020–2024
-          </Text>
-        </View>
-      ) : null}
     </ScrollView>
+
+    {/* Progress overlay OUTSIDE ScrollView so absoluteFill covers the full screen */}
+    {seedingDemo ? (
+      <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,14,11,0.95)', alignItems: 'center', justifyContent: 'center', gap: 24, zIndex: 999 }}>
+        <Text style={{ fontSize: 56 }}>🎭</Text>
+        <Text style={{ color: LUCY_COLORS.textDark, fontSize: 22, fontWeight: '800', textAlign: 'center' }}>
+          {seedProgress < 15 ? "Opening Eleanor's brain..." : seedProgress < 95 ? 'Loading 4 years of memories...' : 'Almost ready...'}
+        </Text>
+        <View style={{ width: 280, height: 8, backgroundColor: LUCY_COLORS.surface, borderRadius: 4, overflow: 'hidden' }}>
+          <View style={{ width: `${seedProgress}%` as any, height: 8, backgroundColor: '#F472B6', borderRadius: 4 }} />
+        </View>
+        <Text style={{ color: '#F472B6', fontSize: 16, fontWeight: '800' }}>{seedProgress}%</Text>
+        <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, textAlign: 'center', paddingHorizontal: 40, lineHeight: 20 }}>
+          Eleanor Vance · Marketing Director{'\n'}1,461 daily logs · Dec 2020 – Nov 2024
+        </Text>
+      </View>
+    ) : null}
+    </View>
   );
 }
 

@@ -20,7 +20,7 @@ import { organizeMemory } from '../processing/organizer';
 import { enqueueTranscript } from '../processing/extract';
 import { archiveTodo } from '../db/todos';
 
-type ViewMode = 'Now' | 'Context' | 'Memory' | 'Captured' | 'Library';
+type ViewMode = 'Now' | 'Context' | 'Memory' | 'Timeline' | 'Library';
 type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'Places' | 'Interests' | 'People';
 
 function displayTimestamp(value: string): string {
@@ -76,6 +76,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   const [followUps, setFollowUps] = useState<FollowUpRow[]>([]);
   const [moodTrend, setMoodTrend] = useState<{ dominant: string; positiveRatio: number; recentTones: string[] }>({ dominant: 'neutral', positiveRatio: 0.5, recentTones: [] });
   const [onThisDay, setOnThisDay] = useState<import('../processing/onThisDay').OnThisDayMemory[]>([]);
+  const [moodsByCapture, setMoodsByCapture] = useState<Record<number, string>>({});
   const [contextRefresh, setContextRefresh] = useState(0);
 
   useEffect(() => {
@@ -119,6 +120,16 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
         const { getOnThisDayMemories } = await import('../processing/onThisDay');
         setOnThisDay(await getOnThisDayMemories(db));
       } catch { /* non-critical */ }
+      try {
+        const rows = await db.getAllAsync<{ capture_id: number; tone: string }>(
+          'SELECT capture_id, tone FROM mood_entries ORDER BY created_at DESC',
+        );
+        const map: Record<number, string> = {};
+        for (const row of rows) {
+          if (!map[row.capture_id]) map[row.capture_id] = row.tone; // most recent tone per capture
+        }
+        setMoodsByCapture(map);
+      } catch { /* non-critical */ }
       const nextUpdates = await listCaptureUpdates(db, results[6].map((capture) => capture.id));
       setUpdates(groupUpdates(nextUpdates));
     })();
@@ -127,7 +138,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   const pendingTodos = todos.filter((item) => item.status === 'pending');
   const focusTasks = pendingTodos.filter((item) => item.urgency === 'high').slice(0, 3);
   const displayTasks = focusTasks.length ? focusTasks : pendingTodos.slice(0, 3);
-  const views: ViewMode[] = ['Now', 'Context', 'Memory', 'Captured', 'Library'];
+  const views: ViewMode[] = ['Now', 'Context', 'Memory', 'Timeline', 'Library'];
 
   return (
     <View style={styles.container}>
@@ -148,7 +159,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
       {view === 'Memory' ? (
         <KnowledgeView run={organizationRun} entities={knowledgeEntities} connections={knowledgeConnections} insights={knowledgeInsights} />
       ) : null}
-      {view === 'Captured' ? <CapturedView captures={captures} updates={updates} onFeedback={() => setContextRefresh((v) => v + 1)} /> : null}
+      {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Library' ? (
         <LibraryView
           tab={tab}
@@ -382,6 +393,205 @@ function KnowledgeView({
       ))}
       {!entities.length ? <EmptyLine text="No stable topics extracted yet." /> : null}
     </ScrollView>
+  );
+}
+
+// ─── Timeline View ─────────────────────────────────────────────────────────────
+
+const MOOD_COLOR: Record<string, string> = {
+  positive: '#4ADE80',
+  excited:  '#FFA05C',
+  calm:     '#60A5FA',
+  neutral:  '#756F68',
+  stressed: '#F59E0B',
+  frustrated: '#FB7185',
+  negative: '#FB7185',
+};
+
+function groupByDate(captures: CaptureRow[]): Array<{ dateLabel: string; dateKey: string; items: CaptureRow[] }> {
+  const now = new Date();
+  const today = now.toDateString();
+  const yesterday = new Date(now.getTime() - 86400000).toDateString();
+  const grouped: Record<string, CaptureRow[]> = {};
+
+  for (const c of captures) {
+    const d = new Date(c.created_at.includes('T') ? c.created_at : `${c.created_at.replace(' ', 'T')}Z`);
+    const key = d.toDateString();
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(c);
+  }
+
+  return Object.entries(grouped)
+    .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
+    .map(([key, items]) => ({
+      dateKey: key,
+      dateLabel: key === today ? 'Today' : key === yesterday ? 'Yesterday' : new Date(key).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }),
+      items,
+    }));
+}
+
+function TimelineView({
+  captures,
+  moodsByCapture,
+  onFeedback,
+}: {
+  captures: CaptureRow[];
+  moodsByCapture: Record<number, string>;
+  onFeedback: () => void;
+}) {
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+  const [feedbackTarget, setFeedbackTarget] = useState<CaptureRow | null>(null);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<CaptureRow[] | null>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!query.trim()) { setSearchResults(null); return; }
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const { findSimilarCaptures } = await import('../processing/vectorSearch');
+        const db = await getDatabase();
+        const results = await findSimilarCaptures(db, query, 10, 0.1);
+        setSearchResults(results.map((r) => r.capture));
+      } catch { setSearchResults(null); }
+    }, 300);
+  };
+
+  const displayCaptures = searchResults ?? captures;
+  const groups = groupByDate(displayCaptures);
+
+  const submitFeedback = async () => {
+    if (!feedbackTarget || !feedbackText.trim()) return;
+    setSending(true);
+    try {
+      const correction = `[Correction for: ${feedbackTarget.extracted_title ?? feedbackTarget.raw_transcript?.slice(0, 60)}]\n${feedbackText.trim()}`;
+      await enqueueTranscript(correction, 'text', feedbackTarget.privacy_level === 'private');
+      setFeedbackTarget(null); setFeedbackText(''); onFeedback();
+    } finally { setSending(false); }
+  };
+
+  return (
+    <>
+      <View style={styles.searchBar}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search timeline..."
+          placeholderTextColor={LUCY_COLORS.textSubtle}
+          value={searchQuery}
+          onChangeText={handleSearch}
+        />
+        {searchQuery ? (
+          <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults(null); }}>
+            <Text style={styles.searchClear}>✕</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {groups.length === 0 ? (
+          <EmptyLine text="Nothing captured yet. Your timeline will grow as you capture thoughts." />
+        ) : groups.map((group) => (
+          <View key={group.dateKey}>
+            {/* Date header */}
+            <View style={styles.tlDateHeader}>
+              <Text style={styles.tlDateLabel}>{group.dateLabel}</Text>
+              <View style={styles.tlDateLine} />
+            </View>
+
+            {/* Timeline items */}
+            {group.items.map((item, idx) => {
+              const tone = moodsByCapture[item.id] ?? 'neutral';
+              const moodColor = MOOD_COLOR[tone] ?? LUCY_COLORS.textSubtle;
+              const timeStr = new Date(
+                item.created_at.includes('T') ? item.created_at : `${item.created_at.replace(' ', 'T')}Z`,
+              ).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+              const isExpanded = expanded[item.id];
+              const isLast = idx === group.items.length - 1;
+
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.tlRow}
+                  onPress={() => setExpanded((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+                  activeOpacity={0.8}
+                >
+                  {/* Time + spine */}
+                  <View style={styles.tlLeft}>
+                    <Text style={styles.tlTime}>{timeStr}</Text>
+                    <View style={styles.tlSpineWrap}>
+                      <View style={[styles.tlDot, { backgroundColor: moodColor, shadowColor: moodColor }]} />
+                      {!isLast ? <View style={styles.tlLine} /> : null}
+                    </View>
+                  </View>
+
+                  {/* Card */}
+                  <View style={[styles.tlCard, isExpanded && styles.tlCardExpanded]}>
+                    {/* Mood color accent bar */}
+                    <View style={[styles.tlAccent, { backgroundColor: moodColor }]} />
+                    <View style={styles.tlCardContent}>
+                      {item.extracted_title ? (
+                        <Text style={styles.tlTitle} numberOfLines={isExpanded ? undefined : 2}>{protectedPreview(item.extracted_title)}</Text>
+                      ) : null}
+                      <Text style={styles.tlSnippet} numberOfLines={isExpanded ? undefined : 1}>{protectedPreview(item.raw_transcript ?? '')}</Text>
+
+                      {isExpanded && item.structured_text ? (
+                        <View style={styles.tlKeyPoints}>
+                          {extractKeyPoints(item.structured_text).map((pt, i) => (
+                            <Text key={i} style={styles.tlKeyPoint}>{pt}</Text>
+                          ))}
+                        </View>
+                      ) : null}
+
+                      <View style={styles.tlCardFooter}>
+                        <PrivacyBadge level={item.privacy_level} />
+                        <TouchableOpacity style={styles.feedbackBtn} onPress={() => { setFeedbackText(''); setFeedbackTarget(item); }}>
+                          <Text style={styles.feedbackBtnText}>?</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ))}
+        <View style={{ height: 20 }} />
+      </ScrollView>
+
+      {/* Feedback modal */}
+      <Modal transparent animationType="fade" visible={feedbackTarget !== null} onRequestClose={() => setFeedbackTarget(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setFeedbackTarget(null)}>
+          <Pressable style={styles.feedbackModal}>
+            <Text style={styles.feedbackModalTitle}>Correct this memory</Text>
+            <Text style={styles.feedbackModalSub} numberOfLines={2}>{feedbackTarget?.extracted_title ?? feedbackTarget?.raw_transcript?.slice(0, 80)}</Text>
+            <TextInput
+              style={styles.feedbackInput}
+              placeholder="What's wrong? What should LUCY know instead?"
+              placeholderTextColor={LUCY_COLORS.textSubtle}
+              multiline autoFocus
+              value={feedbackText}
+              onChangeText={setFeedbackText}
+            />
+            <View style={styles.feedbackButtons}>
+              <TouchableOpacity style={styles.feedbackCancel} onPress={() => setFeedbackTarget(null)}>
+                <Text style={styles.feedbackCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.feedbackSend, !feedbackText.trim() && { opacity: 0.4 }]}
+                disabled={!feedbackText.trim() || sending}
+                onPress={() => void submitFeedback()}
+              >
+                <Text style={styles.feedbackSendText}>{sending ? '...' : 'Send to LUCY'}</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -699,6 +909,25 @@ const styles = StyleSheet.create({
   eyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
   tonightTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '700', marginTop: 9 },
   tonightDetail: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 7 },
+  // Timeline
+  tlDateHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 16 },
+  tlDateLabel: { color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', flexShrink: 0 },
+  tlDateLine: { flex: 1, height: 1, backgroundColor: LUCY_COLORS.divider },
+  tlRow: { flexDirection: 'row', gap: 0, marginBottom: 6, alignItems: 'flex-start' },
+  tlLeft: { width: 68, alignItems: 'flex-end', paddingRight: 12, paddingTop: 12 },
+  tlTime: { color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '600', marginBottom: 6 },
+  tlSpineWrap: { alignItems: 'center', flex: 1 },
+  tlDot: { width: 10, height: 10, borderRadius: 5, shadowOpacity: 0.5, shadowRadius: 4, elevation: 3 },
+  tlLine: { width: 1.5, backgroundColor: LUCY_COLORS.divider, flex: 1, minHeight: 40 },
+  tlCard: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, marginBottom: 0, flexDirection: 'row', overflow: 'hidden' },
+  tlCardExpanded: { borderColor: 'rgba(255,140,66,0.2)' },
+  tlAccent: { width: 3, borderRadius: 0 },
+  tlCardContent: { flex: 1, padding: 12, gap: 4 },
+  tlTitle: { color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700', lineHeight: 20 },
+  tlSnippet: { color: LUCY_COLORS.textMuted, fontSize: 12, lineHeight: 18 },
+  tlKeyPoints: { marginTop: 8, gap: 3 },
+  tlKeyPoint: { color: LUCY_COLORS.textDark, fontSize: 12, lineHeight: 18 },
+  tlCardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
   otdCard: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: 'rgba(255,140,66,0.2)', borderRadius: 18, padding: 16, marginBottom: 14 },
   otdLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, color: LUCY_COLORS.primaryGlow, textTransform: 'uppercase', marginBottom: 6 },
   otdTitle: { fontSize: 15, fontWeight: '700', color: LUCY_COLORS.textDark, lineHeight: 22, marginBottom: 4 },

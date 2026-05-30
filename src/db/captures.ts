@@ -185,8 +185,10 @@ export async function retryCapture(db: SQLiteDatabase, id: number): Promise<void
 }
 
 export async function listRecentCaptures(db: SQLiteDatabase, limit = 30): Promise<CaptureRow[]> {
+  // Show all non-archived captures regardless of processing state.
+  // processed=3 (fully extracted) should still appear in the timeline.
   return db.getAllAsync<CaptureRow>(
-    'SELECT * FROM captures WHERE parent_capture_id IS NULL AND processed <> 3 ORDER BY created_at DESC, id DESC LIMIT ?',
+    'SELECT * FROM captures WHERE parent_capture_id IS NULL AND archived_at IS NULL ORDER BY created_at DESC, id DESC LIMIT ?',
     limit,
   );
 }

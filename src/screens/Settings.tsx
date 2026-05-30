@@ -215,28 +215,19 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           onPress: async () => {
             try {
               const db = await getDatabase();
-              await db.execAsync(`
-                DELETE FROM captures;
-                DELETE FROM todos;
-                DELETE FROM reminders;
-                DELETE FROM expenses;
-                DELETE FROM ideas;
-                DELETE FROM places;
-                DELETE FROM people;
-                DELETE FROM interests;
-                DELETE FROM open_loops;
-                DELETE FROM follow_ups;
-                DELETE FROM context_requests;
-                DELETE FROM knowledge_entities;
-                DELETE FROM knowledge_connections;
-                DELETE FROM knowledge_insights;
-                DELETE FROM organization_runs;
-                DELETE FROM extractions;
-                DELETE FROM capture_embeddings;
-                DELETE FROM person_contexts;
-                DELETE FROM mood_entries;
-                DELETE FROM questions;
-              `);
+              const tables = [
+                'captures', 'todos', 'reminders', 'expenses', 'ideas', 'places',
+                'people', 'interests', 'open_loops', 'follow_ups', 'context_requests',
+                'knowledge_entities', 'knowledge_connections', 'knowledge_insights',
+                'organization_runs', 'extractions', 'capture_embeddings',
+                'person_contexts', 'mood_entries', 'questions', 'ask_threads',
+                'ask_messages', 'battery_snapshots', 'music_captures',
+              ];
+              await db.withTransactionAsync(async () => {
+                for (const table of tables) {
+                  await db.runAsync(`DELETE FROM ${table}`).catch(() => { /* table may not exist */ });
+                }
+              });
               Alert.alert('Done', 'All memories have been deleted. LUCY starts fresh.');
               setLocalRefresh((v) => v + 1);
             } catch (e) {

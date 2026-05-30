@@ -1013,6 +1013,18 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
   const [retrying, setRetrying] = useState(false);
   const [stuck, setStuck] = useState<Array<{ id: number; raw_transcript: string | null; extracted_title: string | null; processing_error: string | null }>>([]);
   const [queued, setQueued] = useState<Array<{ id: number; raw_transcript: string | null; extracted_title: string | null }>>([]);
+  const [diag, setDiag] = useState<{ model: string; available: boolean } | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const [{ resolveRemoteAvailability }, { getPreferredModel }, { config }] = await Promise.all([
+        import('../ai/provider'), import('../ai/modelPreference'), import('../config'),
+      ]);
+      const model = getPreferredModel(config.openAIModel);
+      const { available } = await resolveRemoteAvailability();
+      setDiag({ model, available });
+    })();
+  }, [queue.queued, queue.complete, queue.retrying]);
 
   useEffect(() => {
     void (async () => {
@@ -1068,6 +1080,20 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
         <Metric label="Remembered" value={queue.complete} />
         <Metric label="Archived" value={queue.archived} />
       </View>
+
+      {diag ? (
+        <View style={{ marginTop: 10, padding: 10, borderRadius: 10, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: diag.available ? LUCY_COLORS.border : '#ef4444' }}>
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 }}>PROCESSING WITH</Text>
+          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700', marginTop: 3 }}>
+            {findModel(diag.model)?.label ?? diag.model}
+          </Text>
+          <Text style={{ color: diag.available ? '#4ADE80' : '#ef4444', fontSize: 11, fontWeight: '600', marginTop: 2 }}>
+            {diag.available
+              ? 'Remote ready — captures will process'
+              : 'Remote unavailable — captures will stay queued. Check your API key / Remote intelligence toggle.'}
+          </Text>
+        </View>
+      ) : null}
 
       {queued.length > 0 ? (
         <>

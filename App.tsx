@@ -136,7 +136,17 @@ function AppInner({ onBrainSwitch }: { onBrainSwitch: () => void }) {
           }
         } catch { /* non-critical */ }
 
-        // Demo seeding only runs when explicitly switching to Demo Brain (not on main brain startup)
+        // Seed Eleanor's brain silently in the background — doesn't block the UI
+        // Uses a separate DB handle so the active user's DB is never touched
+        void (async () => {
+          try {
+            const { openNamedDatabase } = await import('./src/db');
+            const demoDb = await openNamedDatabase('lucy_demo.db', 'lucy_database_key_demo');
+            const { seedDemoDataIfNeeded } = await import('./src/processing/demoSeed');
+            await seedDemoDataIfNeeded(demoDb);
+            await demoDb.closeAsync();
+          } catch { /* non-critical — Eleanor will seed on next launch or on switch */ }
+        })();
 
         setReady(true);
         void drainQueue();

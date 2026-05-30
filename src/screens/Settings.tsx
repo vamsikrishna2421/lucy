@@ -478,10 +478,14 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
               await addUser(DEMO_USER);
               await switchUser(DEMO_USER);
               await resetDatabase();
+              // Eleanor's brain is pre-seeded in the background on first launch.
+              // If still empty (edge case), seed now — but this should be rare.
               const db = await getDatabase();
-              // Only seed if demo brain is empty — never wipe existing data
-              const { seedDemoDataIfNeeded } = await import('../processing/demoSeed');
-              await seedDemoDataIfNeeded(db);
+              const count = await db.getFirstAsync<{n:number}>('SELECT COUNT(*) as n FROM captures');
+              if ((count?.n ?? 0) === 0) {
+                const { seedDemoDataIfNeeded } = await import('../processing/demoSeed');
+                await seedDemoDataIfNeeded(db);
+              }
               setBrainUsers((prev) => [...prev.filter((u) => u.id !== 'demo'), DEMO_USER]);
               setActiveBrainId('demo');
               onBrainSwitch();

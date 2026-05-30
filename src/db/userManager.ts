@@ -50,9 +50,15 @@ export async function loadActiveUser(): Promise<BrainUser> {
 export async function listUsers(): Promise<BrainUser[]> {
   try {
     const listJson = await SecureStore.getItemAsync('lucy_user_list');
-    if (listJson) return JSON.parse(listJson) as BrainUser[];
+    if (listJson) {
+      const stored = JSON.parse(listJson) as BrainUser[];
+      // Ensure Eleanor is always in the list
+      const hasEleanor = stored.some((u) => u.id === 'demo');
+      if (!hasEleanor) stored.push(DEMO_USER);
+      return stored;
+    }
   } catch { /* fall through */ }
-  return [{ id: 'main', name: 'My Brain' }];
+  return [{ id: 'main', name: 'My Brain' }, DEMO_USER];
 }
 
 export async function addUser(user: BrainUser): Promise<void> {

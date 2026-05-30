@@ -44,3 +44,22 @@ export async function resetDatabase(): Promise<void> {
   }
   databasePromise = undefined;
 }
+
+/**
+ * Open a named DB independently of the active user — used for background seeding
+ * so Eleanor's brain can be populated without switching the active user's DB.
+ */
+export async function openNamedDatabase(name: string, keyStoreName: string): Promise<SQLite.SQLiteDatabase> {
+  const db = await SQLite.openDatabaseAsync(name);
+  let key = await SecureStore.getItemAsync(keyStoreName);
+  if (!key) {
+    const bytes = await Crypto.getRandomBytesAsync(32);
+    key = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    await SecureStore.setItemAsync(keyStoreName, key);
+  }
+  await db.execAsync(`PRAGMA key = "x'${key}'";`);
+  const cipher = await db.getFirstAsync<{ cipher_version: string }>('PRAGMA cipher_version;');
+  if (!cipher?.cipher_version) { await db.closeAsync(); return db; }
+  await initializeSchema(db);
+  return db;
+}

@@ -42,6 +42,7 @@ function fixture(overrides: Partial<ExtractionResult>): ExtractionResult {
     open_loops: [],
     follow_ups: [],
     mood: { tone: 'neutral', energy: 'medium' },
+    detected_action: null,
     ...overrides,
   };
 }

@@ -24,6 +24,20 @@ workflows:
       - name: Apply patches
         script: npx patch-package
 
+      - name: Auto-increment build number BEFORE prebuild
+        script: |
+          # Expo's Info.plist uses CFBundleVersion = $(CURRENT_PROJECT_VERSION), so the
+          # value MUST be set in app.json BEFORE `expo prebuild` bakes it into the Xcode
+          # build settings (editing Info.plist after prebuild does nothing).
+          #
+          # Use Codemagic's monotonic $BUILD_NUMBER + 100 offset. BUILD_NUMBER is always
+          # set and increments every build; +100 clears the last manual upload (1.0.60)
+          # and keeps growing. No git depth / Apple ID needed. Prevents the App Store
+          # Connect "build number already used" failure.
+          NUM=$(( ${BUILD_NUMBER:-1} + 100 ))
+          BUILD_NUM="1.0.$NUM"
+          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('app.json','utf8'));a.expo.ios=a.expo.ios||{};a.expo.android=a.expo.android||{};a.expo.ios.buildNumber='$BUILD_NUM';a.expo.android.versionCode=$NUM;fs.writeFileSync('app.json',JSON.stringify(a,null,2));console.log('iOS buildNumber=',a.expo.ios.buildNumber,'| android versionCode=',a.expo.android.versionCode);"
+
       - name: Expo prebuild (generate native iOS project)
         script: npx expo prebuild --platform ios --non-interactive
 
@@ -31,19 +45,6 @@ workflows:
         script: |
           cd ios
           pod install --repo-update
-
-      - name: Auto-increment build number (commit count)
-        script: |
-          # Monotonic, Apple-ID-free build number that stays in the dotted scheme and
-          # always exceeds the last upload. Overrides the app.json buildNumber so we
-          # never hit "build number already used" on App Store Connect again.
-          BUILD_NUM="1.0.$(git rev-list --count HEAD)"
-          echo "Setting CFBundleVersion to $BUILD_NUM"
-          # App + extension Info.plists only (skip Pods/build artifacts).
-          find ios -name "Info.plist" -not -path "*/Pods/*" -not -path "*/build/*" | while read -r plist; do
-            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUM" "$plist" 2>/dev/null \
-              && echo "  updated $plist" || true
-          done
 
       - name: Set up keychain
         script: keychain initialize

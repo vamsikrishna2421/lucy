@@ -263,6 +263,17 @@ async function persistExtraction(
     await insertExtractionSnapshot(db, capture.id, extraction);
     await updateCaptureResult(db, capture.id, extraction.privacy_level, extraction.title, formatStructuredMemory(extraction));
     await markCaptureProcessed(db, capture.id);
+    // Store a detected action so the Timeline can offer it as a "LUCY can do this" card
+    // after the capture finishes processing — avoids synchronous regex false positives.
+    if (extraction.detected_action) {
+      await db.runAsync(
+        'INSERT OR REPLACE INTO pending_actions (capture_id, action_json) VALUES (?, ?)',
+        capture.id,
+        JSON.stringify(extraction.detected_action),
+      );
+    } else {
+      await db.runAsync('DELETE FROM pending_actions WHERE capture_id = ?', capture.id);
+    }
   });
 
   writeVaultNote(capture.id, extraction, capture.raw_transcript, capture.source, capture.created_at);

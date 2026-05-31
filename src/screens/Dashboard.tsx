@@ -374,6 +374,8 @@ function TimelineView({
   const [pendingAction, setPendingAction] = useState<import('../processing/automationEngine').ExtractedAction | null>(null);
   const [executingAction, setExecutingAction] = useState(false);
   const [menuTarget, setMenuTarget] = useState<CaptureRow | null>(null);
+  // LLM-detected actions: map from capture_id → parsed action object
+  const [llmActions, setLlmActions] = useState<Record<number, import('../processing/automationEngine').ExtractedAction>>({});
 
   const runReprocess = async (capture: CaptureRow) => {
     const db = await getDatabase();
@@ -438,6 +440,29 @@ function TimelineView({
       } catch { setSearchResults(null); }
     }, 300);
   };
+
+  // Load LLM-detected actions from the DB whenever captures change.
+  // We do this lazily so it never blocks the timeline render.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const db = await getDatabase();
+        const rows = await db.getAllAsync<{ capture_id: number; action_json: string }>(
+          'SELECT capture_id, action_json FROM pending_actions',
+        );
+        const map: Record<number, import('../processing/automationEngine').ExtractedAction> = {};
+        for (const row of rows) {
+          try {
+            const parsed = JSON.parse(row.action_json) as import('../processing/automationEngine').ExtractedAction;
+            if (parsed.type && parsed.displayText) {
+              map[row.capture_id] = { ...parsed, confidence: 0.95 };
+            }
+          } catch { /* skip malformed */ }
+        }
+        setLlmActions(map);
+      } catch { /* non-critical */ }
+    })();
+  }, [captures]);
 
   const displayCaptures = searchResults ?? captures;
   const groups = groupByDate(displayCaptures);
@@ -621,6 +646,18 @@ function TimelineView({
                         </View>
                       ) : null}
 
+                      {/* LLM-detected action banner — shown after the capture processes */}
+                      {llmActions[item.id] ? (
+                        <TouchableOpacity
+                          style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 10, paddingVertical: 7, paddingHorizontal: 10 }}
+                          onPress={() => setPendingAction(llmActions[item.id])}
+                        >
+                          <Text style={{ color: LUCY_COLORS.primary, fontSize: 10, fontWeight: '800', letterSpacing: 0.8 }}>LUCY CAN DO THIS</Text>
+                          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 12, fontWeight: '700', flex: 1 }} numberOfLines={1}>{llmActions[item.id].displayText}</Text>
+                          <Text style={{ color: LUCY_COLORS.primary, fontSize: 13, fontWeight: '800' }}>›</Text>
+                        </TouchableOpacity>
+                      ) : null}
+
                       <View style={styles.tlCardFooter}>
                         <PrivacyBadge level={item.privacy_level} />
                         {/* Actions collapsed under a three-dot menu */}
@@ -724,11 +761,28 @@ function TimelineView({
                     setExecutingAction(false);
                     setPendingAction(null);
                     onQueued?.();
+                    // Remove the action banner once confirmed or dismissed
+                    try {
+                      const db = await getDatabase();
+                      const captureId = Object.entries(llmActions).find(([,a]) => a === pendingAction)?.[0];
+                      if (captureId) {
+                        await db.runAsync('DELETE FROM pending_actions WHERE capture_id = ?', Number(captureId));
+                        setLlmActions((prev) => { const next = { ...prev }; delete next[Number(captureId)]; return next; });
+                      }
+                    } catch { /* non-critical */ }
                   }}
                 >
                   <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>{executingAction ? '...' : pendingAction.confirmText}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={{ paddingHorizontal: 16, justifyContent: 'center' }} onPress={() => setPendingAction(null)}>
+                <TouchableOpacity style={{ paddingHorizontal: 16, justifyContent: 'center' }} onPress={async () => {
+                  // Dismiss the action banner on "Not now" too
+                  const captureId = Object.entries(llmActions).find(([,a]) => a === pendingAction)?.[0];
+                  if (captureId) {
+                    try { const db = await getDatabase(); await db.runAsync('DELETE FROM pending_actions WHERE capture_id = ?', Number(captureId)); } catch { /* non-critical */ }
+                    setLlmActions((prev) => { const next = { ...prev }; delete next[Number(captureId)]; return next; });
+                  }
+                  setPendingAction(null);
+                }}>
                   <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 14 }}>Not now</Text>
                 </TouchableOpacity>
               </View>

@@ -74,6 +74,16 @@ export interface FollowUp {
   action: string;
 }
 
+/** An executable action the LLM detected in the capture (imperative commands like
+ *  "call Mom", "set a 20-min timer", "navigate to the office"). Mirrors ExtractedAction
+ *  from automationEngine so the same confirmation UI can be reused. */
+export interface ExtractedLLMAction {
+  type: 'timer' | 'call' | 'navigate' | 'play' | 'remind' | 'event' | 'message' | 'shortcut' | 'open_app';
+  params: Record<string, string>;
+  displayText: string;
+  confirmText: string;
+}
+
 export interface ExtractionResult {
   title: string;
   summary: string;
@@ -99,6 +109,10 @@ export interface ExtractionResult {
   open_loops: OpenLoop[];
   follow_ups: FollowUp[];
   mood: MoodEntry;
+  /** Optional: an imperative action the LLM detected. Null when the capture is
+   *  informational (not a command). Surfaced as a "LUCY can do this" card after
+   *  processing — replaces the brittle synchronous regex path for complex phrasings. */
+  detected_action: ExtractedLLMAction | null;
 }
 
 export type CaptureSource = 'text' | 'voice' | 'android' | 'ios' | 'passive';

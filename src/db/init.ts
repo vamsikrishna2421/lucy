@@ -389,6 +389,14 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_ai_call_log_called ON ai_call_log(called_at);
 
+    CREATE TABLE IF NOT EXISTS pending_actions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      capture_id INTEGER NOT NULL UNIQUE,
+      action_json TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (capture_id) REFERENCES captures(id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_open_loops_status ON open_loops(status, created_at);
     CREATE INDEX IF NOT EXISTS idx_follow_ups_status ON follow_ups(status, created_at);
     CREATE INDEX IF NOT EXISTS idx_music_captures_status ON music_captures(status, created_at);

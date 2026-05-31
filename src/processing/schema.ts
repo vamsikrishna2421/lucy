@@ -186,5 +186,24 @@ export function normalizeExtraction(value: unknown): ExtractionResult {
       const energy = validEnergy.includes(rawEnergy as typeof validEnergy[number]) ? rawEnergy as typeof validEnergy[number] : 'medium';
       return { tone, energy };
     })(),
+    detected_action: (() => {
+      const validActionTypes = ['timer','call','navigate','play','remind','event','message','shortcut','open_app'] as const;
+      const raw = (source as Record<string, unknown>).detected_action;
+      if (!raw || typeof raw !== 'object') return null;
+      const a = raw as Record<string, unknown>;
+      const type = text(a.type);
+      if (!validActionTypes.includes(type as typeof validActionTypes[number])) return null;
+      const displayText = text(a.displayText).trim();
+      const confirmText = text(a.confirmText).trim();
+      if (!displayText || !confirmText) return null;
+      const params: Record<string, string> = {};
+      if (a.params && typeof a.params === 'object') {
+        for (const [k, v] of Object.entries(a.params as Record<string, unknown>)) {
+          if (typeof v === 'string') params[k] = v;
+          else if (typeof v === 'number') params[k] = String(v);
+        }
+      }
+      return { type: type as typeof validActionTypes[number], params, displayText, confirmText };
+    })(),
   };
 }

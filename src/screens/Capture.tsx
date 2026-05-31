@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Keyboard,
+  useWindowDimensions,
   Linking,
   Modal,
   Platform,
@@ -194,14 +195,19 @@ function CategoryModal({
   const pendingCount = allItems.filter((i) => i.doneAt === null).length;
   const urgentCount = allItems.filter((i) => i.doneAt === null && i.todo.urgency === 'high').length;
 
+  const { height: screenHeight } = useWindowDimensions();
+  // Pixel budget: sheet is capped at 80% of screen. Header ~78px, add-bar ~70px.
+  // Give the ScrollView the remaining space so it reliably scrolls on all devices.
+  const listMaxHeight = Math.max(100, Math.round(screenHeight * 0.8) - 78 - 70);
+
   return (
     <Modal transparent animationType="none" visible onRequestClose={close}>
       <Pressable style={cmStyles.backdrop} onPress={close}>
+        {/* The Animated.View handles translation only — NO maxHeight on it, because
+            flex:1 / flex-based children collapse to 0 when the parent has only
+            maxHeight (no explicit height). Instead we cap with explicit px on ScrollView. */}
         <Animated.View style={[cmStyles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-          {/* flex:1 so this fills the sheet bounds; without it the Pressable grows
-              unbounded and the ScrollView inside it never gets a finite height to
-              scroll within, so items overflow the sheet instead of scrolling. */}
-          <Pressable style={{ flex: 1 }}>
+          <Pressable>
             {/* Header */}
             <View style={[cmStyles.header, { borderBottomColor: category.color + '33' }]}>
               <Text style={cmStyles.icon}>{category.icon}</Text>
@@ -216,10 +222,10 @@ function CategoryModal({
               </TouchableOpacity>
             </View>
 
-            {/* Checklist: flex:1 means it takes the remaining height inside the sheet
-                after the fixed-height header and add-bar, and scrolls within that. */}
+            {/* Explicit maxHeight in pixels so the ScrollView always has a finite
+                bounded size regardless of how many items are in the list. */}
             <ScrollView
-              style={cmStyles.list}
+              style={[cmStyles.list, { maxHeight: listMaxHeight }]}
               showsVerticalScrollIndicator
               keyboardShouldPersistTaps="handled"
             >
@@ -283,14 +289,14 @@ function CategoryModal({
 
 const cmStyles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: LUCY_COLORS.border, maxHeight: '80%' },
+  sheet: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: LUCY_COLORS.border },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 20, borderBottomWidth: 1 },
   icon: { fontSize: 26 },
   title: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '800' },
   subtitle: { color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 2 },
   closeBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 10 },
   closeBtnText: { color: LUCY_COLORS.textMuted, fontSize: 13, fontWeight: '700' },
-  list: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
+  list: { paddingHorizontal: 16, paddingTop: 8 },
   addBar: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider },
   addInput: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, color: LUCY_COLORS.textDark, fontSize: 15, borderWidth: 1, borderColor: LUCY_COLORS.border },
   addBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center' },

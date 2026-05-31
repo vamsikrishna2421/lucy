@@ -131,21 +131,26 @@ function parseDurationToSeconds(amount: string, unit: string): number {
 
 // ─── Contact lookup ─────────────────────────────────────────────────────────
 
-async function findContactPhone(name: string): Promise<string | null> {
+type ContactResult =
+  | { found: true; phone: string }
+  | { found: false; reason: 'permission_denied' | 'not_found' | 'no_phone' };
+
+async function findContactPhone(name: string): Promise<ContactResult> {
   try {
-    // Dynamic import with require to bypass missing type declarations
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const Contacts = require('expo-contacts') as { requestPermissionsAsync(): Promise<{ status: string }>; getContactsAsync(opts: Record<string,unknown>): Promise<{ data: Array<{ phoneNumbers?: Array<{ number?: string }> }> }>; Fields: Record<string, string> };
     const { status } = await Contacts.requestPermissionsAsync();
-    if (status !== 'granted') return null;
+    if (status !== 'granted') return { found: false, reason: 'permission_denied' };
     const { data } = await Contacts.getContactsAsync({
       fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name],
       name,
     });
-    const contact = data[0];
-    return (contact?.phoneNumbers?.[0] as any)?.number ?? null;
+    if (!data[0]) return { found: false, reason: 'not_found' };
+    const phone = (data[0].phoneNumbers?.[0] as any)?.number ?? null;
+    if (!phone) return { found: false, reason: 'no_phone' };
+    return { found: true, phone };
   } catch {
-    return null;
+    return { found: false, reason: 'not_found' };
   }
 }
 
@@ -366,16 +371,22 @@ export async function executeAction(action: ExtractedAction): Promise<{ success:
       }
 
       case 'call': {
-        const phone = await findContactPhone(action.params.name ?? '');
-        if (phone) {
-          await Linking.openURL(`tel:${phone.replace(/\D/g, '')}`);
+        const result = await findContactPhone(action.params.name ?? '');
+        if (result.found) {
+          await Linking.openURL(`tel:${result.phone.replace(/\D/g, '')}`);
           return { success: true, message: `Calling ${action.params.name}` };
         }
-        // No match — open Contacts app so user can find them
+        if (result.reason === 'permission_denied') {
+          return { success: false, message: `LUCY needs Contacts permission to look up "${action.params.name}". Please allow it in Settings → LUCY → Contacts, then try again.` };
+        }
+        if (result.reason === 'no_phone') {
+          return { success: false, message: `"${action.params.name}" is in your contacts but has no phone number saved.` };
+        }
+        // Contact not found — open Contacts app so user can dial manually
         const contactsUrl = Platform.OS === 'ios' ? 'contacts://' : 'content://contacts/people/';
         const canOpen = await Linking.canOpenURL(contactsUrl);
         await Linking.openURL(canOpen ? contactsUrl : 'tel:');
-        return { success: false, message: `"${action.params.name}" not found in contacts — opened Contacts app` };
+        return { success: false, message: `"${action.params.name}" wasn't found in your contacts — opened Contacts so you can find them.` };
       }
 
       case 'navigate': {
@@ -458,8 +469,8 @@ export async function executeAction(action: ExtractedAction): Promise<{ success:
       }
 
       case 'message': {
-        const phone = await findContactPhone(action.params.name ?? '');
-        const to = phone?.replace(/\s/g, '') ?? '';
+        const msgResult = await findContactPhone(action.params.name ?? '');
+        const to = msgResult.found ? msgResult.phone.replace(/\s/g, '') : '';
         const body = encodeURIComponent(action.params.body ?? '');
         await Linking.openURL(`sms:${to}${Platform.OS === 'ios' ? '&' : '?'}body=${body}`);
         return { success: true, message: `Composing message to ${action.params.name}` };

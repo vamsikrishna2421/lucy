@@ -850,10 +850,18 @@ function TimelineView({
                   onPress={async () => {
                     setExecutingAction(true);
                     const { executeAction } = await import('../processing/automationEngine');
-                    await executeAction(pendingAction);
+                    const result = await executeAction(pendingAction);
                     setExecutingAction(false);
                     setPendingAction(null);
                     onQueued?.();
+                    // Always show the result so the user knows what happened.
+                    // A failed action (e.g. contact not found, permission denied)
+                    // used to silently close the modal with no feedback.
+                    if (!result.success) {
+                      Alert.alert('Couldn\'t complete action', result.message);
+                    } else if (result.message) {
+                      Alert.alert('Done', result.message, [{ text: 'OK' }]);
+                    }
                     // Remove the action banner once confirmed or dismissed
                     try {
                       const db = await getDatabase();

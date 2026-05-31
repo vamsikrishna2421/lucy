@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
-  Dimensions,
   Keyboard,
   Linking,
   Modal,
@@ -196,7 +195,10 @@ function CategoryModal({
     <Modal transparent animationType="none" visible onRequestClose={close}>
       <Pressable style={cmStyles.backdrop} onPress={close}>
         <Animated.View style={[cmStyles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-          <Pressable style={{ flexShrink: 1 }}>
+          {/* flex:1 so this fills the sheet bounds; without it the Pressable grows
+              unbounded and the ScrollView inside it never gets a finite height to
+              scroll within, so items overflow the sheet instead of scrolling. */}
+          <Pressable style={{ flex: 1 }}>
             {/* Header */}
             <View style={[cmStyles.header, { borderBottomColor: category.color + '33' }]}>
               <Text style={cmStyles.icon}>{category.icon}</Text>
@@ -211,11 +213,10 @@ function CategoryModal({
               </TouchableOpacity>
             </View>
 
-            {/* Checklist — pending + done items shown together.
-                Bound the height explicitly (sheet ~80% of screen minus header+add-bar)
-                so the list reliably scrolls; flexShrink alone wasn't dependable in RN. */}
+            {/* Checklist: flex:1 means it takes the remaining height inside the sheet
+                after the fixed-height header and add-bar, and scrolls within that. */}
             <ScrollView
-              style={[cmStyles.list, { maxHeight: Math.round(Dimensions.get('window').height * 0.62) }]}
+              style={cmStyles.list}
               showsVerticalScrollIndicator
               keyboardShouldPersistTaps="handled"
             >
@@ -286,7 +287,7 @@ const cmStyles = StyleSheet.create({
   subtitle: { color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 2 },
   closeBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 10 },
   closeBtnText: { color: LUCY_COLORS.textMuted, fontSize: 13, fontWeight: '700' },
-  list: { flexShrink: 1, paddingHorizontal: 16, paddingTop: 8 },
+  list: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
   addBar: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider },
   addInput: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, color: LUCY_COLORS.textDark, fontSize: 15, borderWidth: 1, borderColor: LUCY_COLORS.border },
   addBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center' },

@@ -78,7 +78,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
         listIdeas(db),
         listExpenses(db),
         listReminders(db),
-        listRecentCaptures(db, 12),
+        listRecentCaptures(db, 30),
         listOpenContextRequests(db),
         listOpenLoops(db),
         listFollowUps(db),

@@ -310,29 +310,41 @@ export default function App() {
         <View style={styles.container}>
           {startupError ? <Text style={styles.error}>{startupError}</Text> : null}
           {/* Loading is handled by SplashAnimation overlay */}
-          {ready && screen === 'capture' ? (
-            <CaptureScreen
-              refreshToken={refreshToken}
-              passiveState={passiveState}
-              onToggleListen={togglePassiveListening}
-              backgroundEnabled={backgroundEnabled}
-              onBackgroundPress={showBackgroundChoice}
-              onMeeting={() => setMeetingVisible(true)}
-              onQueued={() => {
-                setRefreshToken((value) => value + 1);
-                void drainQueue();
-              }}
-            />
-          ) : null}
-          {ready && screen === 'dashboard' ? <DashboardScreen refreshToken={refreshToken} /> : null}
-          {ready && screen === 'ask' ? <AskScreen /> : null}
-          {ready && screen === 'settings' ? (
-            <SettingsScreen
-              refreshToken={refreshToken}
-              backgroundEnabled={backgroundEnabled}
-              onChangeBackground={setBackgroundPreference}
-              onReprocessAll={reprocessAllMemories}
-            />
+          {/* Screens are always mounted once ready so their state (captures, etc.)
+              survives tab switches — the Dashboard in particular must not remount from
+              scratch on every navigation or it shows a blank Timeline until the async
+              fetch completes, making newly-added captures appear to be missing. */}
+          {ready ? (
+            <>
+              <View style={{ flex: 1, display: screen === 'capture' ? 'flex' : 'none' }}>
+                <CaptureScreen
+                  refreshToken={refreshToken}
+                  passiveState={passiveState}
+                  onToggleListen={togglePassiveListening}
+                  backgroundEnabled={backgroundEnabled}
+                  onBackgroundPress={showBackgroundChoice}
+                  onMeeting={() => setMeetingVisible(true)}
+                  onQueued={() => {
+                    setRefreshToken((value) => value + 1);
+                    void drainQueue();
+                  }}
+                />
+              </View>
+              <View style={{ flex: 1, display: screen === 'dashboard' ? 'flex' : 'none' }}>
+                <DashboardScreen refreshToken={refreshToken} />
+              </View>
+              <View style={{ flex: 1, display: screen === 'ask' ? 'flex' : 'none' }}>
+                <AskScreen />
+              </View>
+              <View style={{ flex: 1, display: screen === 'settings' ? 'flex' : 'none' }}>
+                <SettingsScreen
+                  refreshToken={refreshToken}
+                  backgroundEnabled={backgroundEnabled}
+                  onChangeBackground={setBackgroundPreference}
+                  onReprocessAll={reprocessAllMemories}
+                />
+              </View>
+            </>
           ) : null}
         </View>
         <View style={styles.bottomNav}>

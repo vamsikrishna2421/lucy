@@ -759,20 +759,6 @@ export function CaptureScreen({
             <Text style={styles.sendText}>{sending ? '...' : 'Send'}</Text>
           </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: markedPrivate }}
-          style={styles.protectionToggle}
-          onPress={() => setMarkedPrivate((current) => !current)}
-        >
-          <View style={[styles.check, markedPrivate && styles.checkSelected]}>
-            {markedPrivate ? <Text style={styles.checkMark}>{'✓'}</Text> : null}
-          </View>
-          <View style={styles.protectionText}>
-            <Text style={styles.protectionTitle}>Mark as private</Text>
-            <Text style={styles.protectionHint}>Stored with private flag — you control this</Text>
-          </View>
-        </TouchableOpacity>
       </View>
 
       {/* Edit todo modal */}

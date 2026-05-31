@@ -25,3 +25,7 @@ export async function insertIdea(
 export async function listIdeas(db: SQLiteDatabase): Promise<IdeaRow[]> {
   return db.getAllAsync<IdeaRow>('SELECT * FROM ideas ORDER BY created_at DESC, id DESC');
 }
+
+export async function deleteIdea(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync('DELETE FROM ideas WHERE id = ?', id);
+}

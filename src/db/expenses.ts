@@ -30,3 +30,7 @@ export async function insertExpense(
 export async function listExpenses(db: SQLiteDatabase): Promise<ExpenseRow[]> {
   return db.getAllAsync<ExpenseRow>('SELECT * FROM expenses ORDER BY created_at DESC, id DESC');
 }
+
+export async function deleteExpense(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync('DELETE FROM expenses WHERE id = ?', id);
+}

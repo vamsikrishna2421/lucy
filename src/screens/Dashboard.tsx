@@ -212,20 +212,12 @@ function ExtractionChips({ extraction }: { extraction: import('../types/extracti
   if (!extraction) return null;
   const chips = buildChips(extraction);
   if (chips.length === 0) return null;
-  const pairs: ChipItem[][] = [];
-  for (let i = 0; i < chips.length; i += 2) pairs.push(chips.slice(i, i + 2));
   return (
-    <View style={{ marginTop: 10, gap: 6 }}>
-      {pairs.map((pair, pi) => (
-        <View key={pi} style={{ flexDirection: 'row', gap: 6 }}>
-          {pair.map((chip, ci) => (
-            <View key={ci} style={{ flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 10, padding: 10, borderLeftWidth: 3, borderLeftColor: chip.accent, minHeight: 60 }}>
-              <Text style={{ color: chip.accent, fontSize: 9, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>{chip.type}</Text>
-              <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700', lineHeight: 17 }} numberOfLines={2}>{chip.label}</Text>
-              {chip.sub ? <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, marginTop: 2 }} numberOfLines={1}>{chip.sub}</Text> : null}
-            </View>
-          ))}
-          {pair.length === 1 ? <View style={{ flex: 1 }} /> : null}
+    <View style={{ marginTop: 10, gap: 5 }}>
+      {chips.map((chip, i) => (
+        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, borderLeftWidth: 3, borderLeftColor: chip.accent }}>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: chip.accent, flexShrink: 0 }} />
+          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700', flex: 1 }} numberOfLines={2}>{chip.label}</Text>
         </View>
       ))}
     </View>
@@ -898,9 +890,9 @@ function TimelineView({
 function LibraryView({
   tab,
   setTab,
-  todos,
-  ideas,
-  expenses,
+  todos: initialTodos,
+  ideas: initialIdeas,
+  expenses: initialExpenses,
 }: {
   tab: LibraryTab;
   setTab: (tab: LibraryTab) => void;
@@ -908,6 +900,36 @@ function LibraryView({
   ideas: IdeaRow[];
   expenses: ExpenseRow[];
 }) {
+  const [todos, setTodos] = useState(initialTodos);
+  const [ideas, setIdeas] = useState(initialIdeas);
+  const [expenses, setExpenses] = useState(initialExpenses);
+
+  // Keep in sync when parent reloads (e.g. after refreshToken bump)
+  useEffect(() => { setTodos(initialTodos); }, [initialTodos]);
+  useEffect(() => { setIdeas(initialIdeas); }, [initialIdeas]);
+  useEffect(() => { setExpenses(initialExpenses); }, [initialExpenses]);
+
+  const deleteTodo = async (id: number) => {
+    const db = await getDatabase();
+    const { deleteTodo: del } = await import('../db/todos');
+    await del(db, id);
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const deleteIdea = async (id: number) => {
+    const db = await getDatabase();
+    const { deleteIdea: del } = await import('../db/ideas');
+    await del(db, id);
+    setIdeas((prev) => prev.filter((i) => i.id !== id));
+  };
+
+  const deleteExpense = async (id: number) => {
+    const db = await getDatabase();
+    const { deleteExpense: del } = await import('../db/expenses');
+    await del(db, id);
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
+  };
+
   const tabs: LibraryTab[] = ['Todos', 'Ideas', 'Expenses', 'People'];
   return (
     <View style={styles.library}>
@@ -919,9 +941,9 @@ function LibraryView({
         ))}
       </ScrollView>
       <ScrollView style={styles.content}>
-        {tab === 'Todos' && todos.map((item) => <Card key={item.id} title={item.task} detail={`${item.category} / ${item.urgency} / ${item.status}`} privacy={item.privacy_level} />)}
-        {tab === 'Ideas' && ideas.map((item) => <Card key={item.id} title={item.title} detail={item.description} privacy={item.privacy_level} />)}
-        {tab === 'Expenses' && expenses.map((item) => <Card key={item.id} title={`${item.amount ?? '-'} - ${item.description}`} detail={item.category} privacy={item.privacy_level} />)}
+        {tab === 'Todos' && todos.map((item) => <Card key={item.id} title={item.task} detail={`${item.category} / ${item.urgency} / ${item.status}`} privacy={item.privacy_level} onDelete={() => void deleteTodo(item.id)} />)}
+        {tab === 'Ideas' && ideas.map((item) => <Card key={item.id} title={item.title} detail={item.description} privacy={item.privacy_level} onDelete={() => void deleteIdea(item.id)} />)}
+        {tab === 'Expenses' && expenses.map((item) => <Card key={item.id} title={`${item.amount ?? '-'} - ${item.description}`} detail={item.category} privacy={item.privacy_level} onDelete={() => void deleteExpense(item.id)} />)}
         {tab === 'People' && <PeopleTab />}
       </ScrollView>
     </View>
@@ -1028,12 +1050,25 @@ function ReminderCard({ item }: { item: ReminderRow }) {
   return <Card title={protectedPreview(item.text)} detail={item.notification_id ? time : `${time} · notification pending`} privacy={item.privacy_level} />;
 }
 
-function Card({ title, detail, privacy }: { title: string; detail: string; privacy?: 'private' | 'local' | 'normal' }) {
+function Card({ title, detail, privacy, onDelete }: { title: string; detail: string; privacy?: 'private' | 'local' | 'normal'; onDelete?: () => void }) {
   return (
     <View style={styles.card}>
       <View style={styles.cardTop}>
-        <Text style={styles.cardTitle}>{protectedPreview(title)}</Text>
-        {privacy ? <PrivacyBadge level={privacy} /> : null}
+        <Text style={[styles.cardTitle, { flex: 1 }]}>{protectedPreview(title)}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {privacy ? <PrivacyBadge level={privacy} /> : null}
+          {onDelete ? (
+            <TouchableOpacity
+              onPress={() => Alert.alert('Delete permanently?', 'This removes the item from your brain everywhere. This cannot be undone.', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: onDelete },
+              ])}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={{ color: '#ef4444', fontSize: 16, fontWeight: '700' }}>✕</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
       <Text style={styles.detail}>{protectedPreview(detail)}</Text>
     </View>

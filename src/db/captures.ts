@@ -256,12 +256,28 @@ export async function markCaptureProcessing(db: SQLiteDatabase, id: number): Pro
   );
 }
 
+/** Max automatic retries before a capture becomes terminal (user must reprocess manually). */
+export const MAX_AUTO_RETRIES = 5;
+
 export async function markCaptureFailed(db: SQLiteDatabase, id: number, error: string): Promise<void> {
+  // Billing / quota / rate-limit errors are NOT transient — auto-retrying them is
+  // pointless and, worse, the moment balance is restored EVERY queued failure re-runs at
+  // once and burns credits. Mark those terminal (no next_attempt_at) so the user decides
+  // when to retry. Also stop auto-retrying any capture after MAX_AUTO_RETRIES attempts.
+  const lower = error.toLowerCase();
+  const terminal = /balance|credit|quota|billing|insufficient|payment|too many requests|rate limit|\b429\b|\b402\b/.test(lower);
   await db.runAsync(
     `UPDATE captures SET processed = -1, processing_error = ?,
-     next_attempt_at = datetime('now', CASE WHEN attempt_count <= 1 THEN '+30 seconds' WHEN attempt_count = 2 THEN '+2 minutes' ELSE '+10 minutes' END)
+     next_attempt_at = CASE
+       WHEN ? = 1 THEN NULL
+       WHEN attempt_count >= ? THEN NULL
+       WHEN attempt_count <= 1 THEN datetime('now', '+30 seconds')
+       WHEN attempt_count = 2 THEN datetime('now', '+2 minutes')
+       ELSE datetime('now', '+10 minutes') END
      WHERE id = ?`,
     error,
+    terminal ? 1 : 0,
+    MAX_AUTO_RETRIES,
     id,
   );
 }

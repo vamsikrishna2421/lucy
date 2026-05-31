@@ -338,12 +338,13 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
 
   const confirmFullReprocess = () => {
     Alert.alert(
-      'Reprocess all memories?',
-      'LUCY will keep every original thought, clear current derived interpretation, and rebuild it using the selected local model. This may take a long time for a deep model.',
+      'Reprocess ALL memories?',
+      'This re-runs AI extraction on EVERY memory from scratch. With a remote model (OpenAI/Claude) that means one API call per memory — it can use a lot of credits and take a while. Your raw thoughts are kept; only the derived interpretation is rebuilt. Use this only after changing models or schema — not to retry one item (use the ⋯ menu on a single memory for that).',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Reprocess',
+          text: 'Reprocess everything',
+          style: 'destructive',
           onPress: () => void (async () => {
             setReprocessing(true);
             try {

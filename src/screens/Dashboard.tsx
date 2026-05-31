@@ -146,6 +146,92 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   );
 }
 
+// ─── Extraction chips ─────────────────────────────────────────────────────────
+
+type ChipItem = { type: string; accent: string; label: string; sub: string };
+
+function buildChips(extraction: import('../types/extraction').ExtractionResult): ChipItem[] {
+  const chips: ChipItem[] = [];
+  for (const t of extraction.tasks ?? []) {
+    chips.push({
+      type: t.urgency === 'high' ? 'TASK · HIGH URGENCY' : 'TASK',
+      accent: t.urgency === 'high' ? '#FF8C42' : LUCY_COLORS.primary,
+      label: t.task,
+      sub: t.context ? t.context.slice(0, 50) : t.category,
+    });
+  }
+  for (const e of extraction.expenses ?? []) {
+    chips.push({
+      type: 'EXPENSE',
+      accent: '#4ADE80',
+      label: `${e.amount ? '$' + e.amount + ' · ' : ''}${e.description}`,
+      sub: `Categorised: ${e.category}`,
+    });
+  }
+  for (const f of extraction.follow_ups ?? []) {
+    chips.push({
+      type: 'FOLLOW-UP',
+      accent: '#FB923C',
+      label: `${f.assignee} — ${f.action}`,
+      sub: 'Assignee logged',
+    });
+  }
+  for (const p of extraction.people ?? []) {
+    chips.push({
+      type: 'PERSON',
+      accent: '#60A5FA',
+      label: p,
+      sub: extraction.summary ? extraction.summary.slice(0, 50) : 'Mentioned',
+    });
+  }
+  for (const r of extraction.reminders ?? []) {
+    chips.push({
+      type: 'REMINDER',
+      accent: '#A78BFA',
+      label: r.text,
+      sub: r.time ? new Date(r.time).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : r.urgency,
+    });
+  }
+  for (const i of extraction.ideas ?? []) {
+    chips.push({ type: 'IDEA', accent: '#818CF8', label: i.title, sub: i.description.slice(0, 60) });
+  }
+  if (extraction.mood && extraction.mood.tone !== 'neutral') {
+    chips.push({
+      type: 'MOOD SIGNAL',
+      accent: extraction.mood.tone === 'positive' || extraction.mood.tone === 'excited' ? '#4ADE80'
+            : extraction.mood.tone === 'stressed' || extraction.mood.tone === 'frustrated' ? '#FB7185'
+            : '#94A3B8',
+      label: `${extraction.mood.tone.charAt(0).toUpperCase() + extraction.mood.tone.slice(1)}`,
+      sub: `Energy: ${extraction.mood.energy}`,
+    });
+  }
+  return chips.slice(0, 8); // cap to keep the card readable
+}
+
+function ExtractionChips({ extraction }: { extraction: import('../types/extraction').ExtractionResult | null }) {
+  if (!extraction) return null;
+  const chips = buildChips(extraction);
+  if (chips.length === 0) return null;
+  const pairs: ChipItem[][] = [];
+  for (let i = 0; i < chips.length; i += 2) pairs.push(chips.slice(i, i + 2));
+  return (
+    <View style={{ marginTop: 10, gap: 6 }}>
+      {pairs.map((pair, pi) => (
+        <View key={pi} style={{ flexDirection: 'row', gap: 6 }}>
+          {pair.map((chip, ci) => (
+            <View key={ci} style={{ flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 10, padding: 10, borderLeftWidth: 3, borderLeftColor: chip.accent, minHeight: 60 }}>
+              <Text style={{ color: chip.accent, fontSize: 9, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>{chip.type}</Text>
+              <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700', lineHeight: 17 }} numberOfLines={2}>{chip.label}</Text>
+              {chip.sub ? <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, marginTop: 2 }} numberOfLines={1}>{chip.sub}</Text> : null}
+            </View>
+          ))}
+          {pair.length === 1 ? <View style={{ flex: 1 }} /> : null}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function NowView({
   todos,
   reminders,
@@ -376,6 +462,8 @@ function TimelineView({
   const [menuTarget, setMenuTarget] = useState<CaptureRow | null>(null);
   // LLM-detected actions: map from capture_id → parsed action object
   const [llmActions, setLlmActions] = useState<Record<number, import('../processing/automationEngine').ExtractedAction>>({});
+  // Extraction chips: map from capture_id → parsed ExtractionResult (loaded lazily on expand)
+  const [extractionChips, setExtractionChips] = useState<Record<number, import('../types/extraction').ExtractionResult>>({});
 
   const runReprocess = async (capture: CaptureRow) => {
     const db = await getDatabase();
@@ -573,7 +661,23 @@ function TimelineView({
                 <TouchableOpacity
                   key={item.id}
                   style={styles.tlRow}
-                  onPress={() => setExpanded((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+                  onPress={() => {
+                    const nowExpanded = !expanded[item.id];
+                    setExpanded((prev) => ({ ...prev, [item.id]: nowExpanded }));
+                    // Lazily load extraction chips the first time a processed card expands
+                    if (nowExpanded && item.processed === 1 && !extractionChips[item.id]) {
+                      void (async () => {
+                        try {
+                          const db = await getDatabase();
+                          const { getLatestExtractionForCapture } = await import('../db/extractions');
+                          const json = await getLatestExtractionForCapture(db, item.id);
+                          if (json) {
+                            setExtractionChips((prev) => ({ ...prev, [item.id]: JSON.parse(json) as import('../types/extraction').ExtractionResult }));
+                          }
+                        } catch { /* non-critical */ }
+                      })();
+                    }
+                  }}
                   activeOpacity={0.8}
                 >
                   {/* Time + spine */}
@@ -632,19 +736,8 @@ function TimelineView({
                         </View>
                       )}
 
-                      {/* Only show a snippet when expanded, and only from structured_text */}
-                      {isExpanded ? (
-                        <View style={styles.tlKeyPoints}>
-                          {item.structured_text
-                            ? extractKeyPoints(item.structured_text).map((pt, i) => (
-                                <Text key={i} style={styles.tlKeyPoint}>{pt}</Text>
-                              ))
-                            : item.extracted_title
-                              ? null
-                              : <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, fontStyle: 'italic' }}>LUCY is processing this thought...</Text>
-                          }
-                        </View>
-                      ) : null}
+                      {/* Extraction chips — shown when expanded */}
+                      {isExpanded ? <ExtractionChips extraction={extractionChips[item.id] ?? null} /> : null}
 
                       {/* LLM-detected action banner — shown after the capture processes */}
                       {llmActions[item.id] ? (

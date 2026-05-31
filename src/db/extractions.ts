@@ -22,6 +22,17 @@ export interface ExtractionEvidenceRow {
   structured_json: string;
 }
 
+export async function getLatestExtractionForCapture(
+  db: SQLiteDatabase,
+  captureId: number,
+): Promise<string | null> {
+  const row = await db.getFirstAsync<{ structured_json: string }>(
+    'SELECT structured_json FROM extractions WHERE capture_id = ? ORDER BY id DESC LIMIT 1',
+    captureId,
+  );
+  return row?.structured_json ?? null;
+}
+
 export async function listLatestExtractionEvidence(db: SQLiteDatabase): Promise<ExtractionEvidenceRow[]> {
   return db.getAllAsync<ExtractionEvidenceRow>(
     `SELECT e.capture_id, c.created_at AS capture_created_at, e.privacy_level, e.structured_json

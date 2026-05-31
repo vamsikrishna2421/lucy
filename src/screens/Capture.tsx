@@ -50,10 +50,11 @@ interface TaskCategory {
 
 const CATEGORY_RULES: Array<{ id: string; label: string; icon: string; color: string; pattern: RegExp }> = [
   { id: 'grocery',  label: 'Grocery List',    icon: '🛒', color: '#4ADE80', pattern: /grocery|groceries|food|milk|vegetable|onion|tomato|garlic|spinach|mango|bread|butter|eggs|cereal|buy.*food|shopping list|produce/i },
-  { id: 'habits',   label: 'Daily Habits',    icon: '✦',  color: '#60A5FA', pattern: /habit|routine|morning|evening|workout|exercise|run|yoga|meditation|daily|wake|sleep|stretc|vitamin|water/i },
-  { id: 'work',     label: 'Work & Deadlines',icon: '⌘',  color: '#FF8C42', pattern: /work|office|project|deadline|meeting|client|team|sprint|deploy|engineering|presentation|report|email.*work|standup|review|submit/i },
+  { id: 'habits',   label: 'Daily Habits',    icon: '✦',  color: '#60A5FA', pattern: /habit|routine|morning|evening|workout|exercise|run\b|yoga|meditation|daily|wake|sleep|stretc|vitamin|water|steps|walk\b|walking/i },
+  // "work" alone is too broad (matches "work towards", "work on myself"). Require job-context neighbours.
+  { id: 'work',     label: 'Work & Deadlines',icon: '⌘',  color: '#FF8C42', pattern: /\boffice\b|project deadline|work deadline|at work|for work|meeting\b|client\b|team\b|sprint\b|deploy\b|engineering\b|presentation\b|standup\b|code review|pull request|jira|slack|submit.*report|send.*report/i },
   { id: 'calls',    label: 'Calls & Messages', icon: '◉',  color: '#F472B6', pattern: /call|phone|text|sms|message|whatsapp|ping|contact|follow.up|reach out/i },
-  { id: 'health',   label: 'Health',          icon: '♡',  color: '#FCA5A5', pattern: /health|doctor|dentist|medical|physio|appointment|clinic|pharmacy|medicine|pill|prescription/i },
+  { id: 'health',   label: 'Health',          icon: '♡',  color: '#FCA5A5', pattern: /health|doctor|dentist|medical|physio|appointment|clinic|pharmacy|medicine|pill|prescription|weight loss|lose weight|diet\b|calories|steps goal|walk more|gym\b|fitness/i },
   { id: 'personal', label: 'Personal',        icon: '◈',  color: '#A78BFA', pattern: /family|home|personal|mom|dad|kids|children|house|clean|laundry|bills|bank/i },
 ];
 
@@ -151,11 +152,13 @@ function CategoryModal({
   onClose,
   onComplete,
   onAdd,
+  onEdit,
 }: {
   category: TaskCategory;
   onClose: () => void;
   onComplete: (todo: TodoRow) => void;
   onAdd: (text: string) => void;
+  onEdit: (todo: TodoRow) => void;
 }) {
   const [addText, setAddText] = useState('');
   // allItems tracks every item with its state: pending or done-pending-undo
@@ -227,7 +230,7 @@ function CategoryModal({
                     key={todo.id}
                     todo={todo}
                     onPress={() => handleCheck(todo)}
-                    onLongPress={() => {}}
+                    onLongPress={() => onEdit(todo)}
                   />
                 ) : (
                   // Done item — inline with undo button
@@ -827,6 +830,7 @@ export function CaptureScreen({
             await archiveTodo(db, todo.id, 'done').catch(() => {});
             setTodos((prev) => prev.filter((t) => t.id !== todo.id));
           }}
+          onEdit={(todo) => { setOpenCategory(null); setEditTodo(todo); }}
           onAdd={async (text) => {
             const db = await getDatabase();
             await db.runAsync(

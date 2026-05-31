@@ -41,7 +41,9 @@ export async function promptOpenAI(
     },
     body: JSON.stringify({
       model,
-      reasoning: { effort: 'none' },
+      // reasoning param is only valid for o-series models (o1, o3, o4-mini…).
+      // Standard GPT models (gpt-4o, gpt-4o-mini, gpt-4.1…) reject it with a 400.
+      ...(model.startsWith('o') ? { reasoning: { effort: 'low' } } : {}),
       max_output_tokens: 1800,
       instructions: system,
       input,

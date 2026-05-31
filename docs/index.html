@@ -255,6 +255,75 @@
   </div>
 </section>
 
+<!-- ───────────── HACKATHON PITCH ───────────── -->
+<section id="pitch" style="background:#0A0908;border-top:1px solid #2D2218;border-bottom:1px solid #2D2218;">
+  <div class="container" style="max-width:900px;">
+    <div class="section-label">The Pitch</div>
+    <h2 class="section-title">LUCY in 60 seconds</h2>
+
+    <p style="font-size:clamp(20px,2.6vw,26px);line-height:1.6;color:#F5EFE6;font-weight:600;margin:24px 0 8px;">
+      You said it once. Three days later, your phone remembered it for you.
+    </p>
+    <p style="font-size:17px;line-height:1.8;color:#C4A882;margin-bottom:40px;">
+      LUCY runs in the background of your life, capturing the stream of thoughts you would normally lose —
+      a task, a person, an expense, an idea — and silently organizes everything into a private, encrypted
+      second brain you can <strong style="color:#F5EFE6;">query like a conversation</strong>. No folders, no
+      tags, no setup. Speak or type one messy sentence; LUCY does the filing.
+    </p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-bottom:44px;">
+      <div class="pitch-card">
+        <div class="pitch-h">The problem</div>
+        <p class="pitch-p">Your best thoughts arrive at the worst times — walking, driving, mid-meeting. Notes apps demand structure you do not have a free hand for, so the thought is lost. Most "AI memory" tools send everything to the cloud and hallucinate confident nonsense.</p>
+      </div>
+      <div class="pitch-card">
+        <div class="pitch-h">The solution</div>
+        <p class="pitch-p">One capture box. LUCY extracts tasks, people, expenses, reminders, ideas and follow-ups from plain language, splits multi-event journals into separate memories, and connects them into a knowledge graph with evidence and confidence — never invented certainty.</p>
+      </div>
+      <div class="pitch-card">
+        <div class="pitch-h">Why it is different</div>
+        <p class="pitch-p">Local-first and encrypted (SQLCipher on-device). Bring your own model — Claude or OpenAI. It does not just store; it acts: one tap to call, navigate, set a timer, add a reminder, or schedule an event. And it surfaces what matters proactively.</p>
+      </div>
+    </div>
+
+    <h3 style="color:#FFA05C;font-size:13px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:16px;">The 90-second demo</h3>
+    <ol style="font-size:15px;line-height:1.9;color:#C4A882;padding-left:20px;margin-bottom:44px;">
+      <li>Open LUCY. Speak one sentence: <em style="color:#F5EFE6;">"Had a great call with Marcus about the Series B deck — he wants the revenue slide revised by Thursday. Also pick up wine for dinner Friday, about 40 dollars."</em></li>
+      <li>Watch it become structured memory in seconds: a <strong style="color:#F5EFE6;">task</strong> (revise revenue slide, due Thursday), a <strong style="color:#F5EFE6;">follow-up</strong> on Marcus, an <strong style="color:#F5EFE6;">expense</strong> ($40 wine, Friday) — from one breath.</li>
+      <li>Ask: <em style="color:#F5EFE6;">"What do I need to do before Thursday?"</em> — LUCY answers from your own memory, with sources.</li>
+      <li>Paste a whole day journal → it fans out into separate timeline memories, one headline per event.</li>
+      <li>Say <em style="color:#F5EFE6;">"Call Marcus"</em> → a confirmation card slides up → one tap → the dialer opens.</li>
+    </ol>
+
+    <h3 style="color:#FFA05C;font-size:13px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:16px;">Under the hood</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:44px;">
+      <span class="pitch-chip">Expo / React Native</span>
+      <span class="pitch-chip">SQLCipher encrypted store</span>
+      <span class="pitch-chip">Claude + OpenAI (swappable)</span>
+      <span class="pitch-chip">LLM extraction → structured schema</span>
+      <span class="pitch-chip">Hybrid semantic + keyword search</span>
+      <span class="pitch-chip">Evidence-based knowledge graph</span>
+      <span class="pitch-chip">Background organizing</span>
+      <span class="pitch-chip">URL-scheme / intent automations</span>
+    </div>
+
+    <div style="background:#1A1510;border:1px solid #2D2218;border-radius:18px;padding:24px;">
+      <div class="pitch-h" style="margin-bottom:10px;">The one-line pitch</div>
+      <p style="font-size:19px;line-height:1.6;color:#F5EFE6;font-weight:600;margin:0;">
+        LUCY is a private, on-device AI second brain that turns the thoughts you speak in passing into an
+        organized, queryable memory — and acts on them with a single tap.
+      </p>
+    </div>
+  </div>
+</section>
+
+<style>
+  .pitch-card { background:#1A1510;border:1px solid #2D2218;border-radius:16px;padding:20px; }
+  .pitch-h { color:#FFA05C;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px; }
+  .pitch-p { font-size:14px;line-height:1.7;color:#C4A882;margin:0; }
+  .pitch-chip { background:rgba(255,140,66,0.1);color:#FFA05C;font-size:12px;font-weight:700;padding:7px 13px;border-radius:20px;border:1px solid rgba(255,140,66,0.25); }
+</style>
+
 <!-- LOGO MEANING -->
 <section class="logo-section" id="logo">
   <div class="container">
@@ -872,53 +941,70 @@
 
 <script>
 const TESTS = [
-  // CORE
-  { id:'board-capture', cat:'core', name:'Capture a thought', steps:'Type anything in Board input → tap Send → verify it appears organized in Today → Captured.' },
-  { id:'board-task-done', cat:'core', name:'Mark task as done', steps:'On Board, tap the circle on any task → see strikethrough animation → task moves to Done Today section.' },
-  { id:'board-task-edit', cat:'core', name:'Edit or delete a task', steps:'Tap ⋯ on any Board task → edit the text or delete it.' },
-  { id:'board-task-undo', cat:'core', name:'Undo a completion', steps:'Mark a task done → tap "undo" in Done Today section → task returns to pending.' },
-  { id:'board-hero', cat:'ui', name:'Hero header collapses on scroll', steps:'On Board screen, scroll down → hero (LUCY + greeting) should compress into compact header. Scroll back up to restore.' },
-  { id:'board-receipt', cat:'core', name:'Receipt OCR (📷 button)', steps:'Tap 📷 in Board composer → take photo of a receipt → LUCY fills in amount + merchant.' },
-  { id:'capture-voice', cat:'core', name:'Voice input mic button', steps:'Tap ⏺ mic button in Board composer → speak → stop → text appears in input box.' },
-  // TODAY
-  { id:'today-now', cat:'core', name:'Today → Now tab shows tasks', steps:'Go to Today → Now. Verify reminders, tasks, and follow-ups appear.' },
-  { id:'today-onthisday', cat:'ai', name:'On This Day card', steps:'After capturing notes over multiple days, check Today → Now for the "On this day" card surfacing past memories.' },
-  { id:'today-mood', cat:'ai', name:'Mood display in Tonight card', steps:'Capture a few notes → go Today → Now → Tonight card should show mood emoji + colored dots.' },
-  { id:'today-memory', cat:'ai', name:'Memory map connections', steps:'Today → Memory tab → verify entities and connections from your captures appear.' },
-  { id:'today-captured', cat:'core', name:'Captured cards with key points', steps:'Today → Captured tab → each card shows title + 1-line raw + key extracted points.' },
-  { id:'today-correct', cat:'core', name:'? button to correct a memory', steps:'Today → Captured → tap ? on any card → write correction → tap Send to LUCY → verify it re-processes.' },
-  { id:'today-ai-action', cat:'ai', name:'✦ AI text actions', steps:'Today → Captured → tap ✦ AI on any card → choose Summarize → verify AI returns a summary.' },
-  { id:'today-search', cat:'core', name:'Semantic search in Captured', steps:'Today → Captured → type a keyword in search bar → results should appear matching semantically.' },
-  // ASK
-  { id:'ask-llm', cat:'ai', name:'Ask LUCY free-form question', steps:'Go to Ask → type "What did I work on today?" → verify LUCY answers from your captures (not generic).' },
-  { id:'ask-sources', cat:'ai', name:'Source citations under answers', steps:'Ask any question → scroll below the answer → "From your memory" chips should show which captures were used.' },
-  { id:'ask-device', cat:'ai', name:'Ask device questions', steps:'Ask "What timezone am I in?" or "What is my battery level?" → LUCY should answer from live device data.' },
-  { id:'ask-insights', cat:'ai', name:'✦ Insights tab pre-generated questions', steps:'Ask → tap ✦ Insights → see 4+ questions LUCY generated. Tap any → answer reveals.' },
-  { id:'ask-device-habits', cat:'ai', name:'Device habit insights', steps:'In ✦ Insights → verify "What are my capture habits?" and battery + mood questions appear.' },
-  // AUTOMATIONS
-  { id:'auto-timer', cat:'automation', name:'Set timer via Ask', steps:'In Ask, type "Set a timer for 5 minutes" → LUCY shows confirmation card → tap to confirm → timer starts.' },
-  { id:'auto-call', cat:'automation', name:'Call a contact via Ask', steps:'Type "Call [name of contact]" → LUCY shows confirmation → tap → phone dialer opens.' },
-  { id:'auto-navigate', cat:'automation', name:'Navigate to location', steps:'Type "Navigate to [a place]" → confirmation appears → tap → Maps opens with destination.' },
-  { id:'auto-play', cat:'automation', name:'Play music via Ask', steps:'Type "Play my focus playlist" → confirmation → Spotify or Apple Music opens.' },
-  { id:'auto-remind', cat:'automation', name:'Add to grocery/reminder list', steps:'Type "Add milk to grocery list" → confirmation → creates in Reminders app.' },
-  { id:'auto-event', cat:'automation', name:'Schedule calendar event', steps:'Type "Schedule a meeting with Sam tomorrow at 3pm" → creates calendar event.' },
-  { id:'auto-shortcut', cat:'automation', name:'Trigger iOS Shortcut', steps:'Type "Run my morning routine" (if you have a Shortcut named that) → triggers it.' },
-  // AI FEATURES
-  { id:'meeting-mode', cat:'ai', name:'Meeting Mode capture + summary', steps:'Tap Meeting in Board header → name it → start → speak for 1-2 min → End meeting → verify AI summary shows decisions/actions.' },
-  { id:'morning-brief', cat:'ai', name:'Morning brief notification', steps:'Enable Background organizing → wait for 7-9am → check notification for LUCY morning brief.' },
-  { id:'onthisday-notif', cat:'ai', name:'On This Day notification', steps:'After several days of use → check notifications for "On this day X years ago..." message.' },
-  { id:'checkin-notif', cat:'ai', name:'Progress check-in notifications', steps:'Settings → Connectors → enable Progress check-ins → wait for 10am, 12pm or 2pm notification.' },
-  // CONNECTORS
-  { id:'connector-calendar', cat:'connectors', name:'Calendar integration', steps:'Settings → Connectors → tap Calendar toggle → grant permission → verify pre-meeting brief fires 30 min before a meeting.' },
-  { id:'connector-location', cat:'connectors', name:'Location context in Ask', steps:'Settings → Connectors → enable Location → Ask "Where am I?" → verify city/area response.' },
-  { id:'connector-passive', cat:'connectors', name:'Passive listening', steps:'Settings → Connectors → enable Passive listening → confirm Listen button works → speak for 2 min → stop → check Captured.' },
-  // UI/UX
-  { id:'ui-onboarding', cat:'ui', name:'First-run onboarding (fresh install)', steps:'Delete + reinstall → 3-slide onboarding should appear on first launch.' },
-  { id:'ui-splash', cat:'ui', name:'Animated splash screen', steps:'Force-close app completely → reopen → L·U·C planets orbit around Y → LUCY wordmark appears → fades to app.' },
-  { id:'ui-nav', cat:'ui', name:'Bottom navigation 4 tabs', steps:'Verify Board · Today · Ask · Settings tabs exist. Verify Connectors is inside Settings.' },
-  { id:'export-json', cat:'core', name:'Export data as JSON', steps:'Settings → Export as JSON → system share sheet appears with .json file.' },
-  { id:'export-md', cat:'core', name:'Export data as Markdown', steps:'Settings → Export as Markdown → system share sheet appears with .md file.' },
-  { id:'delete-data', cat:'core', name:'Delete all memories', steps:'Settings → Delete all memories → confirmation alert → all data cleared → board/today empty.' },
+  // ───────── SETUP (do these first) ─────────
+  { id:'setup-model', cat:'core', name:'Choose an AI model', steps:'1) Settings → AI extraction model. 2) Tap the dropdown. 3) Pick a model. For a Claude model, first paste your Anthropic key in the Claude API key box below and tap Save (it is verified). 4) The dropdown should now show the chosen model.' },
+  { id:'setup-remote', cat:'core', name:'Turn on remote intelligence', steps:'1) Settings → open the queue/diagnostics panel. 2) Confirm PROCESSING WITH shows your model and a green "Remote ready". 3) If it is red, add/verify the API key — captures will stay queued until remote is reachable.' },
+
+  // ───────── CAPTURE ─────────
+  { id:'cap-text', cat:'core', name:'Capture a single thought', steps:'1) Open the Tasks (Board) tab. 2) Type "Call the bank tomorrow at 3pm". 3) Tap Send (arrow). 4) A "Got it" toast shows and the box clears. 5) Today → Timeline: within ~30s the card changes from "Organizing…" to an extracted headline.' },
+  { id:'cap-list-split', cat:'core', name:'A list splits into separate tasks', steps:'1) Tasks → type "buy milk, eggs, bread and onions". 2) Send. 3) Open the Grocery List category. 4) Verify FOUR separate checkbox items (Buy milk / Buy eggs / Buy bread / Buy onions) — NOT one combined line.' },
+  { id:'cap-journal-split', cat:'ai', name:'A day journal splits into per-event memories', steps:'1) Tasks → paste a day log, e.g. "Woke up at 7. Had a great meeting with Sam about the deck. Bought groceries for 40 dollars. Felt tired in the evening." 2) Send. 3) Today → Timeline. 4) Verify it becomes SEVERAL separate memories (one per event) each with its own headline — not one giant entry.' },
+  { id:'cap-share-md', cat:'core', name:'Share a .md / .txt file into LUCY', steps:'1) Open Files / Downloads and pick a .md or .txt journal. 2) Share → choose LUCY. 3) LUCY opens on the capture screen. 4) Verify the file contents are captured (appear in Today → Timeline within ~30s, split into events if it is a day log).' },
+  { id:'cap-voice', cat:'core', name:'Voice input', steps:'1) Tasks composer → tap the mic button. 2) Grant microphone permission if asked. 3) Speak a sentence → tap to stop. 4) The transcribed text appears in the input box. 5) Send it.' },
+  { id:'cap-receipt', cat:'core', name:'Receipt OCR', steps:'1) Tasks composer → tap the camera button. 2) Photograph a receipt. 3) LUCY fills in amount + merchant as an expense. 4) Confirm it lands in Brain → Expenses.' },
+  { id:'cap-private', cat:'core', name:'Mark a capture private', steps:'1) Tasks → toggle "Contains private details". 2) Type a note → Send. 3) Toast reads "Protected thought queued". 4) Timeline card shows a privacy badge / lock.' },
+
+  // ───────── TASKS / BOARD ─────────
+  { id:'task-categories', cat:'core', name:'Tasks grouped into categories', steps:'1) Capture a few tasks (a grocery item, a call, a workout). 2) Tasks tab shows them grouped into category cards (Grocery List, Calls & Messages, Daily Habits, etc.). 3) Each card shows an item count.' },
+  { id:'task-scroll', cat:'ui', name:'Long task list scrolls', steps:'1) Capture 15+ items in one category (e.g. many grocery items). 2) Tasks → tap that category card. 3) The detail sheet opens. 4) Verify you can SCROLL all the way to the bottom of the list (not just the first few).' },
+  { id:'task-done', cat:'core', name:'Complete + undo a task', steps:'1) Open a category sheet. 2) Tap a task circle → strikethrough animation → it moves to done. 3) Tap "Undo" → it returns to pending.' },
+  { id:'task-add-inline', cat:'core', name:'Quick-add inside a category', steps:'1) Open a category sheet. 2) Type in the "Add to …" box at the bottom → tap +. 3) The new item appears in the list immediately.' },
+
+  // ───────── TIMELINE ─────────
+  { id:'tl-headlines', cat:'core', name:'Timeline reads as headlines', steps:'1) Today → Timeline. 2) Each memory shows a one-line extracted headline + mood color. 3) Tap a card to expand key points; tap again to collapse.' },
+  { id:'tl-menu', cat:'core', name:'Memory ⋯ menu: Correct / Reprocess / Delete', steps:'1) Today → Timeline → tap ⋯ on a memory. 2) Menu shows Correct, Reprocess, Delete. 3) Tap "Correct this memory" → write what is wrong → Send. 4) Reopen ⋯ → Reprocess → it re-organizes (no duplicate tasks created).' },
+  { id:'tl-delete-brain', cat:'core', name:'Delete removes it from the Brain too', steps:'1) Timeline → ⋯ → Delete → confirm. 2) The memory disappears from Timeline. 3) Check Brain (Todos/Ideas/Expenses) and Ask — the deleted content must NOT resurface anywhere.' },
+  { id:'tl-failed-retry', cat:'core', name:'Failed capture shows a retry path', steps:'1) (Easiest with remote off / wrong key.) Capture a thought. 2) Timeline shows amber "Couldn\'t organize — tap ⋯ to retry" (not an endless "Organizing…"). 3) Fix the key in Settings. 4) ⋯ → Reprocess → it organizes.' },
+  { id:'tl-quick', cat:'core', name:'Quick-capture bar on Timeline', steps:'1) Today → Timeline → type in the "Capture a thought…" bar at top → Send. 2) A new memory appears.' },
+
+  // ───────── ASK ─────────
+  { id:'ask-llm', cat:'ai', name:'Ask a free-form question', steps:'1) Ask tab → type "What did I work on today?" 2) LUCY answers from YOUR captures (specific, not generic). 3) Try "What do I need to do before Friday?"' },
+  { id:'ask-sources', cat:'ai', name:'Source citations', steps:'1) Ask any memory question. 2) Below the answer, "From your memory" chips show which captures were used. 3) (Requires an OpenAI key for embeddings, even on Claude.)' },
+  { id:'ask-device', cat:'ai', name:'Ask live device questions', steps:'1) Ask "What timezone am I in?" or "What is my battery level?" 2) LUCY answers from live device data.' },
+  { id:'ask-insights', cat:'ai', name:'Pre-generated insight questions', steps:'1) Ask → Insights tab. 2) See 4+ questions LUCY generated about your habits/mood/progress. 3) Tap one → the answer reveals.' },
+
+  // ───────── AUTOMATIONS (need the latest native build) ─────────
+  { id:'auto-saves', cat:'automation', name:'An action never loses the thought', steps:'1) Tasks → type "Call mom now". 2) The "LUCY can do this" confirmation card appears. 3) Tap "Not now". 4) Verify the thought is STILL saved in Timeline (a misfired action must not lose your note).' },
+  { id:'auto-timer', cat:'automation', name:'Set a timer', steps:'1) Type "Set a timer for 5 minutes". 2) Tap the confirmation. 3) The system clock timer opens, or LUCY schedules a 5-min notification as fallback.' },
+  { id:'auto-call', cat:'automation', name:'Call a contact', steps:'1) Type "Call [a real contact name] now". 2) Grant Contacts permission if asked. 3) Tap confirm → the phone dialer opens with that number.' },
+  { id:'auto-navigate', cat:'automation', name:'Navigate to a place', steps:'1) Type "Navigate to the office" (or any place). 2) Tap confirm → Maps opens with the destination.' },
+  { id:'auto-message', cat:'automation', name:'Message a contact', steps:'1) Type "Text Sarah I am running late". 2) Tap confirm → Messages/SMS opens pre-filled to that contact.' },
+  { id:'auto-remind', cat:'automation', name:'Add to a reminders list', steps:'1) Type "Add milk to grocery list". 2) Tap confirm → an item is created in the Reminders app (iOS).' },
+  { id:'auto-event', cat:'automation', name:'Schedule a calendar event', steps:'1) Type "Schedule a meeting with Sam tomorrow at 3pm". 2) Grant Calendar permission. 3) Tap confirm → a calendar event is created for tomorrow 3pm.' },
+  { id:'auto-play', cat:'automation', name:'Play music', steps:'1) Type "Play my focus playlist". 2) Tap confirm → Spotify (or Apple Music) opens with the search.' },
+
+  // ───────── PROACTIVE AI ─────────
+  { id:'ai-meeting', cat:'ai', name:'Meeting Mode summary', steps:'1) Tap "Meeting" in the top header. 2) Name it → Start → speak for 1-2 minutes. 3) End meeting. 4) Verify an AI summary with decisions + action items appears.' },
+  { id:'ai-morning', cat:'ai', name:'Morning brief notification', steps:'1) Settings → enable Background organizing. 2) Between 7-9am the next day, check for a warm 2-sentence LUCY morning brief notification.' },
+  { id:'ai-onthisday', cat:'ai', name:'On This Day', steps:'1) After several days of use, check Today → Focus Now for an "On this day" card, and notifications for past memories.' },
+  { id:'ai-mood', cat:'ai', name:'Mood tracking', steps:'1) Capture several notes with feeling. 2) Today → Focus Now → the mood card shows a tone emoji + trend dots.' },
+
+  // ───────── CONNECTORS ─────────
+  { id:'con-calendar', cat:'connectors', name:'Calendar pre-meeting brief', steps:'1) Settings → Connectors → enable Calendar → grant permission. 2) ~30 min before a real calendar event, LUCY sends a pre-meeting brief pulling related people/notes.' },
+  { id:'con-location', cat:'connectors', name:'Location context', steps:'1) Settings → Connectors → enable Location. 2) Ask "Where am I?" → LUCY answers with city/area (never precise GPS).' },
+  { id:'con-passive', cat:'connectors', name:'Passive listening', steps:'1) Settings → Connectors → enable Passive listening. 2) Tap the Listen header pill. 3) Speak for ~2 min → stop. 4) A transcript batch is captured into the Timeline.' },
+
+  // ───────── DIAGNOSTICS / DATA ─────────
+  { id:'diag-panel', cat:'core', name:'Queue diagnostics', steps:'1) Settings → queue panel. 2) See counts (Queued / Organizing / Will retry / Remembered). 3) PROCESSING WITH shows the active model + remote status. 4) If anything failed, expand "Recent errors".' },
+  { id:'data-export-json', cat:'core', name:'Export as JSON', steps:'1) Settings → Export as JSON. 2) The system share sheet appears with a .json file containing your data.' },
+  { id:'data-export-md', cat:'core', name:'Export as Markdown', steps:'1) Settings → Export as Markdown. 2) The share sheet appears with a .md file.' },
+  { id:'data-reprocess-all', cat:'core', name:'Reprocess all memories', steps:'1) Settings → Reprocess all memories. 2) All derived items are rebuilt from your raw captures (no duplicates, no error).' },
+  { id:'data-delete-all', cat:'core', name:'Delete all memories', steps:'1) Settings → Delete all memories → confirm. 2) Everything clears — Timeline, Tasks, Brain and Ask are all empty (captures included, not just the derived items).' },
+
+  // ───────── UI / UX ─────────
+  { id:'ui-onboarding', cat:'ui', name:'First-run onboarding', steps:'1) Fresh install (delete + reinstall). 2) The onboarding slides appear on first launch.' },
+  { id:'ui-splash', cat:'ui', name:'Animated splash', steps:'1) Force-close the app. 2) Reopen → the L·U·C·Y wordmark animation plays → fades into the app.' },
+  { id:'ui-nav', cat:'ui', name:'Bottom navigation', steps:'1) Verify the four tabs: Home (Today) · Tasks · Ask · Settings. 2) Today has Timeline / Focus Now / Brain views.' },
 ];
 
 let currentFilter = 'all';

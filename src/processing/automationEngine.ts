@@ -43,30 +43,34 @@ export interface ExtractedAction {
 
 // ─── Intent pattern matching ─────────────────────────────────────────────────
 
+// NOTE: command patterns are anchored to the START of the capture (^\s*). An action
+// is something the user *issues* ("Call mom now"), not something they *recount*
+// ("Had a great call with the team"). Anchoring kills the biggest false-positive class;
+// the capture is always saved as a memory anyway, so missing an edge case is harmless.
 const TIMER_PATTERNS = [
-  /set (?:a )?timer (?:for )?(\d+)\s*(min(?:utes?)?|sec(?:onds?)?|hr?s?|hours?)/i,
-  /(\d+)\s*(min(?:utes?)?|sec(?:onds?)?|hr?s?|hours?) timer/i,
-  /remind me in (\d+)\s*(min(?:utes?)?|sec(?:onds?)?|hours?)/i,
+  /^\s*set (?:a )?timer (?:for )?(\d+)\s*(min(?:utes?)?|sec(?:onds?)?|hr?s?|hours?)/i,
+  /^\s*(\d+)\s*(min(?:utes?)?|sec(?:onds?)?|hr?s?|hours?) timer/i,
+  /^\s*remind me in (\d+)\s*(min(?:utes?)?|sec(?:onds?)?|hours?)/i,
 ];
 
 const CALL_PATTERNS = [
-  /call (\w[\w\s]+?)(?:\s+now|\s+please|$)/i,
-  /(?:phone|ring|dial) (\w[\w\s]+?)(?:\s+now|\s+please|$)/i,
-  /i need to call (\w[\w\s]+)/i,
+  /^\s*call (\w[\w\s]{0,40}?)(?:\s+now|\s+please)?\s*$/i,
+  /^\s*(?:phone|ring|dial) (\w[\w\s]{0,40}?)(?:\s+now|\s+please)?\s*$/i,
+  /^\s*i need to call (\w[\w\s]{0,40})\s*$/i,
 ];
 
 const NAVIGATE_PATTERNS = [
-  /navigate to (.+)/i,
-  /take me to (.+)/i,
-  /directions? to (.+)/i,
-  /how do i get to (.+)/i,
-  /open maps? (?:for |to )?(.+)/i,
+  /^\s*navigate to (.+)/i,
+  /^\s*take me to (.+)/i,
+  /^\s*directions? to (.+)/i,
+  /^\s*how do i get to (.+)/i,
+  /^\s*open maps? (?:for |to )?(.+)/i,
 ];
 
 const PLAY_PATTERNS = [
-  /play (?:my )?(.+?)(?:\s+playlist|\s+album|\s+on spotify|\s+on apple music|$)/i,
-  /start (?:playing )?(.+?)(?:\s+playlist|\s+music|$)/i,
-  /put on (.+?)(?:\s+playlist|$)/i,
+  /^\s*play (?:my )?(.+?)(?:\s+playlist|\s+album|\s+on spotify|\s+on apple music|$)/i,
+  /^\s*start (?:playing )?(.+?)(?:\s+playlist|\s+music|$)/i,
+  /^\s*put on (.+?)(?:\s+playlist|$)/i,
 ];
 
 const REMIND_PATTERNS = [
@@ -78,8 +82,8 @@ const REMIND_PATTERNS = [
 ];
 
 const MESSAGE_PATTERNS = [
-  /(?:text|message|sms|send a message to) (\w[\w\s]+?)[:\s]+(.+)/i,
-  /tell (\w[\w\s]+?) (?:that )?(.+)/i,
+  /^\s*(?:text|message|sms|send a message to) (\w[\w\s]{0,30}?)[:\s]+(.+)/i,
+  /^\s*tell (\w[\w\s]{0,30}?) (?:that )?(.+)/i,
 ];
 
 const GEOFENCE_PATTERNS = [
@@ -96,12 +100,26 @@ const EVENT_PATTERNS = [
 ];
 
 const SHORTCUT_PATTERNS = [
-  /run (?:my )?(?:shortcut|routine) (.+)/i,
-  /start (?:my )?(.+?) (?:routine|shortcut)/i,
-  /trigger (.+?) (?:routine|shortcut|automation)/i,
+  /^\s*run (?:my )?(.+?)\s+(?:routine|shortcut)\s*$/i,   // "run my morning routine"
+  /^\s*run (?:my )?(?:shortcut|routine)\s+(.+)/i,         // "run shortcut Foo"
+  /^\s*start (?:my )?(.+?)\s+(?:routine|shortcut)\s*$/i,
+  /^\s*trigger (.+?)\s+(?:routine|shortcut|automation)\s*$/i,
 ];
 
 // ─── Duration parsing ────────────────────────────────────────────────────────
+
+/** Trims a captured contact name down to just the name: cuts off any narrative tail
+ *  ("mom about the lease" → "mom") and rejects clearly non-name phrases. */
+function cleanContactName(raw: string): string {
+  let name = raw.trim()
+    .replace(/\s+(?:about|regarding|re|for|to|on|at|tomorrow|today|tonight|later|now|please)\b.*$/i, '')
+    .replace(/[.,!?]+$/, '')
+    .trim();
+  const words = name.split(/\s+/).filter(Boolean);
+  // A real call target is short (a name / "the dentist"). Anything longer is narrative.
+  if (words.length === 0 || words.length > 4) return '';
+  return name;
+}
 
 function parseDurationToSeconds(amount: string, unit: string): number {
   const n = parseInt(amount, 10);
@@ -178,7 +196,8 @@ export function detectAutomationIntent(text: string): ExtractedAction | null {
   for (const pattern of CALL_PATTERNS) {
     const m = t.match(pattern);
     if (m) {
-      const name = m[1].trim();
+      const name = cleanContactName(m[1]);
+      if (!name) break; // nothing usable after trimming narrative tail
       return {
         type: 'call',
         confidence: 0.9,

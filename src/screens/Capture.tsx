@@ -738,13 +738,13 @@ export function CaptureScreen({
               },
             ]}>
               <Text style={[styles.micIcon, voiceRecording && { color: '#fff' }]}>
-                {voiceRecording ? '⏹' : '⏺'}
+                {voiceRecording ? '⏹' : '🎤'}
               </Text>
             </Animated.View>
           </TouchableOpacity>
           <TextInput
             multiline
-            placeholder="Something missing from your todo list?"
+            placeholder="Manage todo list"
             placeholderTextColor={LUCY_COLORS.textSubtle}
             style={styles.input}
             textAlignVertical="top"

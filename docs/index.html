@@ -17,8 +17,9 @@
     background: rgba(15,14,11,0.92); backdrop-filter: blur(16px);
     border-bottom: 1px solid #2D2218;
   }
-  .nav-logo { font-size: 22px; font-weight: 900; letter-spacing: 2px; }
+  .nav-logo { font-size: 22px; font-weight: 900; letter-spacing: 2px; display: flex; align-items: center; gap: 10px; }
   .nav-logo span { color: #FF8C42; }
+  .nav-logo img { width: 32px; height: 32px; border-radius: 8px; }
   .nav-links { display: flex; gap: 32px; align-items: center; }
   .nav-links a { color: #8A7560; font-size: 13px; font-weight: 600; text-decoration: none; letter-spacing: 0.3px; transition: color 0.2s; }
   .nav-links a:hover { color: #F5EFE6; }
@@ -211,7 +212,10 @@
 
 <!-- NAV -->
 <nav>
-  <div class="nav-logo">LUC<span>Y</span></div>
+  <div class="nav-logo">
+    <img src="../assets/lucy-icon.png" alt="LUCY icon" />
+    LUC<span>Y</span>
+  </div>
   <div class="nav-links">
     <a href="#features">Features</a>
     <a href="#meetings">Meetings</a>

@@ -37,6 +37,7 @@ import { updatePersonContext } from './relationshipEngine';
 import { jsonrepair } from 'jsonrepair';
 import { journalSegmentationPrompt } from '../ai/prompts';
 import { logError } from '../db/errorLog';
+import { isAiCallCapReached } from '../ai/rateLimit';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 function normText(s: string): string {
@@ -409,6 +410,7 @@ async function segmentAndIngestDayJournal(
   db: SQLiteDatabase,
   text: string,
   privacyLevel: 'private' | 'local' | 'normal',
+  originId?: number,
 ): Promise<number> {
   let segments: string[] = [];
   try {
@@ -433,8 +435,9 @@ async function segmentAndIngestDayJournal(
   for (let i = 0; i < segments.length; i++) {
     const id = await insertCapture(db, 'text', segments[i], privacyLevel, false);
     // Preserve chronological order: earliest event oldest, last event = newest (top of timeline).
+    // Tag with the origin so a later reprocess can replace (not duplicate) these splits.
     const ts = new Date(base - (segments.length - 1 - i) * 1000).toISOString();
-    await db.runAsync('UPDATE captures SET created_at = ? WHERE id = ?', ts, id);
+    await db.runAsync('UPDATE captures SET created_at = ?, split_origin_id = ? WHERE id = ?', ts, originId ?? null, id);
   }
   return segments.length;
 }
@@ -445,6 +448,12 @@ export async function processQueue(onChange?: () => void, maxCaptures = Number.P
   while (processedCount < maxCaptures) {
     const capture = await nextQueuedCapture(db);
     if (!capture) {
+      return processedCount;
+    }
+    // Cost guard: if the hourly remote-AI-call cap is reached, PAUSE here — leave the
+    // capture queued (processed = 0) and stop draining. It resumes automatically once
+    // the rolling window clears. Nothing fails, so no credits are spent retrying.
+    if (await isAiCallCapReached(db)) {
       return processedCount;
     }
     await markCaptureProcessing(db, capture.id);
@@ -475,7 +484,7 @@ export async function processQueue(onChange?: () => void, maxCaptures = Number.P
 
       // Multi-date journal → split into per-date captures with historical timestamps.
       if (rawText.length > 3000 && isMultiDateJournal(rawText)) {
-        const count = await ingestJournal(db, rawText, privacyLevel);
+        const count = await ingestJournal(db, rawText, privacyLevel, capture.id);
         if (count >= 2) {
           const { archiveCapture } = await import('../db/captures');
           await archiveCapture(db, capture.id, `split into ${count} dated captures`);
@@ -487,7 +496,7 @@ export async function processQueue(onChange?: () => void, maxCaptures = Number.P
 
       // Single-day journal / multi-event log → one timeline memory per event.
       if (shouldSegmentDayJournal(rawText) && !isMultiDateJournal(rawText)) {
-        const segCount = await segmentAndIngestDayJournal(db, rawText, privacyLevel);
+        const segCount = await segmentAndIngestDayJournal(db, rawText, privacyLevel, capture.id);
         if (segCount >= 2) {
           const { archiveCapture } = await import('../db/captures');
           await archiveCapture(db, capture.id, `split into ${segCount} timeline memories`);

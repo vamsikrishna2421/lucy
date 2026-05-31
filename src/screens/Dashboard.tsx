@@ -375,12 +375,30 @@ function TimelineView({
   const [executingAction, setExecutingAction] = useState(false);
   const [menuTarget, setMenuTarget] = useState<CaptureRow | null>(null);
 
-  const reprocessCapture = async (capture: CaptureRow) => {
+  const runReprocess = async (capture: CaptureRow) => {
     const db = await getDatabase();
     // Purge previously-extracted items first so reprocessing can't leave duplicates.
     const { resetCaptureForReprocess } = await import('../db/captures');
     await resetCaptureForReprocess(db, capture.id);
     onFeedback();
+  };
+
+  const reprocessCapture = async (capture: CaptureRow) => {
+    // A large / multi-event entry re-runs as MANY AI calls (segmentation + one per event),
+    // which costs credits. Warn before a single tap can fan out into a big spend.
+    const len = capture.raw_transcript?.length ?? 0;
+    if (len > 600) {
+      Alert.alert(
+        'Reprocess this entry?',
+        'This looks like a long or multi-event entry. Reprocessing re-runs AI extraction and may make several API calls (one per event), which uses credits.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Reprocess', style: 'destructive', onPress: () => void runReprocess(capture) },
+        ],
+      );
+      return;
+    }
+    await runReprocess(capture);
   };
 
   const confirmDeleteCapture = (capture: CaptureRow) => {

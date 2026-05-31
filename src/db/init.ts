@@ -311,6 +311,11 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
   if (!existing.has('parent_capture_id')) {
     await db.execAsync('ALTER TABLE captures ADD COLUMN parent_capture_id INTEGER;');
   }
+  if (!existing.has('split_origin_id')) {
+    // The capture this one was split out of (journal → dated/event captures). Lets a
+    // reprocess remove prior split children instead of duplicating them.
+    await db.execAsync('ALTER TABLE captures ADD COLUMN split_origin_id INTEGER;');
+  }
   if (!existing.has('capture_kind')) {
     await db.execAsync("ALTER TABLE captures ADD COLUMN capture_kind TEXT DEFAULT 'thought';");
   }
@@ -377,6 +382,12 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       message TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_error_log_occurred ON error_log(occurred_at);
+
+    CREATE TABLE IF NOT EXISTS ai_call_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      called_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_call_log_called ON ai_call_log(called_at);
 
     CREATE INDEX IF NOT EXISTS idx_open_loops_status ON open_loops(status, created_at);
     CREATE INDEX IF NOT EXISTS idx_follow_ups_status ON follow_ups(status, created_at);

@@ -5,6 +5,8 @@ import type { ExtractionResult } from '../types/extraction';
 /** Routes to Claude or OpenAI depending on the active model. Use this everywhere instead of promptOpenAI directly. */
 export async function promptAI(system: string, input: string, apiKey: string): Promise<string> {
   const model = getPreferredModel(config.openAIModel);
+  // Count this remote call toward the hourly cost guard.
+  void import('./rateLimit').then((m) => m.recordAiCall()).catch(() => {});
   if (model.startsWith('claude-')) {
     const { promptClaude } = await import('./claude');
     return promptClaude(system, input, model);

@@ -1020,6 +1020,8 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
   const [diag, setDiag] = useState<{ model: string; available: boolean } | null>(null);
   const [errors, setErrors] = useState<Array<{ id: number; occurred_at: string; context: string; message: string }>>([]);
   const [showErrors, setShowErrors] = useState(false);
+  const [guard, setGuard] = useState<{ enabled: boolean; max: number; used: number } | null>(null);
+  const [guardRefresh, setGuardRefresh] = useState(0);
 
   useEffect(() => {
     void (async () => {
@@ -1033,9 +1035,27 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
         const db = await getDatabase();
         const { listRecentErrors } = await import('../db/errorLog');
         setErrors(await listRecentErrors(db, 20));
+        const { getCostGuard } = await import('../ai/rateLimit');
+        setGuard(await getCostGuard(db));
       } catch { /* non-critical */ }
     })();
-  }, [queue.queued, queue.complete, queue.retrying]);
+  }, [queue.queued, queue.complete, queue.retrying, guardRefresh]);
+
+  const toggleGuard = async () => {
+    const db = await getDatabase();
+    const { COST_GUARD_ENABLED_KEY } = await import('../ai/rateLimit');
+    await setSetting(db, COST_GUARD_ENABLED_KEY, guard?.enabled ? 'false' : 'true');
+    setGuardRefresh((v) => v + 1);
+  };
+
+  const cycleGuardLimit = async () => {
+    const presets = [60, 120, 240, 500];
+    const next = presets[(presets.indexOf(guard?.max ?? 120) + 1) % presets.length];
+    const db = await getDatabase();
+    const { COST_GUARD_MAX_KEY } = await import('../ai/rateLimit');
+    await setSetting(db, COST_GUARD_MAX_KEY, String(next));
+    setGuardRefresh((v) => v + 1);
+  };
 
   useEffect(() => {
     void (async () => {
@@ -1103,6 +1123,29 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
               ? 'Remote ready — captures will process'
               : 'Remote unavailable — captures will stay queued. Check your API key / Remote intelligence toggle.'}
           </Text>
+        </View>
+      ) : null}
+
+      {guard ? (
+        <View style={{ marginTop: 10, padding: 10, borderRadius: 10, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: guard.enabled && guard.used >= guard.max ? '#F59E0B' : LUCY_COLORS.border }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 }}>COST GUARD</Text>
+            <TouchableOpacity onPress={() => void toggleGuard()} style={{ paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8, backgroundColor: guard.enabled ? LUCY_COLORS.primarySoft : LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: guard.enabled ? LUCY_COLORS.primary : LUCY_COLORS.border }}>
+              <Text style={{ color: guard.enabled ? LUCY_COLORS.primary : LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '800' }}>{guard.enabled ? 'ON' : 'OFF'}</Text>
+            </TouchableOpacity>
+          </View>
+          {guard.enabled ? (
+            <>
+              <Text style={{ color: guard.used >= guard.max ? '#F59E0B' : LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '600', marginTop: 4 }}>
+                {guard.used} / {guard.max} AI calls this hour{guard.used >= guard.max ? ' — paused until the hour clears' : ''}
+              </Text>
+              <TouchableOpacity onPress={() => void cycleGuardLimit()} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
+                <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '700' }}>Limit: {guard.max}/hr — tap to change</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 4 }}>No automatic limit on AI calls. Tap ON to cap spend.</Text>
+          )}
         </View>
       ) : null}
 

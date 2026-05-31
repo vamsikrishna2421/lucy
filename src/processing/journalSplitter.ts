@@ -98,6 +98,7 @@ export async function ingestJournal(
   db: SQLiteDatabase,
   text: string,
   privacyLevel: 'private' | 'local' | 'normal',
+  originId?: number,
 ): Promise<number> {
   const sections = splitJournal(text);
   if (sections.length < 3) return 0;
@@ -117,9 +118,11 @@ export async function ingestJournal(
       section.text;
 
     const id = await insertCapture(db, 'text', labeledText, privacyLevel, false);
+    // Tag with the origin so a later reprocess can replace (not duplicate) these splits.
     await db.runAsync(
-      'UPDATE captures SET created_at = ? WHERE id = ?',
+      'UPDATE captures SET created_at = ?, split_origin_id = ? WHERE id = ?',
       section.date.toISOString(),
+      originId ?? null,
       id,
     );
   }

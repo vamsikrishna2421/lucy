@@ -16,6 +16,7 @@ export interface CaptureRow {
   attempt_count: number;
   next_attempt_at: string | null;
   parent_capture_id: number | null;
+  split_origin_id: number | null;
   capture_kind: 'thought' | 'update';
   archived_at: string | null;
   archive_reason: string | null;
@@ -171,11 +172,21 @@ export async function purgeCaptureDerivedData(db: SQLiteDatabase, id: number): P
  * then re-queues it. Returns it to the processing queue (processed = 0).
  */
 export async function resetCaptureForReprocess(db: SQLiteDatabase, id: number): Promise<void> {
+  // If this capture previously split into children (journal → dated/event captures),
+  // remove those first so re-splitting cannot create duplicates.
+  const priorSplits = await db.getAllAsync<{ id: number }>(
+    'SELECT id FROM captures WHERE split_origin_id = ?', id,
+  );
   await db.withTransactionAsync(async () => {
+    for (const child of priorSplits) {
+      await purgeCaptureDerivedData(db, child.id);
+      await db.runAsync('DELETE FROM captures WHERE id = ?', child.id);
+    }
     await purgeCaptureDerivedData(db, id);
     await db.runAsync(
       `UPDATE captures SET processed = 0, processing_error = NULL, attempt_count = 0,
-       next_attempt_at = NULL, extracted_title = NULL, structured_text = NULL WHERE id = ?`,
+       next_attempt_at = NULL, extracted_title = NULL, structured_text = NULL,
+       archived_at = NULL, archive_reason = NULL WHERE id = ?`,
       id,
     );
   });

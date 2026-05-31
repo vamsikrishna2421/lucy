@@ -17,8 +17,9 @@
     background: rgba(15,14,11,0.92); backdrop-filter: blur(16px);
     border-bottom: 1px solid #2D2218;
   }
-  .nav-logo { font-size: 22px; font-weight: 900; letter-spacing: 2px; }
+  .nav-logo { font-size: 22px; font-weight: 900; letter-spacing: 2px; display:flex; align-items:center; gap:10px; }
   .nav-logo span { color: #FF8C42; }
+  .nav-logo img { width:32px; height:32px; border-radius:8px; }
   .nav-links { display: flex; gap: 32px; align-items: center; }
   .nav-links a { color: #8A7560; font-size: 13px; font-weight: 600; text-decoration: none; letter-spacing: 0.3px; transition: color 0.2s; }
   .nav-links a:hover { color: #F5EFE6; }
@@ -211,7 +212,7 @@
 
 <!-- NAV -->
 <nav>
-  <div class="nav-logo">LUC<span>Y</span></div>
+  <div class="nav-logo"><img src="assets/lucy-icon.png" alt="LUCY" />LUC<span>Y</span></div>
   <div class="nav-links">
     <a href="#features">Features</a>
     <a href="#meetings">Meetings</a>
@@ -896,13 +897,17 @@
     </div>
   </div>
 
-  <div style="display:flex;gap:12px;margin-bottom:32px;flex-wrap:wrap;">
+  <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
     <button onclick="filterTests('all')" id="filter-all" class="test-filter active">All</button>
     <button onclick="filterTests('core')" id="filter-core" class="test-filter">Core</button>
     <button onclick="filterTests('automation')" id="filter-automation" class="test-filter">Automations</button>
     <button onclick="filterTests('ai')" id="filter-ai" class="test-filter">AI Features</button>
     <button onclick="filterTests('connectors')" id="filter-connectors" class="test-filter">Connectors</button>
     <button onclick="filterTests('ui')" id="filter-ui" class="test-filter">UI/UX</button>
+  </div>
+  <div style="display:flex;gap:10px;margin-bottom:32px;flex-wrap:wrap;">
+    <button onclick="filterByStatus('done')" id="filter-done" class="test-filter" style="border-color:rgba(74,222,128,0.3);color:#4ADE80;">✓ Done</button>
+    <button onclick="filterByStatus('pending')" id="filter-pending" class="test-filter">◻ Not done</button>
   </div>
 
   <div id="test-list"></div>
@@ -1008,6 +1013,7 @@ const TESTS = [
 ];
 
 let currentFilter = 'all';
+let statusFilter = 'all'; // 'all' | 'done' | 'pending'
 const done = new Set(JSON.parse(localStorage.getItem('lucy-tests-done') || '[]'));
 
 function save() { localStorage.setItem('lucy-tests-done', JSON.stringify([...done])); }
@@ -1026,9 +1032,24 @@ function filterTests(cat) {
   renderTests();
 }
 
+function filterByStatus(status) {
+  statusFilter = statusFilter === status ? 'all' : status;
+  ['done','pending'].forEach(s => {
+    const btn = document.getElementById(`filter-${s}`);
+    if (btn) btn.classList.toggle('active', statusFilter === s);
+  });
+  renderTests();
+}
+
 function renderTests() {
   const list = document.getElementById('test-list');
-  const filtered = currentFilter === 'all' ? TESTS : TESTS.filter(t => t.cat === currentFilter);
+  let filtered = currentFilter === 'all' ? TESTS : TESTS.filter(t => t.cat === currentFilter);
+  if (statusFilter === 'done') filtered = filtered.filter(t => done.has(t.id));
+  if (statusFilter === 'pending') filtered = filtered.filter(t => !done.has(t.id));
+  if (filtered.length === 0) {
+    list.innerHTML = `<p style="color:#6B5E4E;text-align:center;padding:32px;">No tests match this filter.</p>`;
+    return;
+  }
   list.innerHTML = filtered.map(t => `
     <div class="test-card ${done.has(t.id) ? 'done' : ''}" onclick="toggle('${t.id}')">
       <div class="test-check">${done.has(t.id) ? '✓' : ''}</div>

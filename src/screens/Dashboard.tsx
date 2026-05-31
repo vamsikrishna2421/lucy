@@ -18,7 +18,7 @@ import { enqueueTranscript } from '../processing/extract';
 import { archiveTodo } from '../db/todos';
 
 type ViewMode = 'Focus Now' | 'Timeline' | 'Brain';
-type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'People';
+type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings';
 
 function displayTimestamp(value: string): string {
   return new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`).toLocaleString();
@@ -930,7 +930,7 @@ function LibraryView({
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const tabs: LibraryTab[] = ['Todos', 'Ideas', 'Expenses', 'People'];
+  const tabs: LibraryTab[] = ['Todos', 'Ideas', 'Expenses', 'People', 'Meetings'];
   return (
     <View style={styles.library}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs}>
@@ -945,8 +945,115 @@ function LibraryView({
         {tab === 'Ideas' && ideas.map((item) => <Card key={item.id} title={item.title} detail={item.description} privacy={item.privacy_level} onDelete={() => void deleteIdea(item.id)} />)}
         {tab === 'Expenses' && expenses.map((item) => <Card key={item.id} title={`${item.amount ?? '-'} - ${item.description}`} detail={item.category} privacy={item.privacy_level} onDelete={() => void deleteExpense(item.id)} />)}
         {tab === 'People' && <PeopleTab />}
+        {tab === 'Meetings' && <MeetingsTab />}
       </ScrollView>
     </View>
+  );
+}
+
+function MeetingsTab() {
+  const [meetings, setMeetings] = useState<import('../db/meetingSummaries').MeetingSummaryRow[]>([]);
+  const [selected, setSelected] = useState<import('../db/meetingSummaries').MeetingSummaryRow | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const db = await getDatabase();
+      const { listMeetingSummaries } = await import('../db/meetingSummaries');
+      setMeetings(await listMeetingSummaries(db));
+    })();
+  }, []);
+
+  const deleteMeeting = async (id: number) => {
+    const db = await getDatabase();
+    const { deleteMeetingSummary } = await import('../db/meetingSummaries');
+    await deleteMeetingSummary(db, id);
+    setMeetings((prev) => prev.filter((m) => m.id !== id));
+  };
+
+  if (meetings.length === 0) {
+    return <Text style={styles.empty}>No meetings saved yet. Use Meeting Mode in the header to record and summarise a meeting.</Text>;
+  }
+
+  const formatDate = (iso: string) => new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  return (
+    <>
+      {meetings.map((m) => (
+        <TouchableOpacity key={m.id} onPress={() => setSelected(m)} style={styles.card}>
+          <View style={styles.cardTop}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={styles.cardTitle}>⌘ {m.title}</Text>
+              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>
+                {formatDate(m.recorded_at)} · {m.duration_minutes} min
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => Alert.alert('Delete meeting?', 'Removes this summary permanently.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void deleteMeeting(m.id) }])}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={{ color: '#ef4444', fontSize: 16, fontWeight: '700' }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          {m.headline ? <Text style={styles.detail} numberOfLines={2}>{m.headline}</Text> : null}
+          {(() => {
+            const actions = m.action_items ? (JSON.parse(m.action_items) as Array<{task:string}>) : [];
+            return actions.length > 0
+              ? <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 4 }}>{actions.length} action item{actions.length !== 1 ? 's' : ''}</Text>
+              : null;
+          })()}
+        </TouchableOpacity>
+      ))}
+
+      {/* Meeting detail modal */}
+      <Modal transparent animationType="slide" visible={selected !== null} onRequestClose={() => setSelected(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setSelected(null)}>
+          <Pressable style={[styles.feedbackModal, { maxHeight: '90%', gap: 0 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: LUCY_COLORS.textDark, flex: 1 }} numberOfLines={2}>{selected?.title}</Text>
+              <TouchableOpacity onPress={() => setSelected(null)} style={{ paddingLeft: 12 }}>
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 14, fontWeight: '700' }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginBottom: 12 }}>
+              {selected ? formatDate(selected.recorded_at) : ''} · {selected?.duration_minutes} min
+            </Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {selected?.headline ? <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '600', lineHeight: 22, marginBottom: 14 }}>{selected.headline}</Text> : null}
+              {(() => {
+                if (!selected) return null;
+                const decisions: string[] = selected.key_decisions ? JSON.parse(selected.key_decisions) : [];
+                const actions: Array<{task:string;owner?:string;deadline?:string}> = selected.action_items ? JSON.parse(selected.action_items) : [];
+                const questions: string[] = selected.open_questions ? JSON.parse(selected.open_questions) : [];
+                const attendees: string[] = selected.attendees ? JSON.parse(selected.attendees) : [];
+                return (
+                  <>
+                    {decisions.length > 0 && (<>
+                      <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800', letterSpacing: 1, marginBottom: 6 }}>DECISIONS</Text>
+                      {decisions.map((d, i) => <Text key={i} style={{ color: LUCY_COLORS.textMuted, fontSize: 13, marginBottom: 4 }}>• {d}</Text>)}
+                    </>)}
+                    {actions.length > 0 && (<>
+                      <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 12, marginBottom: 6 }}>ACTION ITEMS</Text>
+                      {actions.map((a, i) => <Text key={i} style={{ color: LUCY_COLORS.textMuted, fontSize: 13, marginBottom: 5 }}>
+                        → {a.task}{a.owner ? ` (${a.owner})` : ''}{a.deadline ? ` · ${a.deadline}` : ''}
+                      </Text>)}
+                    </>)}
+                    {questions.length > 0 && (<>
+                      <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 12, marginBottom: 6 }}>OPEN QUESTIONS</Text>
+                      {questions.map((q, i) => <Text key={i} style={{ color: LUCY_COLORS.textMuted, fontSize: 13, marginBottom: 4 }}>? {q}</Text>)}
+                    </>)}
+                    {selected.next_steps ? (<>
+                      <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 12, marginBottom: 6 }}>NEXT STEPS</Text>
+                      <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 20 }}>{selected.next_steps}</Text>
+                    </>) : null}
+                    {attendees.length > 0 && <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 14 }}>Mentioned: {attendees.join(', ')}</Text>}
+                  </>
+                );
+              })()}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 

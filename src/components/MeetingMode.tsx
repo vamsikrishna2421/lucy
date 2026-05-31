@@ -91,9 +91,10 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
     passiveListener.clearTranscript();
     const durationMs = startedAt ? Date.now() - startedAt.getTime() : 0;
 
+    let gen: Awaited<ReturnType<typeof generateMeetingSummary>> = null;
     try {
       const db = await getDatabase();
-      const gen = await generateMeetingSummary(
+      gen = await generateMeetingSummary(
         rawTranscript || `Meeting lasted ${formatDuration(durationMs)} but no speech was captured.`,
         meetingTitle,
         db,
@@ -102,6 +103,11 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
     } catch { /* show empty summary */ }
 
     setPhase('summary');
+    // Auto-save immediately — user still sees the summary and can dismiss.
+    // They no longer need to tap "Save to LUCY Memory" for the meeting to be stored.
+    if (gen && startedAt) {
+      void saveMeetingToMemory(gen, meetingTitle, Date.now() - startedAt.getTime()).catch(() => {});
+    }
   };
 
   const saveAndClose = async () => {

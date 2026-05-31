@@ -397,6 +397,20 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       FOREIGN KEY (capture_id) REFERENCES captures(id)
     );
 
+    CREATE TABLE IF NOT EXISTS meeting_summaries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      duration_minutes INTEGER DEFAULT 0,
+      headline TEXT,
+      key_decisions TEXT,
+      action_items TEXT,
+      open_questions TEXT,
+      next_steps TEXT,
+      attendees TEXT,
+      raw_transcript TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_open_loops_status ON open_loops(status, created_at);
     CREATE INDEX IF NOT EXISTS idx_follow_ups_status ON follow_ups(status, created_at);
     CREATE INDEX IF NOT EXISTS idx_music_captures_status ON music_captures(status, created_at);

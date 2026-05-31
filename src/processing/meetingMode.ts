@@ -110,5 +110,23 @@ export async function saveMeetingToMemory(
     parts.push(`Next steps: ${summary.nextSteps}`);
   }
 
+  // Store structured summary in the dedicated meeting_summaries table so the
+  // Meetings brain tab can show rich formatted summaries, not just raw text.
+  const db = await (await import('../db')).getDatabase();
+  const { insertMeetingSummary } = await import('../db/meetingSummaries');
+  await insertMeetingSummary(
+    db,
+    title || 'Meeting',
+    durationMin,
+    summary.headline,
+    summary.keyDecisions,
+    summary.actionItems,
+    summary.openQuestions,
+    summary.nextSteps ?? null,
+    summary.attendeesMentioned,
+    summary.rawTranscript ?? null,
+  );
+
+  // Also enqueue as a capture so it appears in the Timeline.
   await enqueueTranscript(parts.join('\n'), 'passive', false);
 }

@@ -222,23 +222,42 @@ export default function App() {
       return;
     }
     const interval = setInterval(() => void drainQueue(), 30_000);
-    // Record location + health every hour while the app is foregrounded.
+    // Record location + health every hour while the app is foregrounded —
+    // but only when background location is NOT active (to avoid double-recording).
+    // If the user granted "Always" permission, the background task handles hourly
+    // location; this interval only handles health (steps/sleep) in that case.
     const lifeContextInterval = setInterval(() => void (async () => {
       try {
         const db = await getDatabase();
+        const { isBackgroundLocationActive } = await import('./src/processing/backgroundLocation');
+        const bgActive = await isBackgroundLocationActive();
         const { recordLifeContextSnapshot } = await import('./src/processing/recordLifeContext');
-        await recordLifeContextSnapshot(db);
+        if (bgActive) {
+          // Background location is running — only update health, skip location
+          const { recordCurrentHealthOnly } = await import('./src/processing/recordLifeContext');
+          await recordCurrentHealthOnly(db);
+        } else {
+          await recordLifeContextSnapshot(db);
+        }
       } catch { /* non-critical */ }
     })(), 60 * 60 * 1000); // 1 hour
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         void drainQueue();
-        // Record location + health snapshot when app comes to foreground
+        // Record location + health when app comes to foreground.
+        // If background location is active, only update health (location is already covered).
         void (async () => {
           try {
             const db = await getDatabase();
-            const { recordLifeContextSnapshot } = await import('./src/processing/recordLifeContext');
-            await recordLifeContextSnapshot(db);
+            const { isBackgroundLocationActive } = await import('./src/processing/backgroundLocation');
+            const bgActive = await isBackgroundLocationActive();
+            if (bgActive) {
+              const { recordCurrentHealthOnly } = await import('./src/processing/recordLifeContext');
+              await recordCurrentHealthOnly(db);
+            } else {
+              const { recordLifeContextSnapshot } = await import('./src/processing/recordLifeContext');
+              await recordLifeContextSnapshot(db);
+            }
           } catch { /* non-critical */ }
         })();
         // Also check if a Brain Pulse is due (interval-guarded inside, cheap no-op if not)

@@ -16,7 +16,12 @@ export async function recordLifeContextSnapshot(db: SQLiteDatabase): Promise<voi
   ]);
 }
 
-async function recordCurrentLocation(db: SQLiteDatabase): Promise<void> {
+/** Health-only snapshot — used when background location is active (avoids double-recording). */
+export async function recordCurrentHealthOnly(db: SQLiteDatabase): Promise<void> {
+  await recordCurrentHealth(db).catch(() => {});
+}
+
+export async function recordCurrentLocation(db: SQLiteDatabase): Promise<void> {
   const Location = await import('expo-location');
   const { status } = await Location.getForegroundPermissionsAsync();
   if (status !== 'granted') return;

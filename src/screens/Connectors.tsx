@@ -90,18 +90,35 @@ export function ConnectorsScreen() {
       id: 'location',
       name: 'Location context',
       icon: '📍',
-      description: 'General location (city/area only, not precise)',
-      whatLucyDoes: '• Answer "Where am I?" in Ask\n• Add location context to your daily brief\n• Detect time zone changes automatically',
-      permissionNeeded: 'Location when using the app',
+      description: 'City-level travel timeline, recorded ~1 mile precision',
+      whatLucyDoes: '• Build your weekly travel timeline (city-level, ~1 mile precision)\n• Answer "Where am I?" in Ask\n• Add location context to daily briefs\n• Records every hour + when you move ~1 mile — even when app is closed\n• Coordinates never leave your device',
+      permissionNeeded: 'Location — Always for background tracking, or "When in use" for app-open only',
       onToggle: async (enable: boolean) => {
         if (enable) {
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status !== 'granted') {
-            Alert.alert('Permission needed', 'Go to Settings → LUCY → Location to grant access.');
-            return;
+          // Try to get "Always" permission first (best experience — records in background every ~1h).
+          // If the user only grants "When in use", fall back gracefully — records whenever the app is open.
+          const { startBackgroundLocationTracking } = await import('../processing/backgroundLocation');
+          const started = await startBackgroundLocationTracking();
+          if (started) {
+            // Full background mode
+            setEnabled('location', true);
+          } else {
+            // Foreground-only fallback: request at least "when in use"
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission needed', 'Go to Settings → LUCY → Location to grant access.');
+              return;
+            }
+            Alert.alert(
+              'Location enabled (app-open only)',
+              'LUCY will record your location when you open the app. For travel tracking while the phone is in your pocket, grant "Always" location access in Settings → LUCY → Location.',
+              [{ text: 'OK' }],
+            );
+            setEnabled('location', true);
           }
-          setEnabled('location', true);
         } else {
+          const { stopBackgroundLocationTracking } = await import('../processing/backgroundLocation');
+          await stopBackgroundLocationTracking();
           setEnabled('location', false);
         }
       },

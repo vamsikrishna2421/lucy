@@ -37,7 +37,9 @@
         "NSSpeechRecognitionUsageDescription": "LUCY uses on-device speech recognition to transcribe what you say during passive listening mode.",
         "NSPhotoLibraryUsageDescription": "LUCY may save audio recordings to your library when capturing memories.",
         "NSCalendarsUsageDescription": "LUCY reads your calendar to send pre-meeting briefs and help you prepare — all data stays on your device.",
-        "NSLocationWhenInUseUsageDescription": "LUCY uses your location to add context to your daily brief and answer location questions — never shared externally."
+        "NSLocationWhenInUseUsageDescription": "LUCY uses your location to add context to your daily brief and answer location questions — never shared externally.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "LUCY records your city-level location (~1 mile precision) once per hour to build your personal travel timeline — never precise GPS, never shared externally.",
+        "NSLocationAlwaysUsageDescription": "LUCY records your city-level location once per hour for your travel timeline. Data stays on your device."
       }
     },
     "android": {
@@ -57,7 +59,8 @@
         "android.permission.READ_CONTACTS",
         "android.permission.SET_ALARM",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
       ]
     },
     "web": {

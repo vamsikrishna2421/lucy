@@ -224,6 +224,131 @@ function ExtractionChips({ extraction }: { extraction: import('../types/extracti
   );
 }
 
+// ─── Brain Pulse ──────────────────────────────────────────────────────────────
+
+const PULSE_ACCENT = '#C084FC'; // violet — distinct from all existing palette colors
+
+function PulseCard({ pulse, onDismiss }: { pulse: import('../db/brainPulses').BrainPulseRow; onDismiss: () => void }) {
+  const accentMap: Record<string, string> = {
+    pattern: PULSE_ACCENT,
+    person: '#60A5FA',
+    mood: '#F59E0B',
+    connection: '#4ADE80',
+    overdue: '#FB7185',
+  };
+  const labelMap: Record<string, string> = {
+    pattern: 'PATTERN',
+    person: 'PATTERN · PEOPLE',
+    mood: 'PATTERN · MOOD',
+    connection: 'CONNECTION',
+    overdue: 'HEADS UP',
+  };
+  const accent = accentMap[pulse.category] ?? PULSE_ACCENT;
+  const label = labelMap[pulse.category] ?? 'PULSE';
+  const age = (() => {
+    const ms = Date.now() - new Date(pulse.generated_at.includes('T') ? pulse.generated_at : `${pulse.generated_at.replace(' ', 'T')}Z`).getTime();
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    return h > 0 ? `${h}h ago` : `${m}m ago`;
+  })();
+  return (
+    <View style={{ backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: '#2D1F40', borderRadius: 18, padding: 14, marginBottom: 10, borderLeftWidth: 3, borderLeftColor: accent, opacity: pulse.seen_at ? 0.78 : 1 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <Text style={{ color: accent, fontSize: 9, fontWeight: '800', letterSpacing: 1.2 }}>{label}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>{age}</Text>
+          <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 14, fontWeight: '700' }}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      <Text style={{ color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '600', lineHeight: 21 }}>{pulse.headline}</Text>
+    </View>
+  );
+}
+
+function BrainPulseSection() {
+  const [pulses, setPulses] = useState<import('../db/brainPulses').BrainPulseRow[]>([]);
+  const [showArchive, setShowArchive] = useState(false);
+  const [archived, setArchived] = useState<import('../db/brainPulses').BrainPulseRow[]>([]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const db = await getDatabase();
+        const { listUnseenPulses, markPulseSeen } = await import('../db/brainPulses');
+        const rows = await listUnseenPulses(db);
+        setPulses(rows);
+        for (const p of rows.filter((r) => !r.seen_at)) {
+          await markPulseSeen(db, p.id);
+        }
+      } catch { /* non-critical */ }
+    })();
+  }, []);
+
+  const dismiss = async (id: number) => {
+    const db = await getDatabase();
+    const { dismissPulse } = await import('../db/brainPulses');
+    await dismissPulse(db, id);
+    setPulses((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const openArchive = async () => {
+    const db = await getDatabase();
+    const { listDismissedPulses } = await import('../db/brainPulses');
+    setArchived(await listDismissedPulses(db));
+    setShowArchive(true);
+  };
+
+  return (
+    <>
+      {pulses.length > 0 ? (
+        <View style={{ marginBottom: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <Text style={{ color: PULSE_ACCENT, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 }}>LUCY PULSE</Text>
+            <View style={{ backgroundColor: PULSE_ACCENT, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
+              <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{pulses.filter((p) => !p.seen_at).length || pulses.length}</Text>
+            </View>
+          </View>
+          {pulses.map((p) => (
+            <PulseCard key={p.id} pulse={p} onDismiss={() => void dismiss(p.id)} />
+          ))}
+          <TouchableOpacity onPress={() => void openArchive()} style={{ alignSelf: 'flex-start', marginBottom: 8 }}>
+            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12 }}>View archived pulses</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {/* Archive modal */}
+      <Modal transparent animationType="fade" visible={showArchive} onRequestClose={() => setShowArchive(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowArchive(false)}>
+          <Pressable style={[styles.feedbackModal, { maxHeight: '80%', gap: 0 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <Text style={{ color: PULSE_ACCENT, fontSize: 13, fontWeight: '800', letterSpacing: 1 }}>ARCHIVED PULSES</Text>
+              <TouchableOpacity onPress={() => setShowArchive(false)}>
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 14, fontWeight: '700' }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {archived.length === 0
+                ? <Text style={{ color: LUCY_COLORS.textSubtle, textAlign: 'center', padding: 24 }}>No archived pulses yet.</Text>
+                : archived.map((p) => (
+                    <View key={p.id} style={{ opacity: 0.6, marginBottom: 10, borderLeftWidth: 2, borderLeftColor: PULSE_ACCENT, paddingLeft: 10 }}>
+                      <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '600' }}>{p.headline}</Text>
+                      <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 2 }}>
+                        {new Date(p.generated_at.includes('T') ? p.generated_at : `${p.generated_at.replace(' ', 'T')}Z`).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  ))
+              }
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
 function NowView({
   todos,
   reminders,
@@ -300,6 +425,9 @@ function NowView({
           ) : null}
         </View>
       ) : null}
+      {/* Brain Pulse — 6-hour cross-domain insight synthesis */}
+      <BrainPulseSection />
+
       {contextCount ? (
         <TouchableOpacity style={styles.contextPrompt} onPress={onOpenContext}>
           <Text style={styles.eyebrow}>NEEDS CONTEXT</Text>

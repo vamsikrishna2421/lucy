@@ -225,6 +225,14 @@ export default function App() {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         void drainQueue();
+        // Also check if a Brain Pulse is due (interval-guarded inside, cheap no-op if not)
+        void (async () => {
+          try {
+            const db = await getDatabase();
+            const { runBrainPulseIfDue } = await import('./src/processing/brainPulse');
+            await runBrainPulseIfDue(db);
+          } catch { /* non-critical */ }
+        })();
       }
     });
     return () => {

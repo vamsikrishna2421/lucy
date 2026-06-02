@@ -227,7 +227,7 @@ function ExtractionChips({ extraction }: { extraction: import('../types/extracti
 // ─── Weekly Life Widget (travel + health) ─────────────────────────────────────
 
 function WeeklyLifeWidget() {
-  const [locations, setLocations] = useState<import('../db/locationSnapshots').LocationSnapshot[]>([]);
+  const [locations, setLocations] = useState<import('../db/locationSnapshots').DayLocationSummary[]>([]);
   const [healthRows, setHealthRows] = useState<import('../db/healthSnapshots').HealthSnapshot[]>([]);
 
   useEffect(() => {
@@ -246,7 +246,6 @@ function WeeklyLifeWidget() {
 
   if (locations.length === 0 && healthRows.length === 0) return null;
 
-  // Build a merged 7-day map: dateKey → { location, health }
   const healthByDate = new Map(healthRows.map((h) => [h.date_key, h]));
   const locationByDate = new Map(locations.map((l) => [l.date_key, l]));
 
@@ -261,7 +260,6 @@ function WeeklyLifeWidget() {
   const hasHealthData = healthRows.some((h) => h.steps > 0 || h.sleep_hours !== null);
   if (!hasTravelData && !hasHealthData) return null;
 
-  // Health tip for today
   const today = healthByDate.get(last7[0]);
   const { generateHealthTip } = require('../processing/recordLifeContext') as typeof import('../processing/recordLifeContext');
   const tip = today ? generateHealthTip(today.steps, today.sleep_hours, today.resting_hr) : null;
@@ -292,21 +290,23 @@ function WeeklyLifeWidget() {
                 const dayLabel = dayLabels[d.getDay()];
                 const isToday = dateKey === last7[0];
 
-                const hasAnything = loc || (health && (health.steps > 0 || health.sleep_hours !== null));
+                const hasAnything = (loc && loc.cities.length > 0) || (health && (health.steps > 0 || health.sleep_hours !== null));
                 if (!hasAnything && !isToday) return null;
 
+                // Show city or multi-stop label (e.g. "Hyd → Blr")
+                const cityLabel = loc && loc.cities.length > 1
+                  ? `${loc.cities[0]} → ${loc.cities[loc.cities.length - 1]}`
+                  : loc?.firstCity ?? null;
+
                 return (
-                  <View key={dateKey} style={{ width: 88, backgroundColor: isToday ? `${TEAL}18` : LUCY_COLORS.surface, borderWidth: 1, borderColor: isToday ? `${TEAL}55` : LUCY_COLORS.border, borderRadius: 12, padding: 10, gap: 4 }}>
+                  <View key={dateKey} style={{ width: 96, backgroundColor: isToday ? `${TEAL}18` : LUCY_COLORS.surface, borderWidth: 1, borderColor: isToday ? `${TEAL}55` : LUCY_COLORS.border, borderRadius: 12, padding: 10, gap: 4 }}>
                     <Text style={{ color: isToday ? TEAL : LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 }}>
                       {isToday ? 'TODAY' : dayLabel}
                     </Text>
-                    {loc?.city ? (
-                      <Text style={{ color: LUCY_COLORS.textDark, fontSize: 11, fontWeight: '700' }} numberOfLines={1}>
-                        📍 {loc.city}
+                    {cityLabel ? (
+                      <Text style={{ color: LUCY_COLORS.textDark, fontSize: 11, fontWeight: '700' }} numberOfLines={2}>
+                        📍 {cityLabel}
                       </Text>
-                    ) : null}
-                    {loc?.region && loc.region !== loc.city ? (
-                      <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10 }} numberOfLines={1}>{loc.region}</Text>
                     ) : null}
                     {health?.sleep_hours ? (
                       <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 11 }}>😴 {health.sleep_hours}h</Text>

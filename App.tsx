@@ -222,6 +222,14 @@ export default function App() {
       return;
     }
     const interval = setInterval(() => void drainQueue(), 30_000);
+    // Record location + health every hour while the app is foregrounded.
+    const lifeContextInterval = setInterval(() => void (async () => {
+      try {
+        const db = await getDatabase();
+        const { recordLifeContextSnapshot } = await import('./src/processing/recordLifeContext');
+        await recordLifeContextSnapshot(db);
+      } catch { /* non-critical */ }
+    })(), 60 * 60 * 1000); // 1 hour
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         void drainQueue();
@@ -245,6 +253,7 @@ export default function App() {
     });
     return () => {
       clearInterval(interval);
+      clearInterval(lifeContextInterval);
       subscription.remove();
     };
   }, [drainQueue, ready]);

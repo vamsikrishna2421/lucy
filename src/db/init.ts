@@ -397,7 +397,8 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     CREATE TABLE IF NOT EXISTS location_snapshots (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      date_key TEXT NOT NULL UNIQUE,
+      hour_key TEXT NOT NULL UNIQUE,
+      date_key TEXT NOT NULL,
       city TEXT,
       region TEXT,
       country TEXT,

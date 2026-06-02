@@ -16,6 +16,15 @@ import { protectedPreview } from '../processing/privacy';
 import { organizeMemory } from '../processing/organizer';
 import { enqueueTranscript } from '../processing/extract';
 import { archiveTodo } from '../db/todos';
+import { StalenessReviewCard, ContextBatchCard } from '../components/StalenessReviewCard';
+import {
+  ensureStalenessTable,
+  listPendingReviews,
+  getContextBatch,
+  runStalenessCheck,
+  type StalenessReview,
+  type ContextBatch,
+} from '../processing/stalenessEngine';
 
 type ViewMode = 'Focus Now' | 'Timeline' | 'Brain';
 type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
@@ -40,6 +49,81 @@ function extractKeyPoints(structured: string): string[] {
     })
     .filter((x): x is string => x !== null)
     .slice(0, 4);
+}
+
+/**
+ * Decide what summary text to show in the collapsed card body.
+ *
+ * Priority order:
+ *   1. extraction.summary  — 1-2 sentence AI abstract written at extraction time.
+ *      This is the best signal: it is intentionally compact and human-readable.
+ *   2. structured_text first non-metadata line — the lead value from the structured
+ *      memory block (e.g. "Discussed partnership model with Priya…").
+ *   3. raw_transcript trimmed to 200 chars — raw fallback for unprocessed cards.
+ *
+ * We deliberately do NOT generate a fresh LLM abstract per-card render — that
+ * would fan out API calls every scroll. The extraction.summary field (already
+ * produced during the single extraction pass) is the right place for this text.
+ */
+function getCardSummaryText(
+  item: CaptureRow,
+  extraction: import('../types/extraction').ExtractionResult | null,
+): string | null {
+  // 1. AI summary from extraction result (best quality)
+  if (extraction?.summary && extraction.summary.trim().length > 10) {
+    return extraction.summary.trim();
+  }
+  // 2. Lead value from structured_text (skip label-only lines)
+  if (item.structured_text) {
+    const lines = item.structured_text.split('\n');
+    for (const line of lines) {
+      const colon = line.indexOf(':');
+      if (colon === -1) continue;
+      const label = line.slice(0, colon).trim().toLowerCase();
+      if (['title', 'type'].includes(label)) continue;
+      const value = line.slice(colon + 1).trim();
+      if (value.length > 15) return value;
+    }
+  }
+  // 3. Raw transcript fallback
+  if (item.raw_transcript && item.raw_transcript.trim().length > 0) {
+    return item.raw_transcript.trim().slice(0, 200);
+  }
+  return null;
+}
+
+/**
+ * Returns a compact source icon glyph + label for the header badge row.
+ * Using plain unicode chars keeps the bundle clean and renders reliably on
+ * both iOS and Android without requiring an icon font.
+ */
+function sourceLabel(source: import('../types/extraction').CaptureSource): { glyph: string; label: string; color: string } {
+  switch (source) {
+    case 'passive': return { glyph: '◎', label: 'LISTEN', color: '#5B8CFF' };
+    case 'voice':   return { glyph: '◉', label: 'VOICE', color: LUCY_COLORS.primaryGlow };
+    case 'text':    return { glyph: '◈', label: 'TEXT', color: LUCY_COLORS.textMuted };
+    default:        return { glyph: '◈', label: 'CAPTURE', color: LUCY_COLORS.textMuted };
+  }
+}
+
+/**
+ * Returns an accent color and short label for the note_type extracted by AI.
+ * Falls back gracefully when extraction is not yet available.
+ */
+function noteTypeLabel(noteType: import('../types/extraction').NoteType | undefined): { label: string; color: string } | null {
+  if (!noteType) return null;
+  const map: Partial<Record<import('../types/extraction').NoteType, { label: string; color: string }>> = {
+    task:           { label: 'TASK', color: '#FF8C42' },
+    idea:           { label: 'IDEA', color: '#818CF8' },
+    meeting:        { label: 'MEETING', color: '#60A5FA' },
+    journal:        { label: 'JOURNAL', color: LUCY_COLORS.textMuted },
+    reminder:       { label: 'REMINDER', color: '#A78BFA' },
+    decision:       { label: 'DECISION', color: '#FB923C' },
+    project_update: { label: 'PROJECT', color: LUCY_COLORS.primaryGlow },
+    resource:       { label: 'RESOURCE', color: '#2DD4BF' },
+    thought:        { label: 'THOUGHT', color: LUCY_COLORS.textSubtle },
+  };
+  return map[noteType] ?? null;
 }
 
 function groupUpdates(updates: CaptureRow[]): Record<number, CaptureRow[]> {
@@ -69,6 +153,8 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   const [onThisDay, setOnThisDay] = useState<import('../processing/onThisDay').OnThisDayMemory[]>([]);
   const [moodsByCapture, setMoodsByCapture] = useState<Record<number, string>>({});
   const [contextRefresh, setContextRefresh] = useState(0);
+  const [stalenessReviews, setStalenessReviews] = useState<StalenessReview[]>([]);
+  const [contextBatch, setContextBatch] = useState<ContextBatch | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -91,6 +177,16 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
       setContextRequests(results[5]);
       setOpenLoops(results[6]);
       setFollowUps(results[7]);
+      // Load staleness reviews and context batch
+      try {
+        await ensureStalenessTable(db);
+        // Run a lightweight staleness check on every dashboard load (rate-limited inside)
+        await runStalenessCheck(db);
+        const reviews = await listPendingReviews(db);
+        setStalenessReviews(reviews.filter((r) => r.kind !== 'context_overflow'));
+        const batch = await getContextBatch(db);
+        setContextBatch(batch.total > 3 ? batch : null);
+      } catch { /* non-critical */ }
       try {
         const { getMoodTrend } = await import('../processing/temporalEngine');
         setMoodTrend(await getMoodTrend(db, 7));
@@ -131,7 +227,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
           </TouchableOpacity>
         ))}
       </View>
-      {view === 'Focus Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} /> : null}
+      {view === 'Focus Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} stalenessReviews={stalenessReviews} contextBatch={contextBatch} onStalenessResolved={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Brain' ? (
         <LibraryView
@@ -466,6 +562,9 @@ function NowView({
   onThisDay,
   onOpenContext,
   onLoopResolved,
+  stalenessReviews = [],
+  contextBatch = null,
+  onStalenessResolved,
 }: {
   todos: TodoRow[];
   reminders: ReminderRow[];
@@ -477,12 +576,24 @@ function NowView({
   onThisDay: import('../processing/onThisDay').OnThisDayMemory[];
   onOpenContext: () => void;
   onLoopResolved: () => void;
+  stalenessReviews?: StalenessReview[];
+  contextBatch?: ContextBatch | null;
+  onStalenessResolved?: () => void;
 }) {
   const moodEmoji: Record<string, string> = { positive: '😊', excited: '⚡', calm: '😌', neutral: '😐', stressed: '😤', frustrated: '😤', negative: '😔' };
   const moodColor: Record<string, string> = { positive: '#4ADE80', excited: '#FFA05C', calm: '#60A5FA', neutral: LUCY_COLORS.textSubtle, stressed: '#F59E0B', frustrated: '#FB7185', negative: '#FB7185' };
   const organizing = captures.filter((item) => captureStatus(item) !== 'complete').length;
-  const scheduledReminders = reminders.filter((item) => Boolean(item.notification_id) && Boolean(item.remind_at));
-  const unscheduledCount = reminders.length - scheduledReminders.length;
+  const nowMs = Date.now();
+  const STALE_MS = 4 * 60 * 60 * 1000; // 4h past due = stale
+  const scheduledReminders = reminders.filter((item) => {
+    if (!item.remind_at) return false;
+    return new Date(item.remind_at).getTime() > nowMs - STALE_MS;
+  });
+  const staleReminders = reminders.filter((item) => {
+    if (!item.remind_at) return false;
+    return new Date(item.remind_at).getTime() <= nowMs - STALE_MS;
+  });
+  const unscheduledCount = reminders.length - scheduledReminders.length - staleReminders.length;
 
   const handleResolveLoop = async (id: number) => {
     const db = await getDatabase();
@@ -537,7 +648,9 @@ function NowView({
       {/* Weekly life context — travel timeline + health */}
       <WeeklyLifeWidget />
 
-      {contextCount ? (
+      {/* Only show the simple context banner when there are few requests (≤ 3).
+          When there are more, the ContextBatchCard further down handles it. */}
+      {contextCount > 0 && !contextBatch ? (
         <TouchableOpacity style={styles.contextPrompt} onPress={onOpenContext}>
           <Text style={styles.eyebrow}>NEEDS CONTEXT</Text>
           <Text style={styles.contextPromptTitle}>
@@ -546,6 +659,28 @@ function NowView({
           <Text style={styles.tonightDetail}>Add a little context when you have time. LUCY keeps your original thought unchanged.</Text>
         </TouchableOpacity>
       ) : null}
+      {/* Staleness reviews — shown before Follow-ups so the user cleans house first */}
+      {stalenessReviews.length > 0 ? (
+        <>
+          <SectionTitle title="Quick Review" />
+          {stalenessReviews.map((review) => (
+            <StalenessReviewCard
+              key={review.id}
+              review={review}
+              onDone={() => onStalenessResolved?.()}
+            />
+          ))}
+        </>
+      ) : null}
+
+      {/* Batched context overflow — replaces the raw count banner when > 3 */}
+      {contextBatch ? (
+        <ContextBatchCard
+          batch={contextBatch}
+          onDone={() => onStalenessResolved?.()}
+        />
+      ) : null}
+
       {followUps.length > 0 ? (
         <>
           <SectionTitle title="Follow-ups" />
@@ -920,59 +1055,103 @@ function TimelineView({
 
                   {/* Card */}
                   <View style={[styles.tlCard, isExpanded && styles.tlCardExpanded]}>
-                    {/* Mood color accent bar */}
+                    {/* Left accent bar — mood colour */}
                     <View style={[styles.tlAccent, { backgroundColor: moodColor }]} />
+
                     <View style={styles.tlCardContent}>
-                      {/* Source badge for passive (listen) captures */}
-                      {item.source === 'passive' ? (
-                        <Text style={{ color: '#5B8CFF', fontSize: 9, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>🎙 LISTEN</Text>
-                      ) : null}
+
+                      {/* ── Header row: source badge + content-type pill + privacy dot ── */}
+                      {(() => {
+                        const src = sourceLabel(item.source);
+                        const extraction = extractionChips[item.id] ?? null;
+                        const nt = noteTypeLabel(extraction?.note_type);
+                        return (
+                          <View style={styles.tlCardHeaderRow}>
+                            {/* Source glyph + label */}
+                            <Text style={[styles.tlSourceBadge, { color: src.color }]}>
+                              {src.glyph} {src.label}
+                            </Text>
+
+                            {/* Content-type pill — only once extraction loaded */}
+                            {nt ? (
+                              <View style={[styles.tlTypePill, { borderColor: nt.color + '55' }]}>
+                                <Text style={[styles.tlTypePillText, { color: nt.color }]}>{nt.label}</Text>
+                              </View>
+                            ) : null}
+
+                            {/* Processing state — shown instead of type pill when pending */}
+                            {!nt && item.processed !== 1 ? (
+                              <View style={styles.tlTypePill}>
+                                {item.processed === -1 ? (
+                                  <Text style={[styles.tlTypePillText, { color: '#F59E0B' }]}>FAILED</Text>
+                                ) : (
+                                  <Text style={[styles.tlTypePillText, { color: LUCY_COLORS.primary + 'CC' }]}>ORGANIZING</Text>
+                                )}
+                              </View>
+                            ) : null}
+
+                            {/* Spacer */}
+                            <View style={{ flex: 1 }} />
+
+                            {/* Privacy indicator — far right of header */}
+                            <PrivacyBadge level={item.privacy_level} />
+                          </View>
+                        );
+                      })()}
+
+                      {/* ── Title ── */}
                       {item.extracted_title ? (
-                        // Extracted title — curated by LUCY
                         <Text style={styles.tlTitle} numberOfLines={isExpanded ? undefined : 2}>
                           {protectedPreview(item.extracted_title)}
                         </Text>
                       ) : item.processed === -1 ? (
-                        // Failed / retrying — surface it instead of an endless "Organizing..."
-                        <View style={{ gap: 4 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#F59E0B' }} />
-                            <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>
-                              Couldn't organize — tap ⋯ to retry
-                            </Text>
-                          </View>
-                          {item.raw_transcript ? (
-                            <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 18 }} numberOfLines={2}>
-                              {item.raw_transcript.slice(0, 120)}
-                            </Text>
-                          ) : null}
-                          {isExpanded && item.processing_error ? (
-                            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, fontStyle: 'italic' }} numberOfLines={3}>
-                              {item.processing_error}
-                            </Text>
-                          ) : null}
-                        </View>
+                        <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '600', lineHeight: 19 }}>
+                          Couldn't organize — tap ⋯ to retry
+                        </Text>
                       ) : (
-                        // Not yet processed — show "Organizing..." + brief snippet so user knows what it is
-                        <View style={{ gap: 4 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: LUCY_COLORS.primary, opacity: 0.6 }} />
-                            <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>
-                              Organizing...
-                            </Text>
-                          </View>
-                          {item.raw_transcript ? (
-                            <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 18 }} numberOfLines={2}>
-                              {item.raw_transcript.slice(0, 120)}
-                            </Text>
-                          ) : null}
-                        </View>
+                        <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, fontWeight: '500', lineHeight: 19 }}>
+                          Organizing your thought…
+                        </Text>
                       )}
 
-                      {/* Extraction chips — shown when expanded */}
+                      {/* ── Summary body ── */}
+                      {(() => {
+                        const extraction = extractionChips[item.id] ?? null;
+                        const summaryText = getCardSummaryText(item, extraction);
+                        if (!summaryText) return null;
+
+                        // Collapsed: show ~3 lines of summary (numberOfLines clips the rest).
+                        // Expanded: show full text.
+                        // We always show the summary; chips only appear after expansion.
+                        return (
+                          <View style={{ marginTop: 5 }}>
+                            <Text
+                              style={styles.tlSummaryText}
+                              numberOfLines={isExpanded ? undefined : 3}
+                            >
+                              {summaryText}
+                            </Text>
+                            {/* Expand/collapse affordance — inline at end of text when collapsed */}
+                            {!isExpanded ? (
+                              <Text style={styles.tlExpandHint}>
+                                tap to expand
+                              </Text>
+                            ) : null}
+                          </View>
+                        );
+                      })()}
+
+                      {/* ── Processing error detail (expanded only) ── */}
+                      {isExpanded && item.processed === -1 && item.processing_error ? (
+                        <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, fontStyle: 'italic', marginTop: 4 }} numberOfLines={3}>
+                          {item.processing_error}
+                        </Text>
+                      ) : null}
+
+                      {/* ── Extraction chips — second layer, only when expanded ── */}
                       {isExpanded ? <ExtractionChips extraction={extractionChips[item.id] ?? null} /> : null}
 
-                      {/* LLM-detected action banner — shown after the capture processes */}
+                      {/* ── LLM-detected action banner ── */}
                       {llmActions[item.id] ? (
                         <TouchableOpacity
                           style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 10, paddingVertical: 7, paddingHorizontal: 10 }}
@@ -984,9 +1163,9 @@ function TimelineView({
                         </TouchableOpacity>
                       ) : null}
 
+                      {/* ── Footer: spacer + three-dot menu only ── */}
                       <View style={styles.tlCardFooter}>
-                        <PrivacyBadge level={item.privacy_level} />
-                        {/* Actions collapsed under a three-dot menu */}
+                        <View style={{ flex: 1 }} />
                         <TouchableOpacity
                           style={styles.tlMenuBtn}
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -995,6 +1174,7 @@ function TimelineView({
                           <Text style={styles.tlMenuBtnText}>⋯</Text>
                         </TouchableOpacity>
                       </View>
+
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -1528,14 +1708,45 @@ const styles = StyleSheet.create({
   tlDot: { width: 10, height: 10, borderRadius: 5, shadowOpacity: 0.5, shadowRadius: 4, elevation: 3 },
   tlLine: { width: 1.5, backgroundColor: LUCY_COLORS.divider, flex: 1, minHeight: 40 },
   tlCard: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, marginBottom: 0, flexDirection: 'row', overflow: 'hidden' },
-  tlCardExpanded: { borderColor: 'rgba(255,140,66,0.2)' },
+  tlCardExpanded: { borderColor: 'rgba(255,140,66,0.22)' },
   tlAccent: { width: 3, borderRadius: 0 },
-  tlCardContent: { flex: 1, padding: 12, gap: 4 },
-  tlTitle: { color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700', lineHeight: 20 },
+  tlCardContent: { flex: 1, paddingTop: 10, paddingBottom: 10, paddingHorizontal: 12, gap: 0 },
+
+  // Header row: source badge + type pill + privacy dot
+  tlCardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 5 },
+  tlSourceBadge: { fontSize: 9, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' },
+  tlTypePill: {
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255,140,66,0.28)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  tlTypePillText: { fontSize: 8, fontWeight: '800', letterSpacing: 1 },
+
+  // Card body
+  tlTitle: { color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700', lineHeight: 20, marginBottom: 0 },
+
+  // Summary text — the main readable body
+  tlSummaryText: {
+    color: LUCY_COLORS.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '400',
+  },
+  // "tap to expand" nudge — appears below the truncated summary
+  tlExpandHint: {
+    color: LUCY_COLORS.textSubtle,
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 3,
+    letterSpacing: 0.2,
+  },
+
   tlSnippet: { color: LUCY_COLORS.textMuted, fontSize: 12, lineHeight: 18 },
   tlKeyPoints: { marginTop: 8, gap: 3 },
   tlKeyPoint: { color: LUCY_COLORS.textDark, fontSize: 12, lineHeight: 18 },
-  tlCardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+  tlCardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 6 },
   otdCard: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: 'rgba(255,140,66,0.2)', borderRadius: 18, padding: 16, marginBottom: 14 },
   otdLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, color: LUCY_COLORS.primaryGlow, textTransform: 'uppercase', marginBottom: 6 },
   otdTitle: { fontSize: 15, fontWeight: '700', color: LUCY_COLORS.textDark, lineHeight: 22, marginBottom: 4 },

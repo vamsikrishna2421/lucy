@@ -1,19 +1,70 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import type { PrivacyLevel } from '../types/extraction';
 
+/**
+ * Privacy indicator \u2014 reads as "yours, private, safe" not "locked out".
+ *
+ * Design intent:
+ *   private  \u2192 warm amber shield ring (5\u00D75 pt dot inside a 9\u00D79 ring) \u2014 your most
+ *              sensitive memories. The ring evokes a soft shield without the alarm of a padlock.
+ *   local    \u2192 single 5\u00D75 pt warm dot, no ring \u2014 on-device, nothing sent anywhere.
+ *   normal   \u2192 nothing rendered (default; every memory is on-device anyway, so no
+ *              badge is needed and absence avoids badge-blindness).
+ *
+ * Placement: bottom-left of the card footer, 4 pt from left edge.
+ * The component is intentionally tiny (9 pt total diameter) so it never
+ * dominates the card hierarchy \u2014 it is a reassurance signal, not a warning.
+ */
 export function PrivacyBadge({ level }: { level: PrivacyLevel }) {
-  if (level !== 'private') {
-    return null;
+  if (level === 'private') {
+    return (
+      <View
+        accessibilityLabel="Saved privately to your device only"
+        style={styles.ring}
+      >
+        <View style={styles.dot} />
+      </View>
+    );
   }
-  return (
-    <View accessibilityLabel="Private memory" style={styles.badge}>
-      <Text style={styles.text}>{'\uD83D\uDD12'}</Text>
-    </View>
-  );
+  if (level === 'local') {
+    return (
+      <View
+        accessibilityLabel="Stored locally on your device"
+        style={styles.localDot}
+      />
+    );
+  }
+  return null;
 }
 
+// Amber at ~40 % opacity for the ring so it is visible but not alarming.
+const RING_COLOR = 'rgba(255, 140, 66, 0.38)';
+const DOT_COLOR = LUCY_COLORS.primary; // full-opacity amber centre
+
 const styles = StyleSheet.create({
-  badge: { borderRadius: 14, paddingHorizontal: 6, paddingVertical: 4, alignSelf: 'flex-start', backgroundColor: LUCY_COLORS.surface },
-  text: { color: LUCY_COLORS.textMuted, fontSize: 12 },
+  // Private: 9\u00D79 ring with a 5\u00D75 filled centre
+  ring: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: RING_COLOR,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: DOT_COLOR,
+  },
+  // Local: plain 5\u00D75 muted dot \u2014 present but visually quieter
+  localDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: LUCY_COLORS.textSubtle,
+    opacity: 0.55,
+  },
 });

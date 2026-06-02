@@ -77,3 +77,19 @@ export async function archiveTodo(db: SQLiteDatabase, id: number, reason: string
     id,
   );
 }
+
+/**
+ * Merge two duplicate todos: keep `keepId` (updating its task text if `mergedText` is
+ * supplied), archive `discardId` as a duplicate.
+ */
+export async function mergeDuplicateTodos(
+  db: SQLiteDatabase,
+  keepId: number,
+  discardId: number,
+  mergedText?: string,
+): Promise<void> {
+  if (mergedText) {
+    await db.runAsync('UPDATE todos SET task = ? WHERE id = ?', mergedText, keepId);
+  }
+  await archiveTodo(db, discardId, `merged into todo #${keepId}`);
+}

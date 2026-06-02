@@ -16,6 +16,7 @@ import { sendOnThisDayIfDue } from './onThisDay';
 import { storeEmbedding } from '../ai/embeddings';
 import { listRecentCaptures } from '../db/captures';
 import { recordBatterySnapshot } from '../db/deviceStats';
+import { runStalenessCheck } from './stalenessEngine';
 import * as Battery from 'expo-battery';
 
 export const BACKGROUND_PROCESSING_TASK = 'lucy-background-organizing';
@@ -85,6 +86,9 @@ if (!TaskManager.isTaskDefined(BACKGROUND_PROCESSING_TASK)) {
         const { recordLifeContextSnapshot } = await import('./recordLifeContext');
         await recordLifeContextSnapshot(db);
       } catch { /* non-critical */ }
+
+      // Staleness sweep: auto-archive expired reminders, queue review prompts
+      try { await runStalenessCheck(db); } catch { /* non-critical */ }
 
       // Brain Pulse: 6-hour cross-domain synthesis (night-suppressed, rate-limited)
       try {

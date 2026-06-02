@@ -418,6 +418,19 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_health_snapshots_date ON health_snapshots(date_key);
 
+    CREATE TABLE IF NOT EXISTS pending_staleness_reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL,
+      item_id INTEGER NOT NULL,
+      item_text TEXT NOT NULL,
+      related_id INTEGER,
+      related_text TEXT,
+      scheduled_for TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      dismissed_at DATETIME
+    );
+    CREATE INDEX IF NOT EXISTS idx_staleness_kind_item ON pending_staleness_reviews(kind, item_id, dismissed_at);
+
     CREATE TABLE IF NOT EXISTS brain_pulses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

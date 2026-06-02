@@ -73,3 +73,18 @@ export async function answerContextRequest(
     id,
   );
 }
+
+export async function dismissContextRequest(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync(
+    `UPDATE context_requests SET status = 'dismissed', answered_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND status = 'open'`,
+    id,
+  );
+}
+
+export async function countOpenContextRequests(db: SQLiteDatabase): Promise<number> {
+  const row = await db.getFirstAsync<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM context_requests WHERE status = 'open'`,
+  );
+  return row?.n ?? 0;
+}

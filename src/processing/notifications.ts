@@ -150,37 +150,38 @@ export async function scheduleCapturedReminder(
   const baseBody = isSecret ? 'Open LUCY to view a protected reminder.' : reminder.text;
   const baseTitle = isSecret ? 'Protected reminder' : 'heads up —';
 
-  // Schedule cascade: 15 min before, 10 min before, 5 min before, at time.
-  const offsets: Array<{ ms: number; label: string }> = [
-    { ms: 15 * 60 * 1000, label: '15 min until' },
-    { ms: 10 * 60 * 1000, label: '10 min until' },
-    { ms: 5 * 60 * 1000, label: '5 min until' },
-    { ms: 0, label: 'now —' },
+  // ONE stable notification that updates as the deadline approaches.
+  // Previously scheduled 15min/10min/5min/at-time as 4 SEPARATE notifications —
+  // they stacked in the notification tray creating spam.
+  // Now: a single stableId that gets cancelled-and-replaced on each re-schedule,
+  // so only ONE card ever lives in the system tray per reminder.
+  const stableId = `rem-${reminder.text.replace(/[^a-z0-9]/gi, '').slice(0, 16)}-${deadlineMs % 100000}`;
+
+  // Cancel any previous push card for this reminder (prevents stacking)
+  await Notifications.cancelScheduledNotificationAsync(stableId).catch(() => {});
+  await Notifications.dismissNotificationAsync(stableId).catch(() => {});
+
+  // Schedule only the NEXT upcoming milestone
+  const milestones = [
+    { ms: 15 * 60 * 1000, label: '15 min' },
+    { ms:  5 * 60 * 1000, label:  '5 min' },
+    { ms:              0, label: '' },
   ];
 
-  let firstId: string | null = null;
-  for (const { ms, label } of offsets) {
+  for (const { ms, label } of milestones) {
     const fireAt = deadlineMs - ms;
-    if (fireAt <= Date.now()) continue;
-    const body = isSecret
-      ? baseBody
-      : ms === 0
-        ? `${baseBody}\n${deadlineTime}`
-        : `${label} ${deadlineTime}: ${baseBody}`;
-    const id = await Notifications.scheduleNotificationAsync({
+    if (fireAt <= Date.now() + 30_000) continue; // skip if <30s away
+    const title = label ? `${label} — ${deadlineTime}` : baseTitle;
+    const body  = isSecret ? baseBody : (ms === 0 ? `${baseBody} · ${deadlineTime}` : baseBody);
+    return Notifications.scheduleNotificationAsync({
+      identifier: stableId, // same id = updates, not stacks
       content: {
-        title: ms === 0 ? baseTitle : `${label} ${deadlineTime}`,
-        body,
+        title, body,
         data: { kind: 'captured-reminder', privacy, text: isSecret ? null : reminder.text },
         sound: ms === 0,
       },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: new Date(fireAt),
-        channelId: REMINDER_CHANNEL,
-      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(fireAt), channelId: REMINDER_CHANNEL },
     });
-    if (!firstId) firstId = id;
   }
-  return firstId;
+  return null;
 }

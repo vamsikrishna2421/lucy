@@ -372,6 +372,14 @@ export default function App() {
             </View>
           </View>
         </View>
+        {/* No-key warning banner — shows when Listen is active but transcription can't run */}
+        {passiveState.status === 'listening' && passiveState.noApiKey ? (
+          <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderBottomWidth: 1, borderBottomColor: 'rgba(245,158,11,0.25)', paddingHorizontal: 16, paddingVertical: 7 }}>
+            <Text style={{ color: '#F59E0B', fontSize: 12, fontWeight: '600', textAlign: 'center' }}>
+              ⚠ Listen mode is recording but cannot transcribe — add an OpenAI key in Settings → Remote intelligence.
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.container}>
           {startupError ? <Text style={styles.error}>{startupError}</Text> : null}
           {/* Loading is handled by SplashAnimation overlay */}

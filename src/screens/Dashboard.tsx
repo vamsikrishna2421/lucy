@@ -1376,6 +1376,8 @@ function LibraryView({
 function ListenTab() {
   const [sessions, setSessions] = useState<ListenSessionGroup[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // Lazy-loaded full transcript text per session (keyed by sessionId → clip texts)
+  const [clipTexts, setClipTexts] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     void (async () => {
@@ -1383,6 +1385,26 @@ function ListenTab() {
       setSessions(await listListenSessions(db));
     })();
   }, []);
+
+  const toggleExpand = async (s: ListenSessionGroup) => {
+    const wasExpanded = expanded[s.sessionId];
+    setExpanded((prev) => ({ ...prev, [s.sessionId]: !wasExpanded }));
+    // Load full transcripts the first time a session is expanded
+    if (!wasExpanded && !clipTexts[s.sessionId] && s.captureIds.length > 0) {
+      try {
+        const db = await getDatabase();
+        const placeholders = s.captureIds.map(() => '?').join(',');
+        const rows = await db.getAllAsync<{ id: number; raw_transcript: string; extracted_title: string | null }>(
+          `SELECT id, raw_transcript, extracted_title FROM captures WHERE id IN (${placeholders}) ORDER BY created_at ASC, id ASC`,
+          ...s.captureIds,
+        );
+        setClipTexts((prev) => ({
+          ...prev,
+          [s.sessionId]: rows.map((r) => r.extracted_title ?? (r.raw_transcript ?? '').slice(0, 300)),
+        }));
+      } catch { /* non-critical */ }
+    }
+  };
 
   const deleteSession = async (sessionId: string, captureIds: number[]) => {
     Alert.alert('Delete listen session?', 'All clips from this session will be permanently removed.', [
@@ -1410,7 +1432,17 @@ function ListenTab() {
   };
 
   if (sessions.length === 0) {
-    return <Text style={styles.empty}>No listen sessions yet. Tap the Listen button in the header to start capturing ambient audio in 10-minute batches.</Text>;
+    return (
+      <View style={{ padding: 20, gap: 8 }}>
+        <Text style={styles.empty}>No listen sessions yet.</Text>
+        <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, lineHeight: 19 }}>
+          Tap the Listen button in the header to start. LUCY captures ambient audio in batches — stop early and it processes immediately.
+        </Text>
+        <Text style={{ color: '#F59E0B', fontSize: 12, marginTop: 4 }}>
+          ⚠ Transcription requires an OpenAI API key (Settings → Remote intelligence).
+        </Text>
+      </View>
+    );
   }
 
   return (
@@ -1419,15 +1451,13 @@ function ListenTab() {
         <View key={s.sessionId} style={[styles.card, { borderLeftWidth: 3, borderLeftColor: '#5B8CFF' }]}>
           <View style={styles.cardTop}>
             <View style={{ flex: 1, gap: 3 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ color: '#5B8CFF', fontSize: 10, fontWeight: '800', letterSpacing: 1 }}>🎙 LISTEN SESSION</Text>
-              </View>
+              <Text style={{ color: '#5B8CFF', fontSize: 10, fontWeight: '800', letterSpacing: 1 }}>🎙 LISTEN SESSION</Text>
               <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>
                 {formatDate(s.startedAt)} · {durationLabel(s.startedAt, s.endedAt)} · {s.captureCount} clip{s.captureCount !== 1 ? 's' : ''}
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <TouchableOpacity onPress={() => setExpanded((prev) => ({ ...prev, [s.sessionId]: !prev[s.sessionId] }))}>
+              <TouchableOpacity onPress={() => void toggleExpand(s)}>
                 <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, fontWeight: '700' }}>{expanded[s.sessionId] ? '▾' : '▸'}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => void deleteSession(s.sessionId, s.captureIds)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -1435,13 +1465,18 @@ function ListenTab() {
               </TouchableOpacity>
             </View>
           </View>
-          {s.snippets.map((snip, i) => (
-            <Text key={i} style={[styles.detail, { marginTop: i === 0 ? 6 : 2 }]} numberOfLines={2}>"{snip}…"</Text>
-          ))}
+          {/* Collapsed preview snippets */}
+          {!expanded[s.sessionId] ? s.snippets.map((snip, i) => (
+            <Text key={i} style={[styles.detail, { marginTop: i === 0 ? 6 : 2 }]} numberOfLines={2}>"{snip}"</Text>
+          )) : null}
+          {/* Expanded: full transcript text per clip */}
           {expanded[s.sessionId] ? (
-            <View style={{ marginTop: 8, gap: 4 }}>
-              {s.captureIds.map((id, i) => (
-                <Text key={id} style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>Clip {i + 1} · ID {id}</Text>
+            <View style={{ marginTop: 10, gap: 10 }}>
+              {(clipTexts[s.sessionId] ?? s.snippets).map((text, i) => (
+                <View key={i} style={{ backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 10, padding: 10, gap: 4 }}>
+                  <Text style={{ color: '#5B8CFF', fontSize: 9, fontWeight: '800', letterSpacing: 1 }}>CLIP {i + 1}</Text>
+                  <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 19 }}>{text || '(no transcript)'}</Text>
+                </View>
               ))}
             </View>
           ) : null}

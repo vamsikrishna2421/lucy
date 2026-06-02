@@ -435,6 +435,48 @@ export async function dismissAllLowPriorityContext(db: SQLiteDatabase): Promise<
   return result.changes ?? 0;
 }
 
+// ─── Ignored duplicate cleanup ───────────────────────────────────────────────
+
+/**
+ * When a duplicate-todo suggestion has been sitting unacknowledged for 7 days,
+ * LUCY auto-archives the LOWER-CONFIDENCE item (never auto-merges — merging
+ * risks losing nuance the user intended to keep separate).
+ *
+ * "Lower confidence" = the item with fewer captured words / less context.
+ * Ties are broken by created_at (newer = less established = discard).
+ */
+async function archiveIgnoredDuplicates(db: SQLiteDatabase): Promise<number> {
+  const stale = await db.getAllAsync<{
+    id: number; item_id: number; item_text: string;
+    related_id: number; related_text: string;
+  }>(
+    `SELECT id, item_id, item_text, related_id, related_text
+     FROM pending_staleness_reviews
+     WHERE kind = 'todo_duplicate'
+       AND dismissed_at IS NULL
+       AND created_at < datetime('now', '-7 days')`,
+  );
+
+  let count = 0;
+  for (const review of stale) {
+    // Determine which todo is "lower confidence" (shorter task text = less context)
+    const discardId = review.item_text.length >= review.related_text.length
+      ? review.related_id  // related is shorter → discard it
+      : review.item_id;    // item is shorter → discard it
+
+    const { archiveTodo } = await import('../db/todos');
+    await archiveTodo(db, discardId, 'auto-archived: duplicate todo ignored for 7 days').catch(() => {});
+
+    // Mark the review as dismissed so it doesn't re-trigger
+    await db.runAsync(
+      'UPDATE pending_staleness_reviews SET dismissed_at = CURRENT_TIMESTAMP WHERE id = ?',
+      review.id,
+    );
+    count++;
+  }
+  return count;
+}
+
 // ─── Main nightly job ─────────────────────────────────────────────────────────
 
 export interface StalenessRunResult {
@@ -467,6 +509,10 @@ export async function runStalenessCheck(
   }
 
   await purgeExpiredReviews(db);
+  // Auto-archive ignored duplicate-todo suggestions older than 7 days.
+  // We never auto-MERGE (merging risks losing nuance), only archive the
+  // lower-confidence duplicate (newer / less context) so the better one survives.
+  await archiveIgnoredDuplicates(db);
 
   // Reminders must run first (it archives + queues), then we count reviews.
   const archived = await processStaleReminders(db);

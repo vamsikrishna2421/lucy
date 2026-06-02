@@ -80,6 +80,12 @@ if (!TaskManager.isTaskDefined(BACKGROUND_PROCESSING_TASK)) {
       // Generate daily AI insights (once per day, any time)
       try { await generateDailyInsights(db); } catch { /* non-critical */ }
 
+      // Record health snapshot in background (steps + HealthKit if available)
+      try {
+        const { recordLifeContextSnapshot } = await import('./recordLifeContext');
+        await recordLifeContextSnapshot(db);
+      } catch { /* non-critical */ }
+
       // Brain Pulse: 6-hour cross-domain synthesis (night-suppressed, rate-limited)
       try {
         const { runBrainPulseIfDue } = await import('./brainPulse');

@@ -225,6 +225,14 @@ export default function App() {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         void drainQueue();
+        // Record location + health snapshot when app comes to foreground
+        void (async () => {
+          try {
+            const db = await getDatabase();
+            const { recordLifeContextSnapshot } = await import('./src/processing/recordLifeContext');
+            await recordLifeContextSnapshot(db);
+          } catch { /* non-critical */ }
+        })();
         // Also check if a Brain Pulse is due (interval-guarded inside, cheap no-op if not)
         void (async () => {
           try {

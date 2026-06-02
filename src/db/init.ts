@@ -394,6 +394,29 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_ai_call_log_called ON ai_call_log(called_at);
 
+    CREATE TABLE IF NOT EXISTS location_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      date_key TEXT NOT NULL UNIQUE,
+      city TEXT,
+      region TEXT,
+      country TEXT,
+      latitude REAL,
+      longitude REAL
+    );
+    CREATE INDEX IF NOT EXISTS idx_location_snapshots_date ON location_snapshots(date_key);
+
+    CREATE TABLE IF NOT EXISTS health_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      date_key TEXT NOT NULL UNIQUE,
+      steps INTEGER DEFAULT 0,
+      sleep_hours REAL,
+      resting_hr INTEGER,
+      active_minutes INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_health_snapshots_date ON health_snapshots(date_key);
+
     CREATE TABLE IF NOT EXISTS brain_pulses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

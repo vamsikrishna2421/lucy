@@ -224,6 +224,112 @@ function ExtractionChips({ extraction }: { extraction: import('../types/extracti
   );
 }
 
+// ─── Weekly Life Widget (travel + health) ─────────────────────────────────────
+
+function WeeklyLifeWidget() {
+  const [locations, setLocations] = useState<import('../db/locationSnapshots').LocationSnapshot[]>([]);
+  const [healthRows, setHealthRows] = useState<import('../db/healthSnapshots').HealthSnapshot[]>([]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const db = await getDatabase();
+        const [locs, health] = await Promise.all([
+          import('../db/locationSnapshots').then((m) => m.listLocationSnapshots(db, 7)),
+          import('../db/healthSnapshots').then((m) => m.listHealthSnapshots(db, 7)),
+        ]);
+        setLocations(locs);
+        setHealthRows(health);
+      } catch { /* non-critical */ }
+    })();
+  }, []);
+
+  if (locations.length === 0 && healthRows.length === 0) return null;
+
+  // Build a merged 7-day map: dateKey → { location, health }
+  const healthByDate = new Map(healthRows.map((h) => [h.date_key, h]));
+  const locationByDate = new Map(locations.map((l) => [l.date_key, l]));
+
+  const last7: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    last7.push(d.toISOString().slice(0, 10));
+  }
+
+  const hasTravelData = locations.length > 0;
+  const hasHealthData = healthRows.some((h) => h.steps > 0 || h.sleep_hours !== null);
+  if (!hasTravelData && !hasHealthData) return null;
+
+  // Health tip for today
+  const today = healthByDate.get(last7[0]);
+  const { generateHealthTip } = require('../processing/recordLifeContext') as typeof import('../processing/recordLifeContext');
+  const tip = today ? generateHealthTip(today.steps, today.sleep_hours, today.resting_hr) : null;
+
+  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const TEAL = '#2DD4BF';
+
+  return (
+    <View style={{ marginBottom: 16 }}>
+      {tip ? (
+        <View style={{ backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: `${TEAL}44`, borderRadius: 14, padding: 12, marginBottom: 10, borderLeftWidth: 3, borderLeftColor: TEAL }}>
+          <Text style={{ color: TEAL, fontSize: 9, fontWeight: '800', letterSpacing: 1.2, marginBottom: 4 }}>HEALTH TIP</Text>
+          <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 19 }}>{tip}</Text>
+        </View>
+      ) : null}
+
+      {(hasTravelData || hasHealthData) ? (
+        <>
+          <Text style={{ color: TEAL, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 8 }}>
+            YOUR WEEK {hasTravelData ? '· TRAVEL & HEALTH' : '· HEALTH'}
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {last7.map((dateKey) => {
+                const loc = locationByDate.get(dateKey);
+                const health = healthByDate.get(dateKey);
+                const d = new Date(dateKey + 'T12:00:00');
+                const dayLabel = dayLabels[d.getDay()];
+                const isToday = dateKey === last7[0];
+
+                const hasAnything = loc || (health && (health.steps > 0 || health.sleep_hours !== null));
+                if (!hasAnything && !isToday) return null;
+
+                return (
+                  <View key={dateKey} style={{ width: 88, backgroundColor: isToday ? `${TEAL}18` : LUCY_COLORS.surface, borderWidth: 1, borderColor: isToday ? `${TEAL}55` : LUCY_COLORS.border, borderRadius: 12, padding: 10, gap: 4 }}>
+                    <Text style={{ color: isToday ? TEAL : LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 }}>
+                      {isToday ? 'TODAY' : dayLabel}
+                    </Text>
+                    {loc?.city ? (
+                      <Text style={{ color: LUCY_COLORS.textDark, fontSize: 11, fontWeight: '700' }} numberOfLines={1}>
+                        📍 {loc.city}
+                      </Text>
+                    ) : null}
+                    {loc?.region && loc.region !== loc.city ? (
+                      <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10 }} numberOfLines={1}>{loc.region}</Text>
+                    ) : null}
+                    {health?.sleep_hours ? (
+                      <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 11 }}>😴 {health.sleep_hours}h</Text>
+                    ) : null}
+                    {health?.steps && health.steps > 0 ? (
+                      <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 11 }}>
+                        {health.steps >= 1000 ? `👟 ${(health.steps / 1000).toFixed(1)}k` : `👟 ${health.steps}`}
+                      </Text>
+                    ) : null}
+                    {!loc && (!health || (health.steps === 0 && !health.sleep_hours)) ? (
+                      <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>–</Text>
+                    ) : null}
+                  </View>
+                );
+              }).filter(Boolean)}
+            </View>
+          </ScrollView>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
 // ─── Brain Pulse ──────────────────────────────────────────────────────────────
 
 const PULSE_ACCENT = '#C084FC'; // violet — distinct from all existing palette colors
@@ -427,6 +533,9 @@ function NowView({
       ) : null}
       {/* Brain Pulse — 6-hour cross-domain insight synthesis */}
       <BrainPulseSection />
+
+      {/* Weekly life context — travel timeline + health */}
+      <WeeklyLifeWidget />
 
       {contextCount ? (
         <TouchableOpacity style={styles.contextPrompt} onPress={onOpenContext}>

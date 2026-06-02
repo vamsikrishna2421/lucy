@@ -202,5 +202,32 @@ async function buildPulseContext(db: SQLiteDatabase): Promise<string> {
     parts.push(ideas.map((i) => `- ${i.title}: ${i.description.slice(0, 80)}`).join('\n'));
   }
 
+  // Health snapshots — last 7 days
+  const healthRows = await db.getAllAsync<{ date_key: string; steps: number; sleep_hours: number | null; resting_hr: number | null }>(
+    `SELECT date_key, steps, sleep_hours, resting_hr FROM health_snapshots WHERE date_key >= date('now', '-7 days') ORDER BY date_key DESC`,
+  );
+  if (healthRows.length > 0) {
+    parts.push('\nHEALTH (last 7 days):');
+    parts.push(healthRows.map((h) => {
+      const s = [`${h.date_key}`];
+      if (h.steps > 0) s.push(`${h.steps.toLocaleString()} steps`);
+      if (h.sleep_hours !== null) s.push(`${h.sleep_hours}h sleep`);
+      if (h.resting_hr !== null) s.push(`HR ${h.resting_hr} bpm`);
+      return `- ${s.join(', ')}`;
+    }).join('\n'));
+  }
+
+  // Location snapshots — travel this week
+  const locationRows = await db.getAllAsync<{ date_key: string; city: string | null; region: string | null; country: string | null }>(
+    `SELECT date_key, city, region, country FROM location_snapshots WHERE date_key >= date('now', '-7 days') ORDER BY date_key DESC`,
+  );
+  if (locationRows.length > 0) {
+    parts.push('\nTRAVEL THIS WEEK:');
+    parts.push(locationRows.map((l) => {
+      const place = [l.city, l.region, l.country].filter(Boolean).join(', ');
+      return `- ${l.date_key}: ${place || 'unknown location'}`;
+    }).join('\n'));
+  }
+
   return parts.join('\n');
 }

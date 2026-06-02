@@ -421,15 +421,21 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     CREATE TABLE IF NOT EXISTS lucy_notifications (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      identifier TEXT UNIQUE,
       kind TEXT NOT NULL,
       tier INTEGER NOT NULL DEFAULT 2,
       title TEXT NOT NULL,
-      body TEXT NOT NULL,
+      body TEXT,
       data_json TEXT,
+      scheduled_for DATETIME,
+      entity_id TEXT,
+      entity_kind TEXT,
       read_at DATETIME,
-      dismissed_at DATETIME
+      dismissed_at DATETIME,
+      expired_at DATETIME
     );
     CREATE INDEX IF NOT EXISTS idx_lucy_notifications_created ON lucy_notifications(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_lucy_notifications_tier ON lucy_notifications(tier, read_at, dismissed_at);
 
     CREATE TABLE IF NOT EXISTS pending_staleness_reviews (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

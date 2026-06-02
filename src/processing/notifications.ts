@@ -5,6 +5,34 @@ import { containsCredentialSecret } from './privacy';
 
 const REMINDER_CHANNEL = 'lucy-reminders';
 const GUARDIAN_CHANNEL = 'lucy-guardian';
+const STATUS_CHANNEL = 'lucy-status';
+const PERSISTENT_NOTIF_ID = 'lucy-persistent-status';
+
+/** Writes every notification to the in-app log so it's never lost. */
+async function logToInApp(
+  kind: string,
+  tier: 1 | 2 | 3,
+  title: string,
+  body: string,
+  identifier?: string,
+): Promise<void> {
+  try {
+    const { getDatabase } = await import('../db');
+    const { upsertNotifLog } = await import('../db/notificationLog');
+    const db = await getDatabase();
+    await upsertNotifLog(db, {
+      identifier: identifier ?? `lucy_${kind}_${Date.now()}`,
+      kind, tier, title, body,
+      scheduled_for: new Date().toISOString(),
+      entity_id: null, entity_kind: null,
+    });
+    // Keep table bounded to last 200 rows
+    await db.runAsync(
+      `DELETE FROM lucy_notifications WHERE id NOT IN
+       (SELECT id FROM lucy_notifications ORDER BY created_at DESC LIMIT 200)`,
+    );
+  } catch { /* non-critical */ }
+}
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -19,16 +47,67 @@ export async function initializeNotifications(): Promise<void> {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL, {
       name: 'Reminders',
-      description: 'Time-sensitive reminders found in captured notes',
+      description: 'Time-sensitive reminders',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 150, 250],
     });
     await Notifications.setNotificationChannelAsync(GUARDIAN_CHANNEL, {
-      name: 'LUCY Guardian',
-      description: 'LUCY recalled something you were trying to remember',
+      name: 'LUCY insights',
+      description: 'Patterns and insights from your second brain',
       importance: Notifications.AndroidImportance.DEFAULT,
     });
+    // Low-importance channel for the persistent status strip — no sound, no vibration.
+    await Notifications.setNotificationChannelAsync(STATUS_CHANNEL, {
+      name: 'LUCY status',
+      description: 'Persistent status indicator (always on top)',
+      importance: Notifications.AndroidImportance.LOW,
+      vibrationPattern: [0],
+      enableVibrate: false,
+    });
   }
+}
+
+/**
+ * Android only: posts a persistent "always-on-top" notification showing today's
+ * LUCY activity. It lives in the notification shade permanently (ongoing: true,
+ * sticky) so users can tap it to open the notification center from anywhere.
+ * On iOS this is not possible — iOS controls notification ordering.
+ *
+ * Call after app launch and after any significant state change (new capture, pulse, etc.).
+ */
+export async function updatePersistentStatusNotification(
+  capturedToday: number,
+  pendingTasks: number,
+  unreadInsights: number,
+): Promise<void> {
+  if (Platform.OS !== 'android') return; // iOS doesn't support persistent notifications
+  if (!(await requestNotificationPermission())) return;
+
+  const bodyParts: string[] = [];
+  if (capturedToday > 0) bodyParts.push(`${capturedToday} captured today`);
+  if (pendingTasks > 0) bodyParts.push(`${pendingTasks} tasks`);
+  if (unreadInsights > 0) bodyParts.push(`${unreadInsights} new insights`);
+  const body = bodyParts.length > 0 ? bodyParts.join(' · ') : 'Your second brain is ready';
+
+  // Cancel the old one first (same identifier → replace, not stack)
+  await Notifications.cancelScheduledNotificationAsync(PERSISTENT_NOTIF_ID).catch(() => {});
+
+  await Notifications.scheduleNotificationAsync({
+    identifier: PERSISTENT_NOTIF_ID,
+    content: {
+      title: 'LUCY',
+      body,
+      data: { kind: 'status', action: 'open_notification_center' },
+      sound: false,
+      // Android-specific fields not in Expo types — cast to avoid TS error
+      ...(Platform.OS === 'android' ? ({ sticky: true, ongoing: true } as object) : {}),
+    } as Notifications.NotificationContentInput,
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date: new Date(Date.now() + 500),
+      channelId: STATUS_CHANNEL,
+    },
+  });
 }
 
 async function requestNotificationPermission(): Promise<boolean> {
@@ -46,22 +125,17 @@ export async function sendGuardianNotification(
   message: string,
   extraData?: Record<string, unknown>,
 ): Promise<void> {
-  if (!(await requestNotificationPermission())) {
-    return;
+  const kind = (extraData?.kind as string | undefined) ?? 'guardian';
+  // Always log to in-app center (Tier 2 = no push interrupt for ambient insights)
+  await logToInApp(kind, 2, 'LUCY', message);
+  // Only push for urgent types; guardian-class insights stay in-app only
+  if (kind === 'pre-meeting' || kind === 'post-meeting') {
+    if (!(await requestNotificationPermission())) return;
+    await Notifications.scheduleNotificationAsync({
+      content: { title: 'LUCY', body: message, data: { kind, ...(extraData ?? {}) }, sound: true },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(Date.now() + 1000), channelId: REMINDER_CHANNEL },
+    });
   }
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'I spotted something',
-      body: message,
-      data: { kind: 'guardian', ...(extraData ?? {}) },
-      sound: true,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date: new Date(Date.now() + 1000),
-      channelId: GUARDIAN_CHANNEL,
-    },
-  });
 }
 
 export async function sendDigestNotification(
@@ -70,22 +144,8 @@ export async function sendDigestNotification(
   openCount?: number,
   followCount?: number,
 ): Promise<void> {
-  if (!(await requestNotificationPermission())) {
-    return;
-  }
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title,
-      body,
-      data: { kind: 'digest', openCount: openCount ?? 0, followCount: followCount ?? 0 },
-      sound: false,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date: new Date(Date.now() + 2000),
-      channelId: GUARDIAN_CHANNEL,
-    },
-  });
+  // Digest is Tier 2 — in-app only, no push
+  await logToInApp('digest', 2, title, body);
 }
 
 // Fires every 2 hours during waking hours only (8 AM, 10 AM, 12 PM, 2 PM, 4 PM, 6 PM).

@@ -18,7 +18,9 @@ import { disableBackgroundProcessing, enableBackgroundProcessing } from './src/p
 import { dedupePendingTodos, enqueueTranscript, processQueue } from './src/processing/extract';
 import { autoRestoreDeviceModel, initializeDeviceModelSelection } from './src/ai/device';
 import { archiveUnmatchedCompletionRetries } from './src/processing/followUp';
-import { initializeNotifications } from './src/processing/notifications';
+import { initializeNotifications, updatePersistentStatusNotification } from './src/processing/notifications';
+import { NotificationCenter } from './src/components/NotificationCenter';
+import { getTotalUnreadCount } from './src/db/notificationLog';
 import { initializeVault } from './src/processing/vault';
 import { archiveMisclassifiedArtifacts } from './src/processing/artifactCleanup';
 import { organizeMemory } from './src/processing/organizer';
@@ -39,6 +41,8 @@ export default function App() {
   const [notificationDetail, setNotificationDetail] = useState<NotificationDetailPayload | null>(null);
   const [passiveState, setPassiveState] = useState<PassiveListenerState>(passiveListener.getState());
   const [meetingVisible, setMeetingVisible] = useState(false);
+  const [notifCenterVisible, setNotifCenterVisible] = useState(false);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const splashFade = useRef(new Animated.Value(1)).current;
@@ -244,6 +248,10 @@ export default function App() {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         void drainQueue();
+        // Refresh notification badge count
+        void (async () => {
+          try { const db = await getDatabase(); setUnreadNotifCount(await getTotalUnreadCount(db)); } catch { /* non-critical */ }
+        })();
         // Record location + health when app comes to foreground.
         // If background location is active, only update health (location is already covered).
         void (async () => {
@@ -329,6 +337,19 @@ export default function App() {
           <View style={styles.brandRow}>
             <Text style={styles.brandName}>LUC<Text style={{ color: '#FF8C42' }}>Y</Text></Text>
             <View style={styles.headerActions}>
+              {/* Bell icon — opens in-app notification center */}
+              <TouchableOpacity
+                style={styles.bellBtn}
+                onPress={() => setNotifCenterVisible(true)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={[styles.bellIcon, unreadNotifCount > 0 && { color: LUCY_COLORS.primary }]}>◌</Text>
+                {unreadNotifCount > 0 ? (
+                  <View style={styles.bellBadge}>
+                    <Text style={styles.bellBadgeText}>{unreadNotifCount > 9 ? '9+' : String(unreadNotifCount)}</Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.listenPill, meetingVisible && styles.listenPillActive]}
                 onPress={() => setMeetingVisible(true)}
@@ -419,6 +440,14 @@ export default function App() {
       />
       <SplashAnimation fadeAnim={splashFade} visible={showSplash} />
       <MeetingMode visible={meetingVisible} onClose={() => setMeetingVisible(false)} />
+      <NotificationCenter
+        visible={notifCenterVisible}
+        onClose={() => {
+          setNotifCenterVisible(false);
+          // Refresh badge after user reads/dismisses
+          void getDatabase().then((db) => getTotalUnreadCount(db)).then(setUnreadNotifCount).catch(() => {});
+        }}
+      />
       <Onboarding visible={onboardingVisible} onComplete={async () => {
         setOnboardingVisible(false);
         const db = await getDatabase();
@@ -436,6 +465,10 @@ const styles = StyleSheet.create({
   brandName: { color: LUCY_COLORS.textDark, fontSize: 24, fontWeight: '800', letterSpacing: 1.3 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   meetingPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', flexDirection: 'row', alignItems: 'center', gap: 5 },
+  bellBtn: { position: 'relative', width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
+  bellIcon: { fontSize: 22, color: LUCY_COLORS.textMuted },
+  bellBadge: { position: 'absolute', top: 2, right: 2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: LUCY_COLORS.primary, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: LUCY_COLORS.background },
+  bellBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
   listenPill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, flexDirection: 'row', alignItems: 'center', gap: 6 },
   listenPillActive: { backgroundColor: '#1a0a00', borderColor: LUCY_COLORS.primary },
   listenDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: LUCY_COLORS.textSubtle },

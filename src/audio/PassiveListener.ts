@@ -1,5 +1,6 @@
 import { RecordingPresets, setAudioModeAsync } from 'expo-audio';
 import * as FileSystem from 'expo-file-system';
+import * as Crypto from 'expo-crypto';
 import { config } from '../config';
 import { enqueueTranscript } from '../processing/extract';
 import { transcribeAudioFile } from './WhisperTranscriber';
@@ -52,6 +53,9 @@ class PassiveListenerManager {
   private voiceBuffer: string[] = [];
   private voiceRestartTimer: ReturnType<typeof setTimeout> | null = null;
   private transcriptAccumulator: string[] = [];
+  // UUID generated at session start, set on every enqueued batch so all clips
+  // from one session can be grouped together in the Brain → Listen tab.
+  private sessionId: string | null = null;
 
   subscribe(fn: (s: PassiveListenerState) => void): () => void {
     this.stateListeners.push(fn);
@@ -80,8 +84,10 @@ class PassiveListenerManager {
     if (this.state.status !== 'off') return;
     this.patch({ status: 'starting', wordsHeard: 0, sessionStartedAt: Date.now(), recordingSeconds: 0 });
     this.transcriptAccumulator = [];
+    this.sessionId = Crypto.randomUUID();
     this.active = true;
-    try { await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true }); } catch { /* non-fatal */ }
+    // allowsBackgroundRecording ensures recording continues when the app is minimised.
+    try { await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true }); } catch { /* non-fatal */ }
 
     // Consent signal when listening starts
     try {
@@ -105,8 +111,9 @@ class PassiveListenerManager {
     } else {
       this.patch({ mode: 'batch', noApiKey });
       await this.startRecordingBatch();
-      // Rotate every 3 minutes (was 10) for more responsive feedback
-      this.batchTimer = setInterval(() => void this.rotateBatch(), 3 * 60 * 1000);
+      // 10-minute batches: large enough to capture a meaningful chunk,
+      // short enough to process promptly. Stopping early triggers immediate processing.
+      this.batchTimer = setInterval(() => void this.rotateBatch(), 10 * 60 * 1000);
       // Tick recording seconds every second so the UI can show progress
       this.secondTimer = setInterval(() => {
         this.patch({ recordingSeconds: this.state.recordingSeconds + 1 });
@@ -133,7 +140,7 @@ class PassiveListenerManager {
     if (this.voiceBuffer.length === 0) return;
     const text = this.voiceBuffer.join(' ').trim();
     this.voiceBuffer = [];
-    if (text.split(/\s+/).length >= 5) { try { await enqueueTranscript(text, 'passive'); } catch { /* non-critical */ } }
+    if (text.split(/\s+/).length >= 5) { try { await enqueueTranscript(text, 'passive', false, this.sessionId); } catch { /* non-critical */ } }
   }
 
   private async startRecordingBatch(): Promise<void> {
@@ -161,7 +168,7 @@ class PassiveListenerManager {
       const text = await transcribeAudioFile(uri);
       if (text && text.split(/\s+/).length >= 5) {
         this.transcriptAccumulator.push(text); // accumulate for Meeting Mode
-        await enqueueTranscript(text, 'passive');
+        await enqueueTranscript(text, 'passive', false, this.sessionId);
         this.patch({ wordsHeard: this.state.wordsHeard + text.split(/\s+/).length });
       }
     } catch { /* non-critical */ }
@@ -183,6 +190,7 @@ class PassiveListenerManager {
       try { await this.recorder.stop(); const uri = this.recorder.uri; this.recorder.release?.(); this.recorder = null; if (uri) await this.transcribeAndProcess(uri); } catch { /* ignore */ }
     }
     try { await setAudioModeAsync({ allowsRecording: false }); } catch { /* non-fatal */ }
+    this.sessionId = null;
     this.patch({ status: 'off', sessionStartedAt: null });
   }
 }

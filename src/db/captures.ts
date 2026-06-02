@@ -21,6 +21,7 @@ export interface CaptureRow {
   archived_at: string | null;
   archive_reason: string | null;
   guardian_note: string | null;
+  listen_session_id: string | null;
 }
 
 export type CaptureStatus = 'queued' | 'processing' | 'complete' | 'retrying' | 'archived';
@@ -55,15 +56,51 @@ export async function insertCapture(
   transcript: string,
   privacyLevel: PrivacyLevel,
   userMarkedPrivate = false,
+  listenSessionId: string | null = null,
 ): Promise<number> {
   const result = await db.runAsync(
-    'INSERT INTO captures (source, raw_transcript, privacy_level, user_marked_private) VALUES (?, ?, ?, ?)',
+    'INSERT INTO captures (source, raw_transcript, privacy_level, user_marked_private, listen_session_id) VALUES (?, ?, ?, ?, ?)',
     source,
     transcript,
     privacyLevel,
     userMarkedPrivate ? 1 : 0,
+    listenSessionId,
   );
   return result.lastInsertRowId;
+}
+
+export interface ListenSessionGroup {
+  sessionId: string;
+  startedAt: string;
+  endedAt: string;
+  captureCount: number;
+  captureIds: number[];
+  snippets: string[];
+}
+
+/** Groups passive captures by listen_session_id for the Brain → Listen tab. */
+export async function listListenSessions(db: SQLiteDatabase): Promise<ListenSessionGroup[]> {
+  const rows = await db.getAllAsync<{ id: number; listen_session_id: string | null; raw_transcript: string; created_at: string }>(
+    `SELECT id, listen_session_id, raw_transcript, created_at
+     FROM captures
+     WHERE source = 'passive' AND archived_at IS NULL
+     ORDER BY created_at ASC, id ASC`,
+  );
+  const map = new Map<string, ListenSessionGroup>();
+  for (const row of rows) {
+    const key = row.listen_session_id ?? `legacy-${row.created_at.slice(0, 13)}`; // group legacy by hour
+    const existing = map.get(key);
+    const snippet = (row.raw_transcript ?? '').slice(0, 100).trim();
+    if (existing) {
+      existing.captureCount += 1;
+      existing.captureIds.push(row.id);
+      existing.endedAt = row.created_at;
+      if (existing.snippets.length < 3 && snippet) existing.snippets.push(snippet);
+    } else {
+      map.set(key, { sessionId: key, startedAt: row.created_at, endedAt: row.created_at, captureCount: 1, captureIds: [row.id], snippets: snippet ? [snippet] : [] });
+    }
+  }
+  return [...map.values()].reverse(); // newest first
 }
 
 export async function insertSharedCapture(

@@ -68,7 +68,12 @@ export async function generateMeetingSummary(
   if (!available) return null;
 
   const userPrefix = buildUserContextPrefix(profile);
-  const input = `Meeting title: ${title}\n\nTranscript:\n${transcript.slice(0, 6000)}`;
+  // 16 000-char window covers ~30 min of speech; longer transcripts keep first+last halves.
+  const MAX = 16000;
+  const clipped = transcript.length > MAX
+    ? transcript.slice(0, MAX / 2) + '\n...[middle section omitted for length]...\n' + transcript.slice(-MAX / 2)
+    : transcript;
+  const input = `Meeting title: ${title}\n\nTranscript:\n${clipped}`;
 
   try {
     const raw = await promptAI(`${userPrefix}${MEETING_SYSTEM_PROMPT}`, input, openAIKey);
@@ -129,4 +134,21 @@ export async function saveMeetingToMemory(
 
   // Also enqueue as a capture so it appears in the Timeline.
   await enqueueTranscript(parts.join('\n'), 'passive', false);
+}
+
+/**
+ * Fallback: saves raw meeting transcript when AI summarization is unavailable.
+ * The meeting still appears in Brain → Meetings; the user can re-summarize later.
+ */
+export async function saveRawTranscriptAsMeeting(
+  rawTranscript: string,
+  title: string,
+  durationMs: number,
+): Promise<void> {
+  const db = await (await import('../db')).getDatabase();
+  const { insertMeetingSummary } = await import('../db/meetingSummaries');
+  const durationMin = Math.round(durationMs / 60000);
+  await insertMeetingSummary(db, title || 'Meeting', durationMin, null, [], [], [], null, [], rawTranscript);
+  // Enqueue the raw transcript as a capture so the meeting appears on the Timeline.
+  await enqueueTranscript(`Meeting: ${title || 'Meeting'} (${durationMin} min)\n${rawTranscript.slice(0, 500)}`, 'passive', false);
 }

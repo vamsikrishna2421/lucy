@@ -3,7 +3,7 @@ import { Alert, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, Scrol
 import { PrivacyBadge } from '../components/PrivacyBadge';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
-import { captureStatus, listCaptureUpdates, listRecentCaptures, type CaptureRow } from '../db/captures';
+import { captureStatus, listCaptureUpdates, listRecentCaptures, listListenSessions, type CaptureRow, type ListenSessionGroup } from '../db/captures';
 import { answerContextRequest, listOpenContextRequests, type ContextRequestRow } from '../db/contextRequests';
 import { listExpenses, type ExpenseRow } from '../db/expenses';
 import { listIdeas, type IdeaRow } from '../db/ideas';
@@ -18,7 +18,7 @@ import { enqueueTranscript } from '../processing/extract';
 import { archiveTodo } from '../db/todos';
 
 type ViewMode = 'Focus Now' | 'Timeline' | 'Brain';
-type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings';
+type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
 
 function displayTimestamp(value: string): string {
   return new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`).toLocaleString();
@@ -686,6 +686,10 @@ function TimelineView({
                     {/* Mood color accent bar */}
                     <View style={[styles.tlAccent, { backgroundColor: moodColor }]} />
                     <View style={styles.tlCardContent}>
+                      {/* Source badge for passive (listen) captures */}
+                      {item.source === 'passive' ? (
+                        <Text style={{ color: '#5B8CFF', fontSize: 9, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>🎙 LISTEN</Text>
+                      ) : null}
                       {item.extracted_title ? (
                         // Extracted title — curated by LUCY
                         <Text style={styles.tlTitle} numberOfLines={isExpanded ? undefined : 2}>
@@ -930,7 +934,7 @@ function LibraryView({
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const tabs: LibraryTab[] = ['Todos', 'Ideas', 'Expenses', 'People', 'Meetings'];
+  const tabs: LibraryTab[] = ['Todos', 'Ideas', 'Expenses', 'People', 'Meetings', 'Listen'];
   return (
     <View style={styles.library}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs}>
@@ -946,8 +950,87 @@ function LibraryView({
         {tab === 'Expenses' && expenses.map((item) => <Card key={item.id} title={`${item.amount ?? '-'} - ${item.description}`} detail={item.category} privacy={item.privacy_level} onDelete={() => void deleteExpense(item.id)} />)}
         {tab === 'People' && <PeopleTab />}
         {tab === 'Meetings' && <MeetingsTab />}
+        {tab === 'Listen' && <ListenTab />}
       </ScrollView>
     </View>
+  );
+}
+
+function ListenTab() {
+  const [sessions, setSessions] = useState<ListenSessionGroup[]>([]);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    void (async () => {
+      const db = await getDatabase();
+      setSessions(await listListenSessions(db));
+    })();
+  }, []);
+
+  const deleteSession = async (sessionId: string, captureIds: number[]) => {
+    Alert.alert('Delete listen session?', 'All clips from this session will be permanently removed.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          const db = await getDatabase();
+          const { deleteCaptureCompletely } = await import('../db/captures');
+          await Promise.all(captureIds.map((id) => deleteCaptureCompletely(db, id)));
+          setSessions((prev) => prev.filter((s) => s.sessionId !== sessionId));
+        },
+      },
+    ]);
+  };
+
+  const formatDate = (iso: string) => new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`)
+    .toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  const durationLabel = (start: string, end: string) => {
+    const ms = new Date(end.includes('T') ? end : `${end.replace(' ', 'T')}Z`).getTime()
+             - new Date(start.includes('T') ? start : `${start.replace(' ', 'T')}Z`).getTime();
+    const min = Math.max(1, Math.round(ms / 60000));
+    return `${min} min`;
+  };
+
+  if (sessions.length === 0) {
+    return <Text style={styles.empty}>No listen sessions yet. Tap the Listen button in the header to start capturing ambient audio in 10-minute batches.</Text>;
+  }
+
+  return (
+    <>
+      {sessions.map((s) => (
+        <View key={s.sessionId} style={[styles.card, { borderLeftWidth: 3, borderLeftColor: '#5B8CFF' }]}>
+          <View style={styles.cardTop}>
+            <View style={{ flex: 1, gap: 3 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ color: '#5B8CFF', fontSize: 10, fontWeight: '800', letterSpacing: 1 }}>🎙 LISTEN SESSION</Text>
+              </View>
+              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>
+                {formatDate(s.startedAt)} · {durationLabel(s.startedAt, s.endedAt)} · {s.captureCount} clip{s.captureCount !== 1 ? 's' : ''}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <TouchableOpacity onPress={() => setExpanded((prev) => ({ ...prev, [s.sessionId]: !prev[s.sessionId] }))}>
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, fontWeight: '700' }}>{expanded[s.sessionId] ? '▾' : '▸'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => void deleteSession(s.sessionId, s.captureIds)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={{ color: '#ef4444', fontSize: 16, fontWeight: '700' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          {s.snippets.map((snip, i) => (
+            <Text key={i} style={[styles.detail, { marginTop: i === 0 ? 6 : 2 }]} numberOfLines={2}>"{snip}…"</Text>
+          ))}
+          {expanded[s.sessionId] ? (
+            <View style={{ marginTop: 8, gap: 4 }}>
+              {s.captureIds.map((id, i) => (
+                <Text key={id} style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>Clip {i + 1} · ID {id}</Text>
+              ))}
+            </View>
+          ) : null}
+        </View>
+      ))}
+    </>
   );
 }
 

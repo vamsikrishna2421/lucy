@@ -316,6 +316,11 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     // reprocess remove prior split children instead of duplicating them.
     await db.execAsync('ALTER TABLE captures ADD COLUMN split_origin_id INTEGER;');
   }
+  if (!existing.has('listen_session_id')) {
+    // Groups all batch chunks from a single Listen session together. Generated at
+    // passiveListener.start() and passed through enqueueTranscript for every batch.
+    await db.execAsync('ALTER TABLE captures ADD COLUMN listen_session_id TEXT;');
+  }
   if (!existing.has('capture_kind')) {
     await db.execAsync("ALTER TABLE captures ADD COLUMN capture_kind TEXT DEFAULT 'thought';");
   }

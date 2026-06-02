@@ -139,6 +139,7 @@ export async function enqueueTranscript(
   transcript: string,
   source: CaptureSource = 'text',
   markedPrivate = false,
+  listenSessionId: string | null = null,
 ): Promise<number> {
   const trimmed = transcript.trim();
   if (!trimmed) {
@@ -165,7 +166,7 @@ export async function enqueueTranscript(
         if (thoughts.length >= 2) {
           let lastId = 0;
           for (const thought of thoughts) {
-            lastId = await insertCapture(db, source, thought, preflight.level, markedPrivate);
+            lastId = await insertCapture(db, source, thought, preflight.level, markedPrivate, listenSessionId);
             // Apply temporal anchor to each thought
             const { extractTemporalAnchor } = await import('./temporalAnchor');
             const anchor = extractTemporalAnchor(thought);
@@ -182,7 +183,7 @@ export async function enqueueTranscript(
   // Single capture — apply temporal anchor if date mentioned
   const id = (source === 'android' || source === 'ios')
     ? await insertSharedCapture(db, source, trimmed, preflight.level, markedPrivate)
-    : await insertCapture(db, source, trimmed, preflight.level, markedPrivate);
+    : await insertCapture(db, source, trimmed, preflight.level, markedPrivate, listenSessionId);
 
   try {
     const { extractTemporalAnchor } = await import('./temporalAnchor');

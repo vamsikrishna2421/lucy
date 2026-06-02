@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { passiveListener } from '../audio/PassiveListener';
-import { generateMeetingSummary, saveMeetingToMemory, type MeetingSummary } from '../processing/meetingMode';
+import { generateMeetingSummary, saveMeetingToMemory, saveRawTranscriptAsMeeting, type MeetingSummary } from '../processing/meetingMode';
 import { getDatabase } from '../db';
 
 type MeetingPhase = 'idle' | 'naming' | 'recording' | 'processing' | 'summary';
@@ -104,9 +104,13 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
 
     setPhase('summary');
     // Auto-save immediately — user still sees the summary and can dismiss.
-    // They no longer need to tap "Save to LUCY Memory" for the meeting to be stored.
-    if (gen && startedAt) {
-      void saveMeetingToMemory(gen, meetingTitle, Date.now() - startedAt.getTime()).catch(() => {});
+    const elapsed = startedAt ? Date.now() - startedAt.getTime() : 0;
+    if (gen) {
+      void saveMeetingToMemory(gen, meetingTitle, elapsed).catch(() => {});
+    } else if (rawTranscript && rawTranscript.trim().length > 0) {
+      // AI summarization failed (no key / unavailable) — save raw transcript so
+      // the meeting is never silently lost. Shows in Brain → Meetings with no headline.
+      void saveRawTranscriptAsMeeting(rawTranscript, meetingTitle, elapsed).catch(() => {});
     }
   };
 

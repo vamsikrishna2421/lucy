@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Easing, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { PrivacyBadge } from '../components/PrivacyBadge';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
@@ -315,6 +315,32 @@ function ExtractionChips({ extraction }: { extraction: import('../types/extracti
           <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: chip.accent, flexShrink: 0 }} />
           <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700', flex: 1 }} numberOfLines={2}>{chip.label}</Text>
         </View>
+      ))}
+    </View>
+  );
+}
+
+// ─── Animated organizing indicator ────────────────────────────────────────────
+
+/** Three staggered dots that breathe — replaces static "ORGANIZING" text. */
+function OrganizingDots() {
+  const dots = [useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current];
+  useEffect(() => {
+    const anims = dots.map((anim, i) =>
+      Animated.loop(Animated.sequence([
+        Animated.delay(i * 160),
+        Animated.timing(anim, { toValue: 1, duration: 380, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 380, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.delay((2 - i) * 160),
+      ]))
+    );
+    Animated.parallel(anims).start();
+    return () => anims.forEach((a) => a.stop());
+  }, []);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+      {dots.map((anim, i) => (
+        <Animated.View key={i} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.primary, opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] }), transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.2] }) }] }} />
       ))}
     </View>
   );
@@ -1002,7 +1028,17 @@ function TimelineView({
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {groups.length === 0 ? (
-          <EmptyLine text="Nothing captured yet. Your timeline will grow as you capture thoughts." />
+          <View style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40, gap: 14 }}>
+            {/* AmberPulse — three concentric circles, LUCY is listening */}
+            <View style={{ alignItems: 'center', justifyContent: 'center', width: 80, height: 80, marginBottom: 4 }}>
+              <View style={{ position: 'absolute', width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,140,66,0.06)' }} />
+              <View style={{ position: 'absolute', width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,140,66,0.10)' }} />
+              <View style={{ position: 'absolute', width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,140,66,0.16)' }} />
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: LUCY_COLORS.primary }} />
+            </View>
+            <Text style={{ color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700', textAlign: 'center' }}>Nothing yet today</Text>
+            <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21, textAlign: 'center' }}>Speak a thought or type something. LUCY handles the rest.</Text>
+          </View>
         ) : groups.map((group) => (
           <View key={group.dateKey}>
             {/* Date header */}
@@ -1085,7 +1121,7 @@ function TimelineView({
                                 {item.processed === -1 ? (
                                   <Text style={[styles.tlTypePillText, { color: '#F59E0B' }]}>FAILED</Text>
                                 ) : (
-                                  <Text style={[styles.tlTypePillText, { color: LUCY_COLORS.primary + 'CC' }]}>ORGANIZING</Text>
+                                  <OrganizingDots />
                                 )}
                               </View>
                             ) : null}
@@ -1742,14 +1778,14 @@ const styles = StyleSheet.create({
   tlSpineWrap: { alignItems: 'center', flex: 1 },
   tlDot: { width: 10, height: 10, borderRadius: 5, shadowOpacity: 0.5, shadowRadius: 4, elevation: 3 },
   tlLine: { width: 1.5, backgroundColor: LUCY_COLORS.divider, flex: 1, minHeight: 40 },
-  tlCard: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, marginBottom: 0, flexDirection: 'row', overflow: 'hidden' },
+  tlCard: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, borderTopColor: '#3A3028', marginBottom: 0, flexDirection: 'row', overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.22, shadowRadius: 5, elevation: 3 },
   tlCardExpanded: { borderColor: 'rgba(255,140,66,0.22)' },
   tlAccent: { width: 3, borderRadius: 0 },
   tlCardContent: { flex: 1, paddingTop: 10, paddingBottom: 10, paddingHorizontal: 12, gap: 0 },
 
   // Header row: source badge + type pill + privacy dot
   tlCardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 5 },
-  tlSourceBadge: { fontSize: 9, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' },
+  tlSourceBadge: { fontSize: 10, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase' },
   tlTypePill: {
     borderRadius: 5,
     borderWidth: 1,
@@ -1757,7 +1793,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
-  tlTypePillText: { fontSize: 8, fontWeight: '800', letterSpacing: 1 },
+  tlTypePillText: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
 
   // Card body
   tlTitle: { color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700', lineHeight: 20, marginBottom: 0 },
@@ -1817,7 +1853,7 @@ const styles = StyleSheet.create({
   activeTab: { backgroundColor: LUCY_COLORS.primary },
   tabText: { color: LUCY_COLORS.textMuted, fontWeight: '600' },
   activeText: { color: LUCY_COLORS.white },
-  card: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, marginBottom: 10, gap: 7 },
+  card: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, borderTopColor: '#3A3028', padding: 15, marginBottom: 10, gap: 7, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 4 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   cardTitle: { flex: 1, color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 16 },
   detail: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 19 },
@@ -1869,13 +1905,13 @@ const styles = StyleSheet.create({
   feedbackBtnText: { color: LUCY_COLORS.textMuted, fontSize: 14, fontWeight: '700' },
   tlMenuBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   tlMenuBtnText: { color: LUCY_COLORS.textMuted, fontSize: 20, fontWeight: '800', lineHeight: 20, marginTop: -4 },
-  actionSheet: { backgroundColor: LUCY_COLORS.surface, borderRadius: 20, paddingVertical: 8, width: '100%', borderWidth: 1, borderColor: LUCY_COLORS.border },
+  actionSheet: { backgroundColor: LUCY_COLORS.surfaceElevated ?? '#2A2219', borderRadius: 20, paddingVertical: 8, width: '100%', borderWidth: 1, borderColor: LUCY_COLORS.border, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.40, shadowRadius: 16, elevation: 12 },
   actionSheetTitle: { color: LUCY_COLORS.textSubtle, fontSize: 12, fontWeight: '700', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 8 },
   actionSheetItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 14 },
   actionSheetIcon: { width: 22, textAlign: 'center', color: LUCY_COLORS.textMuted, fontSize: 16, fontWeight: '700' },
   actionSheetLabel: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '600' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  feedbackModal: { backgroundColor: LUCY_COLORS.surface, borderRadius: 20, padding: 24, width: '100%', borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 12 },
+  feedbackModal: { backgroundColor: LUCY_COLORS.surfaceElevated ?? '#2A2219', borderRadius: 20, padding: 24, width: '100%', borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.40, shadowRadius: 16, elevation: 12 },
   feedbackModalTitle: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
   feedbackModalSub: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 20 },
   feedbackInput: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 12, color: LUCY_COLORS.textDark, fontSize: 15, minHeight: 80, textAlignVertical: 'top' },

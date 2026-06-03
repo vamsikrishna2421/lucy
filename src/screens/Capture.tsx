@@ -17,6 +17,7 @@ import {
   Easing,
 } from 'react-native';
 import type { PassiveListenerState } from '../audio/PassiveListener';
+import { haptic } from '../config/haptics';
 import { RecordingPresets, setAudioModeAsync } from 'expo-audio';
 import * as ImagePicker from 'expo-image-picker';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -99,6 +100,27 @@ function formatDoneTime(iso: string): string {
   });
 }
 
+/** Breathing amber glow — LUCY is alive and watching. The #1 premium wow moment.
+ *  Runs entirely on the native thread (useNativeDriver: true). */
+function HeroGlow() {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    ).start();
+    return () => pulse.stopAnimation();
+  }, []);
+  return (
+    <Animated.View style={[styles.heroGlow, {
+      opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.08, 0.22] }),
+      transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.90, 1.12] }) }],
+    }]} />
+  );
+}
+
 function AnimatedTodoRow({ todo, onPress, onLongPress }: { todo: TodoRow; onPress: () => void; onLongPress: () => void }) {
   const checkScale = useRef(new Animated.Value(1)).current;
   const checkFill = useRef(new Animated.Value(0)).current;
@@ -106,6 +128,8 @@ function AnimatedTodoRow({ todo, onPress, onLongPress }: { todo: TodoRow; onPres
   const rowOpacity = useRef(new Animated.Value(1)).current;
 
   const handlePress = () => {
+    haptic.taskDone(); // medium tap, then 80ms later a light tap — double-tap feel
+    setTimeout(() => haptic.taskUndo(), 80); // repurposed as the second lighter tap
     Animated.sequence([
       Animated.timing(checkScale, { toValue: 1.35, duration: 100, useNativeDriver: true }),
       Animated.timing(checkScale, { toValue: 1, duration: 100, useNativeDriver: true }),
@@ -341,7 +365,7 @@ function CategoryCard({ category, onPress }: { category: TaskCategory; onPress: 
 }
 
 const ccStyles = StyleSheet.create({
-  card: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, borderLeftWidth: 4, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, marginBottom: 10 },
+  card: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, borderTopColor: '#3A3028', borderLeftWidth: 4, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 4 },
   iconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   iconText: { fontSize: 20 },
   label: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '700' },
@@ -534,6 +558,7 @@ export function CaptureScreen({
       Voice.default.onSpeechEnd = () => setVoiceRecording(false);
       Voice.default.onSpeechError = () => setVoiceRecording(false);
       await Voice.default.start('en-US');
+      haptic.listenStart();
       animateMicToRecording();
       setVoiceRecording(true);
     } else {
@@ -556,6 +581,7 @@ export function CaptureScreen({
         audioRecorder.current = new AR(RecordingPresets.HIGH_QUALITY);
         await audioRecorder.current.prepareToRecordAsync();
         audioRecorder.current.record();
+        haptic.listenStart();
         animateMicToRecording();
         setVoiceRecording(true);
       } catch {
@@ -584,6 +610,7 @@ export function CaptureScreen({
     try {
       setSending(true);
       await enqueueTranscript(outgoing, 'text', markedPrivate);
+      haptic.capture(); // success — the most important haptic in the app
       setText('');
       setAcknowledgement(markedPrivate ? 'Protected thought queued' : 'Got it');
       setMarkedPrivate(false);
@@ -632,7 +659,7 @@ export function CaptureScreen({
       >
         {/* Hero lives inside the scroll view — scrolls away naturally, always comes back */}
         <Animated.View style={[styles.hero, { opacity: heroOpacity }]}>
-          <View style={styles.heroGlow} />
+          <HeroGlow />
           <Text style={styles.heroGreeting}>{getGreeting()}{userName ? `, ${userName}` : ''}</Text>
           <Text style={styles.heroTitle}>LUCY</Text>
           <Text style={styles.heroPillars}>Listen · Understand · Connect · Yield</Text>
@@ -876,11 +903,11 @@ const styles = StyleSheet.create({
   controlBrainPill: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5, maxWidth: 130 },
   // Hero
   hero: { backgroundColor: '#1a0f00', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 16, position: 'relative', overflow: 'hidden' },
-  heroGlow: { position: 'absolute', top: -40, right: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,140,66,0.12)' },
+  heroGlow: { position: 'absolute', top: -40, right: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: '#FF8C42' },
   heroGreeting: { fontSize: 12, fontWeight: '700', color: LUCY_COLORS.primary, letterSpacing: 0.5, marginBottom: 2 },
-  heroTitle: { fontSize: 42, fontWeight: '900', letterSpacing: -2, color: LUCY_COLORS.textDark, lineHeight: 46, marginBottom: 2 },
+  heroTitle: { fontSize: 42, fontWeight: '900', letterSpacing: -2.5, color: LUCY_COLORS.textDark, lineHeight: 46, marginBottom: 2 },
   heroPillars: { fontSize: 11, color: LUCY_COLORS.textSubtle, marginBottom: 12 },
-  heroCard: { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,140,66,0.25)', borderRadius: 14, padding: 12 },
+  heroCard: { backgroundColor: 'rgba(255,140,66,0.07)', borderWidth: 1, borderColor: 'rgba(255,140,66,0.25)', borderRadius: 14, padding: 12 },
   heroCardLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, color: LUCY_COLORS.primary, marginBottom: 4 },
   heroCardTitle: { fontSize: 18, fontWeight: '800', color: LUCY_COLORS.textDark },  // was 15 — more punchy
   // Compact header

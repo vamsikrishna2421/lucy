@@ -899,7 +899,7 @@ function NowView({
       {/* Staleness reviews — shown before Follow-ups so the user cleans house first */}
       {stalenessReviews.length > 0 ? (
         <>
-          <SectionTitle title="Quick Review" />
+          <SectionTitle title="Quick Review" count={stalenessReviews.length} />
           {stalenessReviews.map((review) => (
             <StalenessReviewCard
               key={review.id}
@@ -912,7 +912,7 @@ function NowView({
 
       {followUps.length > 0 ? (
         <>
-          <SectionTitle title="Follow-ups" />
+          <SectionTitle title="Follow-ups" count={followUps.length} />
           {followUps.map((item) => (
             <View style={styles.loopCard} key={item.id}>
               <Text style={styles.cardTitle}>{item.assignee ? `${item.assignee}: ` : ''}{protectedPreview(item.action)}</Text>
@@ -923,11 +923,11 @@ function NowView({
           ))}
         </>
       ) : null}
-      <SectionTitle title="Reminders" />
+      <SectionTitle title="Reminders" count={scheduledReminders.length || undefined} />
       {scheduledReminders.length ? scheduledReminders.map((item) => <ReminderCard item={item} key={item.id} />) : <EmptyLine text="No scheduled reminders yet." />}
       {unscheduledCount ? <Text style={styles.pendingHint}>{unscheduledCount} captured reminder{unscheduledCount === 1 ? '' : 's'} need a specific time.</Text> : null}
-      <SectionTitle title="Focus" />
-      {todos.length ? todos.map((item) => <Card key={item.id} title={item.task} detail={`${item.category} / ${item.urgency}`} privacy={item.privacy_level} />) : <EmptyLine text="Capture a task and it will appear here." />}
+      <SectionTitle title="Focus" count={todos.length || undefined} />
+      {todos.length ? todos.map((item) => <FocusTodoCard key={item.id} item={item} />) : <EmptyLine text="Capture a task and it will appear here." />}
 
       {/* Needs Context — moved to bottom so it doesn't clutter the main focus.
           Shows only when there are unanswered clarification requests. */}
@@ -1314,8 +1314,21 @@ function TimelineView({
               <View style={{ position: 'absolute', width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,140,66,0.16)' }} />
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: LUCY_COLORS.primary }} />
             </View>
-            <Text style={{ color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700', textAlign: 'center' }}>Nothing yet today</Text>
-            <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21, textAlign: 'center' }}>Speak a thought or type something. LUCY handles the rest.</Text>
+            {noteTypeFilter ? (
+              <>
+                <Text style={{ color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700', textAlign: 'center' }}>
+                  No {noteTypeFilter}s yet
+                </Text>
+                <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21, textAlign: 'center' }}>
+                  Capture something and LUCY will classify it as a {noteTypeFilter} if it fits.
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={{ color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700', textAlign: 'center' }}>Nothing yet today</Text>
+                <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21, textAlign: 'center' }}>Speak a thought or type something. LUCY handles the rest.</Text>
+              </>
+            )}
           </View>
         ) : groups.map((group) => (
           <View key={group.dateKey}>
@@ -1447,11 +1460,12 @@ function TimelineView({
                             >
                               {summaryText}
                             </Text>
-                            {/* Expand/collapse affordance — inline at end of text when collapsed */}
+                            {/* Expand/collapse affordance */}
                             {!isExpanded ? (
-                              <Text style={styles.tlExpandHint}>
-                                tap to expand
-                              </Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 }}>
+                                <View style={{ height: 1, flex: 1, backgroundColor: 'rgba(255,140,66,0.15)' }} />
+                                <Text style={{ color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', opacity: 0.7 }}>show more  ›</Text>
+                              </View>
                             ) : null}
                           </View>
                         );
@@ -1963,8 +1977,46 @@ function PeopleTab() {
   );
 }
 
-function SectionTitle({ title }: { title: string }) {
-  return <Text style={styles.sectionTitle}>{title}</Text>;
+const URGENCY_CONFIG = {
+  high: { label: 'HIGH', color: '#EF4444', bg: 'rgba(239,68,68,0.12)' },
+  medium: { label: 'MED', color: '#F59E0B', bg: 'rgba(245,158,11,0.12)' },
+  low: { label: 'LOW', color: '#6EE7B7', bg: 'rgba(110,231,183,0.10)' },
+};
+
+function FocusTodoCard({ item }: { item: TodoRow }) {
+  const urg = URGENCY_CONFIG[item.urgency as 'high' | 'medium' | 'low'] ?? URGENCY_CONFIG.low;
+  return (
+    <View style={[styles.card, { borderLeftWidth: 3, borderLeftColor: urg.color, paddingLeft: 13 }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.cardTitle} numberOfLines={2}>{protectedPreview(item.task)}</Text>
+          {item.category ? (
+            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 3, textTransform: 'capitalize' }}>{item.category}</Text>
+          ) : null}
+        </View>
+        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+          <View style={{ backgroundColor: urg.bg, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 }}>
+            <Text style={{ color: urg.color, fontSize: 10, fontWeight: '800', letterSpacing: 0.6 }}>{urg.label}</Text>
+          </View>
+          {item.privacy_level ? <PrivacyBadge level={item.privacy_level} /> : null}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function SectionTitle({ title, count }: { title: string; count?: number }) {
+  return (
+    <View style={styles.sectionTitleRow}>
+      <View style={styles.sectionTitleAccent} />
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {count != null ? (
+        <View style={styles.sectionTitleBadge}>
+          <Text style={styles.sectionTitleBadgeText}>{count}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 function EmptyLine({ text }: { text: string }) {
@@ -2076,10 +2128,10 @@ const styles = StyleSheet.create({
   otdTitle: { fontSize: 15, fontWeight: '700', color: LUCY_COLORS.textDark, lineHeight: 22, marginBottom: 4 },
   otdSnippet: { fontSize: 13, color: LUCY_COLORS.textMuted, lineHeight: 19, fontStyle: 'italic' },
   otdMore: { fontSize: 11, color: LUCY_COLORS.textSubtle, marginTop: 6 },
-  moodBar: { marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  moodBar: { marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,140,66,0.12)' },
   moodLabel: { fontSize: 12, fontWeight: '700' },
-  moodDots: { flexDirection: 'row', gap: 5 },
-  moodDot: { width: 8, height: 8, borderRadius: 4 },
+  moodDots: { flexDirection: 'row', gap: 4 },
+  moodDot: { width: 10, height: 10, borderRadius: 5 },
   contextPrompt: { backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderRadius: 20, padding: 16, marginBottom: 19 },
   contextPromptTitle: { color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700', marginTop: 8 },
   contextIntro: { backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderRadius: 22, padding: 22, marginBottom: 14 },  // was 18
@@ -2097,7 +2149,11 @@ const styles = StyleSheet.create({
   confidence: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
   connection: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700', lineHeight: 21 },
   relation: { color: LUCY_COLORS.primaryGlow },
-  sectionTitle: { color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700', marginBottom: 10, marginTop: 4 },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10, marginTop: 8 },
+  sectionTitleAccent: { width: 3, height: 16, borderRadius: 2, backgroundColor: LUCY_COLORS.primary },
+  sectionTitle: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '800', flex: 1 },
+  sectionTitleBadge: { backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
+  sectionTitleBadgeText: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '800' },
   empty: { color: LUCY_COLORS.textMuted, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, padding: 16, marginBottom: 17 },
   pendingHint: { color: LUCY_COLORS.textMuted, fontSize: 13, marginBottom: 17, paddingHorizontal: 3 },
   library: { flex: 1 },

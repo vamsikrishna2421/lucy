@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated, FlatList, Modal, Pressable, StyleSheet,
-  Text, TouchableOpacity, View,
+  Text, TouchableOpacity, View, useWindowDimensions,
 } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
@@ -98,6 +98,9 @@ export function NotificationCenter({ visible, onClose }: { visible: boolean; onC
   const [filter, setFilter] = useState<NotifFilter>('all');
   const [items, setItems] = useState<NotifLogRow[]>([]);
   const slideAnim = useRef(new Animated.Value(800)).current;
+  const { height: screenHeight } = useWindowDimensions();
+  // Sheet is maxHeight 92%. Fixed inside: handle(20px) + header(~54px) + filterRow(~50px) + padding
+  const listHeight = Math.max(200, Math.round(screenHeight * 0.88) - 140);
 
   useEffect(() => {
     if (visible) {
@@ -155,7 +158,7 @@ export function NotificationCenter({ visible, onClose }: { visible: boolean; onC
     <Modal transparent animationType="none" visible={visible} onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-          <Pressable>
+          <Pressable onPress={() => {}}>
             {/* Drag handle */}
             <View style={styles.handle} />
 
@@ -195,7 +198,7 @@ export function NotificationCenter({ visible, onClose }: { visible: boolean; onC
                 <NotifRow item={item} onRead={handleRead} onDismiss={handleDismiss} />
               )}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
-              style={styles.list}
+              style={[styles.list, { height: listHeight }]}
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={() => (
                 <View style={styles.emptyWrap}>

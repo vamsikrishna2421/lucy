@@ -197,6 +197,20 @@ export default function App() {
               const content = (await readAsStringAsync(uri)).trim();
               if (content) parts.push(content);
             } catch { /* unreadable file — skip */ }
+          } else if (uri && (
+            mime.startsWith('image/') ||
+            /\.(jpg|jpeg|png|gif|webp|heic|heif)$/i.test(name || uri)
+          )) {
+            // Image share → LUCY Lens: extract visual memory, delete image immediately
+            try {
+              const { processImageToMemory } = await import('./src/processing/lucyLens');
+              const result = await processImageToMemory(uri, name || null);
+              if (result?.confidence === 'low') {
+                // Low confidence means no remote AI — surface this to user
+                parts.push(`[Image shared — ${result.memoryText}]`);
+              }
+              // High confidence: already enqueued inside processImageToMemory, skip parts
+            } catch { /* non-critical */ }
           }
         }
         const sharedText = parts.join('\n').trim();

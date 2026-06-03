@@ -13,7 +13,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.65",
+      "buildNumber": "1.0.66",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
@@ -74,7 +74,7 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.anonymous.lucy",
-      "versionCode": 20,
+      "versionCode": 21,
       "intentFilters": [
         {
           "action": "SEND",

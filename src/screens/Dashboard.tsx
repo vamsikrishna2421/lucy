@@ -1274,29 +1274,28 @@ function TimelineView({
         ) : null}
       </View>
 
-      {/* Note-type filter chips — only show when there are types to filter by */}
-      {Object.keys(noteTypes).length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8, height: 34 }} contentContainerStyle={{ paddingHorizontal: 2, gap: 6, flexDirection: 'row', alignItems: 'center' }}>
-          {(['all', 'thought', 'task', 'idea', 'journal', 'meeting', 'reminder'] as const).map((type) => {
-            const isAll = type === 'all';
-            const isActive = isAll ? !noteTypeFilter : noteTypeFilter === type;
-            const nt = isAll ? null : noteTypeLabel(type as import('../types/extraction').NoteType);
-            return (
-              <TouchableOpacity
-                key={type}
-                style={{ alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: isActive ? (nt?.color ?? LUCY_COLORS.primary) : LUCY_COLORS.border, backgroundColor: isActive ? `${nt?.color ?? LUCY_COLORS.primary}18` : 'transparent' }}
-                onPress={() => setNoteTypeFilter(isAll ? null : noteTypeFilter === type ? null : type)}
-              >
-                <Text style={{ color: isActive ? (nt?.color ?? LUCY_COLORS.primary) : LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '700' }}>
-                  {isAll ? 'All' : nt?.label ?? type}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      ) : null}
-
+      {/* Content ScrollView — chips live inside here to avoid any fixed/flex boundary ambiguity */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {Object.keys(noteTypes).length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 34, marginBottom: 8 }} contentContainerStyle={{ paddingHorizontal: 2, gap: 6, flexDirection: 'row', alignItems: 'center' }}>
+            {(['all', 'thought', 'task', 'idea', 'journal', 'meeting', 'reminder'] as const).map((type) => {
+              const isAll = type === 'all';
+              const isActive = isAll ? !noteTypeFilter : noteTypeFilter === type;
+              const nt = isAll ? null : noteTypeLabel(type as import('../types/extraction').NoteType);
+              return (
+                <TouchableOpacity
+                  key={type}
+                  style={{ alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: isActive ? (nt?.color ?? LUCY_COLORS.primary) : LUCY_COLORS.border, backgroundColor: isActive ? `${nt?.color ?? LUCY_COLORS.primary}18` : 'transparent' }}
+                  onPress={() => setNoteTypeFilter(isAll ? null : noteTypeFilter === type ? null : type)}
+                >
+                  <Text style={{ color: isActive ? (nt?.color ?? LUCY_COLORS.primary) : LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '700' }}>
+                    {isAll ? 'All' : nt?.label ?? type}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        ) : null}
         {groups.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40, gap: 14 }}>
             {/* AmberPulse — three concentric circles, LUCY is listening */}

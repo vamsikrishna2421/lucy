@@ -233,7 +233,8 @@ function CategoryModal({
             flex:1 / flex-based children collapse to 0 when the parent has only
             maxHeight (no explicit height). Instead we cap with explicit px on ScrollView. */}
         <Animated.View style={[cmStyles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-          <Pressable>
+          {/* View (not Pressable) so scroll gestures on the list pass through correctly */}
+          <View>
             {/* Header */}
             <View style={[cmStyles.header, { borderBottomColor: category.color + '33' }]}>
               <Text style={cmStyles.icon}>{category.icon}</Text>
@@ -306,7 +307,7 @@ function CategoryModal({
                 <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>+</Text>
               </TouchableOpacity>
             </View>
-          </Pressable>
+          </View>
         </Animated.View>
       </Pressable>
     </Modal>

@@ -262,9 +262,37 @@ async function answerWithLLM(question: string): Promise<LucyAnswer> {
   const systemPrompt = `${userPrefix}${memoryAnswerSystemPrompt}`;
   const deviceInfo = await enrichWithUsagePatterns(deviceCtx);
   const calendarInfo = formatCalendarContext(calEvents);
+
+  // Enrich with top Brain Galaxy topics so LUCY understands life structure
+  let galaxyContext: string | null = null;
+  try {
+    const { listTopics } = await import('../db/brainTopics');
+    const topics = await listTopics(db);
+    const areas = topics.filter((t) => t.depth === 0 && !t.is_misc && t.item_count > 0);
+    if (areas.length > 0) {
+      galaxyContext = `USER'S LIFE AREAS (Brain Galaxy):\n${areas.map((a) => `- ${a.emoji ?? ''} ${a.name} (${a.item_count} items)`).join('\n')}`;
+    }
+  } catch { /* non-critical */ }
+
+  // Inject today's health snapshot for wellbeing questions
+  let healthContext: string | null = null;
+  try {
+    const { getTodayHealthSnapshot } = await import('../db/healthSnapshots');
+    const health = await getTodayHealthSnapshot(db);
+    if (health && (health.steps > 0 || health.sleep_hours)) {
+      const parts = [];
+      if (health.steps > 0) parts.push(`${health.steps.toLocaleString()} steps today`);
+      if (health.sleep_hours) parts.push(`${health.sleep_hours}h sleep last night`);
+      if (health.resting_hr) parts.push(`resting HR ${health.resting_hr} bpm`);
+      if (parts.length > 0) healthContext = `TODAY'S HEALTH:\n${parts.join(', ')}`;
+    }
+  } catch { /* non-critical */ }
+
   const input = [
     `DEVICE CONTEXT (live data — always accurate):\n${deviceInfo}`,
     calendarInfo ? calendarInfo : null,
+    galaxyContext,
+    healthContext,
     `CAPTURED MEMORIES:\n---\n${context}\n---`,
     `Question: ${question}`,
   ].filter(Boolean).join('\n\n');

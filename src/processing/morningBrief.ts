@@ -87,6 +87,27 @@ export async function sendMorningBrief(db: SQLiteDatabase): Promise<void> {
     }
   }
 
+  // Health tip for the morning
+  try {
+    const { getTodayHealthSnapshot } = await import('../db/healthSnapshots');
+    const { generateHealthTip } = await import('./recordLifeContext');
+    const health = await getTodayHealthSnapshot(db);
+    if (health) {
+      const tip = generateHealthTip(health.steps, health.sleep_hours, health.resting_hr);
+      if (tip) parts.push(tip);
+    }
+  } catch { /* non-critical */ }
+
+  // Top Brain Galaxy life area context
+  try {
+    const { listTopics } = await import('../db/brainTopics');
+    const topics = await listTopics(db);
+    const topArea = topics.filter((t) => t.depth === 0 && !t.is_misc).sort((a, b) => b.item_count - a.item_count)[0];
+    if (topArea && topArea.item_count > 5) {
+      parts.push(`Most of your captured memories cluster around ${topArea.name}.`);
+    }
+  } catch { /* non-critical */ }
+
   if (parts.length === 0) {
     parts.push('Your board is clear and you\'re up to date. Good start to the day.');
   }

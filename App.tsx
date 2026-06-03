@@ -44,6 +44,7 @@ export default function App() {
   const [meetingVisible, setMeetingVisible] = useState(false);
   const [notifCenterVisible, setNotifCenterVisible] = useState(false);
   const [wrappedVisible, setWrappedVisible] = useState(false);
+  const [askInitialQuestion, setAskInitialQuestion] = useState<string | undefined>(undefined);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
@@ -429,10 +430,13 @@ export default function App() {
                 />
               </View>
               <View style={{ flex: 1, display: screen === 'dashboard' ? 'flex' : 'none' }}>
-                <DashboardScreen refreshToken={refreshToken} />
+                <DashboardScreen
+                  refreshToken={refreshToken}
+                  onAskAbout={(q) => { setAskInitialQuestion(q); setScreen('ask'); }}
+                />
               </View>
               <View style={{ flex: 1, display: screen === 'ask' ? 'flex' : 'none' }}>
-                <AskScreen />
+                <AskScreen initialQuestion={askInitialQuestion} />
               </View>
               <View style={{ flex: 1, display: screen === 'settings' ? 'flex' : 'none' }}>
                 <SettingsScreen

@@ -41,8 +41,8 @@ const welcomeMessage: ChatMessage = {
   text: 'Ask about today, or name a project, area, or person to explore connected memory. I answer on this device.',
 };
 
-export function AskScreen() {
-  const [question, setQuestion] = useState('');
+export function AskScreen({ initialQuestion }: { initialQuestion?: string } = {}) {
+  const [question, setQuestion] = useState(initialQuestion ?? '');
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
   const [asking, setAsking] = useState(false);
   const [threadId, setThreadId] = useState<number>();

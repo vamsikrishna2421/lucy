@@ -139,7 +139,7 @@ function groupUpdates(updates: CaptureRow[]): Record<number, CaptureRow[]> {
   }, {});
 }
 
-export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
+export function DashboardScreen({ refreshToken, onAskAbout }: { refreshToken: number; onAskAbout?: (question: string) => void }) {
   const [view, setView] = useState<ViewMode>('Timeline');
   const [tab, setTab] = useState<LibraryTab>('Todos');
   const [todos, setTodos] = useState<TodoRow[]>([]);
@@ -230,7 +230,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
         ))}
       </View>
       {view === 'Focus Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} stalenessReviews={stalenessReviews} contextBatch={contextBatch} onStalenessResolved={() => setContextRefresh((v) => v + 1)} /> : null}
-      {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} /> : null}
+      {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} onAskAbout={onAskAbout} /> : null}
       {view === 'Brain' ? (
         <LibraryView
           tab={tab}
@@ -1056,11 +1056,13 @@ function TimelineView({
   moodsByCapture,
   onFeedback,
   onQueued,
+  onAskAbout,
 }: {
   captures: CaptureRow[];
   moodsByCapture: Record<number, string>;
   onFeedback: () => void;
   onQueued?: () => void;
+  onAskAbout?: (question: string) => void;
 }) {
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [feedbackTarget, setFeedbackTarget] = useState<CaptureRow | null>(null);
@@ -1068,6 +1070,7 @@ function TimelineView({
   const [sending, setSending] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<CaptureRow[] | null>(null);
+  const [noteTypeFilter, setNoteTypeFilter] = useState<string | null>(null); // null = all
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [quickText, setQuickText] = useState('');
   const [quickSending, setQuickSending] = useState(false);
@@ -1191,7 +1194,11 @@ function TimelineView({
     })();
   }, [captures]);
 
-  const displayCaptures = searchResults ?? captures;
+  // Apply note-type filter using eagerly-loaded noteTypes map
+  const baseCaptures = searchResults ?? captures;
+  const displayCaptures = noteTypeFilter
+    ? baseCaptures.filter((c) => noteTypes[c.id] === noteTypeFilter)
+    : baseCaptures;
   const groups = groupByDate(displayCaptures);
 
   const submitFeedback = async () => {
@@ -1274,6 +1281,28 @@ function TimelineView({
           </TouchableOpacity>
         ) : null}
       </View>
+
+      {/* Note-type filter chips — only show when there are types to filter by */}
+      {Object.keys(noteTypes).length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }} contentContainerStyle={{ paddingHorizontal: 2, gap: 6, flexDirection: 'row' }}>
+          {(['all', 'thought', 'task', 'idea', 'journal', 'meeting', 'reminder'] as const).map((type) => {
+            const isAll = type === 'all';
+            const isActive = isAll ? !noteTypeFilter : noteTypeFilter === type;
+            const nt = isAll ? null : noteTypeLabel(type as import('../types/extraction').NoteType);
+            return (
+              <TouchableOpacity
+                key={type}
+                style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: isActive ? (nt?.color ?? LUCY_COLORS.primary) : LUCY_COLORS.border, backgroundColor: isActive ? `${nt?.color ?? LUCY_COLORS.primary}18` : 'transparent' }}
+                onPress={() => setNoteTypeFilter(isAll ? null : noteTypeFilter === type ? null : type)}
+              >
+                <Text style={{ color: isActive ? (nt?.color ?? LUCY_COLORS.primary) : LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '700' }}>
+                  {isAll ? 'All' : nt?.label ?? type}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      ) : null}
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {groups.length === 0 ? (
@@ -1479,6 +1508,20 @@ function TimelineView({
             <Text style={styles.actionSheetTitle} numberOfLines={1}>
               {menuTarget?.extracted_title ?? menuTarget?.raw_transcript?.slice(0, 48) ?? 'Memory'}
             </Text>
+            {/* Ask LUCY about this — pre-fills Ask tab with the memory title */}
+            {onAskAbout && menuTarget?.extracted_title ? (
+              <TouchableOpacity
+                style={styles.actionSheetItem}
+                onPress={() => {
+                  const t = menuTarget;
+                  setMenuTarget(null);
+                  onAskAbout(`Tell me more about: "${t?.extracted_title ?? ''}"`);
+                }}
+              >
+                <Text style={[styles.actionSheetIcon, { color: '#60A5FA' }]}>✦</Text>
+                <Text style={styles.actionSheetLabel}>Ask LUCY about this</Text>
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity
               style={styles.actionSheetItem}
               onPress={() => { const t = menuTarget; setMenuTarget(null); setFeedbackText(''); setFeedbackTarget(t); }}

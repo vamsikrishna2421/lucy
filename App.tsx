@@ -490,6 +490,15 @@ export default function App() {
         setOnboardingVisible(false);
         const db = await getDatabase();
         await setSetting(db, 'onboarding_complete', 'true');
+        // Seed demo captures so the board isn't empty on first open
+        try {
+          const { seedDemoDataIfNeeded } = await import('./src/processing/seedDemoData');
+          const seeded = await seedDemoDataIfNeeded(db);
+          if (seeded) {
+            setRefreshToken((v) => v + 1);
+            void drainQueue();
+          }
+        } catch { /* non-critical */ }
       }} />
     </SafeAreaProvider>
   );

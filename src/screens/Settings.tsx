@@ -390,6 +390,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       <Text style={styles.subtitle}>Quiet controls for your memory.</Text>
 
       <View style={styles.list}>
+        <SettingsSectionLabel label="Capture & Notifications" />
         <SettingsRow
           title="Progress check-ins"
           value={checkInEnabled ? 'LUCY reminds you every 2 hours to capture updates' : 'Off — tap to turn on'}
@@ -412,6 +413,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
             }
           }}
         />
+        <SettingsSectionLabel label="Profile" />
         <SettingsRow
           title="About you"
           value={profile.name ? `${profile.name}${profile.about ? ' · ' + profile.about.slice(0, 30) + (profile.about.length > 30 ? '…' : '') : ''}` : 'Tell LUCY who you are'}
@@ -535,6 +537,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           </View>
         </View>
 
+        <SettingsSectionLabel label="Intelligence" />
         <SettingsRow
           title="On-device intelligence"
           value={modelStatus}
@@ -602,8 +605,9 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           }}
           actionLabel="Grant access"
         />
+        <SettingsSectionLabel label="Your Data" />
         <SettingsRow
-          title="LUCY Wrapped"
+          title="🎁 LUCY Wrapped"
           value="Your quarterly story — captures, tasks, people, mood"
           onAction={async () => {
             const db = await getDatabase();
@@ -657,6 +661,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           }}
           actionLabel="Export"
         />
+        <SettingsSectionLabel label="Danger Zone" />
         <SettingsRow
           title="Delete all memories"
           value="Permanently erase everything LUCY knows"
@@ -916,6 +921,14 @@ function panelTitle(panel: SettingsPanel): string {
     case 'privacy': return 'Privacy';
     default: return '';
   }
+}
+
+function SettingsSectionLabel({ label }: { label: string }) {
+  return (
+    <View style={{ paddingHorizontal: 16, paddingTop: 22, paddingBottom: 6 }}>
+      <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase' }}>{label}</Text>
+    </View>
+  );
 }
 
 function SettingsRow({

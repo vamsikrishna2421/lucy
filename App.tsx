@@ -401,7 +401,9 @@ export default function App() {
                     ? (passiveState.noApiKey ? 'No key' : passiveState.mode === 'batch'
                         ? (passiveState.wordsHeard > 0
                             ? `${passiveState.wordsHeard}w · ${passiveState.secondsUntilNextBatch}s`
-                            : `${passiveState.recordingSeconds}s / ${passiveState.secondsUntilNextBatch ?? 30}s`)
+                            : passiveState.secondsUntilNextBatch === 0
+                              ? '⟳'
+                              : `${passiveState.recordingSeconds}s / ${passiveState.secondsUntilNextBatch}s`)
                         : `${passiveState.wordsHeard}w`)
                     : passiveState.status === 'starting' || passiveState.status === 'stopping'
                     ? '...'

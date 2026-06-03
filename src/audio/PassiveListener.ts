@@ -154,25 +154,41 @@ class PassiveListenerManager {
   }
 
   private async startRecordingBatch(): Promise<void> {
+    this.batchStartedAt = Date.now();
+    this.patch({ recordingSeconds: 0, secondsUntilNextBatch: PassiveListenerManager.BATCH_SECONDS });
     try {
-      this.batchStartedAt = Date.now();
-      this.patch({ recordingSeconds: 0, secondsUntilNextBatch: PassiveListenerManager.BATCH_SECONDS });
       this.recorder = new AudioRecorderClass(RecordingPresets.HIGH_QUALITY);
       await this.recorder.prepareToRecordAsync();
       this.recorder.record();
-    } catch { this.patch({ status: 'off', sessionStartedAt: null }); this.active = false; }
+    } catch {
+      // Don't kill the session — the batchTimer will call rotateBatch() again in 30s
+      // which will call startRecordingBatch() to retry. Only kill on repeated failures.
+      this.recorder = null;
+    }
   }
 
   private async rotateBatch(): Promise<void> {
-    if (!this.recorder || !this.active) return;
-    try {
-      await this.recorder.stop();
-      const uri = this.recorder.uri;
-      this.recorder.release?.();
+    if (!this.active) return;
+    let uri: string | null = null;
+    if (this.recorder) {
+      try {
+        // Race against a 4-second timeout — stop() can hang on iOS if the audio
+        // session is in a bad state; without the timeout the batch loop freezes.
+        await Promise.race([
+          this.recorder.stop(),
+          new Promise<void>((_, rej) => setTimeout(() => rej(new Error('stop timeout')), 4000)),
+        ]);
+        uri = this.recorder.uri ?? null;
+      } catch { /* timeout or stop error — proceed with whatever URI we have */ }
+      try { this.recorder.release?.(); } catch { /* ignore */ }
       this.recorder = null;
-      if (uri) void this.transcribeAndProcess(uri);
-    } catch { /* non-critical */ }
-    if (this.active) await this.startRecordingBatch();
+    }
+    if (uri) void this.transcribeAndProcess(uri);
+    if (this.active) {
+      // Brief pause so iOS fully releases the previous audio session before we re-open it.
+      await new Promise<void>((res) => setTimeout(res, 300));
+      await this.startRecordingBatch();
+    }
   }
 
   private async transcribeAndProcess(uri: string): Promise<void> {
@@ -181,7 +197,7 @@ class PassiveListenerManager {
       // A 30s silent clip is ~5-8KB in M4A; speech is typically 100KB+.
       // This prevents wasting Whisper quota on ambient silence or mic noise.
       const info = await FileSystem.getInfoAsync(uri);
-      if (!info.exists || (info.size ?? 0) < 8_000) {
+      if (!info.exists || (info.size ?? 0) < 3_000) {
         FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
         return;
       }

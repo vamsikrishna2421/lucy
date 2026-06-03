@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Modal, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text } from 'react-native';
 
 export function SplashAnimation({ fadeAnim, visible }: { fadeAnim: Animated.Value; visible: boolean }) {
-  const scale  = useRef(new Animated.Value(0.82)).current;
-  const opIn   = useRef(new Animated.Value(0)).current;
+  const scale     = useRef(new Animated.Value(0.82)).current;
+  const opIn      = useRef(new Animated.Value(0)).current;
   const taglineOp = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -16,28 +16,31 @@ export function SplashAnimation({ fadeAnim, visible }: { fadeAnim: Animated.Valu
     ]).start();
   }, []);
 
+  if (!visible) return null;
+
   return (
-    <Modal transparent animationType="none" visible={visible} statusBarTranslucent>
-      <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-        <Animated.View style={{ opacity: opIn, transform: [{ scale }], alignItems: 'center' }}>
-          <Text style={styles.lucyText}>
-            LUC<Text style={styles.lucyY}>Y</Text>
-          </Text>
-          <Animated.Text style={[styles.tagline, { opacity: taglineOp }]}>
-            Listen · Understand · Connect · Yield
-          </Animated.Text>
-        </Animated.View>
+    // Absolutely positioned — never participates in flex layout, never blocks touches when faded
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]} pointerEvents="none">
+      <Animated.View style={{ opacity: opIn, transform: [{ scale }], alignItems: 'center' }}>
+        <Text style={styles.lucyText}>
+          LUC<Text style={styles.lucyY}>Y</Text>
+        </Text>
+        <Animated.Text style={[styles.tagline, { opacity: taglineOp }]}>
+          Listen · Understand · Connect · Yield
+        </Animated.Text>
       </Animated.View>
-    </Modal>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: '#0F0E0B',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 999,
   },
   lucyText: {
     fontSize: 80,

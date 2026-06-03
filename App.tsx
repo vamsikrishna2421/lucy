@@ -459,8 +459,15 @@ export default function App() {
             <TouchableOpacity
               key={tab.key}
               style={styles.bottomTab}
-              onPress={() => setScreen(tab.key)}
+              onPress={() => {
+                if (screen !== tab.key) {
+                  void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {});
+                  setScreen(tab.key);
+                }
+              }}
             >
+              {/* Active indicator pill */}
+              <View style={[styles.tabActivePill, screen === tab.key && styles.tabActivePillVisible]} />
               <Text style={[styles.bottomTabIcon, screen === tab.key && styles.bottomTabIconActive]}>
                 {tab.icon}
               </Text>
@@ -536,7 +543,9 @@ const styles = StyleSheet.create({
     borderTopColor: LUCY_COLORS.border,
     paddingBottom: 4,
   },
-  bottomTab: { flex: 1, alignItems: 'center', paddingVertical: 10, gap: 3 },
+  bottomTab: { flex: 1, alignItems: 'center', paddingVertical: 10, gap: 3, position: 'relative' },
+  tabActivePill: { position: 'absolute', top: 0, width: 28, height: 3, borderRadius: 2, backgroundColor: 'transparent' },
+  tabActivePillVisible: { backgroundColor: LUCY_COLORS.primary },
   bottomTabIcon: { fontSize: 20, color: LUCY_COLORS.textSubtle },
   bottomTabIconActive: { color: LUCY_COLORS.primary },
   bottomTabLabel: { fontSize: 11, fontWeight: '600', color: LUCY_COLORS.textSubtle },

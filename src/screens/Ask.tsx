@@ -30,6 +30,39 @@ import { detectAutomationIntent, executeAction, type ExtractedAction } from '../
 
 const exampleQuestion = 'What tasks and deadlines need my attention today?';
 
+/** Compact animated dots — replaces "Looking through memory..." static text. */
+function OrganizingDotsInline() {
+  const dots = [useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current];
+  useEffect(() => {
+    const anims = dots.map((a, i) =>
+      Animated.loop(Animated.sequence([
+        Animated.delay(i * 180),
+        Animated.timing(a, { toValue: 1, duration: 400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(a, { toValue: 0, duration: 400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.delay((2 - i) * 180),
+      ]))
+    );
+    Animated.parallel(anims).start();
+    return () => anims.forEach((a) => a.stop());
+  }, []);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      {dots.map((a, i) => (
+        <Animated.View key={i} style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: LUCY_COLORS.primary, opacity: a.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] }), transform: [{ scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.2] }) }] }} />
+      ))}
+      <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginLeft: 4 }}>Searching your memory</Text>
+    </View>
+  );
+}
+const QUICK_QUESTIONS = [
+  'What do I need to do today?',
+  'What have I been stressed about lately?',
+  'Who should I follow up with?',
+  'What ideas have I had recently?',
+  'How has my mood been this week?',
+  'What expenses did I capture?',
+];
+
 type ChatMessage =
   | { id: string; role: 'lucy'; text: string; answer?: undefined }
   | { id: string; role: 'lucy'; text?: undefined; answer: LucyAnswer }
@@ -274,14 +307,23 @@ export function AskScreen({ initialQuestion }: { initialQuestion?: string } = {}
           >
             {messages.map((message) => <MessageBubble key={message.id} message={message} />)}
             {messages.length === 1 ? (
-              <TouchableOpacity style={styles.suggestion} onPress={() => void ask(exampleQuestion)}>
-                <Text style={styles.suggestionLabel}>SUGGESTED QUESTION</Text>
-                <Text style={styles.suggestionText}>{exampleQuestion}</Text>
-              </TouchableOpacity>
+              <View style={{ gap: 8, paddingTop: 8 }}>
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, paddingHorizontal: 4 }}>QUICK QUESTIONS</Text>
+                {QUICK_QUESTIONS.map((q) => (
+                  <TouchableOpacity
+                    key={q}
+                    style={styles.suggestion}
+                    onPress={() => { setQuestion(q); void ask(q); }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.suggestionText}>{q}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             ) : null}
             {asking ? (
               <View style={[styles.bubble, styles.lucyBubble]}>
-                <Text style={styles.thinking}>Looking through memory...</Text>
+                <OrganizingDotsInline />
               </View>
             ) : null}
           </ScrollView>
@@ -756,7 +798,7 @@ const styles = StyleSheet.create({
   userBubble: { alignSelf: 'flex-end', backgroundColor: LUCY_COLORS.primarySoft, borderColor: '#62311C', borderBottomRightRadius: 5 },
   lucyText: { color: LUCY_COLORS.textDark, fontSize: 14, lineHeight: 20 },
   userText: { color: LUCY_COLORS.textDark, fontSize: 14, lineHeight: 20 },
-  suggestion: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 17, padding: 13, marginTop: 2 },
+  suggestion: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderTopColor: '#3A3028', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, marginTop: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.18, shadowRadius: 3, elevation: 2 },
   suggestionLabel: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 7 },
   suggestionText: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 19 },
   thinking: { color: LUCY_COLORS.textMuted, fontSize: 14 },

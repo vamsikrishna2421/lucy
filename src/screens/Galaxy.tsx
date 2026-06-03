@@ -17,6 +17,7 @@ import {
   moveTopicItem, renameTopic, type BrainTopicRow,
 } from '../db/brainTopics';
 import { haptic } from '../config/haptics';
+import { StoryView, type StorySubject } from './StoryView';
 
 // ─── Stack ────────────────────────────────────────────────────────────────────
 
@@ -149,6 +150,7 @@ export function GalaxyView() {
   const [showSeed, setShowSeed] = useState(false);
   const [addingTopic, setAddingTopic] = useState(false);
   const [newTopicName, setNewTopicName] = useState('');
+  const [storySubject, setStorySubject] = useState<StorySubject | null>(null);
 
   const current = stack[stack.length - 1];
   const push = (frame: GalaxyFrame) => { haptic.tab(); setStack((s) => [...s, frame]); };
@@ -302,10 +304,19 @@ export function GalaxyView() {
   return (
     <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
       {/* Breadcrumb back button */}
-      <TouchableOpacity style={styles.backRow} onPress={pop}>
-        <Text style={styles.backChevron}>‹</Text>
-        <Text style={styles.backLabel}>{stack.length > 2 ? stack[stack.length - 2]?.kind === 'topic' ? (stack[stack.length - 2] as { name: string }).name : 'Galaxy' : 'Galaxy'}</Text>
-      </TouchableOpacity>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 16 }}>
+        <TouchableOpacity style={styles.backRow} onPress={pop}>
+          <Text style={styles.backChevron}>‹</Text>
+          <Text style={styles.backLabel}>{stack.length > 2 ? stack[stack.length - 2]?.kind === 'topic' ? (stack[stack.length - 2] as { name: string }).name : 'Galaxy' : 'Galaxy'}</Text>
+        </TouchableOpacity>
+        {/* "View story" — opens StoryView for this topic name */}
+        <TouchableOpacity
+          onPress={() => setStorySubject({ kind: 'topic', name: current.kind === 'topic' ? current.name : '', emoji: '◆' })}
+          style={{ paddingVertical: 6, paddingHorizontal: 10, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 10 }}
+        >
+          <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '700' }}>View story ›</Text>
+        </TouchableOpacity>
+      </View>
 
       <FlatList
         data={[...children]}
@@ -332,7 +343,7 @@ export function GalaxyView() {
             <Text style={styles.topicChevron}>›</Text>
           </TouchableOpacity>
         )}
-        ListFooterComponent={<TopicItemList topicId={current.topicId} />}
+        ListFooterComponent={<TopicItemList topicId={current.topicId} onOpenStory={setStorySubject} />}
       />
 
       {/* Add sub-topic */}
@@ -362,13 +373,14 @@ export function GalaxyView() {
           </TouchableOpacity>
         )}
       </View>
+      <StoryView subject={storySubject} visible={storySubject !== null} onClose={() => setStorySubject(null)} />
     </Animated.View>
   );
 }
 
 // ─── Items list inside a topic ────────────────────────────────────────────────
 
-function TopicItemList({ topicId }: { topicId: number }) {
+function TopicItemList({ topicId, onOpenStory }: { topicId: number; onOpenStory: (s: StorySubject) => void }) {
   const { items, loading } = useTopicItems(topicId);
   if (loading) return <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, padding: 16 }}>Loading…</Text>;
   if (items.length === 0) return null;
@@ -376,11 +388,21 @@ function TopicItemList({ topicId }: { topicId: number }) {
     <View>
       <Text style={[styles.sectionLabel, { marginTop: 16 }]}>ITEMS</Text>
       {items.map((item) => (
-        <View key={`${item.table_name}-${item.row_id}`} style={styles.itemRow}>
+        <TouchableOpacity
+          key={`${item.table_name}-${item.row_id}`}
+          style={styles.itemRow}
+          activeOpacity={item.table_name === 'captures' ? 0.75 : 1}
+          onPress={() => {
+            // Captures → open Story View for the topic name (topic-level narrative)
+            if (item.table_name === 'captures') {
+              // Nothing yet — future: open single capture detail
+            }
+          }}
+        >
           <Text style={styles.itemTableBadge}>{item.table_name.toUpperCase()}</Text>
           <Text style={styles.itemLabel} numberOfLines={2}>{item.label}</Text>
           {item.subtitle ? <Text style={styles.itemSub} numberOfLines={1}>{item.subtitle}</Text> : null}
-        </View>
+        </TouchableOpacity>
       ))}
     </View>
   );

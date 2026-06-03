@@ -361,8 +361,10 @@ export default function App() {
                 <View style={[styles.listenDot, passiveState.status === 'listening' && styles.listenDotActive]} />
                 <Text style={[styles.listenText, passiveState.status === 'listening' && styles.listenTextActive]}>
                   {passiveState.status === 'listening'
-                    ? (passiveState.noApiKey ? 'No key' : passiveState.mode === 'batch' && passiveState.wordsHeard === 0
-                        ? `Rec ${passiveState.recordingSeconds}s`
+                    ? (passiveState.noApiKey ? 'No key' : passiveState.mode === 'batch'
+                        ? (passiveState.wordsHeard > 0
+                            ? `${passiveState.wordsHeard}w · ${passiveState.secondsUntilNextBatch}s`
+                            : `${passiveState.recordingSeconds}s / ${passiveState.secondsUntilNextBatch ?? 30}s`)
                         : `${passiveState.wordsHeard}w`)
                     : passiveState.status === 'starting' || passiveState.status === 'stopping'
                     ? '...'

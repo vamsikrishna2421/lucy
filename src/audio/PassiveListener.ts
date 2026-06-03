@@ -32,8 +32,10 @@ export interface PassiveListenerState {
   status: ListeningStatus;
   wordsHeard: number;
   sessionStartedAt: number | null;
-  /** Seconds elapsed since recording started (batch mode only). Updates every second. */
+  /** Seconds elapsed in the CURRENT batch (resets on every rotation). */
   recordingSeconds: number;
+  /** Seconds until the current batch is sent for transcription. */
+  secondsUntilNextBatch: number;
   /** Whether this session uses on-device STT or batch+Whisper */
   mode: 'stt' | 'batch' | 'none';
   /** True when API key is missing and word count will never update */
@@ -41,10 +43,15 @@ export interface PassiveListenerState {
 }
 
 class PassiveListenerManager {
+  /** Batch duration in seconds — shorter = more responsive, more Whisper calls. */
+  private static readonly BATCH_SECONDS = 30; // was 10 min; 30s = <45s end-to-end
+
   private state: PassiveListenerState = {
     status: 'off', wordsHeard: 0, sessionStartedAt: null,
-    recordingSeconds: 0, mode: 'none', noApiKey: false,
+    recordingSeconds: 0, secondsUntilNextBatch: PassiveListenerManager.BATCH_SECONDS,
+    mode: 'none', noApiKey: false,
   };
+  private batchStartedAt = 0;
   private stateListeners: Array<(s: PassiveListenerState) => void> = [];
   private recorder: RecorderInstance | null = null;
   private batchTimer: ReturnType<typeof setInterval> | null = null;
@@ -111,12 +118,15 @@ class PassiveListenerManager {
     } else {
       this.patch({ mode: 'batch', noApiKey });
       await this.startRecordingBatch();
-      // 10-minute batches: large enough to capture a meaningful chunk,
-      // short enough to process promptly. Stopping early triggers immediate processing.
-      this.batchTimer = setInterval(() => void this.rotateBatch(), 10 * 60 * 1000);
-      // Tick recording seconds every second so the UI can show progress
+      // 30-second batches → <45s end-to-end (Whisper ~3-8s + extraction ~2-4s).
+      // Short batches mean more API calls but dramatically better responsiveness.
+      // Stopping early still processes the partial batch immediately (see stop()).
+      this.batchTimer = setInterval(() => void this.rotateBatch(), PassiveListenerManager.BATCH_SECONDS * 1000);
+      // Tick every second: update elapsed time and countdown to next batch
       this.secondTimer = setInterval(() => {
-        this.patch({ recordingSeconds: this.state.recordingSeconds + 1 });
+        const elapsed = Math.floor((Date.now() - this.batchStartedAt) / 1000);
+        const remaining = Math.max(0, PassiveListenerManager.BATCH_SECONDS - elapsed);
+        this.patch({ recordingSeconds: elapsed, secondsUntilNextBatch: remaining });
       }, 1000);
     }
     this.patch({ status: 'listening' });
@@ -145,6 +155,8 @@ class PassiveListenerManager {
 
   private async startRecordingBatch(): Promise<void> {
     try {
+      this.batchStartedAt = Date.now();
+      this.patch({ recordingSeconds: 0, secondsUntilNextBatch: PassiveListenerManager.BATCH_SECONDS });
       this.recorder = new AudioRecorderClass(RecordingPresets.HIGH_QUALITY);
       await this.recorder.prepareToRecordAsync();
       this.recorder.record();
@@ -165,11 +177,24 @@ class PassiveListenerManager {
 
   private async transcribeAndProcess(uri: string): Promise<void> {
     try {
+      // Silence guard: skip Whisper if the file is too small (< 8KB ≈ <1s of audio).
+      // A 30s silent clip is ~5-8KB in M4A; speech is typically 100KB+.
+      // This prevents wasting Whisper quota on ambient silence or mic noise.
+      const info = await FileSystem.getInfoAsync(uri);
+      if (!info.exists || (info.size ?? 0) < 8_000) {
+        FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+        return;
+      }
+
       const text = await transcribeAudioFile(uri);
-      if (text && text.split(/\s+/).length >= 5) {
+      if (text && text.split(/\s+/).length >= 3) {
         this.transcriptAccumulator.push(text); // accumulate for Meeting Mode
         await enqueueTranscript(text, 'passive', false, this.sessionId);
         this.patch({ wordsHeard: this.state.wordsHeard + text.split(/\s+/).length });
+        // Trigger immediate extraction so the capture appears in <10s total
+        void import('../processing/extract').then(({ processQueue }) =>
+          processQueue(undefined, 1)
+        ).catch(() => {});
       }
     } catch { /* non-critical */ }
     FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});

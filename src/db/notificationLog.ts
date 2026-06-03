@@ -28,7 +28,9 @@ export async function upsertNotifLog(
      ON CONFLICT(identifier) DO UPDATE SET
        title = excluded.title,
        body = excluded.body,
-       scheduled_for = excluded.scheduled_for`,
+       scheduled_for = excluded.scheduled_for,
+       read_at = NULL,
+       dismissed_at = NULL`,
     row.identifier, row.kind, row.tier, row.title, row.body ?? null,
     row.scheduled_for ?? null, row.entity_id ?? null, row.entity_kind ?? null,
   );

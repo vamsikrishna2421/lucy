@@ -101,16 +101,27 @@ export function NotificationCenter({ visible, onClose }: { visible: boolean; onC
 
   useEffect(() => {
     if (visible) {
+      setFilter('all');
       Animated.spring(slideAnim, { toValue: 0, friction: 20, tension: 160, useNativeDriver: true }).start();
       void loadItems();
     } else {
       Animated.timing(slideAnim, { toValue: 800, duration: 220, useNativeDriver: true }).start();
     }
-  }, [visible, filter]);
+  }, [visible]);
+
+  useEffect(() => {
+    if (visible) void loadItems();
+  }, [filter]);
 
   const loadItems = async () => {
-    const db = await getDatabase();
-    setItems(await listNotifLog(db, filter));
+    try {
+      const db = await getDatabase();
+      const rows = await listNotifLog(db, filter);
+      setItems(rows);
+    } catch (e) {
+      console.error('[NotificationCenter] loadItems failed:', e);
+      setItems([]);
+    }
   };
 
   const handleRead = async (id: number) => {

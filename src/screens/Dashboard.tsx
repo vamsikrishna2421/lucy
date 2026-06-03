@@ -229,21 +229,11 @@ export function DashboardScreen({ refreshToken, onAskAbout }: { refreshToken: nu
           </TouchableOpacity>
         ))}
       </View>
-      <View style={{ flex: 1, display: view === 'Focus Now' ? 'flex' : 'none' }}>
-        <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} stalenessReviews={stalenessReviews} contextBatch={contextBatch} onStalenessResolved={() => setContextRefresh((v) => v + 1)} />
-      </View>
-      <View style={{ flex: 1, display: view === 'Timeline' ? 'flex' : 'none' }}>
-        <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} onAskAbout={onAskAbout} />
-      </View>
-      <View style={{ flex: 1, display: view === 'Brain' ? 'flex' : 'none' }}>
-        <LibraryView tab={tab} setTab={setTab} todos={todos} ideas={ideas} expenses={expenses} />
-      </View>
-      <View style={{ flex: 1, display: view === 'Galaxy' ? 'flex' : 'none' }}>
-        <GalaxyView />
-      </View>
-      <View style={{ flex: 1, display: view === 'Health' ? 'flex' : 'none' }}>
-        <HealthView />
-      </View>
+      {view === 'Focus Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} stalenessReviews={stalenessReviews} contextBatch={contextBatch} onStalenessResolved={() => setContextRefresh((v) => v + 1)} /> : null}
+      {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} onAskAbout={onAskAbout} /> : null}
+      {view === 'Brain' ? <LibraryView tab={tab} setTab={setTab} todos={todos} ideas={ideas} expenses={expenses} /> : null}
+      {view === 'Galaxy' ? <GalaxyView /> : null}
+      {view === 'Health' ? <HealthView /> : null}
     </View>
   );
 }
@@ -1247,7 +1237,7 @@ function TimelineView({
   };
 
   return (
-    <>
+    <View style={{ flex: 1 }}>
       {/* Quick capture bar */}
       <View style={styles.tlQuickBar}>
         <TextInput
@@ -1650,7 +1640,7 @@ function TimelineView({
           </Pressable>
         </Modal>
       ) : null}
-    </>
+    </View>
   );
 }
 

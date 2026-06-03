@@ -553,4 +553,17 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
 
   // item_count denormalized triggers (kept in TS — SQLite trigger syntax is fragile in execAsync)
   // Triggers are skipped; item_count is maintained by insertTopicItem / removeTopicItem helpers.
+
+  // ── lucy_notifications column migrations (schema evolved across builds 1.0.95→1.0.101) ──
+  // The table was created without identifier/expired_at/scheduled_for/entity_* columns.
+  // ALTER TABLE is safe to run on every startup — IF NOT EXISTS equivalent via column check.
+  const notifCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(lucy_notifications)');
+  if (notifCols.length > 0) {
+    const nc = new Set(notifCols.map((c) => c.name));
+    if (!nc.has('identifier'))    await db.execAsync('ALTER TABLE lucy_notifications ADD COLUMN identifier TEXT;');
+    if (!nc.has('scheduled_for')) await db.execAsync('ALTER TABLE lucy_notifications ADD COLUMN scheduled_for DATETIME;');
+    if (!nc.has('entity_id'))     await db.execAsync('ALTER TABLE lucy_notifications ADD COLUMN entity_id TEXT;');
+    if (!nc.has('entity_kind'))   await db.execAsync('ALTER TABLE lucy_notifications ADD COLUMN entity_kind TEXT;');
+    if (!nc.has('expired_at'))    await db.execAsync('ALTER TABLE lucy_notifications ADD COLUMN expired_at DATETIME;');
+  }
 }

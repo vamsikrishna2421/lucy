@@ -357,7 +357,7 @@ export default function App() {
                 onPress={() => setNotifCenterVisible(true)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text style={[styles.bellIcon, unreadNotifCount > 0 && { color: LUCY_COLORS.primary }]}>◌</Text>
+                <Text style={[styles.bellIcon, unreadNotifCount > 0 && { color: LUCY_COLORS.primary }]}>🔔</Text>
                 {unreadNotifCount > 0 ? (
                   <View style={styles.bellBadge}>
                     <Text style={styles.bellBadgeText}>{unreadNotifCount > 9 ? '9+' : String(unreadNotifCount)}</Text>

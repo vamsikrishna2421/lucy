@@ -222,7 +222,9 @@ function CategoryModal({
   const { height: screenHeight } = useWindowDimensions();
   // Pixel budget: sheet is capped at 80% of screen. Header ~78px, add-bar ~70px.
   // Give the ScrollView the remaining space so it reliably scrolls on all devices.
-  const listMaxHeight = Math.max(100, Math.round(screenHeight * 0.8) - 78 - 70);
+  // Sheet is capped by backdrop (full screen). Header≈78px, addBar≈58px, handle≈8px.
+  // Use 70% of screen so there's room on small phones too.
+  const listMaxHeight = Math.max(150, Math.round(screenHeight * 0.70) - 78 - 58);
 
   return (
     <Modal transparent animationType="none" visible onRequestClose={close}>

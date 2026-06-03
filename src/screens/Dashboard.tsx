@@ -677,17 +677,6 @@ function NowView({
       {/* Weekly life context — travel timeline + health */}
       <WeeklyLifeWidget />
 
-      {/* Only show the simple context banner when there are few requests (≤ 3).
-          When there are more, the ContextBatchCard further down handles it. */}
-      {contextCount > 0 && !contextBatch ? (
-        <TouchableOpacity style={styles.contextPrompt} onPress={onOpenContext}>
-          <Text style={styles.eyebrow}>NEEDS CONTEXT</Text>
-          <Text style={styles.contextPromptTitle}>
-            {contextCount} memory detail{contextCount === 1 ? '' : 's'} could become clearer
-          </Text>
-          <Text style={styles.tonightDetail}>Add a little context when you have time. LUCY keeps your original thought unchanged.</Text>
-        </TouchableOpacity>
-      ) : null}
       {/* Staleness reviews — shown before Follow-ups so the user cleans house first */}
       {stalenessReviews.length > 0 ? (
         <>
@@ -700,14 +689,6 @@ function NowView({
             />
           ))}
         </>
-      ) : null}
-
-      {/* Batched context overflow — replaces the raw count banner when > 3 */}
-      {contextBatch ? (
-        <ContextBatchCard
-          batch={contextBatch}
-          onDone={() => onStalenessResolved?.()}
-        />
       ) : null}
 
       {followUps.length > 0 ? (
@@ -728,6 +709,28 @@ function NowView({
       {unscheduledCount ? <Text style={styles.pendingHint}>{unscheduledCount} captured reminder{unscheduledCount === 1 ? '' : 's'} need a specific time.</Text> : null}
       <SectionTitle title="Focus" />
       {todos.length ? todos.map((item) => <Card key={item.id} title={item.task} detail={`${item.category} / ${item.urgency}`} privacy={item.privacy_level} />) : <EmptyLine text="Capture a task and it will appear here." />}
+
+      {/* Needs Context — moved to bottom so it doesn't clutter the main focus.
+          Shows only when there are unanswered clarification requests. */}
+      {contextCount > 0 && !contextBatch ? (
+        <View style={{ marginTop: 10 }}>
+          <SectionTitle title="Needs Context" />
+          <TouchableOpacity style={styles.contextPrompt} onPress={onOpenContext}>
+            <Text style={styles.contextPromptTitle}>
+              {contextCount > 5
+                ? `${contextCount} memories could be clearer — tap to answer one`
+                : `${contextCount} memory detail${contextCount === 1 ? '' : 's'} could become clearer`}
+            </Text>
+            <Text style={styles.tonightDetail}>Add context when you have time. LUCY keeps your original thought unchanged.</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      {contextBatch ? (
+        <View style={{ marginTop: 10 }}>
+          <SectionTitle title="Needs Context" />
+          <ContextBatchCard batch={contextBatch} onDone={() => onStalenessResolved?.()} />
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -857,6 +860,8 @@ function TimelineView({
   const [llmActions, setLlmActions] = useState<Record<number, import('../processing/automationEngine').ExtractedAction>>({});
   // Extraction chips: map from capture_id → parsed ExtractionResult (loaded lazily on expand)
   const [extractionChips, setExtractionChips] = useState<Record<number, import('../types/extraction').ExtractionResult>>({});
+  // note_type badges loaded eagerly for all visible captures (single cheap JSON parse)
+  const [noteTypes, setNoteTypes] = useState<Record<number, string>>({});
 
   const runReprocess = async (capture: CaptureRow) => {
     const db = await getDatabase();
@@ -922,12 +927,12 @@ function TimelineView({
     }, 300);
   };
 
-  // Load LLM-detected actions from the DB whenever captures change.
-  // We do this lazily so it never blocks the timeline render.
+  // Load LLM-detected actions + note_types from DB whenever captures change.
   useEffect(() => {
     void (async () => {
       try {
         const db = await getDatabase();
+        // LLM action cards
         const rows = await db.getAllAsync<{ capture_id: number; action_json: string }>(
           'SELECT capture_id, action_json FROM pending_actions',
         );
@@ -941,6 +946,28 @@ function TimelineView({
           } catch { /* skip malformed */ }
         }
         setLlmActions(map);
+        // Eagerly load note_type for all visible captures — single cheap query,
+        // so the IDEA/THOUGHT/JOURNAL badge shows without needing to expand the card.
+        if (captures.length > 0) {
+          const ids = captures.filter((c) => c.processed === 1).map((c) => c.id);
+          if (ids.length > 0) {
+            const eRows = await db.getAllAsync<{ capture_id: number; structured_json: string }>(
+              `SELECT e.capture_id, e.structured_json FROM extractions e
+               INNER JOIN (SELECT capture_id, MAX(id) AS eid FROM extractions GROUP BY capture_id) latest
+               ON latest.eid = e.id
+               WHERE e.capture_id IN (${ids.map(() => '?').join(',')})`,
+              ...ids,
+            );
+            const ntMap: Record<number, string> = {};
+            for (const r of eRows) {
+              try {
+                const p = JSON.parse(r.structured_json) as { note_type?: string };
+                if (p.note_type) ntMap[r.capture_id] = p.note_type;
+              } catch { /* skip */ }
+            }
+            setNoteTypes(ntMap);
+          }
+        }
       } catch { /* non-critical */ }
     })();
   }, [captures]);
@@ -1103,7 +1130,9 @@ function TimelineView({
                       {(() => {
                         const src = sourceLabel(item.source);
                         const extraction = extractionChips[item.id] ?? null;
-                        const nt = noteTypeLabel(extraction?.note_type);
+                        // Use eagerly-loaded noteTypes first; fall back to expanded extraction
+                        const rawNoteType = noteTypes[item.id] ?? extraction?.note_type;
+                        const nt = noteTypeLabel(rawNoteType as import('../types/extraction').NoteType | undefined);
                         return (
                           <View style={styles.tlCardHeaderRow}>
                             {/* Source glyph + label */}

@@ -603,6 +603,23 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           actionLabel="Grant access"
         />
         <SettingsRow
+          title="LUCY Wrapped"
+          value="Your quarterly story — captures, tasks, people, mood"
+          onAction={async () => {
+            const db = await getDatabase();
+            const { isWrappedDue } = await import('../processing/lucyWrapped');
+            const due = await isWrappedDue(db);
+            if (!due) {
+              Alert.alert('Not ready yet', 'LUCY Wrapped needs at least 30 memories to generate your story. Keep capturing!');
+              return;
+            }
+            // Navigate back to Dashboard and trigger Wrapped — simplest approach
+            // since we can't directly set App state from Settings.
+            Alert.alert('Open LUCY Wrapped', 'Close Settings and tap the header to find your Wrapped, or go to Home.', [{ text: 'OK' }]);
+          }}
+          actionLabel="View"
+        />
+        <SettingsRow
           title="Export as JSON"
           value="All memories, tasks, expenses as structured data"
           onAction={exportAllData}

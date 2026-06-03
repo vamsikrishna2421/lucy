@@ -29,6 +29,7 @@ import { CaptureScreen } from './src/screens/Capture';
 import { DashboardScreen } from './src/screens/Dashboard';
 import { AskScreen } from './src/screens/Ask';
 import { SettingsScreen } from './src/screens/Settings';
+import { LucyWrapped } from './src/components/LucyWrapped';
 import { ConnectorsScreen } from './src/screens/Connectors';
 import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
 
@@ -42,6 +43,7 @@ export default function App() {
   const [passiveState, setPassiveState] = useState<PassiveListenerState>(passiveListener.getState());
   const [meetingVisible, setMeetingVisible] = useState(false);
   const [notifCenterVisible, setNotifCenterVisible] = useState(false);
+  const [wrappedVisible, setWrappedVisible] = useState(false);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
@@ -138,6 +140,13 @@ export default function App() {
 
         setReady(true);
         void drainQueue();
+        // Check if LUCY Wrapped is due (quarterly, ≥30 captures)
+        void (async () => {
+          try {
+            const { isWrappedDue } = await import('./src/processing/lucyWrapped');
+            if (await isWrappedDue(db)) setTimeout(() => setWrappedVisible(true), 2000);
+          } catch { /* non-critical */ }
+        })();
         // Show onboarding for first-time users
         const hasOnboarded = await getSetting(db, 'onboarding_complete');
         if (!hasOnboarded) setOnboardingVisible(true);
@@ -464,6 +473,7 @@ export default function App() {
       />
       <SplashAnimation fadeAnim={splashFade} visible={showSplash} />
       <MeetingMode visible={meetingVisible} onClose={() => setMeetingVisible(false)} />
+      <LucyWrapped visible={wrappedVisible} onClose={() => setWrappedVisible(false)} />
       <NotificationCenter
         visible={notifCenterVisible}
         onClose={() => {

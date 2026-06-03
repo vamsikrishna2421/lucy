@@ -13,7 +13,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.62",
+      "buildNumber": "1.0.63",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
@@ -39,7 +39,31 @@
         "NSCalendarsUsageDescription": "LUCY reads your calendar to send pre-meeting briefs and help you prepare — all data stays on your device.",
         "NSLocationWhenInUseUsageDescription": "LUCY uses your location to add context to your daily brief and answer location questions — never shared externally.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "LUCY records your city-level location (~1 mile precision) once per hour to build your personal travel timeline — never precise GPS, never shared externally.",
-        "NSLocationAlwaysUsageDescription": "LUCY records your city-level location once per hour for your travel timeline. Data stays on your device."
+        "NSLocationAlwaysUsageDescription": "LUCY records your city-level location once per hour for your travel timeline. Data stays on your device.",
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "Text Document",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": [
+              "public.plain-text",
+              "public.utf8-plain-text",
+              "net.daringfireball.markdown",
+              "public.text"
+            ]
+          }
+        ],
+        "UTImportedTypeDeclarations": [
+          {
+            "UTTypeIdentifier": "net.daringfireball.markdown",
+            "UTTypeDescription": "Markdown",
+            "UTTypeConformsTo": ["public.plain-text"],
+            "UTTypeTagSpecification": {
+              "public.filename-extension": ["md", "markdown"],
+              "public.mime-type": "text/markdown"
+            }
+          }
+        ]
       }
     },
     "android": {
@@ -50,7 +74,18 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.anonymous.lucy",
-      "versionCode": 17,
+      "versionCode": 18,
+      "intentFilters": [
+        {
+          "action": "SEND",
+          "data": [
+            {"mimeType": "text/plain"},
+            {"mimeType": "text/markdown"},
+            {"mimeType": "text/*"}
+          ],
+          "category": ["DEFAULT"]
+        }
+      ],
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.INTERNET",
@@ -87,7 +122,9 @@
           "android": {
             "enabled": true,
             "singleShareMimeTypes": [
-              "text/plain"
+              "text/plain",
+              "text/markdown",
+              "text/*"
             ]
           }
         }

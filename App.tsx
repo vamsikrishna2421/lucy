@@ -48,6 +48,8 @@ export default function App() {
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+  const [shareToast, setShareToast] = useState<string | null>(null);
+  const shareToastAnim = useRef(new Animated.Value(0)).current;
   const splashFade = useRef(new Animated.Value(1)).current;
   const processing = useRef(false);
   const queueRequested = useRef(false);
@@ -236,9 +238,20 @@ export default function App() {
         recentShare.current = { text: sharedText, receivedAt: Date.now() };
         await enqueueTranscript(sharedText, Platform.OS === 'ios' ? 'ios' : 'android');
         clearSharedPayloads();
-        setScreen('capture');
+        // Navigate to Timeline so the user can see their capture appear
+        setScreen('dashboard');
         setRefreshToken((value) => value + 1);
         void drainQueue();
+        // Show a brief confirmation banner
+        const label = payloads[0] ? ((payloads[0] as Record<string, unknown>).originalName as string | undefined) ?? null : null;
+        const toastMsg = label ? `"${label}" captured` : 'Shared content captured';
+        setShareToast(toastMsg);
+        shareToastAnim.setValue(0);
+        Animated.sequence([
+          Animated.timing(shareToastAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
+          Animated.delay(2400),
+          Animated.timing(shareToastAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+        ]).start(() => setShareToast(null));
       } finally {
         receivingShare.current = false;
       }
@@ -405,6 +418,13 @@ export default function App() {
               ⚠ Listen mode is recording but cannot transcribe — add an OpenAI key in Settings → Remote intelligence.
             </Text>
           </View>
+        ) : null}
+        {shareToast ? (
+          <Animated.View style={{ opacity: shareToastAnim, transform: [{ translateY: shareToastAnim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) }], backgroundColor: 'rgba(110,231,183,0.14)', borderBottomWidth: 1, borderBottomColor: 'rgba(110,231,183,0.3)', paddingHorizontal: 16, paddingVertical: 8 }}>
+            <Text style={{ color: '#6EE7B7', fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
+              ✓ {shareToast} — organizing…
+            </Text>
+          </Animated.View>
         ) : null}
         <View style={styles.container}>
           {startupError ? <Text style={styles.error}>{startupError}</Text> : null}

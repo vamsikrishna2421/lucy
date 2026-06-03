@@ -279,6 +279,20 @@ async function persistExtraction(
 
   writeVaultNote(capture.id, extraction, capture.raw_transcript, capture.source, capture.created_at);
 
+  // Brain Galaxy: classify the capture and its extracted items into the topic tree.
+  // Fire-and-forget so it never blocks the critical extraction path.
+  if (extraction.privacy_level === 'normal') {
+    void (async () => {
+      try {
+        const { classifyItem } = await import('./brainClassify');
+        const text = extraction.title !== 'Untitled capture'
+          ? `${extraction.title}. ${extraction.summary}`
+          : capture.raw_transcript ?? '';
+        await classifyItem(db, 'captures', capture.id, text);
+      } catch { /* non-critical */ }
+    })();
+  }
+
   for (const row of reminderRows) {
     try {
       const notificationId = await scheduleCapturedReminder(row.reminder, extraction.privacy_level, capture.raw_transcript);

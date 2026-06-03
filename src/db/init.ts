@@ -491,5 +491,66 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_capture_embeddings_capture ON capture_embeddings(capture_id);
     CREATE INDEX IF NOT EXISTS idx_mood_entries_created ON mood_entries(created_at);
     CREATE INDEX IF NOT EXISTS idx_person_contexts_name ON person_contexts(name);
+
+    -- ── Brain Galaxy ──────────────────────────────────────────────────────────
+    -- Self-referencing topic tree. depth=0 = Life Area, depth=1 = Topic, depth=2+ = Sub-topic.
+    -- path is the full ancestry chain (e.g. "1/4/12/") for O(1) subtree queries.
+    CREATE TABLE IF NOT EXISTS brain_topics (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      parent_id     INTEGER REFERENCES brain_topics(id) ON DELETE SET NULL,
+      depth         INTEGER NOT NULL DEFAULT 0,
+      path          TEXT NOT NULL DEFAULT '',
+      name          TEXT NOT NULL,
+      emoji         TEXT,
+      description   TEXT,
+      color_hint    TEXT,
+      is_misc       INTEGER DEFAULT 0,
+      is_archived   INTEGER DEFAULT 0,
+      item_count    INTEGER DEFAULT 0,
+      created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_brain_topics_parent ON brain_topics(parent_id);
+    CREATE INDEX IF NOT EXISTS idx_brain_topics_path   ON brain_topics(path);
+    CREATE INDEX IF NOT EXISTS idx_brain_topics_depth  ON brain_topics(depth, is_archived);
+
+    -- Polymorphic join: any extracted artifact → topic
+    CREATE TABLE IF NOT EXISTS topic_items (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      topic_id      INTEGER NOT NULL REFERENCES brain_topics(id) ON DELETE CASCADE,
+      table_name    TEXT NOT NULL,
+      row_id        INTEGER NOT NULL,
+      confidence    REAL DEFAULT 1.0,
+      classified_by TEXT DEFAULT 'user',
+      created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(table_name, row_id, topic_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_topic_items_topic ON topic_items(topic_id, table_name);
+    CREATE INDEX IF NOT EXISTS idx_topic_items_row   ON topic_items(table_name, row_id);
+
+    -- LLM-proposed merge candidates between similar topics
+    CREATE TABLE IF NOT EXISTS topic_merge_proposals (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      topic_a_id      INTEGER NOT NULL REFERENCES brain_topics(id) ON DELETE CASCADE,
+      topic_b_id      INTEGER NOT NULL REFERENCES brain_topics(id) ON DELETE CASCADE,
+      similarity_score REAL NOT NULL,
+      reason          TEXT,
+      status          TEXT DEFAULT 'pending',
+      created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+      resolved_at     DATETIME
+    );
+    CREATE INDEX IF NOT EXISTS idx_merge_proposals_status ON topic_merge_proposals(status, created_at);
+
+    -- One-time seeding run record
+    CREATE TABLE IF NOT EXISTS topic_seeding_runs (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+      capture_count INTEGER,
+      proposed_json TEXT,
+      status        TEXT DEFAULT 'pending'
+    );
   `);
+
+  // item_count denormalized triggers (kept in TS — SQLite trigger syntax is fragile in execAsync)
+  // Triggers are skipped; item_count is maintained by insertTopicItem / removeTopicItem helpers.
 }

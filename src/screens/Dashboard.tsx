@@ -16,6 +16,7 @@ import { protectedPreview } from '../processing/privacy';
 import { organizeMemory } from '../processing/organizer';
 import { enqueueTranscript } from '../processing/extract';
 import { archiveTodo } from '../db/todos';
+import { GalaxyView } from './Galaxy';
 import { StalenessReviewCard, ContextBatchCard } from '../components/StalenessReviewCard';
 import {
   ensureStalenessTable,
@@ -26,7 +27,7 @@ import {
   type ContextBatch,
 } from '../processing/stalenessEngine';
 
-type ViewMode = 'Focus Now' | 'Timeline' | 'Brain';
+type ViewMode = 'Focus Now' | 'Timeline' | 'Brain' | 'Galaxy';
 type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
 
 function displayTimestamp(value: string): string {
@@ -213,7 +214,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   const pendingTodos = todos.filter((item) => item.status === 'pending');
   const focusTasks = pendingTodos.filter((item) => item.urgency === 'high').slice(0, 3);
   const displayTasks = focusTasks.length ? focusTasks : pendingTodos.slice(0, 3);
-  const views: ViewMode[] = ['Timeline', 'Focus Now', 'Brain'];
+  const views: ViewMode[] = ['Timeline', 'Focus Now', 'Brain', 'Galaxy'];
 
   return (
     <View style={styles.container}>
@@ -238,6 +239,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
           expenses={expenses}
         />
       ) : null}
+      {view === 'Galaxy' ? <GalaxyView /> : null}
     </View>
   );
 }

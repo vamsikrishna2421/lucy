@@ -28,7 +28,7 @@ import {
   type ContextBatch,
 } from '../processing/stalenessEngine';
 
-type ViewMode = 'Focus Now' | 'Timeline' | 'Brain' | 'Galaxy';
+type ViewMode = 'Focus Now' | 'Timeline' | 'Brain' | 'Galaxy' | 'Health';
 type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
 
 function displayTimestamp(value: string): string {
@@ -215,7 +215,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
   const pendingTodos = todos.filter((item) => item.status === 'pending');
   const focusTasks = pendingTodos.filter((item) => item.urgency === 'high').slice(0, 3);
   const displayTasks = focusTasks.length ? focusTasks : pendingTodos.slice(0, 3);
-  const views: ViewMode[] = ['Timeline', 'Focus Now', 'Brain', 'Galaxy'];
+  const views: ViewMode[] = ['Timeline', 'Focus Now', 'Brain', 'Galaxy', 'Health'];
 
   return (
     <View style={styles.container}>
@@ -241,6 +241,7 @@ export function DashboardScreen({ refreshToken }: { refreshToken: number }) {
         />
       ) : null}
       {view === 'Galaxy' ? <GalaxyView /> : null}
+      {view === 'Health' ? <HealthView /> : null}
     </View>
   );
 }
@@ -455,6 +456,203 @@ function WeeklyLifeWidget() {
   );
 }
 
+// ─── Health View ──────────────────────────────────────────────────────────────
+
+const TEAL = '#2DD4BF';
+
+function HealthMetricCard({ icon, label, value, unit, sub, accent = TEAL }: { icon: string; label: string; value: string | number | null; unit?: string; sub?: string; accent?: string }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, borderTopColor: '#3A3028', gap: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.22, shadowRadius: 4, elevation: 3 }}>
+      <Text style={{ fontSize: 22 }}>{icon}</Text>
+      <Text style={{ color: accent, fontSize: 9, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase' }}>{label}</Text>
+      {value !== null && value !== undefined ? (
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
+          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 }}>{value}</Text>
+          {unit ? <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, fontWeight: '600' }}>{unit}</Text> : null}
+        </View>
+      ) : (
+        <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 14, fontStyle: 'italic' }}>—</Text>
+      )}
+      {sub ? <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, lineHeight: 15 }}>{sub}</Text> : null}
+    </View>
+  );
+}
+
+function HealthTrendBar({ label, value, maxValue, accent }: { label: string; value: number; maxValue: number; accent: string }) {
+  const pct = maxValue > 0 ? Math.min(1, value / maxValue) : 0;
+  return (
+    <View style={{ gap: 4 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>{label}</Text>
+        <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '700' }}>{value.toLocaleString()}</Text>
+      </View>
+      <View style={{ height: 6, backgroundColor: LUCY_COLORS.border, borderRadius: 3, overflow: 'hidden' }}>
+        <View style={{ height: 6, width: `${pct * 100}%`, backgroundColor: accent, borderRadius: 3 }} />
+      </View>
+    </View>
+  );
+}
+
+function HealthView() {
+  const [health7, setHealth7] = useState<import('../db/healthSnapshots').HealthSnapshot[]>([]);
+  const [mood7, setMood7] = useState<Array<{ tone: string; created_at: string }>>([]);
+
+  useEffect(() => {
+    void (async () => {
+      const db = await getDatabase();
+      const [h, m] = await Promise.all([
+        import('../db/healthSnapshots').then((mod) => mod.listHealthSnapshots(db, 7)),
+        db.getAllAsync<{ tone: string; created_at: string }>(
+          `SELECT tone, created_at FROM mood_entries WHERE created_at >= datetime('now', '-7 days') ORDER BY created_at DESC`
+        ),
+      ]);
+      setHealth7(h);
+      setMood7(m);
+    })();
+  }, []);
+
+  const today = health7[0] ?? null;
+  const maxSteps = Math.max(10000, ...health7.map((h) => h.steps));
+  const avgSteps = health7.length > 0 ? Math.round(health7.reduce((s, h) => s + h.steps, 0) / health7.length) : 0;
+  const avgSleep = health7.filter((h) => h.sleep_hours).length > 0
+    ? Math.round(health7.filter((h) => h.sleep_hours).reduce((s, h) => s + (h.sleep_hours ?? 0), 0) / health7.filter((h) => h.sleep_hours).length * 10) / 10
+    : null;
+
+  // Mood distribution
+  const moodCount = mood7.reduce<Record<string, number>>((acc, m) => { acc[m.tone] = (acc[m.tone] ?? 0) + 1; return acc; }, {});
+  const dominantMood = Object.entries(moodCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const moodEmoji: Record<string, string> = { positive: '😊', excited: '⚡', calm: '😌', neutral: '😐', stressed: '😤', frustrated: '😤', negative: '😔' };
+
+  // Health tip
+  const { generateHealthTip } = require('../processing/recordLifeContext') as typeof import('../processing/recordLifeContext');
+  const tip = today ? generateHealthTip(today.steps, today.sleep_hours, today.resting_hr) : null;
+
+  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const last7Keys: string[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    last7Keys.push(d.toISOString().slice(0, 10));
+  }
+  const healthByDate = new Map(health7.map((h) => [h.date_key, h]));
+
+  return (
+    <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, gap: 16 }}>
+      {/* Today's metrics */}
+      <Text style={{ color: TEAL, fontSize: 10, fontWeight: '800', letterSpacing: 1.4, marginBottom: 4 }}>TODAY</Text>
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <HealthMetricCard
+          icon="👟"
+          label="Steps"
+          value={today?.steps && today.steps > 0 ? (today.steps >= 1000 ? `${(today.steps / 1000).toFixed(1)}k` : today.steps) : null}
+          sub={avgSteps > 0 ? `7-day avg: ${avgSteps >= 1000 ? `${(avgSteps / 1000).toFixed(1)}k` : avgSteps}` : undefined}
+        />
+        <HealthMetricCard
+          icon="😴"
+          label="Sleep"
+          value={today?.sleep_hours ?? null}
+          unit="h"
+          sub={avgSleep ? `7-day avg: ${avgSleep}h` : undefined}
+          accent="#818CF8"
+        />
+        <HealthMetricCard
+          icon="❤️"
+          label="HR"
+          value={today?.resting_hr ?? null}
+          unit="bpm"
+          accent="#FB7185"
+        />
+      </View>
+
+      {/* Health tip */}
+      {tip ? (
+        <View style={{ backgroundColor: LUCY_COLORS.surface, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: `${TEAL}44`, borderLeftWidth: 3, borderLeftColor: TEAL }}>
+          <Text style={{ color: TEAL, fontSize: 9, fontWeight: '800', letterSpacing: 1.4, marginBottom: 4 }}>HEALTH TIP</Text>
+          <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21 }}>{tip}</Text>
+        </View>
+      ) : null}
+
+      {/* 7-day steps trend */}
+      {health7.some((h) => h.steps > 0) ? (
+        <View style={{ backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 12 }}>
+          <Text style={{ color: TEAL, fontSize: 10, fontWeight: '800', letterSpacing: 1.4 }}>STEPS — LAST 7 DAYS</Text>
+          {last7Keys.map((dateKey) => {
+            const h = healthByDate.get(dateKey);
+            const d = new Date(dateKey + 'T12:00:00');
+            const isToday = dateKey === last7Keys[6];
+            return (
+              <HealthTrendBar
+                key={dateKey}
+                label={isToday ? 'Today' : dayLabels[d.getDay()]}
+                value={h?.steps ?? 0}
+                maxValue={maxSteps}
+                accent={h && h.steps >= 10000 ? '#4ADE80' : h && h.steps >= 5000 ? TEAL : '#60A5FA'}
+              />
+            );
+          })}
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 4 }}>Goal: 10,000 steps</Text>
+        </View>
+      ) : null}
+
+      {/* Sleep 7-day */}
+      {health7.some((h) => h.sleep_hours) ? (
+        <View style={{ backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 12 }}>
+          <Text style={{ color: '#818CF8', fontSize: 10, fontWeight: '800', letterSpacing: 1.4 }}>SLEEP — LAST 7 DAYS</Text>
+          {last7Keys.map((dateKey) => {
+            const h = healthByDate.get(dateKey);
+            const d = new Date(dateKey + 'T12:00:00');
+            const isToday = dateKey === last7Keys[6];
+            const hrs = h?.sleep_hours ?? 0;
+            return (
+              <HealthTrendBar
+                key={dateKey}
+                label={isToday ? 'Today' : dayLabels[d.getDay()]}
+                value={Math.round(hrs * 10) / 10}
+                maxValue={10}
+                accent={hrs >= 8 ? '#4ADE80' : hrs >= 6 ? '#818CF8' : '#FB7185'}
+              />
+            );
+          })}
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 4 }}>Goal: 8h sleep</Text>
+        </View>
+      ) : null}
+
+      {/* Mood correlation */}
+      {dominantMood ? (
+        <View style={{ backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 8 }}>
+          <Text style={{ color: '#C084FC', fontSize: 10, fontWeight: '800', letterSpacing: 1.4 }}>MOOD THIS WEEK</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontSize: 28 }}>{moodEmoji[dominantMood] ?? '😐'}</Text>
+            <View>
+              <Text style={{ color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '700' }}>{dominantMood.charAt(0).toUpperCase() + dominantMood.slice(1)}</Text>
+              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12 }}>{mood7.length} mood entries this week</Text>
+            </View>
+          </View>
+          {Object.entries(moodCount).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([tone, count]) => (
+            <HealthTrendBar key={tone} label={tone} value={count} maxValue={mood7.length} accent="#C084FC" />
+          ))}
+        </View>
+      ) : null}
+
+      {/* No data empty state */}
+      {!today && health7.length === 0 ? (
+        <View style={{ alignItems: 'center', paddingVertical: 48, gap: 12 }}>
+          <View style={{ alignItems: 'center', justifyContent: 'center', width: 80, height: 80 }}>
+            <View style={{ position: 'absolute', width: 80, height: 80, borderRadius: 40, backgroundColor: `${TEAL}10` }} />
+            <View style={{ position: 'absolute', width: 52, height: 52, borderRadius: 26, backgroundColor: `${TEAL}18` }} />
+            <Text style={{ fontSize: 28 }}>💚</Text>
+          </View>
+          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700' }}>Health tracking will appear here</Text>
+          <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 21, maxWidth: 280 }}>
+            Enable Location in Connectors to start. Steps and sleep data come from your device — no extra setup needed.
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={{ height: 20 }} />
+    </ScrollView>
+  );
+}
+
 // ─── Brain Pulse ──────────────────────────────────────────────────────────────
 
 const PULSE_ACCENT = '#C084FC'; // violet — distinct from all existing palette colors
@@ -488,6 +686,27 @@ function PulseCard({ pulse, onDismiss }: { pulse: import('../db/brainPulses').Br
         <Text style={{ color: accent, fontSize: 9, fontWeight: '800', letterSpacing: 1.2 }}>{label}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>{age}</Text>
+          {/* Viral share button — shares the insight as plain text, no raw data */}
+          <TouchableOpacity
+            onPress={async () => {
+              try {
+                const { shareAsync, isAvailableAsync } = await import('expo-sharing');
+                const shareText = `LUCY noticed: "${pulse.headline}" — captured by my second brain`;
+                if (await isAvailableAsync()) {
+                  // Write to a temp file since expo-sharing needs a URI on some platforms
+                  const fs = await import('expo-file-system');
+                  const writeAsStringAsync = (fs as unknown as { writeAsStringAsync: (uri: string, contents: string) => Promise<void> }).writeAsStringAsync;
+                  const documentDirectory = (fs as unknown as { documentDirectory: string }).documentDirectory ?? '';
+                  const uri = `${documentDirectory}lucy-pulse.txt`;
+                  await writeAsStringAsync(uri, shareText);
+                  await shareAsync(uri, { mimeType: 'text/plain', dialogTitle: 'Share LUCY insight' });
+                }
+              } catch { /* non-critical */ }
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={{ color: accent, fontSize: 13, fontWeight: '700' }}>↗</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 14, fontWeight: '700' }}>✕</Text>
           </TouchableOpacity>

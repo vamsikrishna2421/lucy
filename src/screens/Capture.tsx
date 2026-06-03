@@ -337,29 +337,38 @@ const cmStyles = StyleSheet.create({
 
 function CategoryCard({ category, onPress }: { category: TaskCategory; onPress: () => void }) {
   const urgentCount = category.items.filter((t) => t.urgency === 'high').length;
+  const topTask = urgentCount > 0
+    ? category.items.find((t) => t.urgency === 'high')
+    : category.items[0];
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.85}
-      onPressIn={() => Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true }).start()}
-      onPressOut={() => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }).start()}
+      onPressIn={() => Animated.spring(scaleAnim, { toValue: 0.97, friction: 30, tension: 400, useNativeDriver: true }).start()}
+      onPressOut={() => Animated.spring(scaleAnim, { toValue: 1, friction: 18, tension: 200, useNativeDriver: true }).start()}
     >
       <Animated.View style={[ccStyles.card, { transform: [{ scale: scaleAnim }], borderLeftColor: category.color }]}>
         <View style={[ccStyles.iconWrap, { backgroundColor: category.color + '22' }]}>
           <Text style={ccStyles.iconText}>{category.icon}</Text>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={ccStyles.label}>{category.label}</Text>
+        <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={ccStyles.label}>{category.label}</Text>
+            {urgentCount > 0 ? (
+              <View style={{ backgroundColor: category.color + '28', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
+                <Text style={{ color: category.color, fontSize: 9, fontWeight: '800', letterSpacing: 0.8 }}>{urgentCount} URGENT</Text>
+              </View>
+            ) : null}
+          </View>
+          {topTask ? (
+            <Text style={ccStyles.preview} numberOfLines={1}>{topTask.task}</Text>
+          ) : null}
           <Text style={ccStyles.count}>
             {category.items.length} item{category.items.length !== 1 ? 's' : ''}
-            {urgentCount > 0 ? <Text style={[ccStyles.urgent, { color: category.color }]}> · {urgentCount} urgent</Text> : null}
           </Text>
         </View>
-        {urgentCount > 0 ? (
-          <View style={[ccStyles.urgentDot, { backgroundColor: category.color }]} />
-        ) : null}
         <Text style={ccStyles.chevron}>›</Text>
       </Animated.View>
     </TouchableOpacity>
@@ -370,9 +379,9 @@ const ccStyles = StyleSheet.create({
   card: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, borderTopColor: '#3A3028', borderLeftWidth: 4, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 4 },
   iconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   iconText: { fontSize: 20 },
-  label: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '700' },
-  count: { color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 2 },
-  urgent: { fontWeight: '800' },
+  label: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700', letterSpacing: -0.1 },
+  preview: { color: LUCY_COLORS.textMuted, fontSize: 12, lineHeight: 17 },
+  count: { color: LUCY_COLORS.textSubtle, fontSize: 11 },
   urgentDot: { width: 8, height: 8, borderRadius: 4 },
   chevron: { color: LUCY_COLORS.textSubtle, fontSize: 22, fontWeight: '300' },
 });
@@ -408,6 +417,9 @@ export function CaptureScreen({
   // WhatsApp-style voice button animation
   const micScale = useRef(new Animated.Value(1)).current;
   const micRadius = useRef(new Animated.Value(23)).current;
+  const sendScale = useRef(new Animated.Value(1)).current;
+  const ackAnim = useRef(new Animated.Value(20)).current;
+  const ackOpacity = useRef(new Animated.Value(0)).current;
   const [done, setDone] = useState<DoneEntry[]>([]);
   const [sending, setSending] = useState(false);
   const [acknowledgement, setAcknowledgement] = useState('');
@@ -417,6 +429,8 @@ export function CaptureScreen({
   const [doneNotes, setDoneNotes] = useState('');
   const [editTodo, setEditTodo] = useState<TodoRow | null>(null);
   const [editText, setEditText] = useState('');
+  const [capturedToday, setCapturedToday] = useState(0);
+  const [captureStreak, setCaptureStreak] = useState(0);
   const [voiceRecording, setVoiceRecording] = useState(false);
   const [scanningReceipt, setScanningReceipt] = useState(false);
   const [replayExtraction, setReplayExtraction] = useState<ExtractionResult | null>(null);
@@ -444,6 +458,24 @@ export function CaptureScreen({
       setTodos(pendingTodosResult);
       const profile = await getUserProfile(db);
       setUserName(profile.name || '');
+      // Today's capture count + streak
+      const todayRow = await db.getFirstAsync<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM captures WHERE date(created_at) = date('now') AND archived_at IS NULL`,
+      );
+      setCapturedToday(todayRow?.n ?? 0);
+      // Calculate streak (consecutive days with at least 1 capture)
+      const dayRows = await db.getAllAsync<{ d: string }>(
+        `SELECT DISTINCT date(created_at) AS d FROM captures WHERE archived_at IS NULL AND created_at >= datetime('now', '-30 days') ORDER BY d DESC`,
+      );
+      let streak = 0;
+      const today = new Date().toISOString().slice(0, 10);
+      for (let i = 0; i < dayRows.length; i++) {
+        const expected = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+        if (dayRows[i].d === expected) streak++;
+        else break;
+      }
+      // Streak only counts if captured today
+      setCaptureStreak(dayRows[0]?.d === today ? streak : 0);
     })();
   }, [refreshToken]);
 
@@ -614,7 +646,13 @@ export function CaptureScreen({
       await enqueueTranscript(outgoing, 'text', markedPrivate);
       haptic.capture(); // success — the most important haptic in the app
       setText('');
-      setAcknowledgement(markedPrivate ? 'Protected thought queued' : 'Got it');
+      const msg = markedPrivate ? 'Protected thought queued' : 'Got it ✓';
+      setAcknowledgement(msg);
+      ackAnim.setValue(20); ackOpacity.setValue(0);
+      Animated.parallel([
+        Animated.spring(ackAnim, { toValue: 0, friction: 16, tension: 200, useNativeDriver: true }),
+        Animated.timing(ackOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+      ]).start();
       setMarkedPrivate(false);
       onQueued();
 
@@ -670,13 +708,39 @@ export function CaptureScreen({
             <Text style={styles.heroCardTitle}>
               {signalCount > 0 ? `${signalCount} urgent signal${signalCount !== 1 ? 's' : ''} for you` : 'All caught up'}
             </Text>
+            {/* Stats row */}
+            <View style={{ flexDirection: 'row', gap: 16, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,140,66,0.2)' }}>
+              <View style={{ alignItems: 'center', gap: 2 }}>
+                <Text style={{ color: LUCY_COLORS.primary, fontSize: 20, fontWeight: '900' }}>{capturedToday}</Text>
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '600', letterSpacing: 0.5 }}>today</Text>
+              </View>
+              {captureStreak > 1 ? (
+                <View style={{ alignItems: 'center', gap: 2 }}>
+                  <Text style={{ color: '#F59E0B', fontSize: 20, fontWeight: '900' }}>{captureStreak}🔥</Text>
+                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '600', letterSpacing: 0.5 }}>day streak</Text>
+                </View>
+              ) : null}
+              {todos.length > 0 ? (
+                <View style={{ alignItems: 'center', gap: 2 }}>
+                  <Text style={{ color: '#60A5FA', fontSize: 20, fontWeight: '900' }}>{todos.length}</Text>
+                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '600', letterSpacing: 0.5 }}>tasks</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
         </Animated.View>
 
         {categories.length === 0 && done.length === 0 ? (
           <View style={styles.emptyBoard}>
-            <Text style={styles.emptyTitle}>Your board is clear</Text>
-            <Text style={styles.emptyHint}>Capture something and LUCY will organize it here by category.</Text>
+            {/* AmberPulse — LUCY is listening */}
+            <View style={{ alignItems: 'center', justifyContent: 'center', width: 80, height: 80, marginBottom: 16 }}>
+              <View style={{ position: 'absolute', width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,140,66,0.06)' }} />
+              <View style={{ position: 'absolute', width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,140,66,0.10)' }} />
+              <View style={{ position: 'absolute', width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,140,66,0.16)' }} />
+              <Text style={{ fontSize: 16 }}>✓</Text>
+            </View>
+            <Text style={styles.emptyTitle}>All clear</Text>
+            <Text style={styles.emptyHint}>Speak a thought or type anything. LUCY extracts tasks, ideas, and reminders automatically.</Text>
           </View>
         ) : (
           <>
@@ -721,9 +785,9 @@ export function CaptureScreen({
       </Animated.ScrollView>
 
       {acknowledgement ? (
-        <View style={styles.ack}>
+        <Animated.View style={[styles.ack, { transform: [{ translateY: ackAnim }], opacity: ackOpacity }]}>
           <Text style={styles.ackText}>{acknowledgement}</Text>
-        </View>
+        </Animated.View>
       ) : null}
 
       {/* Automation confirmation card */}
@@ -790,11 +854,14 @@ export function CaptureScreen({
             onChangeText={setText}
           />
           <TouchableOpacity
-            style={[styles.sendButton, !text.trim() && styles.sendDisabled]}
+            onPressIn={() => Animated.spring(sendScale, { toValue: 0.94, friction: 30, tension: 450, useNativeDriver: true }).start()}
+            onPressOut={() => Animated.spring(sendScale, { toValue: 1, friction: 14, tension: 180, useNativeDriver: true }).start()}
             onPress={() => void sendCapture()}
             disabled={sending || !text.trim()}
           >
-            <Text style={styles.sendText}>{sending ? '...' : 'Send'}</Text>
+            <Animated.View style={[styles.sendButton, !text.trim() && styles.sendDisabled, { transform: [{ scale: sendScale }] }]}>
+              <Text style={styles.sendText}>{sending ? '...' : 'Send'}</Text>
+            </Animated.View>
           </TouchableOpacity>
         </View>
       </View>

@@ -228,14 +228,12 @@ function CategoryModal({
 
   return (
     <Modal transparent animationType="none" visible onRequestClose={close}>
-      <Pressable style={cmStyles.backdrop} onPress={close}>
-        {/* The Animated.View handles translation only — NO maxHeight on it, because
-            flex:1 / flex-based children collapse to 0 when the parent has only
-            maxHeight (no explicit height). Instead we cap with explicit px on ScrollView. */}
+      {/* Backdrop: flex column — Pressable fills the space ABOVE the sheet,
+          sheet itself needs no inner wrapper so ScrollView scrolls freely. */}
+      <View style={cmStyles.backdrop}>
+        <Pressable style={{ flex: 1 }} onPress={close} />
         <Animated.View style={[cmStyles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-          {/* onPress={() => {}} absorbs taps so backdrop doesn't close modal;
-              scroll gestures still reach the ScrollView (ScrollView has gesture priority) */}
-          <Pressable onPress={() => {}}>
+          <View>
             {/* Header */}
             <View style={[cmStyles.header, { borderBottomColor: category.color + '33' }]}>
               <Text style={cmStyles.icon}>{category.icon}</Text>
@@ -308,15 +306,15 @@ function CategoryModal({
                 <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>+</Text>
               </TouchableOpacity>
             </View>
-          </Pressable>
+          </View>
         </Animated.View>
-      </Pressable>
+      </View>
     </Modal>
   );
 }
 
 const cmStyles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', flexDirection: 'column' },
   sheet: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: LUCY_COLORS.border },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 20, borderBottomWidth: 1 },
   icon: { fontSize: 26 },

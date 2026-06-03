@@ -156,9 +156,10 @@ export function NotificationCenter({ visible, onClose }: { visible: boolean; onC
 
   return (
     <Modal transparent animationType="none" visible={visible} onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <View style={styles.backdrop}>
+        <Pressable style={{ flex: 1 }} onPress={onClose} />
         <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-          <Pressable onPress={() => {}}>
+          <View>
             {/* Drag handle */}
             <View style={styles.handle} />
 
@@ -208,9 +209,9 @@ export function NotificationCenter({ visible, onClose }: { visible: boolean; onC
                 </View>
               )}
             />
-          </Pressable>
+          </View>
         </Animated.View>
-      </Pressable>
+      </View>
     </Modal>
   );
 }
@@ -218,7 +219,7 @@ export function NotificationCenter({ visible, onClose }: { visible: boolean; onC
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', flexDirection: 'column' },
   sheet: {
     backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
     borderTopWidth: 1, borderColor: LUCY_COLORS.border, maxHeight: '92%', minHeight: 300,

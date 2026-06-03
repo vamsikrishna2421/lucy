@@ -193,26 +193,31 @@ class PassiveListenerManager {
 
   private async transcribeAndProcess(uri: string): Promise<void> {
     try {
-      // Silence guard: skip Whisper if the file is too small (< 8KB ≈ <1s of audio).
-      // A 30s silent clip is ~5-8KB in M4A; speech is typically 100KB+.
-      // This prevents wasting Whisper quota on ambient silence or mic noise.
       const info = await FileSystem.getInfoAsync(uri);
-      if (!info.exists || (info.size ?? 0) < 3_000) {
+      const fileSize = info.exists ? (info.size ?? 0) : 0;
+      if (!info.exists || fileSize < 3_000) {
+        console.log(`[Listen] Skipping clip — file ${info.exists ? `${fileSize}B (too small)` : 'not found'}`);
         FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
         return;
       }
-
+      console.log(`[Listen] Transcribing clip ${fileSize}B…`);
       const text = await transcribeAudioFile(uri);
+      console.log(`[Listen] Whisper result: ${text ? `"${text.slice(0, 60)}…" (${text.split(/\s+/).length}w)` : 'null (no key or API error)'}`);
       if (text && text.split(/\s+/).length >= 3) {
-        this.transcriptAccumulator.push(text); // accumulate for Meeting Mode
+        this.transcriptAccumulator.push(text);
         await enqueueTranscript(text, 'passive', false, this.sessionId);
         this.patch({ wordsHeard: this.state.wordsHeard + text.split(/\s+/).length });
-        // Trigger immediate extraction so the capture appears in <10s total
         void import('../processing/extract').then(({ processQueue }) =>
-          processQueue(undefined, 1)
+          processQueue(undefined, 1),
         ).catch(() => {});
+      } else if (!text) {
+        // Whisper returned null — save raw audio note so session always appears in Listen tab
+        const fallback = `[Voice clip — ${Math.round(fileSize / 1000)}KB recorded, transcription unavailable. Check OpenAI key in Settings.]`;
+        await enqueueTranscript(fallback, 'passive', false, this.sessionId);
       }
-    } catch { /* non-critical */ }
+    } catch (e) {
+      console.error('[Listen] transcribeAndProcess error:', e);
+    }
     FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
   }
 

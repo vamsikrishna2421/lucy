@@ -1,4 +1,4 @@
-import { RecordingPresets, setAudioModeAsync } from 'expo-audio';
+import { RecordingPresets, setAudioModeAsync, requestRecordingPermissionsAsync } from 'expo-audio';
 import * as FileSystem from 'expo-file-system';
 import * as Crypto from 'expo-crypto';
 import { config } from '../config';
@@ -40,6 +40,8 @@ export interface PassiveListenerState {
   mode: 'stt' | 'batch' | 'none';
   /** True when API key is missing and word count will never update */
   noApiKey: boolean;
+  /** True when microphone permission was denied */
+  noMicAccess: boolean;
 }
 
 class PassiveListenerManager {
@@ -49,7 +51,7 @@ class PassiveListenerManager {
   private state: PassiveListenerState = {
     status: 'off', wordsHeard: 0, sessionStartedAt: null,
     recordingSeconds: 0, secondsUntilNextBatch: PassiveListenerManager.BATCH_SECONDS,
-    mode: 'none', noApiKey: false,
+    mode: 'none', noApiKey: false, noMicAccess: false,
   };
   private batchStartedAt = 0;
   private stateListeners: Array<(s: PassiveListenerState) => void> = [];
@@ -93,6 +95,23 @@ class PassiveListenerManager {
     this.transcriptAccumulator = [];
     this.sessionId = Crypto.randomUUID();
     this.active = true;
+    // Request microphone permission explicitly — prepareToRecordAsync() throws silently if denied.
+    try {
+      const perm = await requestRecordingPermissionsAsync();
+      if (!perm.granted) {
+        this.patch({ status: 'off', sessionStartedAt: null, noMicAccess: true });
+        this.active = false;
+        const { Alert } = await import('react-native');
+        Alert.alert(
+          'Microphone access needed',
+          'LUCY needs microphone access to record in Listen mode. Go to Settings → Privacy & Security → Microphone → LUCY and enable it.',
+          [{ text: 'OK' }],
+        );
+        return;
+      }
+    } catch { /* permission API not available — proceed and let prepareToRecordAsync handle it */ }
+    this.patch({ noMicAccess: false });
+
     // allowsBackgroundRecording ensures recording continues when the app is minimised.
     try { await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true }); } catch { /* non-fatal */ }
 
@@ -243,7 +262,14 @@ class PassiveListenerManager {
     this.voiceRestartTimer = null;
     if (Voice) { try { await Voice.destroy(); } catch { /* ignore */ } await this.flushVoiceBuffer(); }
     const uri = await this.stopRecorder();
-    if (uri) await this.transcribeAndProcess(uri);
+    if (uri) {
+      await this.transcribeAndProcess(uri);
+    } else if (this.sessionId) {
+      // Recorder never produced audio (permission denied or init error) — save marker
+      try {
+        await enqueueTranscript('[Listen session — no audio recorded. Check microphone permission in Settings → Privacy → Microphone.]', 'passive', false, this.sessionId);
+      } catch { /* ignore */ }
+    }
     try { await setAudioModeAsync({ allowsRecording: false }); } catch { /* non-fatal */ }
     this.sessionId = null;
     this.patch({ status: 'off', sessionStartedAt: null });

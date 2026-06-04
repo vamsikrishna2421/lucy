@@ -1,4 +1,5 @@
 import { getRemoteOpenAIKey } from '../ai/remoteAccess';
+import { File as FSFile } from 'expo-file-system';
 
 export async function transcribeAudioFile(uri: string): Promise<string | null> {
   let apiKey: string | null = null;
@@ -15,11 +16,14 @@ export async function transcribeAudioFile(uri: string): Promise<string | null> {
 
   console.log(`[Whisper] Sending ${uri.slice(-40)} to Whisper API…`);
 
-  const form = new FormData();
-  form.append('file', { uri, type: 'audio/m4a', name: 'recording.m4a' } as unknown as Blob);
-  form.append('model', 'whisper-1');
-
   try {
+    // SDK 56: use expo-file-system File class (implements Blob) instead of
+    // the {uri, type, name} object pattern which throws "Unsupported FormDataPart"
+    const audioFile = new FSFile(uri);
+    const form = new FormData();
+    form.append('file', audioFile as unknown as Blob, 'recording.m4a');
+    form.append('model', 'whisper-1');
+
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
@@ -28,7 +32,6 @@ export async function transcribeAudioFile(uri: string): Promise<string | null> {
     if (!response.ok) {
       const errText = await response.text().catch(() => '(unreadable)');
       console.error(`[Whisper] API error ${response.status}: ${errText.slice(0, 200)}`);
-      // Return the error so the caller can surface it in the session card
       throw new Error(`Whisper API ${response.status}: ${errText.slice(0, 100)}`);
     }
     const result = (await response.json()) as { text?: string };
@@ -36,7 +39,7 @@ export async function transcribeAudioFile(uri: string): Promise<string | null> {
     return result.text?.trim() || null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error('[Whisper] fetch error:', msg);
-    throw e; // re-throw so PassiveListener can include the real error in the session card
+    console.error('[Whisper] error:', msg);
+    throw e;
   }
 }

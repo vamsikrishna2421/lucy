@@ -70,8 +70,8 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [organizationRun, setOrganizationRun] = useState<OrganizationRunRow | null>(null);
   const [organizingNow, setOrganizingNow] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
-  const [profile, setProfile] = useState<UserProfile>({ name: '', about: '' });
-  const [profileDraft, setProfileDraft] = useState<UserProfile>({ name: '', about: '' });
+  const [profile, setProfile] = useState<UserProfile>({ name: '', about: '', languages: [], transcriptionEngine: 'whisper' });
+  const [profileDraft, setProfileDraft] = useState<UserProfile>({ name: '', about: '', languages: [], transcriptionEngine: 'whisper' });
   const [savingProfile, setSavingProfile] = useState(false);
   const [checkInEnabled, setCheckInEnabled] = useState(false);
   const [aiModel, setAiModel] = useState('gpt-4o-mini');
@@ -900,6 +900,59 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
               value={profileDraft.about}
               onChangeText={(v) => setProfileDraft((p) => ({ ...p, about: v }))}
             />
+
+            <Text style={styles.fieldLabel}>Languages you speak</Text>
+            <Text style={styles.hint}>LUCY passes your primary language to the voice transcription engine so it doesn't confuse Telugu for Hindi, etc.</Text>
+            {(() => {
+              const LANGS = [
+                { code: 'en', label: 'English' },
+                { code: 'te', label: 'Telugu' },
+                { code: 'hi', label: 'Hindi' },
+                { code: 'ta', label: 'Tamil' },
+                { code: 'kn', label: 'Kannada' },
+                { code: 'ml', label: 'Malayalam' },
+                { code: 'mr', label: 'Marathi' },
+              ];
+              return (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                  {LANGS.map(({ code, label }) => {
+                    const selected = profileDraft.languages.includes(code);
+                    return (
+                      <TouchableOpacity
+                        key={code}
+                        style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, borderWidth: 1, borderColor: selected ? LUCY_COLORS.primary : LUCY_COLORS.border, backgroundColor: selected ? LUCY_COLORS.primarySoft : 'transparent' }}
+                        onPress={() => setProfileDraft((p) => ({
+                          ...p,
+                          languages: selected ? p.languages.filter((l) => l !== code) : [...p.languages, code],
+                        }))}
+                      >
+                        <Text style={{ color: selected ? LUCY_COLORS.primaryGlow : LUCY_COLORS.textMuted, fontWeight: selected ? '700' : '500', fontSize: 13 }}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              );
+            })()}
+
+            <Text style={styles.fieldLabel}>Voice transcription engine</Text>
+            <Text style={styles.hint}>On-device uses iPhone's built-in speech recognition (free, offline, private). Whisper uses OpenAI's API (higher quality, uses credits).</Text>
+            {(['whisper', 'device'] as const).map((eng) => {
+              const selected = (profileDraft.transcriptionEngine ?? 'whisper') === eng;
+              const labels: Record<string, string> = { whisper: 'OpenAI Whisper (cloud, high quality)', device: 'On-device / iPhone native (free, offline)' };
+              return (
+                <TouchableOpacity
+                  key={eng}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: selected ? LUCY_COLORS.primary : LUCY_COLORS.border, backgroundColor: selected ? LUCY_COLORS.primarySoft : 'transparent', marginBottom: 8 }}
+                  onPress={() => setProfileDraft((p) => ({ ...p, transcriptionEngine: eng }))}
+                >
+                  <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: selected ? LUCY_COLORS.primary : LUCY_COLORS.border, alignItems: 'center', justifyContent: 'center' }}>
+                    {selected ? <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: LUCY_COLORS.primary }} /> : null}
+                  </View>
+                  <Text style={{ color: selected ? LUCY_COLORS.textDark : LUCY_COLORS.textMuted, fontSize: 13, fontWeight: selected ? '700' : '400', flex: 1 }}>{labels[eng]}</Text>
+                </TouchableOpacity>
+              );
+            })}
+
             <SecondaryButton
               disabled={savingProfile}
               label={savingProfile ? 'Saving...' : 'Save'}

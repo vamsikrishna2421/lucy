@@ -1,7 +1,14 @@
-import { getRemoteOpenAIKey } from '../ai/remoteAccess';
 import { File as FSFile } from 'expo-file-system';
+import { getRemoteOpenAIKey } from '../ai/remoteAccess';
 
-export async function transcribeAudioFile(uri: string): Promise<string | null> {
+/**
+ * Transcribes an audio file using OpenAI Whisper.
+ *
+ * @param uri       Path to the audio file (M4A)
+ * @param language  ISO-639-1 code for the expected primary language (e.g. 'te' for Telugu).
+ *                  Null = auto-detect (good for English-only; less reliable for mixed speech).
+ */
+export async function transcribeAudioFile(uri: string, language?: string | null): Promise<string | null> {
   let apiKey: string | null = null;
   try {
     apiKey = await getRemoteOpenAIKey();
@@ -14,15 +21,19 @@ export async function transcribeAudioFile(uri: string): Promise<string | null> {
     return null;
   }
 
-  console.log(`[Whisper] Sending ${uri.slice(-40)} to Whisper API…`);
+  const langHint = language?.trim() || null;
+  console.log(`[Whisper] Transcribing ${uri.slice(-40)} lang=${langHint ?? 'auto'}…`);
 
   try {
-    // SDK 56: use expo-file-system File class (implements Blob) instead of
-    // the {uri, type, name} object pattern which throws "Unsupported FormDataPart"
     const audioFile = new FSFile(uri);
     const form = new FormData();
     form.append('file', audioFile as unknown as Blob, 'recording.m4a');
     form.append('model', 'whisper-1');
+    if (langHint) {
+      // Providing a language hint skips Whisper's auto-detect step, reducing
+      // mis-identification (e.g. Telugu being guessed as Hindi).
+      form.append('language', langHint);
+    }
 
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',

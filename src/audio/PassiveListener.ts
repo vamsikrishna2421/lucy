@@ -71,7 +71,8 @@ class PassiveListenerManager {
   private batchTimer: ReturnType<typeof setInterval> | null = null;
   private secondTimer: ReturnType<typeof setInterval> | null = null;
   private active = false;
-  private meetingMode = false; // true = accumulate only, no individual passive captures
+  private meetingMode = false;
+  private languageHint: string | null = null; // ISO-639-1 code for primary language
   private voiceBuffer: string[] = [];
   private voiceRestartTimer: ReturnType<typeof setTimeout> | null = null;
   private transcriptAccumulator: string[] = [];
@@ -135,16 +136,43 @@ class PassiveListenerManager {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch { /* haptics not supported on this device */ }
 
+    // Load user preferences: language hint and transcription engine preference
+    let preferDeviceSTT = false;
+    let langCode: string | null = null;
+    try {
+      const { getDatabase } = await import('../db');
+      const { getUserProfile, getWhisperLanguageHint } = await import('../db/userProfile');
+      const db = await getDatabase();
+      const profile = await getUserProfile(db);
+      langCode = getWhisperLanguageHint(profile);
+      this.languageHint = langCode;
+      preferDeviceSTT = profile.transcriptionEngine === 'device';
+      if (preferDeviceSTT && !Voice) {
+        console.warn('[Listen] On-device STT preferred but @react-native-voice not installed; using Whisper');
+      }
+    } catch { /* non-critical */ }
+
+    // Set language hint on Voice STT module if available
+    // (react-native-voice uses the iOS locale code, e.g. 'te-IN' for Telugu)
+    if (Voice && langCode) {
+      const localeMap: Record<string, string> = { te: 'te-IN', hi: 'hi-IN', ta: 'ta-IN', kn: 'kn-IN', ml: 'ml-IN', mr: 'mr-IN', en: 'en-US' };
+      (Voice as { locale?: string }).locale = localeMap[langCode] ?? `${langCode}-IN`;
+    }
+
+    // Use on-device STT if: user prefers it AND Voice module is available
+    // Use Whisper if: user prefers cloud OR Voice unavailable
+    const useVoice = Voice && (preferDeviceSTT || false);
+
     // Check if API key is present (batch mode needs it to count words)
     let noApiKey = false;
-    if (!Voice) {
+    if (!useVoice) {
       try {
         const key = await getRemoteOpenAIKey();
         noApiKey = !key;
       } catch { noApiKey = true; }
     }
 
-    if (Voice) {
+    if (useVoice) {
       this.patch({ mode: 'stt', noApiKey: false });
       await this.startVoiceSTT();
       this.batchTimer = setInterval(() => void this.flushVoiceBuffer(), config.passiveListenBatchMinutes * 60 * 1000);
@@ -174,7 +202,9 @@ class PassiveListenerManager {
     Voice.onSpeechEnd = () => { if (this.active) this.voiceRestartTimer = setTimeout(() => void this.startVoiceSTT(), 300); };
     Voice.onSpeechError = () => { if (this.active) this.voiceRestartTimer = setTimeout(() => void this.startVoiceSTT(), 2000); };
     try {
-      await Voice.start('en-US');
+      const localeMap: Record<string, string> = { te: 'te-IN', hi: 'hi-IN', ta: 'ta-IN', kn: 'kn-IN', ml: 'ml-IN', mr: 'mr-IN', en: 'en-US' };
+      const locale = this.languageHint ? (localeMap[this.languageHint] ?? `${this.languageHint}-IN`) : 'en-US';
+      await Voice.start(locale);
       this.voiceRestartTimer = setTimeout(() => { if (this.active && Voice) Voice.stop().catch(() => {}); }, 50_000);
     } catch { if (this.active) this.voiceRestartTimer = setTimeout(() => void this.startVoiceSTT(), 3000); }
   }
@@ -251,7 +281,7 @@ class PassiveListenerManager {
       let text: string | null = null;
       let whisperError: string | null = null;
       try {
-        text = await transcribeAudioFile(uri);
+        text = await transcribeAudioFile(uri, this.languageHint);
       } catch (we) {
         whisperError = we instanceof Error ? we.message : String(we);
       }

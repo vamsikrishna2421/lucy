@@ -199,17 +199,20 @@ class PassiveListenerManager {
 
   private async stopRecorder(): Promise<string | null> {
     if (!this.recorder) return null;
-    // Read URI BEFORE stop — it's set when recording starts; stop() may clear it on error.
-    const uri = this.recorder.uri ?? null;
+    const rec = this.recorder;
+    this.recorder = null; // clear early so concurrent calls don't double-stop
     try {
       await Promise.race([
-        this.recorder.stop(),
-        new Promise<void>((_, rej) => setTimeout(() => rej(new Error('stop timeout')), 4000)),
+        rec.stop(),
+        new Promise<void>((_, rej) => setTimeout(() => rej(new Error('stop timeout')), 5000)),
       ]);
-    } catch { /* timeout or error — uri might still be valid */ }
-    // Release AFTER we have the URI captured above — release() may clear internal state.
-    try { this.recorder.release?.(); } catch { /* ignore */ }
-    this.recorder = null;
+    } catch (e) {
+      console.warn('[Listen] stopRecorder warning:', e);
+    }
+    // Read URI AFTER stop() — expo-audio sets uri when the file is finalized on disk
+    const uri = rec.uri ?? null;
+    console.log('[Listen] stopRecorder → uri:', uri, 'size will be checked next');
+    try { rec.release?.(); } catch { /* ignore */ }
     return uri;
   }
 

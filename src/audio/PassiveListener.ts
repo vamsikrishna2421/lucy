@@ -71,6 +71,7 @@ class PassiveListenerManager {
   private batchTimer: ReturnType<typeof setInterval> | null = null;
   private secondTimer: ReturnType<typeof setInterval> | null = null;
   private active = false;
+  private meetingMode = false; // true = accumulate only, no individual passive captures
   private voiceBuffer: string[] = [];
   private voiceRestartTimer: ReturnType<typeof setTimeout> | null = null;
   private transcriptAccumulator: string[] = [];
@@ -101,8 +102,9 @@ class PassiveListenerManager {
   private emit(): void { for (const fn of this.stateListeners) fn({ ...this.state }); }
   private patch(patch: Partial<PassiveListenerState>): void { this.state = { ...this.state, ...patch }; this.emit(); }
 
-  async start(): Promise<void> {
+  async start(options?: { meetingMode?: boolean }): Promise<void> {
     if (this.state.status !== 'off') return;
+    this.meetingMode = options?.meetingMode ?? false;
     this.patch({ status: 'starting', wordsHeard: 0, sessionStartedAt: Date.now(), recordingSeconds: 0 });
     this.transcriptAccumulator = [];
     this.sessionId = Crypto.randomUUID();
@@ -239,7 +241,9 @@ class PassiveListenerManager {
       console.log(`[Listen] Clip: exists=${fileExists}, size=${fileSize}B`);
 
       if (!fileExists || fileSize < 1_000) {
-        await enqueueTranscript('[Voice clip recorded — audio file was empty]', 'passive', false, sessionId);
+        if (!this.meetingMode) {
+          await enqueueTranscript('[Voice clip recorded — audio file was empty]', 'passive', false, sessionId);
+        }
         try { file.delete(); } catch { /* ignore */ }
         return;
       }
@@ -255,12 +259,15 @@ class PassiveListenerManager {
 
       if (text && text.split(/\s+/).length >= 3) {
         this.transcriptAccumulator.push(text);
-        await enqueueTranscript(text, 'passive', false, sessionId);
         this.patch({ wordsHeard: this.state.wordsHeard + text.split(/\s+/).length });
-        void import('../processing/extract').then(({ processQueue }) =>
-          processQueue(undefined, 1),
-        ).catch(() => {});
-      } else {
+        if (!this.meetingMode) {
+          // In meeting mode batches are accumulated only — the final summary is saved by MeetingMode
+          await enqueueTranscript(text, 'passive', false, sessionId);
+          void import('../processing/extract').then(({ processQueue }) =>
+            processQueue(undefined, 1),
+          ).catch(() => {});
+        }
+      } else if (!this.meetingMode) {
         const note = text
           ? `[Voice clip — too short to save: "${text}"]`
           : whisperError

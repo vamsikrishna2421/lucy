@@ -102,6 +102,7 @@ function getCardSummaryText(
 function sourceLabel(source: import('../types/extraction').CaptureSource): { glyph: string; label: string; color: string } {
   switch (source) {
     case 'passive': return { glyph: '◎', label: 'LISTEN', color: '#5B8CFF' };
+    case 'meeting': return { glyph: '◈', label: 'MEETING', color: '#60A5FA' };
     case 'voice':   return { glyph: '◉', label: 'VOICE', color: LUCY_COLORS.primaryGlow };
     case 'text':    return { glyph: '◈', label: 'TEXT', color: LUCY_COLORS.textMuted };
     default:        return { glyph: '◈', label: 'CAPTURE', color: LUCY_COLORS.textMuted };

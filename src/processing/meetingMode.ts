@@ -132,8 +132,9 @@ export async function saveMeetingToMemory(
     summary.rawTranscript ?? null,
   );
 
-  // Also enqueue as a capture so it appears in the Timeline.
-  await enqueueTranscript(parts.join('\n'), 'passive', false);
+  // Enqueue as a 'meeting' capture so it appears in Timeline and NOT in the Listen tab.
+  // Pass the meeting name as a hint so extraction preserves it as the title.
+  await enqueueTranscript(parts.join('\n'), 'meeting', false);
 }
 
 /**
@@ -150,5 +151,5 @@ export async function saveRawTranscriptAsMeeting(
   const durationMin = Math.round(durationMs / 60000);
   await insertMeetingSummary(db, title || 'Meeting', durationMin, null, [], [], [], null, [], rawTranscript);
   // Enqueue the raw transcript as a capture so the meeting appears on the Timeline.
-  await enqueueTranscript(`Meeting: ${title || 'Meeting'} (${durationMin} min)\n${rawTranscript.slice(0, 500)}`, 'passive', false);
+  await enqueueTranscript(`Meeting: ${title || 'Meeting'} (${durationMin} min)\n${rawTranscript.slice(0, 500)}`, 'meeting', false);
 }

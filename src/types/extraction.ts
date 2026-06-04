@@ -115,4 +115,4 @@ export interface ExtractionResult {
   detected_action: ExtractedLLMAction | null;
 }
 
-export type CaptureSource = 'text' | 'voice' | 'android' | 'ios' | 'passive';
+export type CaptureSource = 'text' | 'voice' | 'android' | 'ios' | 'passive' | 'meeting';

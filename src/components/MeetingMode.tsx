@@ -80,7 +80,7 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
     setStartedAt(new Date());
     setElapsed(0);
     setPhase('recording');
-    await passiveListener.start();
+    await passiveListener.start({ meetingMode: true });
   };
 
   const stopMeeting = async () => {

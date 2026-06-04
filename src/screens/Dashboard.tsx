@@ -1718,15 +1718,39 @@ function LibraryView({
 function ListenTab() {
   const [sessions, setSessions] = useState<ListenSessionGroup[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  // Lazy-loaded full transcript text per session (keyed by sessionId → clip texts)
   const [clipTexts, setClipTexts] = useState<Record<string, string[]>>({});
+  const [digestCount, setDigestCount] = useState(0);
+  const [generatingDigest, setGeneratingDigest] = useState(false);
 
   useEffect(() => {
     void (async () => {
       const db = await getDatabase();
-      setSessions(await listListenSessions(db));
+      const [s, count] = await Promise.all([
+        listListenSessions(db),
+        import('../processing/listenDigest').then(({ hasUnsummarizedListenCaptures }) => hasUnsummarizedListenCaptures(db)).catch(() => 0),
+      ]);
+      setSessions(s);
+      setDigestCount(count as number);
     })();
   }, []);
+
+  const generateDigest = async () => {
+    setGeneratingDigest(true);
+    try {
+      const db = await getDatabase();
+      const { generateListenDigest } = await import('../processing/listenDigest');
+      const result = await generateListenDigest(db);
+      if (result) {
+        // Refresh sessions to show the new digest entry
+        setSessions(await listListenSessions(db));
+        setDigestCount(0);
+      } else {
+        Alert.alert('Not enough captures', 'Need at least 5 listen clips today to generate a digest.');
+      }
+    } catch { /* non-critical */ } finally {
+      setGeneratingDigest(false);
+    }
+  };
 
   const toggleExpand = async (s: ListenSessionGroup) => {
     const wasExpanded = expanded[s.sessionId];
@@ -1789,11 +1813,33 @@ function ListenTab() {
 
   return (
     <>
+      {/* Day digest button — shown when there are unsummarized clips from today */}
+      {digestCount >= 5 ? (
+        <TouchableOpacity
+          style={{ backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 14, padding: 14, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: LUCY_COLORS.primary + '44' }}
+          onPress={() => void generateDigest()}
+          disabled={generatingDigest}
+          activeOpacity={0.8}
+        >
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ color: LUCY_COLORS.primaryGlow, fontWeight: '800', fontSize: 14 }}>
+              {generatingDigest ? 'Generating digest…' : '✦ Generate Day Listen Digest'}
+            </Text>
+            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12 }}>
+              Stitch {digestCount} clips from today into one insight summary
+            </Text>
+          </View>
+          {!generatingDigest ? <Text style={{ color: LUCY_COLORS.primary, fontSize: 18 }}>›</Text> : null}
+        </TouchableOpacity>
+      ) : null}
+
       {sessions.map((s) => (
-        <View key={s.sessionId} style={[styles.card, { borderLeftWidth: 3, borderLeftColor: '#5B8CFF' }]}>
+        <View key={s.sessionId} style={[styles.card, { borderLeftWidth: 3, borderLeftColor: s.sessionId.startsWith('digest_') ? LUCY_COLORS.primary : '#5B8CFF' }]}>
           <View style={styles.cardTop}>
             <View style={{ flex: 1, gap: 3 }}>
-              <Text style={{ color: '#5B8CFF', fontSize: 10, fontWeight: '800', letterSpacing: 1 }}>🎙 LISTEN SESSION</Text>
+              <Text style={{ color: s.sessionId.startsWith('digest_') ? LUCY_COLORS.primaryGlow : '#5B8CFF', fontSize: 10, fontWeight: '800', letterSpacing: 1 }}>
+                {s.sessionId.startsWith('digest_') ? '✦ LISTEN DIGEST' : '🎙 LISTEN SESSION'}
+              </Text>
               <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>
                 {formatDate(s.startedAt)} · {durationLabel(s.startedAt, s.endedAt)} · {s.captureCount} clip{s.captureCount !== 1 ? 's' : ''}
               </Text>

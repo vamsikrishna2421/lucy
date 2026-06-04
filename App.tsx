@@ -313,6 +313,26 @@ export default function App() {
             await runBrainPulseIfDue(db);
           } catch { /* non-critical */ }
         })();
+        // Auto listen digest: runs once after midnight if yesterday had ≥5 listen clips
+        void (async () => {
+          try {
+            const h = new Date().getHours();
+            if (h >= 0 && h < 6) { // midnight → 6 AM window
+              const db = await getDatabase();
+              const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+              const digestKey = `listen_digest_done_${yesterday}`;
+              const { getSetting, setSetting } = await import('./src/db/settings');
+              if (await getSetting(db, digestKey) !== 'true') {
+                const { hasUnsummarizedListenCaptures, generateListenDigest } = await import('./src/processing/listenDigest');
+                const count = await hasUnsummarizedListenCaptures(db, yesterday);
+                if (count >= 5) {
+                  await generateListenDigest(db, yesterday);
+                  await setSetting(db, digestKey, 'true');
+                }
+              }
+            }
+          } catch { /* non-critical */ }
+        })();
       }
     });
     return () => {

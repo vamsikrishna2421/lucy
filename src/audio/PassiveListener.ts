@@ -257,15 +257,20 @@ class PassiveListenerManager {
       }
       console.log(`[Listen] Whisper: ${text ? `${text.split(/\s+/).length}w` : `null (err: ${whisperError})`}`);
 
-      if (text && text.split(/\s+/).length >= 3) {
+      const wordCount = text ? text.split(/\s+/).length : 0;
+      if (text && wordCount >= 3) {
         this.transcriptAccumulator.push(text);
-        this.patch({ wordsHeard: this.state.wordsHeard + text.split(/\s+/).length });
+        this.patch({ wordsHeard: this.state.wordsHeard + wordCount });
         if (!this.meetingMode) {
-          // In meeting mode batches are accumulated only — the final summary is saved by MeetingMode
+          // Cost guard: clips < 8 words are saved but skip expensive LLM extraction.
+          // Short clips (filler words, brief sounds) rarely contain actionable content.
+          // Clips >= 8 words go through full extraction.
           await enqueueTranscript(text, 'passive', false, sessionId);
-          void import('../processing/extract').then(({ processQueue }) =>
-            processQueue(undefined, 1),
-          ).catch(() => {});
+          if (wordCount >= 8) {
+            void import('../processing/extract').then(({ processQueue }) =>
+              processQueue(undefined, 1),
+            ).catch(() => {});
+          }
         }
       } else if (!this.meetingMode) {
         const note = text

@@ -167,56 +167,66 @@ class PassiveListenerManager {
     }
   }
 
+  private async stopRecorder(): Promise<string | null> {
+    if (!this.recorder) return null;
+    // Read URI BEFORE stop — it's set when recording starts; stop() may clear it on error.
+    const uri = this.recorder.uri ?? null;
+    try {
+      await Promise.race([
+        this.recorder.stop(),
+        new Promise<void>((_, rej) => setTimeout(() => rej(new Error('stop timeout')), 4000)),
+      ]);
+    } catch { /* timeout or error — uri might still be valid */ }
+    // Release AFTER we have the URI captured above — release() may clear internal state.
+    try { this.recorder.release?.(); } catch { /* ignore */ }
+    this.recorder = null;
+    return uri;
+  }
+
   private async rotateBatch(): Promise<void> {
     if (!this.active) return;
-    let uri: string | null = null;
-    if (this.recorder) {
-      try {
-        // Race against a 4-second timeout — stop() can hang on iOS if the audio
-        // session is in a bad state; without the timeout the batch loop freezes.
-        await Promise.race([
-          this.recorder.stop(),
-          new Promise<void>((_, rej) => setTimeout(() => rej(new Error('stop timeout')), 4000)),
-        ]);
-        uri = this.recorder.uri ?? null;
-      } catch { /* timeout or stop error — proceed with whatever URI we have */ }
-      try { this.recorder.release?.(); } catch { /* ignore */ }
-      this.recorder = null;
-    }
+    const uri = await this.stopRecorder();
     if (uri) void this.transcribeAndProcess(uri);
     if (this.active) {
-      // Brief pause so iOS fully releases the previous audio session before we re-open it.
       await new Promise<void>((res) => setTimeout(res, 300));
       await this.startRecordingBatch();
     }
   }
 
   private async transcribeAndProcess(uri: string): Promise<void> {
+    const sessionId = this.sessionId; // capture before any await clears it
     try {
       const info = await FileSystem.getInfoAsync(uri);
       const fileSize = info.exists ? (info.size ?? 0) : 0;
-      if (!info.exists || fileSize < 3_000) {
-        console.log(`[Listen] Skipping clip — file ${info.exists ? `${fileSize}B (too small)` : 'not found'}`);
-        FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+      console.log(`[Listen] Clip: exists=${info.exists}, size=${fileSize}B, uri=${uri.slice(-40)}`);
+
+      if (!info.exists || fileSize < 1_000) {
+        // File missing or almost empty — save placeholder so session appears in Listen tab
+        await enqueueTranscript('[Voice clip recorded — audio file was empty]', 'passive', false, sessionId);
         return;
       }
-      console.log(`[Listen] Transcribing clip ${fileSize}B…`);
+
       const text = await transcribeAudioFile(uri);
-      console.log(`[Listen] Whisper result: ${text ? `"${text.slice(0, 60)}…" (${text.split(/\s+/).length}w)` : 'null (no key or API error)'}`);
+      console.log(`[Listen] Whisper: ${text ? `${text.split(/\s+/).length}w` : 'null'}`);
+
       if (text && text.split(/\s+/).length >= 3) {
         this.transcriptAccumulator.push(text);
-        await enqueueTranscript(text, 'passive', false, this.sessionId);
+        await enqueueTranscript(text, 'passive', false, sessionId);
         this.patch({ wordsHeard: this.state.wordsHeard + text.split(/\s+/).length });
         void import('../processing/extract').then(({ processQueue }) =>
           processQueue(undefined, 1),
         ).catch(() => {});
-      } else if (!text) {
-        // Whisper returned null — save raw audio note so session always appears in Listen tab
-        const fallback = `[Voice clip — ${Math.round(fileSize / 1000)}KB recorded, transcription unavailable. Check OpenAI key in Settings.]`;
-        await enqueueTranscript(fallback, 'passive', false, this.sessionId);
+      } else {
+        // Whisper unavailable or audio too short — always save something so session shows up
+        const note = text
+          ? `[Voice clip — too short to capture: "${text}"]`
+          : `[Voice clip — ${fileSize}B recorded, transcription unavailable (check OpenAI key in Settings)]`;
+        await enqueueTranscript(note, 'passive', false, sessionId);
       }
     } catch (e) {
       console.error('[Listen] transcribeAndProcess error:', e);
+      // Last-resort save so session is never silently lost
+      try { await enqueueTranscript('[Voice clip — processing error]', 'passive', false, sessionId); } catch { /* ignore */ }
     }
     FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
   }
@@ -232,9 +242,8 @@ class PassiveListenerManager {
     this.secondTimer = null;
     this.voiceRestartTimer = null;
     if (Voice) { try { await Voice.destroy(); } catch { /* ignore */ } await this.flushVoiceBuffer(); }
-    if (this.recorder) {
-      try { await this.recorder.stop(); const uri = this.recorder.uri; this.recorder.release?.(); this.recorder = null; if (uri) await this.transcribeAndProcess(uri); } catch { /* ignore */ }
-    }
+    const uri = await this.stopRecorder();
+    if (uri) await this.transcribeAndProcess(uri);
     try { await setAudioModeAsync({ allowsRecording: false }); } catch { /* non-fatal */ }
     this.sessionId = null;
     this.patch({ status: 'off', sessionStartedAt: null });

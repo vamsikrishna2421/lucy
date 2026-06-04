@@ -244,8 +244,14 @@ class PassiveListenerManager {
         return;
       }
 
-      const text = await transcribeAudioFile(uri);
-      console.log(`[Listen] Whisper: ${text ? `${text.split(/\s+/).length}w` : 'null'}`);
+      let text: string | null = null;
+      let whisperError: string | null = null;
+      try {
+        text = await transcribeAudioFile(uri);
+      } catch (we) {
+        whisperError = we instanceof Error ? we.message : String(we);
+      }
+      console.log(`[Listen] Whisper: ${text ? `${text.split(/\s+/).length}w` : `null (err: ${whisperError})`}`);
 
       if (text && text.split(/\s+/).length >= 3) {
         this.transcriptAccumulator.push(text);
@@ -256,8 +262,10 @@ class PassiveListenerManager {
         ).catch(() => {});
       } else {
         const note = text
-          ? `[Voice clip — too short: "${text}"]`
-          : `[Voice clip — ${fileSize}B recorded, transcription unavailable (add OpenAI key in Settings → Remote intelligence)]`;
+          ? `[Voice clip — too short to save: "${text}"]`
+          : whisperError
+            ? `[Voice clip — Whisper error: ${whisperError.slice(0, 150)}]`
+            : `[Voice clip — ${fileSize}B recorded, no OpenAI key found in Settings → Remote intelligence]`;
         await enqueueTranscript(note, 'passive', false, sessionId);
       }
     } catch (e) {

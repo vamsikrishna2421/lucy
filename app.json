@@ -13,7 +13,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.71",
+      "buildNumber": "1.0.72",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
@@ -40,6 +40,7 @@
         "NSLocationWhenInUseUsageDescription": "LUCY uses your location to add context to your daily brief and answer location questions — never shared externally.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "LUCY records your city-level location (~1 mile precision) once per hour to build your personal travel timeline — never precise GPS, never shared externally.",
         "NSLocationAlwaysUsageDescription": "LUCY records your city-level location once per hour for your travel timeline. Data stays on your device.",
+        "LSSupportsOpeningDocumentsInPlace": false,
         "CFBundleDocumentTypes": [
           {
             "CFBundleTypeName": "Text Document",
@@ -74,7 +75,7 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.anonymous.lucy",
-      "versionCode": 26,
+      "versionCode": 27,
       "intentFilters": [
         {
           "action": "SEND",

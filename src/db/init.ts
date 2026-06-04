@@ -554,6 +554,21 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
   // item_count denormalized triggers (kept in TS — SQLite trigger syntax is fragile in execAsync)
   // Triggers are skipped; item_count is maintained by insertTopicItem / removeTopicItem helpers.
 
+  // ── Dev log table (in-app AI call history for debugging) ──────────────────────────────────
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS dev_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      category TEXT NOT NULL,
+      model TEXT NOT NULL DEFAULT '',
+      input_preview TEXT NOT NULL DEFAULT '',
+      output_preview TEXT NOT NULL DEFAULT '',
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      error TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_dev_log_created ON dev_log(created_at DESC);
+  `);
+
   // ── lucy_notifications column migrations (schema evolved across builds 1.0.95→1.0.101) ──
   // The table was created without identifier/expired_at/scheduled_for/entity_* columns.
   // ALTER TABLE is safe to run on every startup — IF NOT EXISTS equivalent via column check.

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { DevLogViewer } from '../components/DevLogViewer';
 import { shareAsync } from 'expo-sharing';
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { clearDownloadedDeviceModels, getDeviceModelState, prepareDeviceModel, selectDeviceModel, subscribeToDeviceModel, type DeviceModelState } from '../ai/device';
@@ -51,6 +52,7 @@ function findModel(id: string): ModelOption | undefined {
 
 export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll }: SettingsScreenProps) {
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
+  const [devLogVisible, setDevLogVisible] = useState(false);
   const [queue, setQueue] = useState(emptyQueue);
   const [background, setBackground] = useState<BackgroundProcessingState>();
   const [changingBackground, setChangingBackground] = useState(false);
@@ -669,8 +671,16 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           actionLabel="Delete"
           actionDestructive
         />
+        <SettingsSectionLabel label="Developer" />
+        <SettingsRow
+          title="AI call log"
+          value="View all AI requests, responses, and errors"
+          actionLabel="Open"
+          onAction={() => setDevLogVisible(true)}
+        />
       </View>
 
+      <DevLogViewer visible={devLogVisible} onClose={() => setDevLogVisible(false)} />
       <SettingsSheet title={panelTitle(activePanel)} visible={activePanel !== null} onClose={() => setActivePanel(null)}>
         {activePanel === 'intelligence' ? (
           <>

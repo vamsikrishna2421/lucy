@@ -298,16 +298,34 @@ async function answerWithLLM(question: string): Promise<LucyAnswer> {
   ].filter(Boolean).join('\n\n');
 
   let llmResponse: string;
+  const t0 = Date.now();
   try {
     const { available, openAIKey } = await resolveRemoteAvailability();
     if (available) {
-      // promptAI routes to Claude or OpenAI based on the selected model.
       llmResponse = await promptAI(systemPrompt, input, openAIKey);
     } else {
       llmResponse = await promptDevice(`${systemPrompt}\n${input}\n/no_think`);
     }
-  } catch {
+    const { getPreferredModel } = await import('../ai/modelPreference');
+    const { config } = await import('../config');
+    const { insertDevLog } = await import('../db/devLog');
+    void insertDevLog(db, {
+      category: 'ask', model: getPreferredModel(config.openAIModel),
+      input_preview: question.slice(0, 300),
+      output_preview: llmResponse.slice(0, 300),
+      duration_ms: Date.now() - t0, error: null,
+    }).catch(() => {});
+  } catch (e) {
     llmResponse = 'I had trouble answering this. Try enabling remote intelligence in Settings.';
+    const { getPreferredModel } = await import('../ai/modelPreference');
+    const { config } = await import('../config');
+    const { insertDevLog } = await import('../db/devLog');
+    void insertDevLog(db, {
+      category: 'ask', model: getPreferredModel(config.openAIModel),
+      input_preview: question.slice(0, 300), output_preview: '',
+      duration_ms: Date.now() - t0,
+      error: e instanceof Error ? e.message : String(e),
+    }).catch(() => {});
   }
 
   await insertQuestionSignal(db, question, 'llm_answer', llmResponse.slice(0, 200), 'LLM answered from memory context.');

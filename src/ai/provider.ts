@@ -66,10 +66,6 @@ export const AIProvider = {
     return localAnalyze(transcript);
   },
   async analyze(transcript: string, _privacyLevel: PrivacyLevel): Promise<ExtractionResult> {
-    // User directive: process EVERYTHING remotely regardless of privacy level — the
-    // on-device model is intentionally disconnected. On-device privacy redaction
-    // (sanitizePrivatelyForRemote) is deliberately NOT used here; privacy masking will
-    // be revisited later. Sending the raw transcript to the configured remote provider.
     const { available, openAIKey } = await resolveRemoteAvailability();
     if (!available) {
       return localAnalyze(transcript);
@@ -77,9 +73,28 @@ export const AIProvider = {
     const db = await getDatabase();
     const profile = await getUserProfile(db);
     const userContextPrefix = buildUserContextPrefix(profile);
-    // analyzeWithOpenAI → promptAI routes to Claude or OpenAI based on the selected model.
-    // If this throws, processQueue sees the real error and marks the capture as failed.
-    return await analyzeWithOpenAI(transcript, openAIKey, userContextPrefix);
+    const model = getPreferredModel(config.openAIModel);
+    const t0 = Date.now();
+    let result: ExtractionResult;
+    try {
+      result = await analyzeWithOpenAI(transcript, openAIKey, userContextPrefix);
+      void import('../db/devLog').then(({ insertDevLog }) => insertDevLog(db, {
+        category: 'extraction', model,
+        input_preview: transcript.slice(0, 300),
+        output_preview: result.title ?? result.summary ?? '',
+        duration_ms: Date.now() - t0, error: null,
+      })).catch(() => {});
+    } catch (e) {
+      void import('../db/devLog').then(({ insertDevLog }) => insertDevLog(db, {
+        category: 'extraction', model,
+        input_preview: transcript.slice(0, 300),
+        output_preview: '',
+        duration_ms: Date.now() - t0,
+        error: e instanceof Error ? e.message : String(e),
+      })).catch(() => {});
+      throw e;
+    }
+    return result;
   },
   async urgentScan(transcript: string, _privacyLevel: PrivacyLevel = 'local'): Promise<string> {
     // Provider-aware + everything-remote (privacy deferred): promptAI routes to Claude

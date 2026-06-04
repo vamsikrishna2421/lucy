@@ -547,7 +547,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         />
         <SettingsRow
           title="Remote intelligence"
-          value={remote.enabled ? 'GPT Nano with local protection' : remote.hasKey ? 'Ready, currently off' : 'Add your OpenAI key'}
+          value={remote.enabled ? 'OpenAI key saved · active' : remote.hasKey ? 'OpenAI key saved · tap to manage' : 'No key — required for voice & search'}
           badge={remote.enabled ? 'On' : 'Off'}
           active={remote.enabled}
           onInfo={() => setActivePanel('remote')}
@@ -745,14 +745,25 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         {activePanel === 'remote' ? (
           <>
             <Text style={styles.detail}>GPT-5.4 Nano can help organize thoughts quickly. When a thought is marked private or detected as sensitive, on-device intelligence masks details first; only placeholder text may be sent remotely.</Text>
-            <Text style={styles.activity}>{remote.enabled ? 'Enabled' : remote.hasKey ? 'Key saved, disabled' : 'Not set up'}</Text>
-            <Text style={styles.keyLabel}>OpenAI API key only</Text>
-            <Text style={styles.hint}>LUCY currently uses your OpenAI key with GPT-5.4 Nano. Do not enter Claude or other provider tokens here.</Text>
+            {remote.hasKey ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(110,231,183,0.12)', borderRadius: 10, padding: 10, marginVertical: 8, borderWidth: 1, borderColor: 'rgba(110,231,183,0.3)' }}>
+                <Text style={{ color: '#6EE7B7', fontSize: 16 }}>✓</Text>
+                <Text style={{ color: '#6EE7B7', fontWeight: '700', fontSize: 13 }}>OpenAI key saved</Text>
+                <Text style={{ color: '#6EE7B7', fontSize: 12, opacity: 0.8 }}>· {remote.enabled ? 'active' : 'key saved, toggle off'}</Text>
+              </View>
+            ) : (
+              <View style={{ backgroundColor: 'rgba(245,158,11,0.10)', borderRadius: 10, padding: 10, marginVertical: 8, borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)' }}>
+                <Text style={{ color: '#F59E0B', fontWeight: '700', fontSize: 13 }}>No OpenAI key — add one below</Text>
+                <Text style={{ color: '#F59E0B', fontSize: 11, opacity: 0.8, marginTop: 2 }}>Required for voice transcription (Listen/Meeting) and semantic search</Text>
+              </View>
+            )}
+            <Text style={styles.keyLabel}>OpenAI API key</Text>
+            <Text style={styles.hint}>LUCY uses your OpenAI key for Whisper voice transcription and GPT extraction. Do not enter Claude or other provider tokens here.</Text>
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
-              placeholder="Paste OpenAI key (sk-...)"
-              placeholderTextColor={LUCY_COLORS.textSubtle}
+              placeholder={remote.hasKey ? '••••••••••••••••  (tap to replace)' : 'Paste OpenAI key (sk-...)'}
+              placeholderTextColor={remote.hasKey ? '#6EE7B7' : LUCY_COLORS.textSubtle}
               secureTextEntry
               style={styles.keyInput}
               value={remoteKey}

@@ -1538,9 +1538,11 @@ function TimelineView({
               <Text style={styles.actionSheetIcon}>?</Text>
               <Text style={styles.actionSheetLabel}>Correct this memory</Text>
             </TouchableOpacity>
-            {menuTarget && menuTarget.processed !== 0 && menuTarget.processed !== 1 ? (
+            {menuTarget && menuTarget.source !== 'passive' ? (
+              // Reprocess: available for all text captures; grayed out for failed passive clips
               <TouchableOpacity
-                style={styles.actionSheetItem}
+                style={[styles.actionSheetItem, menuTarget.processed === 0 && { opacity: 0.4 }]}
+                disabled={menuTarget.processed === 0}
                 onPress={() => { const t = menuTarget; setMenuTarget(null); if (t) void reprocessCapture(t); }}
               >
                 <Text style={[styles.actionSheetIcon, { color: LUCY_COLORS.primary }]}>↻</Text>

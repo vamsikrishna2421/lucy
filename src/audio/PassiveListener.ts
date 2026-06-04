@@ -1,9 +1,14 @@
 import { RecordingPresets, setAudioModeAsync, requestRecordingPermissionsAsync } from 'expo-audio';
 import { Platform } from 'react-native';
 
-// expo-audio's AudioRecorder constructor expects platform-flattened options,
-// not the nested {ios:{...}, android:{...}} structure of RecordingPresets.
-// This mirrors what useAudioRecorder() does internally via createRecordingOptions().
+// AudioRecorder is NOT exported from expo-audio's public API.
+// useAudioRecorder() internally uses AudioModule.AudioRecorder (the native module).
+// We access it the same way to instantiate recorders outside React context.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const AudioModule = (require('expo-audio/build/AudioModule') as { default: { AudioRecorder: new (opts: unknown) => RecorderInstance } }).default;
+
+// Flatten the nested platform preset to the format the native constructor expects.
+// This mirrors createRecordingOptions() from expo-audio/build/utils/options.
 function flattenPreset(preset: typeof RecordingPresets.HIGH_QUALITY): Record<string, unknown> {
   const base = { extension: preset.extension, sampleRate: preset.sampleRate, numberOfChannels: preset.numberOfChannels, bitRate: preset.bitRate, isMeteringEnabled: false };
   const platform = Platform.OS === 'ios' ? preset.ios : Platform.OS === 'android' ? preset.android : preset.web;
@@ -16,10 +21,7 @@ import { enqueueTranscript } from '../processing/extract';
 import { transcribeAudioFile } from './WhisperTranscriber';
 import { getRemoteOpenAIKey } from '../ai/remoteAccess';
 
-// AudioRecorder is type-only in expo-audio — use require() to get the runtime class.
 type RecorderInstance = { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void };
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const AudioRecorderClass = (require('expo-audio') as { AudioRecorder: new (opts: unknown) => RecorderInstance }).AudioRecorder;
 
 // Try on-device STT first (SFSpeechRecognizer via react-native-voice).
 let Voice: VoiceModule | null = null;
@@ -187,7 +189,7 @@ class PassiveListenerManager {
     this.patch({ recordingSeconds: 0, secondsUntilNextBatch: PassiveListenerManager.BATCH_SECONDS });
     try {
       const opts = flattenPreset(RecordingPresets.HIGH_QUALITY);
-      this.recorder = new AudioRecorderClass(opts);
+      this.recorder = new AudioModule.AudioRecorder(opts);
       await this.recorder.prepareToRecordAsync();
       this.recorder.record();
       console.log('[Listen] Recording started, uri:', this.recorder.uri);

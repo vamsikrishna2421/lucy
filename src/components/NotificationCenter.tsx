@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Animated, FlatList, Modal, Pressable, StyleSheet,
+  Animated, Modal, Pressable, ScrollView, StyleSheet,
   Text, TouchableOpacity, View, useWindowDimensions,
 } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
@@ -99,31 +99,40 @@ export function NotificationCenter({ visible, onClose }: { visible: boolean; onC
   const [items, setItems] = useState<NotifLogRow[]>([]);
   const slideAnim = useRef(new Animated.Value(800)).current;
   const { height: screenHeight } = useWindowDimensions();
-  // Sheet is maxHeight 92%. Fixed inside: handle(20px) + header(~54px) + filterRow(~50px) + padding
-  const listHeight = Math.max(200, Math.round(screenHeight * 0.88) - 140);
+  const listMaxHeight = Math.max(200, Math.round(screenHeight * 0.88) - 140);
+  // Version counter prevents stale async results from overwriting newer ones
+  const loadVersion = useRef(0);
+  // Keep filter in a ref so async loadItems always reads the latest value
+  const filterRef = useRef(filter);
+  filterRef.current = filter;
 
   useEffect(() => {
     if (visible) {
       setFilter('all');
+      filterRef.current = 'all';
       Animated.spring(slideAnim, { toValue: 0, friction: 20, tension: 160, useNativeDriver: true }).start();
-      void loadItems();
+      void loadItems('all');
     } else {
       Animated.timing(slideAnim, { toValue: 800, duration: 220, useNativeDriver: true }).start();
     }
   }, [visible]);
 
   useEffect(() => {
-    if (visible) void loadItems();
+    if (visible) void loadItems(filter);
   }, [filter]);
 
-  const loadItems = async () => {
+  const loadItems = async (f: NotifFilter = filterRef.current) => {
+    const version = ++loadVersion.current;
     try {
       const db = await getDatabase();
-      const rows = await listNotifLog(db, filter);
+      if (version !== loadVersion.current) return;
+      const rows = await listNotifLog(db, f);
+      if (version !== loadVersion.current) return;
+      console.log(`[Notif] Loaded ${rows.length} items for filter="${f}"`);
       setItems(rows);
     } catch (e) {
       console.error('[NotificationCenter] loadItems failed:', e);
-      setItems([]);
+      if (version === loadVersion.current) setItems([]);
     }
   };
 
@@ -191,24 +200,25 @@ export function NotificationCenter({ visible, onClose }: { visible: boolean; onC
               ))}
             </View>
 
-            {/* List */}
-            <FlatList
-              data={items}
-              keyExtractor={(item) => String(item.id)}
-              renderItem={({ item }) => (
-                <NotifRow item={item} onRead={handleRead} onDismiss={handleDismiss} />
-              )}
-              ItemSeparatorComponent={() => <View style={styles.separator} />}
-              style={[styles.list, { height: listHeight }]}
+            {/* List — plain ScrollView avoids FlatList windowing issues */}
+            <ScrollView
+              style={[styles.list, { maxHeight: listMaxHeight }]}
               showsVerticalScrollIndicator={false}
-              ListEmptyComponent={() => (
+              keyboardShouldPersistTaps="handled"
+            >
+              {items.length === 0 ? (
                 <View style={styles.emptyWrap}>
                   <Text style={styles.emptyIcon}>◌</Text>
                   <Text style={styles.emptyText}>No notifications</Text>
                   <Text style={styles.emptySub}>LUCY will surface patterns, reminders, and insights here.</Text>
                 </View>
-              )}
-            />
+              ) : items.map((item, i) => (
+                <View key={String(item.id)}>
+                  <NotifRow item={item} onRead={handleRead} onDismiss={handleDismiss} />
+                  {i < items.length - 1 ? <View style={styles.separator} /> : null}
+                </View>
+              ))}
+            </ScrollView>
           </View>
         </Animated.View>
       </View>

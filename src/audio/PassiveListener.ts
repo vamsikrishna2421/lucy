@@ -1,4 +1,14 @@
 import { RecordingPresets, setAudioModeAsync, requestRecordingPermissionsAsync } from 'expo-audio';
+import { Platform } from 'react-native';
+
+// expo-audio's AudioRecorder constructor expects platform-flattened options,
+// not the nested {ios:{...}, android:{...}} structure of RecordingPresets.
+// This mirrors what useAudioRecorder() does internally via createRecordingOptions().
+function flattenPreset(preset: typeof RecordingPresets.HIGH_QUALITY): Record<string, unknown> {
+  const base = { extension: preset.extension, sampleRate: preset.sampleRate, numberOfChannels: preset.numberOfChannels, bitRate: preset.bitRate, isMeteringEnabled: false };
+  const platform = Platform.OS === 'ios' ? preset.ios : Platform.OS === 'android' ? preset.android : preset.web;
+  return { ...base, ...(platform ?? {}) };
+}
 import * as FileSystem from 'expo-file-system';
 import * as Crypto from 'expo-crypto';
 import { config } from '../config';
@@ -176,12 +186,13 @@ class PassiveListenerManager {
     this.batchStartedAt = Date.now();
     this.patch({ recordingSeconds: 0, secondsUntilNextBatch: PassiveListenerManager.BATCH_SECONDS });
     try {
-      this.recorder = new AudioRecorderClass(RecordingPresets.HIGH_QUALITY);
+      const opts = flattenPreset(RecordingPresets.HIGH_QUALITY);
+      this.recorder = new AudioRecorderClass(opts);
       await this.recorder.prepareToRecordAsync();
       this.recorder.record();
-    } catch {
-      // Don't kill the session — the batchTimer will call rotateBatch() again in 30s
-      // which will call startRecordingBatch() to retry. Only kill on repeated failures.
+      console.log('[Listen] Recording started, uri:', this.recorder.uri);
+    } catch (e) {
+      console.error('[Listen] startRecordingBatch failed:', e);
       this.recorder = null;
     }
   }

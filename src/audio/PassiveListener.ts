@@ -14,7 +14,7 @@ function flattenPreset(preset: typeof RecordingPresets.HIGH_QUALITY): Record<str
   const platform = Platform.OS === 'ios' ? preset.ios : Platform.OS === 'android' ? preset.android : preset.web;
   return { ...base, ...(platform ?? {}) };
 }
-import * as FileSystem from 'expo-file-system';
+import { File as FSFile } from 'expo-file-system';
 import * as Crypto from 'expo-crypto';
 import { config } from '../config';
 import { enqueueTranscript } from '../processing/extract';
@@ -230,15 +230,17 @@ class PassiveListenerManager {
 
   private async transcribeAndProcess(uri: string): Promise<void> {
     const sessionId = this.sessionId; // capture before any await clears it
-    console.log(`[Listen] transcribeAndProcess called, uri type=${typeof uri}, value=${String(uri).slice(0, 80)}`);
+    console.log(`[Listen] transcribeAndProcess uri=${String(uri).slice(0, 80)}`);
     try {
-      const info = await FileSystem.getInfoAsync(uri);
-      const fileSize = info.exists ? (info.size ?? 0) : 0;
-      console.log(`[Listen] Clip: exists=${info.exists}, size=${fileSize}B, uri=${uri.slice(-40)}`);
+      // SDK 56: use new File class instead of deprecated FileSystem.getInfoAsync
+      const file = new FSFile(uri);
+      const fileExists = file.exists;
+      const fileSize = fileExists ? (file.size ?? 0) : 0;
+      console.log(`[Listen] Clip: exists=${fileExists}, size=${fileSize}B`);
 
-      if (!info.exists || fileSize < 1_000) {
-        // File missing or almost empty — save placeholder so session appears in Listen tab
+      if (!fileExists || fileSize < 1_000) {
         await enqueueTranscript('[Voice clip recorded — audio file was empty]', 'passive', false, sessionId);
+        try { file.delete(); } catch { /* ignore */ }
         return;
       }
 
@@ -253,19 +255,17 @@ class PassiveListenerManager {
           processQueue(undefined, 1),
         ).catch(() => {});
       } else {
-        // Whisper unavailable or audio too short — always save something so session shows up
         const note = text
-          ? `[Voice clip — too short to capture: "${text}"]`
-          : `[Voice clip — ${fileSize}B recorded, transcription unavailable (check OpenAI key in Settings)]`;
+          ? `[Voice clip — too short: "${text}"]`
+          : `[Voice clip — ${fileSize}B recorded, transcription unavailable (add OpenAI key in Settings → Remote intelligence)]`;
         await enqueueTranscript(note, 'passive', false, sessionId);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error('[Listen] transcribeAndProcess error:', msg);
-      // Include error in the session card so we can diagnose without Xcode
-      try { await enqueueTranscript(`[Voice clip — processing error: ${msg.slice(0, 120)}]`, 'passive', false, sessionId); } catch { /* ignore */ }
+      try { await enqueueTranscript(`[Voice clip — error: ${msg.slice(0, 120)}]`, 'passive', false, sessionId); } catch { /* ignore */ }
     }
-    FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+    try { new FSFile(uri).delete(); } catch { /* ignore */ }
   }
 
   async stop(): Promise<void> {

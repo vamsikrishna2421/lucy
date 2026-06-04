@@ -230,6 +230,7 @@ class PassiveListenerManager {
 
   private async transcribeAndProcess(uri: string): Promise<void> {
     const sessionId = this.sessionId; // capture before any await clears it
+    console.log(`[Listen] transcribeAndProcess called, uri type=${typeof uri}, value=${String(uri).slice(0, 80)}`);
     try {
       const info = await FileSystem.getInfoAsync(uri);
       const fileSize = info.exists ? (info.size ?? 0) : 0;
@@ -259,9 +260,10 @@ class PassiveListenerManager {
         await enqueueTranscript(note, 'passive', false, sessionId);
       }
     } catch (e) {
-      console.error('[Listen] transcribeAndProcess error:', e);
-      // Last-resort save so session is never silently lost
-      try { await enqueueTranscript('[Voice clip — processing error]', 'passive', false, sessionId); } catch { /* ignore */ }
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[Listen] transcribeAndProcess error:', msg);
+      // Include error in the session card so we can diagnose without Xcode
+      try { await enqueueTranscript(`[Voice clip — processing error: ${msg.slice(0, 120)}]`, 'passive', false, sessionId); } catch { /* ignore */ }
     }
     FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
   }

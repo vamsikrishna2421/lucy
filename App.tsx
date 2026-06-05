@@ -362,9 +362,7 @@ export default function App() {
     if (passiveState.status === 'off') {
       Alert.alert(
         'Start passive listening?',
-        passiveListener.usesOnDeviceSTT
-          ? 'LUCY will listen continuously using on-device speech recognition. Transcripts are batched every 10 minutes and stored privately on your device.'
-          : 'LUCY will record in 10-minute batches and transcribe using remote AI. Enable Remote Intelligence in Settings for best results.',
+        'LUCY will use the Voice transcription engine selected in Settings. On-device mode keeps recognition local; OpenAI Whisper uploads each audio batch for transcription.',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Start', onPress: () => void passiveListener.start() },

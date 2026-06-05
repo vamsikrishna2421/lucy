@@ -902,7 +902,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
             />
 
             <Text style={styles.fieldLabel}>Languages you speak</Text>
-            <Text style={styles.hint}>LUCY passes your primary language to the voice transcription engine so it doesn't confuse Telugu for Hindi, etc.</Text>
+            <Text style={styles.hint}>LUCY uses these languages as context. With multiple languages selected, Listen uses automatic detection so mixed speech is not forced into one language.</Text>
             {(() => {
               const LANGS = [
                 { code: 'en', label: 'English' },
@@ -935,10 +935,10 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
             })()}
 
             <Text style={styles.fieldLabel}>Voice transcription engine</Text>
-            <Text style={styles.hint}>On-device uses iPhone's built-in speech recognition (free, offline, private). Whisper uses OpenAI's API (higher quality, uses credits).</Text>
+            <Text style={styles.hint}>On-device requires a speech model supported by this phone and keeps recognition local. Whisper uploads audio to OpenAI for higher-quality transcription and uses API credits.</Text>
             {(['whisper', 'device'] as const).map((eng) => {
               const selected = (profileDraft.transcriptionEngine ?? 'whisper') === eng;
-              const labels: Record<string, string> = { whisper: 'OpenAI Whisper (cloud, high quality)', device: 'On-device / iPhone native (free, offline)' };
+              const labels: Record<string, string> = { whisper: 'OpenAI Whisper (cloud, high quality)', device: 'On-device speech recognition (private)' };
               return (
                 <TouchableOpacity
                   key={eng}

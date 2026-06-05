@@ -157,3 +157,12 @@
 - Do not remove large parent UI regions or transform a focused `TextInput` in reaction to Android keyboard-open events; physical-device testing showed that approach can dismiss focus immediately.
 - Use Android native `adjustResize` for Capture and Ask composer stability. Keep keyboard-aware lifting limited to the Settings modal path that was validated and did not reproduce the focus loss.
 - Label remote credential input at the point of entry: it accepts OpenAI keys only, and the active beta route is GPT-5.4 Nano.
+
+## 2026-06-05 - Transcription Language Preferences
+
+- Treat selected languages as user context, not an instruction to force the first non-English language across an entire recording.
+- Use no OpenAI language hint when multiple languages are selected or when the selected language is not in the documented speech-to-text language set.
+- Keep a defensive retry without a hint when the API rejects a supplied language, because server-side model support can differ or change.
+- Do not use deprecated `@react-native-voice/voice` on Expo SDK 56 / React Native 0.85; its repository records missing New Architecture support.
+- Use the SDK-56 release of `expo-speech-recognition` and set `requiresOnDeviceRecognition: true` whenever the user selects On-device. Never silently upload that session as a fallback.
+- Use the first selected non-English locale for Apple's single-locale recognizer (`te-IN` for English + Telugu), while remote mixed-language transcription remains unforced.

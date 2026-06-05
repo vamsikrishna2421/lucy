@@ -411,3 +411,24 @@ Verified:
 - Settings renders `OpenAI API key only`, `GPT-5.4 Nano`, and the instruction not to enter Claude or other provider tokens.
 - The published ARM64 APK is aligned and v2 signed with the same sideload certificate as the prior beta update path, contains only `arm64-v8a`, and has no matches for the two local API secret values scanned.
 - Published APK SHA-256: `A48AD63611E7C152F87E48D60C14B58EE5BF00490DFE68672856CC2F68ACAF18`.
+
+## 2026-06-05 - Mixed-Language Listen Transcription Fix
+
+Built:
+
+- Corrected build 1.0.136 language preferences so English + Telugu uses automatic transcription-language detection instead of forcing unsupported `language=te`.
+- Added a documented-language allowlist for single-language Whisper hints.
+- Added a one-time automatic retry without the language hint when OpenAI rejects a hint as unsupported.
+- Reset the per-session language hint before profile loading and clarified the Settings explanation for mixed-language speech.
+- Replaced deprecated, New-Architecture-incompatible `@react-native-voice/voice` with `expo-speech-recognition@56.0.0`.
+- On-device mode now requests microphone permission directly, verifies recognition and true on-device support, requires local processing, preserves Telugu as `te-IN`, and surfaces structured native errors instead of silently looping.
+- Added the SDK 56 speech-recognition config plugin and advanced native build numbers to iOS `1.0.87` / Android `42`.
+
+Verified:
+
+- `npm run typecheck` passes.
+- Focused transcription-language tests pass for English + Telugu, Telugu-only, Hindi-only, normalized duplicates, and unsupported-language retry detection.
+- `npm run test:phase1` is currently blocked before assertions by the plain-Node runner loading Expo/React Native without its runtime globals.
+- `npx expo config --type public` resolves the new speech-recognition plugin and iOS microphone/speech permission strings.
+- `npx expo-doctor` passes all 21 checks after migrating splash configuration and aligning SDK 56 patch versions.
+- The replacement requires a new native iOS/Android build; it cannot be verified on an iPhone from this Windows workspace.

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { config } from '../src/config';
 import { localReferenceTimestamp } from '../src/ai/prompts';
+import { getDeviceSpeechLocale, getTranscriptionLanguageHint, shouldRetryWithoutLanguageHint } from '../src/audio/transcriptionLanguage';
 import { captureStatus, type CaptureRow } from '../src/db/captures';
 import { formatConnectionNote, formatMarkdownNote } from '../src/processing/markdown';
 import { extractExplicitEnglishFact } from '../src/processing/explicitEnglish';
@@ -52,6 +53,18 @@ const todoSample = 'Repu morning 9 ki landlord ki call cheyyali, urgent ga remin
 const ideaSample = 'Na startup idea: local ga family memories organize chese private app build cheyyali.';
 
 assert.equal(config.allowExternalAI, false, 'external AI must be opt-in by default');
+assert.equal(getTranscriptionLanguageHint(['en', 'te']), null, 'mixed English and Telugu must use auto-detect');
+assert.equal(getTranscriptionLanguageHint(['te']), null, 'undocumented Telugu hint must not be sent to Whisper');
+assert.equal(getTranscriptionLanguageHint(['hi']), 'hi', 'a single documented language may be used as a hint');
+assert.equal(getTranscriptionLanguageHint([' HI ', 'hi']), 'hi', 'duplicate language selections are normalized');
+assert.equal(getDeviceSpeechLocale(['en', 'te']), 'te-IN', 'local mixed-language recognition should prefer Telugu locale');
+assert.equal(getDeviceSpeechLocale(['en']), 'en-US', 'local English recognition should use US English');
+assert.equal(
+  shouldRetryWithoutLanguageHint(400, '{"error":{"message":"Language te is not supported."}}', 'te'),
+  true,
+  'a rejected language hint should retry with auto-detect',
+);
+assert.equal(shouldRetryWithoutLanguageHint(401, 'Unauthorized', 'te'), false, 'authentication failures must not retry');
 assert.equal(protectByUserChoice('Met Sam for coffee.', true).level, 'private', 'user may explicitly protect a thought');
 assert.match(protectByUserChoice('Met Sam for coffee.', true).reason, /Marked private/);
 assert.match(protectByUserChoice('Password is ExampleOnly-4829.', false).reason, /credential/i);

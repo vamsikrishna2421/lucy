@@ -7,13 +7,10 @@
     "orientation": "portrait",
     "icon": "./assets/lucy-icon.png",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "backgroundColor": "#0F0E0B"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.86",
+      "buildNumber": "1.0.87",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
@@ -75,7 +72,7 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.anonymous.lucy",
-      "versionCode": 41,
+      "versionCode": 42,
       "intentFilters": [
         {
           "action": "SEND",
@@ -132,7 +129,19 @@
       ],
       "expo-notifications",
       "expo-background-task",
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0F0E0B"
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "LUCY uses the microphone to record your thoughts in Listen mode and during meetings.",
+          "speechRecognitionPermission": "LUCY uses speech recognition to turn your voice into private on-device text."
+        }
+      ],
       ["expo-audio", { "microphonePermission": "LUCY uses the microphone to record your thoughts in Listen mode and during meetings.", "enableBackgroundRecording": true }],
       "expo-localization",
       "expo-asset",

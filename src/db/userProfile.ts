@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { getDeviceSpeechLocale, getTranscriptionLanguageHint } from '../audio/transcriptionLanguage';
 import { getSetting, setSetting } from './settings';
 
 export interface UserProfile {
@@ -48,9 +49,12 @@ export function buildUserContextPrefix(profile: UserProfile): string {
   return parts.length ? parts.join(' ') + '\n' : '';
 }
 
-// Whisper language hint: returns the ISO-639-1 code for the primary non-English language,
-// or null if English-only (no language hint needed — Whisper detects it fine).
+// A forced hint is used only for one documented language. Mixed-language and
+// undocumented-language profiles rely on automatic detection.
 export function getWhisperLanguageHint(profile: UserProfile): string | null {
-  const primaryNonEnglish = profile.languages.find((l) => l !== 'en');
-  return primaryNonEnglish ?? null;
+  return getTranscriptionLanguageHint(profile.languages);
+}
+
+export function getOnDeviceSpeechLocale(profile: UserProfile): string {
+  return getDeviceSpeechLocale(profile.languages);
 }

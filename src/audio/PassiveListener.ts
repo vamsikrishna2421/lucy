@@ -1,4 +1,9 @@
 import { RecordingPresets, setAudioModeAsync, requestRecordingPermissionsAsync } from 'expo-audio';
+import {
+  ExpoSpeechRecognitionModule,
+  type ExpoSpeechRecognitionErrorEvent,
+  type ExpoSpeechRecognitionResultEvent,
+} from 'expo-speech-recognition';
 import { Platform } from 'react-native';
 
 // AudioRecorder is NOT exported from expo-audio's public API.
@@ -22,21 +27,6 @@ import { transcribeAudioFile } from './WhisperTranscriber';
 import { getRemoteOpenAIKey } from '../ai/remoteAccess';
 
 type RecorderInstance = { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void };
-
-// Try on-device STT first (SFSpeechRecognizer via react-native-voice).
-let Voice: VoiceModule | null = null;
-try {
-  Voice = (require('@react-native-voice/voice') as { default: VoiceModule }).default;
-} catch { /* not available */ }
-
-interface VoiceModule {
-  onSpeechResults: ((e: { value?: string[] }) => void) | null;
-  onSpeechEnd: ((e: unknown) => void) | null;
-  onSpeechError: ((e: unknown) => void) | null;
-  start(locale: string): Promise<void>;
-  stop(): Promise<void>;
-  destroy(): Promise<void>;
-}
 
 export type ListeningStatus = 'off' | 'starting' | 'listening' | 'stopping';
 
@@ -73,6 +63,9 @@ class PassiveListenerManager {
   private active = false;
   private meetingMode = false;
   private languageHint: string | null = null; // ISO-639-1 code for primary language
+  private deviceSpeechLocale = 'en-US';
+  private deviceSpeechFatalError = false;
+  private deviceSpeechSubscriptions: Array<{ remove(): void }> = [];
   private voiceBuffer: string[] = [];
   private voiceRestartTimer: ReturnType<typeof setTimeout> | null = null;
   private transcriptAccumulator: string[] = [];
@@ -88,7 +81,7 @@ class PassiveListenerManager {
 
   getState(): PassiveListenerState { return { ...this.state }; }
   get isAvailable(): boolean { return true; }
-  get usesOnDeviceSTT(): boolean { return Voice !== null; }
+  get usesOnDeviceSTT(): boolean { return true; }
 
   /** Returns full accumulated transcript for the current/last session (for Meeting Mode) */
   getAccumulatedTranscript(): string {
@@ -127,9 +120,6 @@ class PassiveListenerManager {
     } catch { /* permission API not available — proceed and let prepareToRecordAsync handle it */ }
     this.patch({ noMicAccess: false });
 
-    // allowsBackgroundRecording ensures recording continues when the app is minimised.
-    try { await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true }); } catch { /* non-fatal */ }
-
     // Consent signal when listening starts
     try {
       const Haptics = await import('expo-haptics');
@@ -138,46 +128,57 @@ class PassiveListenerManager {
 
     // Load user preferences: language hint and transcription engine preference
     let preferDeviceSTT = false;
-    let langCode: string | null = null;
+    this.languageHint = null;
+    this.deviceSpeechLocale = 'en-US';
     try {
       const { getDatabase } = await import('../db');
-      const { getUserProfile, getWhisperLanguageHint } = await import('../db/userProfile');
+      const { getOnDeviceSpeechLocale, getUserProfile, getWhisperLanguageHint } = await import('../db/userProfile');
       const db = await getDatabase();
       const profile = await getUserProfile(db);
-      langCode = getWhisperLanguageHint(profile);
-      this.languageHint = langCode;
+      this.languageHint = getWhisperLanguageHint(profile);
+      this.deviceSpeechLocale = getOnDeviceSpeechLocale(profile);
       preferDeviceSTT = profile.transcriptionEngine === 'device';
-      if (preferDeviceSTT && !Voice) {
-        console.warn('[Listen] On-device STT preferred but @react-native-voice not installed; using Whisper');
-      }
     } catch { /* non-critical */ }
 
-    // Set language hint on Voice STT module if available
-    // (react-native-voice uses the iOS locale code, e.g. 'te-IN' for Telugu)
-    if (Voice && langCode) {
-      const localeMap: Record<string, string> = { te: 'te-IN', hi: 'hi-IN', ta: 'ta-IN', kn: 'kn-IN', ml: 'ml-IN', mr: 'mr-IN', en: 'en-US' };
-      (Voice as { locale?: string }).locale = localeMap[langCode] ?? `${langCode}-IN`;
-    }
-
-    // Use on-device STT if: user prefers it AND Voice module is available
-    // Use Whisper if: user prefers cloud OR Voice unavailable
-    const useVoice = Voice && (preferDeviceSTT || false);
+    const useDeviceSpeech = preferDeviceSTT;
 
     // Check if API key is present (batch mode needs it to count words)
     let noApiKey = false;
-    if (!useVoice) {
+    if (!useDeviceSpeech) {
       try {
         const key = await getRemoteOpenAIKey();
         noApiKey = !key;
       } catch { noApiKey = true; }
     }
 
-    if (useVoice) {
+    if (useDeviceSpeech) {
+      const microphonePermission = await ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync();
+      if (!microphonePermission.granted) {
+        await this.failDeviceSpeech(
+          'Microphone permission is not available. Open iPhone Settings → Apps → LUCY → Microphone and enable it.',
+        );
+        return;
+      }
+      if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+        await this.failDeviceSpeech(
+          'Apple speech recognition is unavailable on this device. Enable Siri & Dictation, or switch Voice transcription engine to OpenAI Whisper.',
+        );
+        return;
+      }
+      if (!ExpoSpeechRecognitionModule.supportsOnDeviceRecognition()) {
+        await this.failDeviceSpeech(
+          'This device does not currently support private on-device speech recognition. Switch Voice transcription engine to OpenAI Whisper.',
+        );
+        return;
+      }
       this.patch({ mode: 'stt', noApiKey: false });
-      await this.startVoiceSTT();
+      this.configureDeviceSpeechListeners();
+      if (!this.startDeviceSpeech()) return;
       this.batchTimer = setInterval(() => void this.flushVoiceBuffer(), config.passiveListenBatchMinutes * 60 * 1000);
     } else {
       this.patch({ mode: 'batch', noApiKey });
+      // Batch mode owns the Expo Audio session and can continue in the background.
+      try { await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true }); } catch { /* non-fatal */ }
       await this.startRecordingBatch();
       // 30-second batches → <45s end-to-end (Whisper ~3-8s + extraction ~2-4s).
       // Short batches mean more API calls but dramatically better responsiveness.
@@ -193,20 +194,74 @@ class PassiveListenerManager {
     this.patch({ status: 'listening' });
   }
 
-  private async startVoiceSTT(): Promise<void> {
-    if (!Voice || !this.active) return;
-    Voice.onSpeechResults = (e) => {
-      const text = (e.value ?? []).join(' ').trim();
-      if (text) { this.voiceBuffer.push(text); this.transcriptAccumulator.push(text); this.patch({ wordsHeard: this.state.wordsHeard + text.split(/\s+/).length }); }
-    };
-    Voice.onSpeechEnd = () => { if (this.active) this.voiceRestartTimer = setTimeout(() => void this.startVoiceSTT(), 300); };
-    Voice.onSpeechError = () => { if (this.active) this.voiceRestartTimer = setTimeout(() => void this.startVoiceSTT(), 2000); };
+  private configureDeviceSpeechListeners(): void {
+    this.clearDeviceSpeechListeners();
+    this.deviceSpeechFatalError = false;
+    this.deviceSpeechSubscriptions = [
+      ExpoSpeechRecognitionModule.addListener('result', (event: ExpoSpeechRecognitionResultEvent) => {
+        if (!event.isFinal) return;
+        const text = event.results[0]?.transcript.trim() ?? '';
+        if (!text) return;
+        this.voiceBuffer.push(text);
+        this.transcriptAccumulator.push(text);
+        this.patch({ wordsHeard: this.state.wordsHeard + text.split(/\s+/).length });
+      }),
+      ExpoSpeechRecognitionModule.addListener('error', (event: ExpoSpeechRecognitionErrorEvent) => {
+        console.error(`[Listen] On-device speech error ${event.error}: ${event.message}`);
+        if (!this.active || event.error === 'aborted' || event.error === 'no-speech') return;
+        this.deviceSpeechFatalError = true;
+        void this.failDeviceSpeech(
+          `On-device transcription failed (${event.error}). ${event.message || 'Switch Voice transcription engine to OpenAI Whisper and try again.'}`,
+        );
+      }),
+      ExpoSpeechRecognitionModule.addListener('end', () => {
+        if (this.active && !this.deviceSpeechFatalError) {
+          this.voiceRestartTimer = setTimeout(() => this.startDeviceSpeech(), 300);
+        }
+      }),
+    ];
+  }
+
+  private clearDeviceSpeechListeners(): void {
+    for (const subscription of this.deviceSpeechSubscriptions) subscription.remove();
+    this.deviceSpeechSubscriptions = [];
+  }
+
+  private startDeviceSpeech(): boolean {
+    if (!this.active) return false;
     try {
-      const localeMap: Record<string, string> = { te: 'te-IN', hi: 'hi-IN', ta: 'ta-IN', kn: 'kn-IN', ml: 'ml-IN', mr: 'mr-IN', en: 'en-US' };
-      const locale = this.languageHint ? (localeMap[this.languageHint] ?? `${this.languageHint}-IN`) : 'en-US';
-      await Voice.start(locale);
-      this.voiceRestartTimer = setTimeout(() => { if (this.active && Voice) Voice.stop().catch(() => {}); }, 50_000);
-    } catch { if (this.active) this.voiceRestartTimer = setTimeout(() => void this.startVoiceSTT(), 3000); }
+      ExpoSpeechRecognitionModule.start({
+        lang: this.deviceSpeechLocale,
+        interimResults: false,
+        maxAlternatives: 1,
+        continuous: true,
+        requiresOnDeviceRecognition: true,
+        addsPunctuation: true,
+      });
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.deviceSpeechFatalError = true;
+      void this.failDeviceSpeech(`Could not start on-device transcription. ${message}`);
+      return false;
+    }
+  }
+
+  private async failDeviceSpeech(message: string): Promise<void> {
+    if (!this.active && this.state.status === 'off') return;
+    this.active = false;
+    clearInterval(this.batchTimer!);
+    clearInterval(this.secondTimer!);
+    clearTimeout(this.voiceRestartTimer!);
+    this.batchTimer = null;
+    this.secondTimer = null;
+    this.voiceRestartTimer = null;
+    try { ExpoSpeechRecognitionModule.abort(); } catch { /* native recognizer may already be stopped */ }
+    this.clearDeviceSpeechListeners();
+    this.patch({ status: 'off', mode: 'none', sessionStartedAt: null });
+    this.sessionId = null;
+    const { Alert } = await import('react-native');
+    Alert.alert('On-device transcription unavailable', message, [{ text: 'OK' }]);
   }
 
   private async flushVoiceBuffer(): Promise<void> {
@@ -328,11 +383,16 @@ class PassiveListenerManager {
     this.batchTimer = null;
     this.secondTimer = null;
     this.voiceRestartTimer = null;
-    if (Voice) { try { await Voice.destroy(); } catch { /* ignore */ } await this.flushVoiceBuffer(); }
+    if (this.state.mode === 'stt') {
+      try { ExpoSpeechRecognitionModule.stop(); } catch { /* ignore */ }
+      await new Promise<void>((resolve) => setTimeout(resolve, 400));
+      this.clearDeviceSpeechListeners();
+      await this.flushVoiceBuffer();
+    }
     const uri = await this.stopRecorder();
     if (uri) {
       await this.transcribeAndProcess(uri);
-    } else if (this.sessionId) {
+    } else if (this.sessionId && this.state.mode === 'batch') {
       // Recorder never produced audio (permission denied or init error) — save marker
       try {
         await enqueueTranscript('[Listen session — no audio recorded. Check microphone permission in Settings → Privacy → Microphone.]', 'passive', false, this.sessionId);

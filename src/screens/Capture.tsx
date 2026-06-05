@@ -19,6 +19,11 @@ import {
 import type { PassiveListenerState } from '../audio/PassiveListener';
 import { haptic } from '../config/haptics';
 import { RecordingPresets, setAudioModeAsync } from 'expo-audio';
+import {
+  ExpoSpeechRecognitionModule,
+  type ExpoSpeechRecognitionErrorEvent,
+  type ExpoSpeechRecognitionResultEvent,
+} from 'expo-speech-recognition';
 import * as ImagePicker from 'expo-image-picker';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { AudioRecorder: AR } = require('expo-audio') as { AudioRecorder: new (opts: unknown) => { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void } };
@@ -31,10 +36,6 @@ import { getRemoteAccessState } from '../ai/remoteAccess';
 import { CaptureReplay } from '../components/CaptureReplay';
 import { detectAutomationIntent, executeAction, type ExtractedAction } from '../processing/automationEngine';
 import type { ExtractionResult } from '../types/extraction';
-
-// On-device STT for the voice button (iOS: SFSpeechRecognizer)
-let Voice: { default: { onSpeechResults: ((e: { value?: string[] }) => void) | null; onSpeechEnd: ((e: unknown) => void) | null; onSpeechError: ((e: unknown) => void) | null; start(l: string): Promise<void>; stop(): Promise<void>; destroy(): Promise<void> } } | null = null;
-try { Voice = require('@react-native-voice/voice') as typeof Voice; } catch { /* not compiled yet */ }
 
 interface DoneEntry {
   todo: TodoRow;
@@ -439,6 +440,7 @@ export function CaptureScreen({
   const [openCategory, setOpenCategory] = useState<TaskCategory | null>(null);
   type RecInst = { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void };
   const audioRecorder = useRef<RecInst | null>(null);
+  const speechSubscriptions = useRef<Array<{ remove(): void }>>([]);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -560,15 +562,19 @@ export function CaptureScreen({
   };
 
   const toggleVoiceInput = async () => {
+    const clearSpeechSubscriptions = () => {
+      for (const subscription of speechSubscriptions.current) subscription.remove();
+      speechSubscriptions.current = [];
+    };
+
     if (voiceRecording) {
-      // Stop recording
       animateMicToIdle();
       setVoiceRecording(false);
-      if (Voice?.default) {
-        await Voice.default.stop().catch(() => {});
-        await Voice.default.destroy().catch(() => {});
+      if (speechSubscriptions.current.length > 0) {
+        try { ExpoSpeechRecognitionModule.stop(); } catch { /* already stopped */ }
+        await new Promise<void>((resolve) => setTimeout(resolve, 300));
+        clearSpeechSubscriptions();
       } else if (audioRecorder.current) {
-        // Whisper fallback: stop and transcribe
         await audioRecorder.current.stop();
         const uri = audioRecorder.current.uri;
         audioRecorder.current.release?.();
@@ -582,45 +588,66 @@ export function CaptureScreen({
       return;
     }
 
-    // Start recording
-    if (Voice?.default) {
-      // On-device STT (iOS SFSpeechRecognizer)
-      Voice.default.onSpeechResults = (e) => {
-        const text = (e.value ?? []).join(' ').trim();
-        if (text) setText((prev) => prev ? `${prev} ${text}` : text);
-      };
-      Voice.default.onSpeechEnd = () => setVoiceRecording(false);
-      Voice.default.onSpeechError = () => setVoiceRecording(false);
-      await Voice.default.start('en-US');
-      haptic.listenStart();
-      animateMicToRecording();
-      setVoiceRecording(true);
-    } else {
-      try {
-        // Request mic permission explicitly before recording
-        const { requestRecordingPermissionsAsync } = await import('expo-audio');
-        const { status } = await requestRecordingPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert(
-            'Microphone access needed',
-            'LUCY needs microphone access to record voice. Go to Settings → LUCY → Microphone and turn it on.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Open Settings', onPress: () => Linking.openSettings() },
-            ],
-          );
-          return;
-        }
+    try {
+      const microphonePermission = await ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync();
+      if (!microphonePermission.granted) {
+        Alert.alert(
+          'Microphone access needed',
+          'LUCY needs microphone access to record voice. Go to Settings → Apps → LUCY → Microphone and turn it on.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ],
+        );
+        return;
+      }
+
+      if (ExpoSpeechRecognitionModule.isRecognitionAvailable() && ExpoSpeechRecognitionModule.supportsOnDeviceRecognition()) {
+        const { getOnDeviceSpeechLocale, getUserProfile } = await import('../db/userProfile');
+        const db = await getDatabase();
+        const profile = await getUserProfile(db);
+        const locale = getOnDeviceSpeechLocale(profile);
+        clearSpeechSubscriptions();
+        speechSubscriptions.current = [
+          ExpoSpeechRecognitionModule.addListener('result', (event: ExpoSpeechRecognitionResultEvent) => {
+            if (!event.isFinal) return;
+            const transcript = event.results[0]?.transcript.trim() ?? '';
+            if (transcript) setText((prev) => prev ? `${prev} ${transcript}` : transcript);
+          }),
+          ExpoSpeechRecognitionModule.addListener('error', (event: ExpoSpeechRecognitionErrorEvent) => {
+            if (event.error === 'aborted' || event.error === 'no-speech') return;
+            clearSpeechSubscriptions();
+            animateMicToIdle();
+            setVoiceRecording(false);
+            Alert.alert('On-device transcription failed', `${event.error}: ${event.message}`);
+          }),
+          ExpoSpeechRecognitionModule.addListener('end', () => {
+            clearSpeechSubscriptions();
+            animateMicToIdle();
+            setVoiceRecording(false);
+          }),
+        ];
+        ExpoSpeechRecognitionModule.start({
+          lang: locale,
+          interimResults: false,
+          maxAlternatives: 1,
+          continuous: false,
+          requiresOnDeviceRecognition: true,
+          addsPunctuation: true,
+        });
+      } else {
+        // Keep the one-shot voice button useful on devices without a local recognizer.
         await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
         audioRecorder.current = new AR(RecordingPresets.HIGH_QUALITY);
         await audioRecorder.current.prepareToRecordAsync();
         audioRecorder.current.record();
-        haptic.listenStart();
-        animateMicToRecording();
-        setVoiceRecording(true);
-      } catch {
-        Alert.alert('Could not start recording', 'Check microphone permission in Settings → LUCY.');
       }
+      haptic.listenStart();
+      animateMicToRecording();
+      setVoiceRecording(true);
+    } catch (error) {
+      clearSpeechSubscriptions();
+      Alert.alert('Could not start recording', error instanceof Error ? error.message : 'Check microphone permission in Settings → LUCY.');
     }
   };
 

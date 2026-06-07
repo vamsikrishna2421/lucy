@@ -207,7 +207,15 @@ function detectsCaptureIntent(text: string): boolean {
     || /\b(yes,?\s*add|please\s*(add|save|remember))\b/i.test(text);
 }
 
-async function answerWithLLM(question: string): Promise<LucyAnswer> {
+export interface AskTurn { role: 'user' | 'lucy'; content: string }
+
+function formatHistory(history: AskTurn[]): string {
+  if (!history || history.length === 0) return '';
+  const lines = history.slice(-8).map((t) => `${t.role === 'user' ? 'User' : 'LUCY'}: ${t.content}`);
+  return `CONVERSATION SO FAR (use this to understand follow-ups like "yes", "do that", "the first one"):\n${lines.join('\n')}\n\n`;
+}
+
+async function answerWithLLM(question: string, history: AskTurn[] = []): Promise<LucyAnswer> {
   const db = await getDatabase();
   const [profile, deviceCtx, calEvents] = await Promise.all([
     getUserProfile(db),
@@ -289,12 +297,13 @@ async function answerWithLLM(question: string): Promise<LucyAnswer> {
   } catch { /* non-critical */ }
 
   const input = [
+    formatHistory(history) || null,
     `DEVICE CONTEXT (live data — always accurate):\n${deviceInfo}`,
     calendarInfo ? calendarInfo : null,
     galaxyContext,
     healthContext,
     `CAPTURED MEMORIES:\n---\n${context}\n---`,
-    `Question: ${question}`,
+    `Current message: ${question}`,
   ].filter(Boolean).join('\n\n');
 
   let llmResponse: string;
@@ -351,9 +360,21 @@ async function answerWithLLM(question: string): Promise<LucyAnswer> {
   };
 }
 
-export async function askLucy(question: string, captureCallback?: (text: string) => Promise<void>): Promise<LucyAnswer> {
+export async function askLucy(
+  question: string,
+  captureCallback?: (text: string) => Promise<void>,
+  history: AskTurn[] = [],
+): Promise<LucyAnswer> {
   const db = await getDatabase();
   const trimmed = question.trim();
+
+  // Mid-conversation follow-ups (e.g. "yes", "do that", "the first one", "option 2")
+  // must be answered WITH the prior turns as context — never treated as a brand-new
+  // capture or matched against the standalone structured detectors.
+  const isShortFollowUp = history.length > 0 && trimmed.split(/\s+/).length <= 6;
+  if (isShortFollowUp) {
+    return answerWithLLM(trimmed, history);
+  }
 
   // If the user is adding new information to memory, capture it and confirm.
   if (detectsCaptureIntent(trimmed) && captureCallback) {
@@ -382,7 +403,7 @@ export async function askLucy(question: string, captureCallback?: (text: string)
   }
   if (!recognizesTodayPlanQuestion(trimmed)) {
     // No structured pattern matched — use LLM to answer from memory context.
-    return answerWithLLM(trimmed);
+    return answerWithLLM(trimmed, history);
   }
 
   const [allTasks, reminders] = await Promise.all([listPendingTodos(db), listReminders(db)]);

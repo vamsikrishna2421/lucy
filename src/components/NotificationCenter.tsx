@@ -6,7 +6,7 @@ import {
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import {
-  dismissNotif, getTotalUnreadCount, listNotifLog, markAllInsightsRead, markNotifRead,
+  dismissNotif, getNotifDiagnostics, getTotalUnreadCount, listNotifLog, markAllInsightsRead, markNotifRead,
   type NotifFilter, type NotifLogRow,
 } from '../db/notificationLog';
 
@@ -97,6 +97,7 @@ function NotifRow({ item, onRead, onDismiss }: {
 export function NotificationCenter({ visible, onClose, onCountChange }: { visible: boolean; onClose: () => void; onCountChange?: (count: number) => void }) {
   const [filter, setFilter] = useState<NotifFilter>('all');
   const [items, setItems] = useState<NotifLogRow[]>([]);
+  const [diag, setDiag] = useState<{ total: number; nonDismissed: number; unread: number; listed: number } | null>(null);
   const slideAnim = useRef(new Animated.Value(800)).current;
   const { height: screenHeight } = useWindowDimensions();
   const listMaxHeight = Math.max(200, Math.round(screenHeight * 0.88) - 140);
@@ -141,6 +142,7 @@ export function NotificationCenter({ visible, onClose, onCountChange }: { visibl
       console.log(`[Notif] Loaded ${rows.length} items for filter="${f}"`);
       setItems(rows);
       void refreshBadge();
+      void getNotifDiagnostics(db).then(setDiag).catch(() => {});
     } catch (e) {
       console.error('[NotificationCenter] loadItems failed:', e);
       if (version === loadVersion.current) setItems([]);
@@ -226,6 +228,11 @@ export function NotificationCenter({ visible, onClose, onCountChange }: { visibl
                   <Text style={styles.emptyIcon}>◌</Text>
                   <Text style={styles.emptyText}>No notifications</Text>
                   <Text style={styles.emptySub}>LUCY will surface patterns, reminders, and insights here.</Text>
+                  {diag ? (
+                    <Text style={styles.diagText}>
+                      debug · total {diag.total} · active {diag.nonDismissed} · unread {diag.unread} · listed {diag.listed}
+                    </Text>
+                  ) : null}
                 </View>
               ) : items.map((item, i) => (
                 <View key={String(item.id)}>
@@ -283,4 +290,5 @@ const styles = StyleSheet.create({
   emptyIcon: { color: LUCY_COLORS.textSubtle, fontSize: 36 },
   emptyText: { color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700' },
   emptySub: { color: LUCY_COLORS.textSubtle, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  diagText: { color: LUCY_COLORS.textSubtle, fontSize: 10, textAlign: 'center', marginTop: 16, opacity: 0.6 },
 });

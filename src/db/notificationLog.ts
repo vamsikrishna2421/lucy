@@ -95,6 +95,21 @@ export async function getTier1UnreadCount(db: SQLiteDatabase): Promise<number> {
   return Number(row?.n ?? 0);
 }
 
+/** Diagnostic snapshot of the notification table to debug badge/list mismatches. */
+export async function getNotifDiagnostics(db: SQLiteDatabase): Promise<{ total: number; nonDismissed: number; unread: number; listed: number }> {
+  const total = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM lucy_notifications');
+  const nonDismissed = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM lucy_notifications WHERE dismissed_at IS NULL');
+  const unread = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM lucy_notifications WHERE read_at IS NULL AND dismissed_at IS NULL AND expired_at IS NULL');
+  let listed = 0;
+  try { listed = (await listNotifLog(db, 'all')).length; } catch { listed = -1; }
+  return {
+    total: Number(total?.n ?? 0),
+    nonDismissed: Number(nonDismissed?.n ?? 0),
+    unread: Number(unread?.n ?? 0),
+    listed,
+  };
+}
+
 export async function getTotalUnreadCount(db: SQLiteDatabase): Promise<number> {
   const row = await db.getFirstAsync<{ n: number }>(
     'SELECT COUNT(*) AS n FROM lucy_notifications WHERE read_at IS NULL AND dismissed_at IS NULL AND expired_at IS NULL',

@@ -220,7 +220,15 @@ export function AskScreen({ initialQuestion }: { initialQuestion?: string } = {}
       const captureCallback = async (text: string) => {
         await enqueueTranscript(text, 'text', false);
       };
-      const answer = await askLucy(trimmed, captureCallback);
+      // Build conversation history so follow-ups ("yes", "do that") have context.
+      const history = messages
+        .map((m) => ({
+          role: m.role === 'user' ? ('user' as const) : ('lucy' as const),
+          content: m.role === 'user' ? (m.text ?? '') : (m.answer?.llmResponse ?? m.answer?.message ?? m.text ?? ''),
+        }))
+        .filter((h) => h.content.trim().length > 0)
+        .slice(-8);
+      const answer = await askLucy(trimmed, captureCallback, history);
       await insertLucyAskMessage(db, currentThreadId, answer);
       setMessages((existing) => [...existing, { id: `lucy-${messageId}`, role: 'lucy', answer }]);
     } finally {

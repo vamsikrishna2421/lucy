@@ -99,25 +99,31 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
     } catch { /* user cancelled */ }
   };
 
-  const captureCardImage = async (): Promise<string | null> => {
-    if (!cardRef.current) return null;
+  const captureCardImage = async (): Promise<string> => {
+    if (!cardRef.current) throw new Error('card not ready');
+    // Two attempts: tmpfile first; some iOS versions need a small settle delay.
     try {
       return await captureRef(cardRef, { format: 'png', quality: 1, result: 'tmpfile' });
-    } catch { return null; }
+    } catch {
+      await new Promise((r) => setTimeout(r, 250));
+      return await captureRef(cardRef, { format: 'png', quality: 0.9, result: 'tmpfile' });
+    }
   };
 
   const shareCardImage = async () => {
     setSharing(true);
     try {
       const uri = await captureCardImage();
-      if (!uri) { Alert.alert('Could not create image', 'Try copying the text instead.'); return; }
       const Sharing = await import('expo-sharing');
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share meeting summary' });
       } else {
         Alert.alert('Sharing unavailable', 'Image sharing is not available on this device.');
       }
-    } catch { /* cancelled */ } finally { setSharing(false); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert('Could not create image', msg);
+    } finally { setSharing(false); }
   };
 
   const saveCardToGallery = async () => {
@@ -130,10 +136,12 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
         return;
       }
       const uri = await captureCardImage();
-      if (!uri) { Alert.alert('Could not create image', 'Try copying the text instead.'); return; }
       await MediaLibrary.saveToLibraryAsync(uri);
       Alert.alert('Saved', 'Meeting summary card saved to your photos.');
-    } catch { Alert.alert('Save failed', 'Could not save the image.'); } finally { setSharing(false); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert('Save failed', msg);
+    } finally { setSharing(false); }
   };
 
   // Live word count from passive listener

@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.91",
+      "buildNumber": "1.0.92",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
@@ -72,7 +72,7 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.anonymous.lucy",
-      "versionCode": 46,
+      "versionCode": 47,
       "intentFilters": [
         {
           "action": "SEND",
@@ -107,6 +107,14 @@
         }
       ],
       "expo-secure-store",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "LUCY saves meeting summary cards to your photo library when you choose to.",
+          "savePhotosPermission": "LUCY saves meeting summary cards to your photo library when you choose to.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
       [
         "expo-sharing",
         {

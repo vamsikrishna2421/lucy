@@ -100,7 +100,6 @@ export function NotificationCenter({ visible, onClose, onCountChange }: { visibl
   const [diag, setDiag] = useState<{ total: number; nonDismissed: number; unread: number; listed: number } | null>(null);
   const slideAnim = useRef(new Animated.Value(800)).current;
   const { height: screenHeight } = useWindowDimensions();
-  const listMaxHeight = Math.max(200, Math.round(screenHeight * 0.88) - 140);
   // Version counter prevents stale async results from overwriting newer ones
   const loadVersion = useRef(0);
   // Keep filter in a ref so async loadItems always reads the latest value
@@ -180,12 +179,17 @@ export function NotificationCenter({ visible, onClose, onCountChange }: { visibl
 
   const unreadCount = items.filter((n) => !n.read_at && !n.expired_at).length;
 
+  // Fixed sheet height + flex:1 ScrollView = reliable list rendering. A bottom sheet
+  // sized to its content can't give a ScrollView a definite height, which collapsed
+  // the list to 0px even with 60 rows. Explicit height fixes it for good.
+  const sheetHeight = Math.round(screenHeight * 0.85);
+
   return (
     <Modal transparent animationType="none" visible={visible} onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <Pressable style={{ flex: 1 }} onPress={onClose} />
-        <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-          <View>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Animated.View style={[styles.sheet, { height: sheetHeight, transform: [{ translateY: slideAnim }] }]}>
+          <View style={{ flex: 1 }}>
             {/* Drag handle */}
             <View style={styles.handle} />
 
@@ -224,11 +228,11 @@ export function NotificationCenter({ visible, onClose, onCountChange }: { visibl
               ))}
             </View>
 
-            {/* List — fixed height (not maxHeight): a ScrollView with only maxHeight
-                inside a content-sized parent collapses to 0 and renders nothing even
-                when it has rows. An explicit height guarantees the list is visible. */}
+            {/* List — flex:1 inside the fixed-height sheet gives it a real, bounded
+                height so rows always render (previously collapsed to 0px). */}
             <ScrollView
-              style={[styles.list, { height: listMaxHeight }]}
+              style={styles.list}
+              contentContainerStyle={{ flexGrow: 1 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
@@ -255,10 +259,10 @@ export function NotificationCenter({ visible, onClose, onCountChange }: { visibl
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', flexDirection: 'column' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    borderTopWidth: 1, borderColor: LUCY_COLORS.border, maxHeight: '92%', minHeight: 300,
+    borderTopWidth: 1, borderColor: LUCY_COLORS.border,
   },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.border, alignSelf: 'center', marginTop: 10, marginBottom: 6 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },

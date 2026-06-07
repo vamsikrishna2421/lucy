@@ -152,25 +152,55 @@ class PassiveListenerManager {
     }
 
     if (useDeviceSpeech) {
-      const microphonePermission = await ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync();
-      if (!microphonePermission.granted) {
+      // CRITICAL: release any expo-audio recording session left active by a prior
+      // Whisper/batch run. SFSpeechRecognizer starts its own AVAudioEngine, and if
+      // expo-audio still owns the AVAudioSession in record mode the engine raises an
+      // uncatchable Objective-C exception → immediate app crash. Deactivating first
+      // hands the session cleanly to the speech recognizer.
+      try { await setAudioModeAsync({ allowsRecording: false }); } catch { /* non-fatal */ }
+
+      let permGranted = false;
+      let recognitionAvailable = false;
+      let onDeviceSupported = false;
+      try {
+        const microphonePermission = await ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync();
+        permGranted = microphonePermission.granted;
+        recognitionAvailable = ExpoSpeechRecognitionModule.isRecognitionAvailable();
+        onDeviceSupported = ExpoSpeechRecognitionModule.supportsOnDeviceRecognition();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await this.failDeviceSpeech(`On-device speech recognition could not initialize. ${message} Switch Voice transcription engine to OpenAI Whisper.`);
+        return;
+      }
+      if (!permGranted) {
         await this.failDeviceSpeech(
           'Microphone permission is not available. Open iPhone Settings → Apps → LUCY → Microphone and enable it.',
         );
         return;
       }
-      if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+      if (!recognitionAvailable) {
         await this.failDeviceSpeech(
           'Apple speech recognition is unavailable on this device. Enable Siri & Dictation, or switch Voice transcription engine to OpenAI Whisper.',
         );
         return;
       }
-      if (!ExpoSpeechRecognitionModule.supportsOnDeviceRecognition()) {
+      if (!onDeviceSupported) {
         await this.failDeviceSpeech(
           'This device does not currently support private on-device speech recognition. Switch Voice transcription engine to OpenAI Whisper.',
         );
         return;
       }
+      // Confirm the chosen locale has an on-device model installed. Forcing
+      // requiresOnDeviceRecognition for an uninstalled locale can fail hard, so we
+      // fall back to en-US (always installed on iOS) when the locale isn't ready.
+      try {
+        const supported = await ExpoSpeechRecognitionModule.getSupportedLocales({});
+        const installed = (supported?.installedLocales ?? []) as string[];
+        if (installed.length > 0 && !installed.includes(this.deviceSpeechLocale)) {
+          console.warn(`[Listen] Locale ${this.deviceSpeechLocale} not installed on-device; falling back to en-US`);
+          this.deviceSpeechLocale = 'en-US';
+        }
+      } catch { /* getSupportedLocales not critical — proceed with chosen locale */ }
       this.patch({ mode: 'stt', noApiKey: false });
       this.configureDeviceSpeechListeners();
       if (!this.startDeviceSpeech()) return;
@@ -237,6 +267,14 @@ class PassiveListenerManager {
         continuous: true,
         requiresOnDeviceRecognition: true,
         addsPunctuation: true,
+        // Explicit audio session config (the library's documented default) so the
+        // AVAudioSession category/mode are set deterministically and don't collide
+        // with whatever state a prior recording left behind.
+        iosCategory: {
+          category: 'playAndRecord',
+          categoryOptions: ['defaultToSpeaker', 'allowBluetooth'],
+          mode: 'measurement',
+        },
       });
       return true;
     } catch (error) {

@@ -6,7 +6,7 @@ import {
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import {
-  dismissNotif, listNotifLog, markAllInsightsRead, markNotifRead,
+  dismissNotif, getTotalUnreadCount, listNotifLog, markAllInsightsRead, markNotifRead,
   type NotifFilter, type NotifLogRow,
 } from '../db/notificationLog';
 
@@ -94,7 +94,7 @@ function NotifRow({ item, onRead, onDismiss }: {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function NotificationCenter({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export function NotificationCenter({ visible, onClose, onCountChange }: { visible: boolean; onClose: () => void; onCountChange?: (count: number) => void }) {
   const [filter, setFilter] = useState<NotifFilter>('all');
   const [items, setItems] = useState<NotifLogRow[]>([]);
   const slideAnim = useRef(new Animated.Value(800)).current;
@@ -121,6 +121,16 @@ export function NotificationCenter({ visible, onClose }: { visible: boolean; onC
     if (visible) void loadItems(filter);
   }, [filter]);
 
+  // Recompute the parent bell badge from the authoritative count so it can never
+  // diverge from reality (the long-standing "badge shows 9+ but list is empty" bug).
+  const refreshBadge = async () => {
+    try {
+      const db = await getDatabase();
+      const count = await getTotalUnreadCount(db);
+      onCountChange?.(count);
+    } catch { /* non-critical */ }
+  };
+
   const loadItems = async (f: NotifFilter = filterRef.current) => {
     const version = ++loadVersion.current;
     try {
@@ -130,9 +140,11 @@ export function NotificationCenter({ visible, onClose }: { visible: boolean; onC
       if (version !== loadVersion.current) return;
       console.log(`[Notif] Loaded ${rows.length} items for filter="${f}"`);
       setItems(rows);
+      void refreshBadge();
     } catch (e) {
       console.error('[NotificationCenter] loadItems failed:', e);
       if (version === loadVersion.current) setItems([]);
+      void refreshBadge();
     }
   };
 
@@ -140,18 +152,21 @@ export function NotificationCenter({ visible, onClose }: { visible: boolean; onC
     const db = await getDatabase();
     await markNotifRead(db, id);
     setItems((prev) => prev.map((n) => n.id === id ? { ...n, read_at: new Date().toISOString() } : n));
+    void refreshBadge();
   };
 
   const handleDismiss = async (id: number) => {
     const db = await getDatabase();
     await dismissNotif(db, id);
     setItems((prev) => prev.filter((n) => n.id !== id));
+    void refreshBadge();
   };
 
   const handleMarkAllRead = async () => {
     const db = await getDatabase();
     await markAllInsightsRead(db);
     await loadItems();
+    void refreshBadge();
   };
 
   const filters: { key: NotifFilter; label: string }[] = [

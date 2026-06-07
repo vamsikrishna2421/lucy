@@ -262,6 +262,9 @@ export default function App() {
     if (!ready) {
       return;
     }
+    // Cold-start badge sync — AppState 'active' may not fire on a fresh launch,
+    // so compute the unread count once here to avoid a stale bell badge.
+    void getDatabase().then((db) => getTotalUnreadCount(db)).then(setUnreadNotifCount).catch(() => {});
     const interval = setInterval(() => void drainQueue(), 30_000);
     // Record location + health every hour while the app is foregrounded —
     // but only when background location is NOT active (to avoid double-recording).
@@ -527,6 +530,7 @@ export default function App() {
       <LucyWrapped visible={wrappedVisible} onClose={() => setWrappedVisible(false)} />
       <NotificationCenter
         visible={notifCenterVisible}
+        onCountChange={setUnreadNotifCount}
         onClose={() => {
           setNotifCenterVisible(false);
           // Refresh badge after user reads/dismisses

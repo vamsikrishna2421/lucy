@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Easing, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { PrivacyBadge } from '../components/PrivacyBadge';
+import { MeetingShareBar } from '../components/MeetingShareBar';
+import { formatMeetingRowText } from '../processing/meetingFormat';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import { captureStatus, listCaptureUpdates, listRecentCaptures, listListenSessions, type CaptureRow, type ListenSessionGroup } from '../db/captures';
@@ -1877,6 +1879,7 @@ function ListenTab() {
 function MeetingsTab() {
   const [meetings, setMeetings] = useState<import('../db/meetingSummaries').MeetingSummaryRow[]>([]);
   const [selected, setSelected] = useState<import('../db/meetingSummaries').MeetingSummaryRow | null>(null);
+  const meetingCardRef = useRef<View>(null);
 
   useEffect(() => {
     void (async () => {
@@ -1931,16 +1934,17 @@ function MeetingsTab() {
       <Modal transparent animationType="slide" visible={selected !== null} onRequestClose={() => setSelected(null)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setSelected(null)}>
           <Pressable style={[styles.feedbackModal, { maxHeight: '90%', gap: 0 }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: LUCY_COLORS.textDark, flex: 1 }} numberOfLines={2}>{selected?.title}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 4 }}>
               <TouchableOpacity onPress={() => setSelected(null)} style={{ paddingLeft: 12 }}>
                 <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 14, fontWeight: '700' }}>Done</Text>
               </TouchableOpacity>
             </View>
-            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginBottom: 12 }}>
-              {selected ? formatDate(selected.recorded_at) : ''} · {selected?.duration_minutes} min
-            </Text>
             <ScrollView showsVerticalScrollIndicator={false}>
+              <View ref={meetingCardRef} collapsable={false} style={{ backgroundColor: LUCY_COLORS.surface, borderRadius: 14, padding: 14 }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: LUCY_COLORS.textDark }} numberOfLines={2}>{selected?.title}</Text>
+              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginBottom: 12, marginTop: 2 }}>
+                {selected ? formatDate(selected.recorded_at) : ''} · {selected?.duration_minutes} min
+              </Text>
               {selected?.headline ? <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '600', lineHeight: 22, marginBottom: 14 }}>{selected.headline}</Text> : null}
               {(() => {
                 if (!selected) return null;
@@ -1972,7 +1976,10 @@ function MeetingsTab() {
                   </>
                 );
               })()}
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '800', letterSpacing: 0.5, marginTop: 18, textAlign: 'right' }}>LUC<Text style={{ color: LUCY_COLORS.primary }}>Y</Text> · meeting summary</Text>
+              </View>
             </ScrollView>
+            {selected ? <MeetingShareBar cardRef={meetingCardRef} getText={() => formatMeetingRowText(selected)} /> : null}
           </Pressable>
         </Pressable>
       </Modal>

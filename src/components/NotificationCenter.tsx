@@ -191,7 +191,14 @@ export function NotificationCenter({ visible, onClose, onCountChange }: { visibl
 
             {/* Header */}
             <View style={styles.header}>
-              <Text style={styles.headerTitle}>Notifications</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.headerTitle}>Notifications</Text>
+                {diag ? (
+                  <Text style={styles.diagText}>
+                    {diag.total} total · {diag.nonDismissed} active · {diag.unread} unread · {diag.listed} shown
+                  </Text>
+                ) : null}
+              </View>
               <View style={styles.headerRight}>
                 {unreadCount > 0 ? (
                   <TouchableOpacity onPress={() => void handleMarkAllRead()} style={styles.markAllBtn}>
@@ -228,11 +235,6 @@ export function NotificationCenter({ visible, onClose, onCountChange }: { visibl
                   <Text style={styles.emptyIcon}>◌</Text>
                   <Text style={styles.emptyText}>No notifications</Text>
                   <Text style={styles.emptySub}>LUCY will surface patterns, reminders, and insights here.</Text>
-                  {diag ? (
-                    <Text style={styles.diagText}>
-                      debug · total {diag.total} · active {diag.nonDismissed} · unread {diag.unread} · listed {diag.listed}
-                    </Text>
-                  ) : null}
                 </View>
               ) : items.map((item, i) => (
                 <View key={String(item.id)}>
@@ -290,5 +292,5 @@ const styles = StyleSheet.create({
   emptyIcon: { color: LUCY_COLORS.textSubtle, fontSize: 36 },
   emptyText: { color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700' },
   emptySub: { color: LUCY_COLORS.textSubtle, fontSize: 14, textAlign: 'center', lineHeight: 20 },
-  diagText: { color: LUCY_COLORS.textSubtle, fontSize: 10, textAlign: 'center', marginTop: 16, opacity: 0.6 },
+  diagText: { color: LUCY_COLORS.primaryGlow, fontSize: 10, marginTop: 3, opacity: 0.7 },
 });

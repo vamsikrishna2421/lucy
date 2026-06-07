@@ -54,7 +54,9 @@ export function MeetingShareBar({ cardRef, getText }: { cardRef: RefObject<View 
   const saveImage = async () => {
     setBusy(true);
     try {
-      const MediaLibrary = await import('expo-media-library');
+      // SDK 56 deprecated saveToLibraryAsync on the main entry; the legacy module
+      // keeps the simple, stable save API.
+      const MediaLibrary = await import('expo-media-library/legacy');
       const perm = await MediaLibrary.requestPermissionsAsync();
       if (!perm.granted) {
         Alert.alert('Photos permission needed', 'Allow photo library access in Settings → LUCY to save summary cards.');

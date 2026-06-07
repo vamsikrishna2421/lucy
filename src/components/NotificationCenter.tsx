@@ -224,9 +224,11 @@ export function NotificationCenter({ visible, onClose, onCountChange }: { visibl
               ))}
             </View>
 
-            {/* List — plain ScrollView avoids FlatList windowing issues */}
+            {/* List — fixed height (not maxHeight): a ScrollView with only maxHeight
+                inside a content-sized parent collapses to 0 and renders nothing even
+                when it has rows. An explicit height guarantees the list is visible. */}
             <ScrollView
-              style={[styles.list, { maxHeight: listMaxHeight }]}
+              style={[styles.list, { height: listMaxHeight }]}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >

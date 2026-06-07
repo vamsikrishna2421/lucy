@@ -129,7 +129,7 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
   const saveCardToGallery = async () => {
     setSharing(true);
     try {
-      const MediaLibrary = await import('expo-media-library');
+      const MediaLibrary = await import('expo-media-library/legacy');
       const perm = await MediaLibrary.requestPermissionsAsync();
       if (!perm.granted) {
         Alert.alert('Photos permission needed', 'Allow photo library access in Settings → LUCY to save summary cards.');

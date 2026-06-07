@@ -63,6 +63,8 @@ export interface LucyAnswer {
   expenseTotal?: number;
   spendingCategories?: LucySpendingCategory[];
   llmResponse?: string;
+  /** When LUCY proposes concrete task reorganizations the user can approve + apply. */
+  proposedActions?: import('./lucyActions').LucyAction[];
 }
 
 function isToday(value: string): boolean {
@@ -375,6 +377,25 @@ export async function askLucy(
   if (isShortFollowUp) {
     return answerWithLLM(trimmed, history);
   }
+
+  // Interactive reorganization: LUCY proposes concrete task-list changes to approve.
+  try {
+    const { isReorganizeRequest, planTaskReorganization } = await import('./lucyActions');
+    if (isReorganizeRequest(trimmed)) {
+      const plan = await planTaskReorganization(trimmed, history);
+      return {
+        supported: true,
+        answerKind: 'llm',
+        title: '',
+        message: '',
+        tasks: [],
+        deadlines: [],
+        recordedSignal: '',
+        llmResponse: plan.message,
+        proposedActions: plan.actions.length > 0 ? plan.actions : undefined,
+      };
+    }
+  } catch { /* fall through to normal answer */ }
 
   // If the user is adding new information to memory, capture it and confirm.
   if (detectsCaptureIntent(trimmed) && captureCallback) {

@@ -415,6 +415,16 @@ export default function App() {
     return () => { responseSub.remove(); receivedSub.remove(); };
   }, []);
 
+  // When LUCY applies task reorganizations from the Ask chat, refresh the Tasks board.
+  useEffect(() => {
+    let cancelled = false;
+    void import('./src/processing/lucyActions').then(({ setActionsAppliedListener }) => {
+      if (cancelled) return;
+      setActionsAppliedListener(() => setRefreshToken((v) => v + 1));
+    });
+    return () => { cancelled = true; void import('./src/processing/lucyActions').then(({ setActionsAppliedListener }) => setActionsAppliedListener(null)); };
+  }, []);
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>

@@ -61,11 +61,34 @@ const CATEGORY_RULES: Array<{ id: string; label: string; icon: string; color: st
   { id: 'personal', label: 'Personal',        icon: '◈',  color: '#A78BFA', pattern: /family|home|personal|mom|dad|kids|children|house|clean|laundry|bills|bank/i },
 ];
 
+// Palette for custom (LUCY/user-created) lists, keyed by name hash for stable colors.
+const CUSTOM_LIST_COLORS = ['#FF8C42', '#60A5FA', '#4ADE80', '#A78BFA', '#F472B6', '#FCA5A5', '#FBBF24'];
+function colorForList(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return CUSTOM_LIST_COLORS[h % CUSTOM_LIST_COLORS.length];
+}
+
 function categorizeTodos(todos: TodoRow[]): TaskCategory[] {
+  // Todos with an explicit list_name (set by the user or LUCY) group under that name
+  // and take priority over regex auto-categorization.
+  const customLists = new Map<string, TodoRow[]>();
+  const autoTodos: TodoRow[] = [];
+  for (const todo of todos) {
+    const listName = (todo.list_name ?? '').trim();
+    if (listName) {
+      const existing = customLists.get(listName) ?? [];
+      existing.push(todo);
+      customLists.set(listName, existing);
+    } else {
+      autoTodos.push(todo);
+    }
+  }
+
   const buckets = new Map<string, TodoRow[]>();
   const uncategorized: TodoRow[] = [];
 
-  for (const todo of todos) {
+  for (const todo of autoTodos) {
     const haystack = [todo.task, todo.context ?? '', todo.category ?? ''].join(' ');
     let matched = false;
     for (const rule of CATEGORY_RULES) {
@@ -81,6 +104,10 @@ function categorizeTodos(todos: TodoRow[]): TaskCategory[] {
   }
 
   const result: TaskCategory[] = [];
+  // Custom lists first (user/LUCY intent is explicit)
+  for (const [name, items] of customLists) {
+    result.push({ id: `custom:${name}`, label: name, icon: '◆', color: colorForList(name), items });
+  }
   for (const rule of CATEGORY_RULES) {
     const items = buckets.get(rule.id);
     if (items && items.length > 0) {

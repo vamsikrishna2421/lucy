@@ -341,6 +341,11 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
   if (!existingTodoColumns.has('archive_reason')) {
     await db.execAsync('ALTER TABLE todos ADD COLUMN archive_reason TEXT;');
   }
+  // Persistent list/category assignment set by the user or by LUCY's reorganizer.
+  // When NULL, the Tasks board falls back to regex-based auto-categorization.
+  if (!existingTodoColumns.has('list_name')) {
+    await db.execAsync('ALTER TABLE todos ADD COLUMN list_name TEXT;');
+  }
   await db.execAsync(`
     CREATE INDEX IF NOT EXISTS idx_captures_created_at ON captures(created_at, id);
     CREATE INDEX IF NOT EXISTS idx_captures_parent_created_at ON captures(parent_capture_id, created_at, id);

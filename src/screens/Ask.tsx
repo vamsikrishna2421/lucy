@@ -22,6 +22,7 @@ import {
   type AskThreadSummaryRow,
 } from '../db/askThreads';
 import { askLucy, type LucyAnswer } from '../processing/ask';
+import { executeActions, summarizeAction, type LucyAction } from '../processing/lucyActions';
 import { isInvalidDeadline, isInvalidPendingTask } from '../processing/artifactCleanup';
 import { protectedPreview } from '../processing/privacy';
 import { enqueueTranscript } from '../processing/extract';
@@ -629,6 +630,46 @@ function HistoryView({
   );
 }
 
+function ActionPlanCard({ actions }: { actions: LucyAction[] }) {
+  const [state, setState] = useState<'idle' | 'applying' | 'done'>('idle');
+  const [resultText, setResultText] = useState('');
+
+  const apply = async () => {
+    setState('applying');
+    try {
+      const { applied, summary } = await executeActions(actions);
+      setResultText(applied > 0 ? `✓ ${summary} Open Tasks to see the changes.` : 'Nothing was changed.');
+      setState('done');
+    } catch {
+      setResultText('Could not apply the changes.');
+      setState('done');
+    }
+  };
+
+  return (
+    <View style={styles.planCard}>
+      <Text style={styles.planTitle}>Proposed changes</Text>
+      {actions.map((a, i) => (
+        <View key={i} style={styles.planRow}>
+          <Text style={styles.planBullet}>•</Text>
+          <Text style={styles.planText}>{summarizeAction(a)}</Text>
+        </View>
+      ))}
+      {state === 'done' ? (
+        <Text style={styles.planDone}>{resultText}</Text>
+      ) : (
+        <TouchableOpacity
+          style={[styles.planApplyBtn, state === 'applying' && { opacity: 0.6 }]}
+          disabled={state === 'applying'}
+          onPress={() => void apply()}
+        >
+          <Text style={styles.planApplyText}>{state === 'applying' ? 'Applying…' : 'Apply changes'}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
 function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.role === 'user') {
     return (
@@ -650,6 +691,9 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       <View style={[styles.bubble, styles.lucyBubble]}>
         <Text style={styles.responseLabel}>LUCY</Text>
         <Text style={styles.llmResponse}>{answer.llmResponse}</Text>
+        {answer.proposedActions && answer.proposedActions.length > 0 ? (
+          <ActionPlanCard actions={answer.proposedActions} />
+        ) : null}
         {answer.citedSources && answer.citedSources.length > 0 ? (
           <View style={styles.sourcesSection}>
             <Text style={styles.sourcesLabel}>From your memory</Text>
@@ -839,6 +883,14 @@ const styles = StyleSheet.create({
   insightAskBtn: { alignSelf: 'flex-start', backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
   insightAskBtnText: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700' },
   llmResponse: { color: LUCY_COLORS.textDark, fontSize: 15, lineHeight: 23, marginBottom: 10 },
+  planCard: { backgroundColor: LUCY_COLORS.surface, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.primary + '44', padding: 14, marginBottom: 10, gap: 6 },
+  planTitle: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
+  planRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  planBullet: { color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '800' },
+  planText: { color: LUCY_COLORS.textDark, fontSize: 14, flex: 1, lineHeight: 20 },
+  planApplyBtn: { backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 8 },
+  planApplyText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  planDone: { color: LUCY_COLORS.success, fontSize: 13, fontWeight: '700', marginTop: 8, lineHeight: 19 },
   sourcesSection: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, marginTop: 4, paddingTop: 12, gap: 6 },
   sourcesLabel: { color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 },
   sourceChip: { backgroundColor: LUCY_COLORS.surface, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: LUCY_COLORS.border },  // more separated from answer

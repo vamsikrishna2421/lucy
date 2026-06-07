@@ -9,6 +9,8 @@ export interface TodoRow extends ExtractedTask {
   status: string;
   archived_at?: string | null;
   archive_reason?: string | null;
+  /** Persistent list assignment (set by user or LUCY). NULL = auto-categorized. */
+  list_name?: string | null;
 }
 
 export async function insertTodo(
@@ -76,6 +78,58 @@ export async function archiveTodo(db: SQLiteDatabase, id: number, reason: string
     reason,
     id,
   );
+}
+
+// ─── Interactive reorganization helpers (used by LUCY's Ask-chat actions) ──────────
+
+/** Assigns a list/category to a set of todos (the "move tasks to a list" action). */
+export async function recategorizeTodos(db: SQLiteDatabase, ids: number[], listName: string): Promise<number> {
+  if (ids.length === 0) return 0;
+  const placeholders = ids.map(() => '?').join(',');
+  await db.runAsync(
+    `UPDATE todos SET list_name = ? WHERE id IN (${placeholders}) AND status = 'pending'`,
+    listName, ...ids,
+  );
+  return ids.length;
+}
+
+/** Renames a list everywhere it's used. */
+export async function renameTodoList(db: SQLiteDatabase, from: string, to: string): Promise<void> {
+  await db.runAsync('UPDATE todos SET list_name = ? WHERE list_name = ?', to, from);
+}
+
+/** Splits one combined todo into several atomic todos in the same list/category. */
+export async function splitTodo(db: SQLiteDatabase, id: number, newTasks: string[]): Promise<void> {
+  const original = await db.getFirstAsync<TodoRow>('SELECT * FROM todos WHERE id = ?', id);
+  if (!original) return;
+  for (const task of newTasks) {
+    const t = task.trim();
+    if (!t) continue;
+    await db.runAsync(
+      'INSERT INTO todos (capture_id, task, category, urgency, context, privacy_level, list_name) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      original.capture_id, t, original.category, original.urgency, original.context ?? '', original.privacy_level, original.list_name ?? null,
+    );
+  }
+  await db.runAsync('DELETE FROM todos WHERE id = ?', id);
+}
+
+/** Permanently deletes a set of todos (duplicate cleanup). */
+export async function deleteTodos(db: SQLiteDatabase, ids: number[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  const placeholders = ids.map(() => '?').join(',');
+  await db.runAsync(`DELETE FROM todos WHERE id IN (${placeholders})`, ...ids);
+  return ids.length;
+}
+
+/** Archives a set of todos (stale cleanup, keeps them recoverable). */
+export async function archiveTodos(db: SQLiteDatabase, ids: number[], reason: string): Promise<number> {
+  if (ids.length === 0) return 0;
+  const placeholders = ids.map(() => '?').join(',');
+  await db.runAsync(
+    `UPDATE todos SET status = 'archived', archived_at = CURRENT_TIMESTAMP, archive_reason = ? WHERE id IN (${placeholders})`,
+    reason, ...ids,
+  );
+  return ids.length;
 }
 
 /**

@@ -38,6 +38,10 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const timerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Guards against saving the same meeting twice (auto-save + explicit "Save to memory").
+  const savedRef  = useRef(false);
+  // Raw transcript captured at stop time, used for the fallback save path.
+  const rawTranscriptRef = useRef('');
 
   // Live word count from passive listener
   useEffect(() => {
@@ -79,14 +83,39 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
     setMeetingTitle(title);
     setStartedAt(new Date());
     setElapsed(0);
+    savedRef.current = false;
+    rawTranscriptRef.current = '';
+    setSavedToMemory(false);
     setPhase('recording');
     await passiveListener.start({ meetingMode: true });
+  };
+
+  /**
+   * Persists the meeting exactly once. Safe to call from multiple places
+   * (auto-save on stop, dismiss safety net) — the savedRef guard prevents
+   * the duplicate copies that previously appeared in Brain → Meetings.
+   */
+  const persistMeeting = async (gen: MeetingSummary | null, durationMs: number): Promise<void> => {
+    if (savedRef.current) return;
+    savedRef.current = true; // set before await so a concurrent call can't slip through
+    try {
+      if (gen) {
+        await saveMeetingToMemory(gen, meetingTitle, durationMs);
+      } else if (rawTranscriptRef.current.trim().length > 0) {
+        await saveRawTranscriptAsMeeting(rawTranscriptRef.current, meetingTitle, durationMs);
+      } else {
+        savedRef.current = false; // nothing to save — allow a later retry
+      }
+    } catch {
+      savedRef.current = false; // save failed — allow a retry from the dismiss path
+    }
   };
 
   const stopMeeting = async () => {
     setPhase('processing');
     // Grab the accumulated transcript BEFORE stopping (stop flushes the buffer)
     const rawTranscript = passiveListener.getAccumulatedTranscript();
+    rawTranscriptRef.current = rawTranscript;
     await passiveListener.stop();
     passiveListener.clearTranscript();
     const durationMs = startedAt ? Date.now() - startedAt.getTime() : 0;
@@ -103,29 +132,19 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
     } catch { /* show empty summary */ }
 
     setPhase('summary');
-    // Auto-save immediately — user still sees the summary and can dismiss.
-    const elapsed = startedAt ? Date.now() - startedAt.getTime() : 0;
-    if (gen) {
-      void saveMeetingToMemory(gen, meetingTitle, elapsed).catch(() => {});
-    } else if (rawTranscript && rawTranscript.trim().length > 0) {
-      // AI summarization failed (no key / unavailable) — save raw transcript so
-      // the meeting is never silently lost. Shows in Brain → Meetings with no headline.
-      void saveRawTranscriptAsMeeting(rawTranscript, meetingTitle, elapsed).catch(() => {});
-    }
+    // Save automatically and exactly once — no explicit button needed.
+    await persistMeeting(gen, durationMs);
+    setSavedToMemory(true);
   };
 
-  const saveAndClose = async () => {
-    if (summary && startedAt) {
-      await saveMeetingToMemory(summary, meetingTitle, Date.now() - startedAt.getTime());
-      setSavedToMemory(true);
-    }
-    setTimeout(() => {
-      setPhase('idle');
-      setMeetingTitle('');
-      setSummary(null);
-      setSavedToMemory(false);
-      onClose();
-    }, 1000);
+  const closeMeeting = () => {
+    setPhase('idle');
+    setMeetingTitle('');
+    setSummary(null);
+    setSavedToMemory(false);
+    savedRef.current = false;
+    rawTranscriptRef.current = '';
+    onClose();
   };
 
   const handleClose = () => {
@@ -133,10 +152,13 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
       void stopMeeting();
       return;
     }
-    setPhase('idle');
-    setMeetingTitle('');
-    setSummary(null);
-    onClose();
+    // Safety net: if the summary is showing but the auto-save didn't land, save before closing.
+    if (phase === 'summary' && !savedRef.current) {
+      const durationMs = startedAt ? Date.now() - startedAt.getTime() : 0;
+      void persistMeeting(summary, durationMs).finally(closeMeeting);
+      return;
+    }
+    closeMeeting();
   };
 
   return (
@@ -258,11 +280,13 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
                   </Text>
                 )}
               </ScrollView>
-              <TouchableOpacity style={[styles.startBtn, savedToMemory && styles.savedBtn]} onPress={() => void saveAndClose()}>
-                <Text style={styles.startBtnText}>{savedToMemory ? 'Saved to memory ✓' : 'Save to LUCY memory'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.dismissBtn} onPress={handleClose}>
-                <Text style={styles.dismissText}>Dismiss</Text>
+              <View style={styles.savedNotice}>
+                <Text style={styles.savedNoticeText}>
+                  {savedToMemory ? '✓ Saved to LUCY memory' : 'Saving to memory…'}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.startBtn} onPress={handleClose}>
+                <Text style={styles.startBtnText}>Done</Text>
               </TouchableOpacity>
             </>
           )}
@@ -312,6 +336,8 @@ const styles = StyleSheet.create({
   },
   startBtn: { backgroundColor: LUCY_COLORS.primary, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginBottom: 12 },
   savedBtn: { backgroundColor: LUCY_COLORS.success },
+  savedNotice: { alignItems: 'center', paddingVertical: 10, marginBottom: 4 },
+  savedNoticeText: { color: LUCY_COLORS.success, fontSize: 14, fontWeight: '700' },
   startBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   disclaimer: { color: LUCY_COLORS.textSubtle, fontSize: 12, textAlign: 'center', lineHeight: 18 },
   // Recording

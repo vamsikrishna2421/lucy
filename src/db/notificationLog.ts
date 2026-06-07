@@ -36,6 +36,28 @@ export async function upsertNotifLog(
   );
 }
 
+/**
+ * Inserts an OS-delivered notification into the log, deduped by a per-occurrence key.
+ * Unlike upsertNotifLog this NEVER resurrects a read/dismissed row (ON CONFLICT DO
+ * NOTHING), so reconciling the tray repeatedly — or a notification arriving via both
+ * the received-listener and the foreground reconcile — produces exactly one entry.
+ */
+export async function insertDeliveredNotifLog(
+  db: SQLiteDatabase,
+  row: { dedupKey: string; kind: string; tier: 1 | 2 | 3; title: string; body: string | null },
+): Promise<void> {
+  await db.runAsync(
+    `INSERT INTO lucy_notifications (identifier, kind, tier, title, body, scheduled_for)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(identifier) DO NOTHING`,
+    row.dedupKey, row.kind, row.tier, row.title, row.body ?? null, new Date().toISOString(),
+  );
+  await db.runAsync(
+    `DELETE FROM lucy_notifications WHERE id NOT IN
+     (SELECT id FROM lucy_notifications ORDER BY created_at DESC LIMIT 200)`,
+  );
+}
+
 export async function markNotifRead(db: SQLiteDatabase, id: number): Promise<void> {
   await db.runAsync(
     'UPDATE lucy_notifications SET read_at = CURRENT_TIMESTAMP WHERE id = ? AND read_at IS NULL', id,

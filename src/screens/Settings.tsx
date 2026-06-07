@@ -14,7 +14,7 @@ import { getSetting, setSetting } from '../db/settings';
 import { getBackgroundProcessingState, type BackgroundProcessingState } from '../processing/background';
 import { runEnglishDeviceBenchmark, type BenchmarkResult } from '../processing/benchmark';
 import { organizeMemory } from '../processing/organizer';
-import { scheduleProgressCheckIn, cancelProgressCheckIn } from '../processing/notifications';
+import { CheckInScheduler } from '../components/CheckInScheduler';
 import { getUserProfile, saveUserProfile, type UserProfile } from '../db/userProfile';
 
 interface SettingsScreenProps {
@@ -53,6 +53,7 @@ function findModel(id: string): ModelOption | undefined {
 export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll }: SettingsScreenProps) {
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
   const [devLogVisible, setDevLogVisible] = useState(false);
+  const [checkInSchedulerVisible, setCheckInSchedulerVisible] = useState(false);
   const [queue, setQueue] = useState(emptyQueue);
   const [background, setBackground] = useState<BackgroundProcessingState>();
   const [changingBackground, setChangingBackground] = useState(false);
@@ -395,25 +396,10 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         <SettingsSectionLabel label="Capture & Notifications" />
         <SettingsRow
           title="Progress check-ins"
-          value={checkInEnabled ? 'LUCY reminds you every 2 hours to capture updates' : 'Off — tap to turn on'}
+          value={checkInEnabled ? 'Reminders on — tap to edit your times' : 'Off — set your own reminder times'}
           badge={checkInEnabled ? 'On' : 'Off'}
           active={checkInEnabled}
-          onInfo={async () => {
-            const db = await getDatabase();
-            if (checkInEnabled) {
-              const existingId = await getSetting(db, 'progress_checkin_notification_id');
-              if (existingId) await cancelProgressCheckIn(existingId);
-              await setSetting(db, 'progress_checkin_notification_id', '');
-              setCheckInEnabled(false);
-            } else {
-              const id = await scheduleProgressCheckIn();
-              if (id) {
-                await setSetting(db, 'progress_checkin_notification_id', id);
-                setCheckInEnabled(true);
-                Alert.alert('Check-ins on', 'LUCY will nudge you every 2 hours to capture your progress.');
-              }
-            }
-          }}
+          onInfo={() => setCheckInSchedulerVisible(true)}
         />
         <SettingsSectionLabel label="Profile" />
         <SettingsRow
@@ -681,6 +667,11 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       </View>
 
       <DevLogViewer visible={devLogVisible} onClose={() => setDevLogVisible(false)} />
+      <CheckInScheduler
+        visible={checkInSchedulerVisible}
+        onClose={() => setCheckInSchedulerVisible(false)}
+        onChange={(en) => setCheckInEnabled(en)}
+      />
       <SettingsSheet title={panelTitle(activePanel)} visible={activePanel !== null} onClose={() => setActivePanel(null)}>
         {activePanel === 'intelligence' ? (
           <>

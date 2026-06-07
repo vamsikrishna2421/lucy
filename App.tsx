@@ -262,9 +262,16 @@ export default function App() {
     if (!ready) {
       return;
     }
-    // Cold-start badge sync — AppState 'active' may not fire on a fresh launch,
-    // so compute the unread count once here to avoid a stale bell badge.
-    void getDatabase().then((db) => getTotalUnreadCount(db)).then(setUnreadNotifCount).catch(() => {});
+    // Cold-start: reconcile any notifications that fired while the app was closed
+    // into the in-app bell, then sync the badge (AppState 'active' may not fire on launch).
+    void (async () => {
+      try {
+        const { reconcileDeliveredNotifications } = await import('./src/processing/notifications');
+        await reconcileDeliveredNotifications();
+        const db = await getDatabase();
+        setUnreadNotifCount(await getTotalUnreadCount(db));
+      } catch { /* non-critical */ }
+    })();
     const interval = setInterval(() => void drainQueue(), 30_000);
     // Record location + health every hour while the app is foregrounded —
     // but only when background location is NOT active (to avoid double-recording).
@@ -288,9 +295,14 @@ export default function App() {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         void drainQueue();
-        // Refresh notification badge count
+        // Reconcile OS-delivered notifications into the in-app bell, then refresh badge.
         void (async () => {
-          try { const db = await getDatabase(); setUnreadNotifCount(await getTotalUnreadCount(db)); } catch { /* non-critical */ }
+          try {
+            const { reconcileDeliveredNotifications } = await import('./src/processing/notifications');
+            await reconcileDeliveredNotifications();
+            const db = await getDatabase();
+            setUnreadNotifCount(await getTotalUnreadCount(db));
+          } catch { /* non-critical */ }
         })();
         // Record location + health when app comes to foreground.
         // If background location is active, only update health (location is already covered).
@@ -377,13 +389,30 @@ export default function App() {
   }, [passiveState.status]);
 
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+    // Tapped a notification → open its detail AND ensure it's logged in the bell.
+    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const req = response.notification.request;
+      const data = req.content.data as Record<string, unknown> | undefined;
+      void import('./src/processing/notifications')
+        .then(({ logDeliveredNotification }) => logDeliveredNotification(req))
+        .then(() => getDatabase())
+        .then((db) => getTotalUnreadCount(db))
+        .then(setUnreadNotifCount)
+        .catch(() => {});
       if (data?.kind && typeof data.kind === 'string') {
         setNotificationDetail(data as unknown as NotificationDetailPayload);
       }
     });
-    return () => sub.remove();
+    // Notification fired while app is foregrounded → log it to the bell immediately.
+    const receivedSub = Notifications.addNotificationReceivedListener((notification) => {
+      void import('./src/processing/notifications')
+        .then(({ logDeliveredNotification }) => logDeliveredNotification(notification.request))
+        .then(() => getDatabase())
+        .then((db) => getTotalUnreadCount(db))
+        .then(setUnreadNotifCount)
+        .catch(() => {});
+    });
+    return () => { responseSub.remove(); receivedSub.remove(); };
   }, []);
 
   return (

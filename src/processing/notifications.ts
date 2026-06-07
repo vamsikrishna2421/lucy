@@ -34,6 +34,62 @@ async function logToInApp(
   } catch { /* non-critical */ }
 }
 
+/** Maps a notification kind to its in-app tier (1=urgent, 2=insight, 3=muted). */
+function kindToTier(kind: string): 1 | 2 | 3 {
+  switch (kind) {
+    case 'reminder':
+    case 'captured-reminder':
+    case 'pre-meeting':
+    case 'post-meeting':
+      return 1;
+    case 'health-tip':
+      return 3;
+    default:
+      return 2; // progress-checkin, morning-brief, weekly-insight, brain-pulse, digest, guardian, etc.
+  }
+}
+
+/**
+ * Logs an OS-delivered notification into the in-app table so it shows in the bell.
+ * Called from App.tsx listeners (received / tapped) and the foreground reconcile,
+ * covering scheduled pushes (check-ins, reminders) that bypass logToInApp at fire time.
+ */
+export async function logDeliveredNotification(
+  request: Notifications.NotificationRequest,
+): Promise<void> {
+  try {
+    const content = request.content;
+    const data = (content.data ?? {}) as Record<string, unknown>;
+    const kind = typeof data.kind === 'string' ? data.kind : 'guardian';
+    const title = content.title ?? 'LUCY';
+    const body = content.body ?? '';
+    // Per-occurrence dedup key: a DAILY check-in fires every day with the same
+    // request.identifier, so we append today's date to keep one entry per day while
+    // still de-duplicating the received-listener vs foreground-reconcile double-log.
+    const base = request.identifier || `lucy_${kind}`;
+    const day = new Date().toISOString().slice(0, 10);
+    const dedupKey = `${base}_${day}`;
+    const { getDatabase } = await import('../db');
+    const { insertDeliveredNotifLog } = await import('../db/notificationLog');
+    const db = await getDatabase();
+    await insertDeliveredNotifLog(db, { dedupKey, kind, tier: kindToTier(kind), title, body });
+  } catch { /* non-critical */ }
+}
+
+/**
+ * Reconciles notifications already sitting in the OS tray into the in-app log.
+ * Run on app foreground/launch so pushes that fired while the app was closed
+ * (e.g. a daily progress check-in) still appear in the bell.
+ */
+export async function reconcileDeliveredNotifications(): Promise<void> {
+  try {
+    const presented = await Notifications.getPresentedNotificationsAsync();
+    for (const n of presented) {
+      await logDeliveredNotification(n.request);
+    }
+  } catch { /* non-critical */ }
+}
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldPlaySound: true,
@@ -148,32 +204,40 @@ export async function sendDigestNotification(
   await logToInApp('digest', 2, title, body);
 }
 
-// Fires every 2 hours during waking hours only (8 AM, 10 AM, 12 PM, 2 PM, 4 PM, 6 PM).
-const CHECKIN_HOURS = [8, 10, 12, 14, 16, 18];
-const CHECKIN_MESSAGES = [
-  "morning check-in — anything worth capturing before the day gets busy?",
-  "two hours in — any updates, decisions, or thoughts worth saving?",
-  "good time to jot something down. what's been on your plate?",
-  "quick capture moment — any wins, blockers, or ideas?",
-  "end of the work stretch — anything worth remembering from today?",
-  "evening check-in — wrap up the day with a quick thought?",
-];
+// Default check-in slots used when the user hasn't customised their own.
+export const DEFAULT_CHECKIN_TIMES = ['08:00', '12:00', '17:00'];
 
-export async function scheduleProgressCheckIn(): Promise<string> {
+/** Picks a contextually appropriate check-in message for the time of day. */
+function checkinMessageForHour(hour: number): string {
+  if (hour < 11) return 'morning check-in — anything worth capturing before the day gets busy?';
+  if (hour < 14) return 'midday check-in — any updates, decisions, or thoughts worth saving?';
+  if (hour < 17) return 'quick capture moment — any wins, blockers, or ideas?';
+  if (hour < 20) return 'end of the work stretch — anything worth remembering from today?';
+  return 'evening check-in — wrap up the day with a quick thought?';
+}
+
+/**
+ * Schedules a daily progress check-in at each provided "HH:MM" time.
+ * Returns a JSON array of the scheduled notification ids (stored so they can be cancelled).
+ */
+export async function scheduleProgressCheckIn(times?: string[]): Promise<string> {
   if (!(await requestNotificationPermission())) return '';
+  const slots = times && times.length > 0 ? times : DEFAULT_CHECKIN_TIMES;
   const ids: string[] = [];
-  for (let i = 0; i < CHECKIN_HOURS.length; i++) {
+  for (const slot of slots) {
+    const [h, m] = slot.split(':').map((n) => Number(n));
+    if (!Number.isFinite(h) || !Number.isFinite(m)) continue;
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title: 'hey —',
-        body: CHECKIN_MESSAGES[i],
+        body: checkinMessageForHour(h),
         data: { kind: 'progress-checkin' },
         sound: false,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: CHECKIN_HOURS[i],
-        minute: 0,
+        hour: h,
+        minute: m,
       },
     });
     ids.push(id);

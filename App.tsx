@@ -50,6 +50,9 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const shareToastAnim = useRef(new Animated.Value(0)).current;
+  const [voiceStatus, setVoiceStatus] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const voiceRecording = useRef(false);
+  const voicePressStart = useRef(0);
   const splashFade = useRef(new Animated.Value(1)).current;
   const processing = useRef(false);
   const queueRequested = useRef(false);
@@ -415,6 +418,52 @@ export default function App() {
     return () => { responseSub.remove(); receivedSub.remove(); };
   }, []);
 
+  // Quick-voice (bottom-nav mic) status subscription.
+  useEffect(() => {
+    let unsub = () => {};
+    void import('./src/audio/quickVoice').then(({ quickVoice }) => { unsub = quickVoice.subscribe(setVoiceStatus); });
+    return () => unsub();
+  }, []);
+
+  const finishVoiceCapture = useCallback(async () => {
+    try {
+      const { quickVoice } = await import('./src/audio/quickVoice');
+      const text = await quickVoice.stop();
+      if (text && text.trim()) {
+        await enqueueTranscript(text.trim(), 'voice', false);
+        setRefreshToken((v) => v + 1);
+        void drainQueue();
+      } else {
+        Alert.alert('Nothing captured', "I didn't catch any speech. Try again, or check your microphone and transcription settings.");
+      }
+    } catch { /* non-critical */ }
+  }, [drainQueue]);
+
+  const onVoicePressIn = useCallback(() => {
+    if (voiceRecording.current) {
+      // Already recording (started by a previous tap) → this tap stops it.
+      voiceRecording.current = false;
+      void finishVoiceCapture();
+      return;
+    }
+    voiceRecording.current = true;
+    voicePressStart.current = Date.now();
+    void import('./src/audio/quickVoice').then(({ quickVoice }) => quickVoice.start()).then((ok) => {
+      if (!ok) { voiceRecording.current = false; }
+    });
+  }, [finishVoiceCapture]);
+
+  const onVoicePressOut = useCallback(() => {
+    if (!voiceRecording.current) return;
+    const held = Date.now() - voicePressStart.current;
+    if (held >= 500) {
+      // Press-and-hold → release stops and saves.
+      voiceRecording.current = false;
+      void finishVoiceCapture();
+    }
+    // Quick tap (<500ms) → stay in recording; the next tap will stop it.
+  }, [finishVoiceCapture]);
+
   // When LUCY applies task reorganizations from the Ask chat, refresh the Tasks board.
   useEffect(() => {
     let cancelled = false;
@@ -535,6 +584,45 @@ export default function App() {
           {([
             { key: 'dashboard', label: 'Home', icon: '\u25c8' },
             { key: 'capture', label: 'Tasks', icon: '\u25a6' },
+          ] as const).map((tab) => (
+            <TouchableOpacity
+              key={tab.key}
+              style={styles.bottomTab}
+              onPress={() => {
+                if (screen !== tab.key) {
+                  void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {});
+                  setScreen(tab.key);
+                }
+              }}
+            >
+              <View style={[styles.tabActivePill, screen === tab.key && styles.tabActivePillVisible]} />
+              <Text style={[styles.bottomTabIcon, screen === tab.key && styles.bottomTabIconActive]}>{tab.icon}</Text>
+              <Text style={[styles.bottomTabLabel, screen === tab.key && styles.bottomTabLabelActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          ))}
+
+          {/* Center voice button \u2014 hold to talk, or tap to start / tap again to stop */}
+          <View style={styles.voiceTabSlot}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPressIn={onVoicePressIn}
+              onPressOut={onVoicePressOut}
+              style={[
+                styles.voiceButton,
+                voiceStatus === 'recording' && styles.voiceButtonRecording,
+                voiceStatus === 'transcribing' && styles.voiceButtonBusy,
+              ]}
+            >
+              <Text style={styles.voiceButtonIcon}>
+                {voiceStatus === 'recording' ? '\u25a0' : voiceStatus === 'transcribing' ? '\u22ef' : '\u2b24'}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.voiceButtonLabel}>
+              {voiceStatus === 'recording' ? 'Tap / release' : voiceStatus === 'transcribing' ? 'Saving\u2026' : 'Hold to talk'}
+            </Text>
+          </View>
+
+          {([
             { key: 'ask', label: 'Ask', icon: '\u25ce' },
             { key: 'settings', label: 'Settings', icon: '\u25c9' },
           ] as const).map((tab) => (
@@ -548,14 +636,9 @@ export default function App() {
                 }
               }}
             >
-              {/* Active indicator pill */}
               <View style={[styles.tabActivePill, screen === tab.key && styles.tabActivePillVisible]} />
-              <Text style={[styles.bottomTabIcon, screen === tab.key && styles.bottomTabIconActive]}>
-                {tab.icon}
-              </Text>
-              <Text style={[styles.bottomTabLabel, screen === tab.key && styles.bottomTabLabelActive]}>
-                {tab.label}
-              </Text>
+              <Text style={[styles.bottomTabIcon, screen === tab.key && styles.bottomTabIconActive]}>{tab.icon}</Text>
+              <Text style={[styles.bottomTabLabel, screen === tab.key && styles.bottomTabLabelActive]}>{tab.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -627,6 +710,17 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   bottomTab: { flex: 1, alignItems: 'center', paddingVertical: 10, gap: 3, position: 'relative' },
+  voiceTabSlot: { flex: 1, alignItems: 'center', justifyContent: 'flex-start' },
+  voiceButton: {
+    width: 58, height: 58, borderRadius: 29, backgroundColor: LUCY_COLORS.primary,
+    alignItems: 'center', justifyContent: 'center', marginTop: -22,
+    shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 8,
+    borderWidth: 3, borderColor: LUCY_COLORS.surface,
+  },
+  voiceButtonRecording: { backgroundColor: '#ef4444', shadowColor: '#ef4444' },
+  voiceButtonBusy: { backgroundColor: LUCY_COLORS.primaryGlow },
+  voiceButtonIcon: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  voiceButtonLabel: { fontSize: 10, fontWeight: '700', color: LUCY_COLORS.textSubtle, marginTop: 2 },
   tabActivePill: { position: 'absolute', top: 0, width: 28, height: 3, borderRadius: 2, backgroundColor: 'transparent' },
   tabActivePillVisible: { backgroundColor: LUCY_COLORS.primary },
   bottomTabIcon: { fontSize: 20, color: LUCY_COLORS.textSubtle },

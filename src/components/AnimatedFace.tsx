@@ -3,11 +3,19 @@ import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'reac
 import { LUCY_COLORS } from '../config/colors';
 
 type Mood = 'awake' | 'happy' | 'sleeping';
+export type LucyStatus = 'idle' | 'organizing' | 'listening' | 'saving' | 'sleeping';
 
 function moodForHour(hour: number): Mood {
   if (hour >= 22 || hour < 6) return 'sleeping';
   return 'awake';
 }
+
+const STATUS_META: Record<Exclude<LucyStatus, 'idle'>, { emoji: string; label: string }> = {
+  organizing: { emoji: '🧠', label: 'Organizing' },
+  listening: { emoji: '🎧', label: 'Listening' },
+  saving: { emoji: '💾', label: 'Saving' },
+  sleeping: { emoji: '😴', label: 'Sleeping' },
+};
 
 /**
  * LUCY's animated face — the top-right "attraction piece".
@@ -22,23 +30,44 @@ export function AnimatedFace({
   unreadCount,
   onPress,
   celebrateKey,
+  status = 'idle',
 }: {
   unreadCount: number;
   onPress: () => void;
   celebrateKey?: number; // change this value to trigger a happy reaction
+  status?: LucyStatus;   // drives the status cloud + face mood
 }) {
+  // Effective status: fall back to "sleeping" at night when nothing else is happening.
+  const hour = new Date().getHours();
+  const effectiveStatus: LucyStatus = status !== 'idle' ? status : (hour >= 22 || hour < 6 ? 'sleeping' : 'idle');
   const [mood, setMood] = useState<Mood>(() => moodForHour(new Date().getHours()));
+  const cloudAnim = useRef(new Animated.Value(0)).current;
   const breathe = useRef(new Animated.Value(0)).current;
   const blink = useRef(new Animated.Value(1)).current; // 1 = open, 0 = closed
   const glow = useRef(new Animated.Value(0)).current;
   const zDrift = useRef(new Animated.Value(0)).current;
   const happy = useRef(new Animated.Value(0)).current;
 
-  // Re-evaluate mood every minute
+  // Mood follows the effective status (sleeping when status is sleeping, else awake).
+  useEffect(() => {
+    setMood(effectiveStatus === 'sleeping' ? 'sleeping' : 'awake');
+  }, [effectiveStatus]);
+
+  // Re-evaluate at night boundary every minute (in case status is idle)
   useEffect(() => {
     const t = setInterval(() => setMood(moodForHour(new Date().getHours())), 60_000);
     return () => clearInterval(t);
   }, []);
+
+  // Animate the status cloud in/out
+  useEffect(() => {
+    Animated.timing(cloudAnim, {
+      toValue: effectiveStatus === 'idle' ? 0 : 1,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [effectiveStatus]);
 
   // Breathing + glow loop (slower when sleeping)
   useEffect(() => {
@@ -99,9 +128,6 @@ export function AnimatedFace({
     ? 0.12
     : Animated.multiply(blink, happy.interpolate({ inputRange: [0, 1], outputRange: [1, 0.35] }));
 
-  const zTranslateY = zDrift.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
-  const zOpacity = zDrift.interpolate({ inputRange: [0, 0.2, 0.8, 1], outputRange: [0, 1, 1, 0] });
-
   return (
     <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={styles.wrap} accessibilityLabel="LUCY — open notifications">
       {/* outer glow */}
@@ -118,12 +144,31 @@ export function AnimatedFace({
         </View>
       </Animated.View>
 
-      {/* sleeping z */}
-      {mood === 'sleeping' ? (
-        <Animated.Text style={[styles.zzz, { opacity: zOpacity, transform: [{ translateY: zTranslateY }] }]}>z</Animated.Text>
+      {/* status thought-cloud (top-right, grows leftward to stay on-screen) */}
+      {effectiveStatus !== 'idle' ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.cloud,
+            {
+              opacity: cloudAnim,
+              transform: [
+                { scale: cloudAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) },
+                { translateY: cloudAnim.interpolate({ inputRange: [0, 1], outputRange: [4, 0] }) },
+              ],
+            },
+          ]}
+        >
+          <Text style={styles.cloudEmoji}>{STATUS_META[effectiveStatus].emoji}</Text>
+          <Text style={styles.cloudText}>{STATUS_META[effectiveStatus].label}</Text>
+        </Animated.View>
+      ) : null}
+      {/* thought-tail dots from face to cloud */}
+      {effectiveStatus !== 'idle' ? (
+        <Animated.View style={[styles.tailDot1, { opacity: cloudAnim }]} />
       ) : null}
 
-      {/* unread badge */}
+      {/* unread badge (bottom-right so it doesn't fight the cloud) */}
       {unreadCount > 0 ? (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : String(unreadCount)}</Text>
@@ -149,7 +194,16 @@ const styles = StyleSheet.create({
   eye: { width: 4, height: 8, borderRadius: 2, backgroundColor: FACE },
   mouth: { width: 12, height: 6, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, borderWidth: 2, borderTopWidth: 0, borderColor: FACE, marginTop: 1 },
   mouthSleeping: { width: 7, height: 2, borderRadius: 1, borderWidth: 0, backgroundColor: FACE },
-  zzz: { position: 'absolute', top: -2, right: 2, color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '800' },
-  badge: { position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#ef4444', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: LUCY_COLORS.background },
+  // Status thought-cloud: anchored to the face's top-right, content grows leftward.
+  cloud: {
+    position: 'absolute', top: -16, right: -4, flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#241a10', borderRadius: 11,
+    paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,140,66,0.4)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 4, elevation: 6,
+  },
+  cloudEmoji: { fontSize: 10 },
+  cloudText: { color: LUCY_COLORS.primaryGlow, fontSize: 9, fontWeight: '800', letterSpacing: 0.2 },
+  tailDot1: { position: 'absolute', top: 0, right: 4, width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,140,66,0.4)' },
+  badge: { position: 'absolute', bottom: -2, right: -2, minWidth: 15, height: 15, borderRadius: 8, backgroundColor: '#ef4444', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: LUCY_COLORS.background },
   badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
 });

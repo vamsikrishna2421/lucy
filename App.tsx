@@ -52,6 +52,7 @@ export default function App() {
   const [shareToast, setShareToast] = useState<string | null>(null);
   const shareToastAnim = useRef(new Animated.Value(0)).current;
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const [processingActive, setProcessingActive] = useState(false);
   const voiceRecording = useRef(false);
   const voicePressStart = useRef(0);
   const splashFade = useRef(new Animated.Value(1)).current;
@@ -99,6 +100,7 @@ export default function App() {
       return;
     }
     processing.current = true;
+    setProcessingActive(true);
     try {
       while (queueRequested.current) {
         queueRequested.current = false;
@@ -111,6 +113,7 @@ export default function App() {
       }
     } finally {
       processing.current = false;
+      setProcessingActive(false);
     }
   }, []);
 
@@ -519,6 +522,12 @@ export default function App() {
                 <AnimatedFace
                   unreadCount={unreadNotifCount}
                   celebrateKey={refreshToken}
+                  status={
+                    voiceStatus === 'transcribing' ? 'saving'
+                    : (voiceStatus === 'recording' || passiveState.status === 'listening') ? 'listening'
+                    : processingActive ? 'organizing'
+                    : 'idle'
+                  }
                   onPress={() => setNotifCenterVisible(true)}
                 />
               </View>

@@ -28,14 +28,23 @@ import { organizeMemory } from './src/processing/organizer';
 import { queueFullMemoryReprocessing } from './src/processing/reprocess';
 import { CaptureScreen } from './src/screens/Capture';
 import { DashboardScreen } from './src/screens/Dashboard';
-import { AskScreen } from './src/screens/Ask';
 import { SettingsScreen } from './src/screens/Settings';
 import { LucyWrapped } from './src/components/LucyWrapped';
 import { ConnectorsScreen } from './src/screens/Connectors';
 import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
 
 export default function App() {
-  const [screen, setScreen] = useState<'capture' | 'dashboard' | 'ask' | 'settings'>('dashboard');
+  const [screen, setScreen] = useState<'capture' | 'dashboard' | 'settings'>('dashboard');
+  // Drives the Dashboard's internal view from the bottom nav (Home → Timeline, Brain → Brain, Ask Lucy).
+  const [dashRequestedView, setDashRequestedView] = useState<'Timeline' | 'Brain' | 'Ask Lucy' | 'Focus Now' | 'Health'>('Timeline');
+  const [dashRequestKey, setDashRequestKey] = useState(0);
+  const [dashCurrentView, setDashCurrentView] = useState<string>('Timeline');
+  const goToDashView = useCallback((v: 'Timeline' | 'Brain' | 'Ask Lucy', q?: string) => {
+    setAskInitialQuestion(q);
+    setDashRequestedView(v);
+    setDashRequestKey((k) => k + 1);
+    setScreen('dashboard');
+  }, []);
   const [refreshToken, setRefreshToken] = useState(0);
   const [ready, setReady] = useState(false);
   const [startupError, setStartupError] = useState('');
@@ -575,11 +584,12 @@ export default function App() {
               <View style={{ flex: 1, display: screen === 'dashboard' ? 'flex' : 'none' }}>
                 <DashboardScreen
                   refreshToken={refreshToken}
-                  onAskAbout={(q) => { setAskInitialQuestion(q); setScreen('ask'); }}
+                  onAskAbout={(q) => goToDashView('Ask Lucy', q)}
+                  requestedView={dashRequestedView}
+                  requestKey={dashRequestKey}
+                  onViewChange={setDashCurrentView}
+                  initialAskQuestion={askInitialQuestion}
                 />
-              </View>
-              <View style={{ flex: 1, display: screen === 'ask' ? 'flex' : 'none' }}>
-                <AskScreen initialQuestion={askInitialQuestion} />
               </View>
               <View style={{ flex: 1, display: screen === 'settings' ? 'flex' : 'none' }}>
                 <SettingsScreen
@@ -593,25 +603,24 @@ export default function App() {
           ) : null}
         </View>
         <View style={styles.bottomNav}>
-          {([
-            { key: 'dashboard', label: 'Home', icon: '\u25c8' },
-            { key: 'capture', label: 'Tasks', icon: '\u25a6' },
-          ] as const).map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={styles.bottomTab}
-              onPress={() => {
-                if (screen !== tab.key) {
-                  void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {});
-                  setScreen(tab.key);
-                }
-              }}
-            >
-              <View style={[styles.tabActivePill, screen === tab.key && styles.tabActivePillVisible]} />
-              <Text style={[styles.bottomTabIcon, screen === tab.key && styles.bottomTabIconActive]}>{tab.icon}</Text>
-              <Text style={[styles.bottomTabLabel, screen === tab.key && styles.bottomTabLabelActive]}>{tab.label}</Text>
-            </TouchableOpacity>
-          ))}
+          {/* Home */}
+          <TouchableOpacity
+            style={styles.bottomTab}
+            onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); goToDashView('Timeline'); }}
+          >
+            <View style={[styles.tabActivePill, (screen === 'dashboard' && dashCurrentView !== 'Brain') && styles.tabActivePillVisible]} />
+            <Text style={[styles.bottomTabIcon, (screen === 'dashboard' && dashCurrentView !== 'Brain') && styles.bottomTabIconActive]}>\u25c8</Text>
+            <Text style={[styles.bottomTabLabel, (screen === 'dashboard' && dashCurrentView !== 'Brain') && styles.bottomTabLabelActive]}>Home</Text>
+          </TouchableOpacity>
+          {/* Brain */}
+          <TouchableOpacity
+            style={styles.bottomTab}
+            onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); goToDashView('Brain'); }}
+          >
+            <View style={[styles.tabActivePill, (screen === 'dashboard' && dashCurrentView === 'Brain') && styles.tabActivePillVisible]} />
+            <Text style={[styles.bottomTabIcon, (screen === 'dashboard' && dashCurrentView === 'Brain') && styles.bottomTabIconActive]}>\u25cd</Text>
+            <Text style={[styles.bottomTabLabel, (screen === 'dashboard' && dashCurrentView === 'Brain') && styles.bottomTabLabelActive]}>Brain</Text>
+          </TouchableOpacity>
 
           {/* Center voice button \u2014 hold to talk, or tap to start / tap again to stop */}
           <View style={styles.voiceTabSlot}>
@@ -643,25 +652,24 @@ export default function App() {
             </Text>
           </View>
 
-          {([
-            { key: 'ask', label: 'Ask', icon: '\u25ce' },
-            { key: 'settings', label: 'Settings', icon: '\u25c9' },
-          ] as const).map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={styles.bottomTab}
-              onPress={() => {
-                if (screen !== tab.key) {
-                  void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {});
-                  setScreen(tab.key);
-                }
-              }}
-            >
-              <View style={[styles.tabActivePill, screen === tab.key && styles.tabActivePillVisible]} />
-              <Text style={[styles.bottomTabIcon, screen === tab.key && styles.bottomTabIconActive]}>{tab.icon}</Text>
-              <Text style={[styles.bottomTabLabel, screen === tab.key && styles.bottomTabLabelActive]}>{tab.label}</Text>
-            </TouchableOpacity>
-          ))}
+          {/* Tasks */}
+          <TouchableOpacity
+            style={styles.bottomTab}
+            onPress={() => { if (screen !== 'capture') { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setScreen('capture'); } }}
+          >
+            <View style={[styles.tabActivePill, screen === 'capture' && styles.tabActivePillVisible]} />
+            <Text style={[styles.bottomTabIcon, screen === 'capture' && styles.bottomTabIconActive]}>\u25a6</Text>
+            <Text style={[styles.bottomTabLabel, screen === 'capture' && styles.bottomTabLabelActive]}>Tasks</Text>
+          </TouchableOpacity>
+          {/* Settings */}
+          <TouchableOpacity
+            style={styles.bottomTab}
+            onPress={() => { if (screen !== 'settings') { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setScreen('settings'); } }}
+          >
+            <View style={[styles.tabActivePill, screen === 'settings' && styles.tabActivePillVisible]} />
+            <Text style={[styles.bottomTabIcon, screen === 'settings' && styles.bottomTabIconActive]}>\u25c9</Text>
+            <Text style={[styles.bottomTabLabel, screen === 'settings' && styles.bottomTabLabelActive]}>Settings</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
       <NotificationDetailModal

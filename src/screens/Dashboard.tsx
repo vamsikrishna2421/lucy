@@ -19,6 +19,7 @@ import { organizeMemory } from '../processing/organizer';
 import { enqueueTranscript } from '../processing/extract';
 import { archiveTodo } from '../db/todos';
 import { GalaxyView } from './Galaxy';
+import { AskScreen } from './Ask';
 import { StoryView, type StorySubject } from './StoryView';
 import { StalenessReviewCard, ContextBatchCard } from '../components/StalenessReviewCard';
 import {
@@ -30,7 +31,7 @@ import {
   type ContextBatch,
 } from '../processing/stalenessEngine';
 
-type ViewMode = 'Focus Now' | 'Timeline' | 'Brain' | 'Health';
+type ViewMode = 'Focus Now' | 'Timeline' | 'Ask Lucy' | 'Health' | 'Brain';
 type LibraryTab = 'Galaxy' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
 
 function displayTimestamp(value: string): string {
@@ -148,10 +149,25 @@ function greetingForHour(hour: number): string {
   return 'Good evening';
 }
 
-export function DashboardScreen({ refreshToken, onAskAbout }: { refreshToken: number; onAskAbout?: (question: string) => void }) {
+export function DashboardScreen({ refreshToken, onAskAbout, requestedView, requestKey, onViewChange, initialAskQuestion }: {
+  refreshToken: number;
+  onAskAbout?: (question: string) => void;
+  requestedView?: ViewMode;
+  requestKey?: number;
+  onViewChange?: (v: ViewMode) => void;
+  initialAskQuestion?: string;
+}) {
   const [view, setView] = useState<ViewMode>('Timeline');
   const [tab, setTab] = useState<LibraryTab>('Galaxy');
   const [userName, setUserName] = useState('');
+
+  // Allow the parent (bottom nav) to push a view in (e.g. Brain, Ask Lucy).
+  useEffect(() => {
+    if (requestedView) setView(requestedView);
+  }, [requestKey]);
+
+  // Report the current view up so the bottom nav can highlight Home vs Brain.
+  useEffect(() => { onViewChange?.(view); }, [view]);
   const [todos, setTodos] = useState<TodoRow[]>([]);
   const [ideas, setIdeas] = useState<IdeaRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
@@ -230,7 +246,8 @@ export function DashboardScreen({ refreshToken, onAskAbout }: { refreshToken: nu
   const pendingTodos = todos.filter((item) => item.status === 'pending');
   const focusTasks = pendingTodos.filter((item) => item.urgency === 'high').slice(0, 3);
   const displayTasks = focusTasks.length ? focusTasks : pendingTodos.slice(0, 3);
-  const views: ViewMode[] = ['Timeline', 'Focus Now', 'Brain', 'Health'];
+  // Brain is reached via the bottom nav, so it's not in the top tab row.
+  const views: ViewMode[] = ['Timeline', 'Focus Now', 'Ask Lucy', 'Health'];
 
   return (
     <View style={styles.container}>
@@ -246,6 +263,7 @@ export function DashboardScreen({ refreshToken, onAskAbout }: { refreshToken: nu
       </View>
       {view === 'Focus Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} stalenessReviews={stalenessReviews} contextBatch={contextBatch} onStalenessResolved={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} onAskAbout={onAskAbout} /> : null}
+      {view === 'Ask Lucy' ? <AskScreen initialQuestion={initialAskQuestion} /> : null}
       {view === 'Brain' ? <LibraryView tab={tab} setTab={setTab} todos={todos} ideas={ideas} expenses={expenses} /> : null}
       {view === 'Health' ? <HealthView /> : null}
     </View>

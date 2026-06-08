@@ -20,6 +20,7 @@ import { autoRestoreDeviceModel, initializeDeviceModelSelection } from './src/ai
 import { archiveUnmatchedCompletionRetries } from './src/processing/followUp';
 import { initializeNotifications, updatePersistentStatusNotification } from './src/processing/notifications';
 import { NotificationCenter } from './src/components/NotificationCenter';
+import { AnimatedFace } from './src/components/AnimatedFace';
 import { getTotalUnreadCount } from './src/db/notificationLog';
 import { initializeVault } from './src/processing/vault';
 import { archiveMisclassifiedArtifacts } from './src/processing/artifactCleanup';
@@ -483,19 +484,12 @@ export default function App() {
           <View style={styles.brandRow}>
             <Text style={styles.brandName}>LUC<Text style={{ color: '#FF8C42' }}>Y</Text></Text>
             <View style={styles.headerActions}>
-              {/* Bell icon — opens in-app notification center */}
-              <TouchableOpacity
-                style={styles.bellBtn}
+              {/* LUCY's animated face — the attraction piece; also opens notifications */}
+              <AnimatedFace
+                unreadCount={unreadNotifCount}
+                celebrateKey={refreshToken}
                 onPress={() => setNotifCenterVisible(true)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Text style={[styles.bellIcon, unreadNotifCount > 0 && { color: LUCY_COLORS.primary }]}>🔔</Text>
-                {unreadNotifCount > 0 ? (
-                  <View style={styles.bellBadge}>
-                    <Text style={styles.bellBadgeText}>{unreadNotifCount > 9 ? '9+' : String(unreadNotifCount)}</Text>
-                  </View>
-                ) : null}
-              </TouchableOpacity>
+              />
               <TouchableOpacity
                 style={[styles.listenPill, meetingVisible && styles.listenPillActive]}
                 onPress={() => setMeetingVisible(true)}

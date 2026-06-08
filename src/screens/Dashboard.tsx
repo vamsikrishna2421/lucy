@@ -30,8 +30,8 @@ import {
   type ContextBatch,
 } from '../processing/stalenessEngine';
 
-type ViewMode = 'Focus Now' | 'Timeline' | 'Brain' | 'Galaxy' | 'Health';
-type LibraryTab = 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
+type ViewMode = 'Focus Now' | 'Timeline' | 'Brain' | 'Health';
+type LibraryTab = 'Galaxy' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
 
 function displayTimestamp(value: string): string {
   return new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`).toLocaleString();
@@ -144,7 +144,7 @@ function groupUpdates(updates: CaptureRow[]): Record<number, CaptureRow[]> {
 
 export function DashboardScreen({ refreshToken, onAskAbout }: { refreshToken: number; onAskAbout?: (question: string) => void }) {
   const [view, setView] = useState<ViewMode>('Timeline');
-  const [tab, setTab] = useState<LibraryTab>('Todos');
+  const [tab, setTab] = useState<LibraryTab>('Galaxy');
   const [todos, setTodos] = useState<TodoRow[]>([]);
   const [ideas, setIdeas] = useState<IdeaRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
@@ -218,7 +218,7 @@ export function DashboardScreen({ refreshToken, onAskAbout }: { refreshToken: nu
   const pendingTodos = todos.filter((item) => item.status === 'pending');
   const focusTasks = pendingTodos.filter((item) => item.urgency === 'high').slice(0, 3);
   const displayTasks = focusTasks.length ? focusTasks : pendingTodos.slice(0, 3);
-  const views: ViewMode[] = ['Timeline', 'Focus Now', 'Brain', 'Galaxy', 'Health'];
+  const views: ViewMode[] = ['Timeline', 'Focus Now', 'Brain', 'Health'];
 
   return (
     <View style={styles.container}>
@@ -235,7 +235,6 @@ export function DashboardScreen({ refreshToken, onAskAbout }: { refreshToken: nu
       {view === 'Focus Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} stalenessReviews={stalenessReviews} contextBatch={contextBatch} onStalenessResolved={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} onAskAbout={onAskAbout} /> : null}
       {view === 'Brain' ? <LibraryView tab={tab} setTab={setTab} todos={todos} ideas={ideas} expenses={expenses} /> : null}
-      {view === 'Galaxy' ? <GalaxyView /> : null}
       {view === 'Health' ? <HealthView /> : null}
     </View>
   );
@@ -1695,7 +1694,26 @@ function LibraryView({
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const tabs: LibraryTab[] = ['Todos', 'Ideas', 'Expenses', 'People', 'Meetings', 'Listen'];
+  const tabs: LibraryTab[] = ['Galaxy', 'Todos', 'Ideas', 'Expenses', 'People', 'Meetings', 'Listen'];
+
+  // Galaxy is the full-screen topic-tree browser; render it without the inner ScrollView.
+  if (tab === 'Galaxy') {
+    return (
+      <View style={styles.library}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs}>
+          {tabs.map((item) => (
+            <TouchableOpacity key={item} style={[styles.tab, item === tab && styles.activeTab]} onPress={() => setTab(item)}>
+              <Text style={[styles.tabText, item === tab && styles.activeText]}>{item}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        <View style={{ flex: 1 }}>
+          <GalaxyView />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.library}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs}>

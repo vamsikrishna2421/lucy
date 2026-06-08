@@ -142,9 +142,16 @@ function groupUpdates(updates: CaptureRow[]): Record<number, CaptureRow[]> {
   }, {});
 }
 
+function greetingForHour(hour: number): string {
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export function DashboardScreen({ refreshToken, onAskAbout }: { refreshToken: number; onAskAbout?: (question: string) => void }) {
   const [view, setView] = useState<ViewMode>('Timeline');
   const [tab, setTab] = useState<LibraryTab>('Galaxy');
+  const [userName, setUserName] = useState('');
   const [todos, setTodos] = useState<TodoRow[]>([]);
   const [ideas, setIdeas] = useState<IdeaRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
@@ -193,6 +200,11 @@ export function DashboardScreen({ refreshToken, onAskAbout }: { refreshToken: nu
         setContextBatch(batch.total > 3 ? batch : null);
       } catch { /* non-critical */ }
       try {
+        const { getUserProfile } = await import('../db/userProfile');
+        const profile = await getUserProfile(db);
+        setUserName((profile.name ?? '').trim().split(/\s+/)[0] ?? '');
+      } catch { /* non-critical */ }
+      try {
         const { getMoodTrend } = await import('../processing/temporalEngine');
         setMoodTrend(await getMoodTrend(db, 7));
       } catch { /* non-critical */ }
@@ -223,7 +235,7 @@ export function DashboardScreen({ refreshToken, onAskAbout }: { refreshToken: nu
   return (
     <View style={styles.container}>
       <Text style={styles.todayDate}>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
-      <Text style={styles.title}>Today</Text>
+      <Text style={styles.title}>{greetingForHour(new Date().getHours())}{userName ? `, ${userName}` : ''}</Text>
       <Text style={styles.subtitle}>What matters now, pulled from your memory.</Text>
       <View style={styles.viewNav}>
         {views.map((item) => (

@@ -23,6 +23,7 @@ interface SettingsScreenProps {
   refreshToken: number;
   onChangeBackground: (enabled: boolean) => Promise<boolean>;
   onReprocessAll: () => Promise<number>;
+  onOpenWrapped?: () => void;
 }
 
 type SettingsPanel = 'intelligence' | 'remote' | 'background' | 'organization' | 'queue' | 'privacy' | 'profile' | 'connectors' | null;
@@ -51,7 +52,7 @@ function findModel(id: string): ModelOption | undefined {
   return ALL_MODELS.find((m) => m.id === id);
 }
 
-export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll }: SettingsScreenProps) {
+export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll, onOpenWrapped }: SettingsScreenProps) {
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
   const [devLogVisible, setDevLogVisible] = useState(false);
   const [checkInSchedulerVisible, setCheckInSchedulerVisible] = useState(false);
@@ -608,15 +609,13 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           value="Your quarterly story — captures, tasks, people, mood"
           onAction={async () => {
             const db = await getDatabase();
-            const { isWrappedDue } = await import('../processing/lucyWrapped');
-            const due = await isWrappedDue(db);
-            if (!due) {
-              Alert.alert('Not ready yet', 'LUCY Wrapped needs at least 30 memories to generate your story. Keep capturing!');
+            const { hasEnoughForWrapped, wrappedMemoryCount } = await import('../processing/lucyWrapped');
+            if (!(await hasEnoughForWrapped(db))) {
+              const n = await wrappedMemoryCount(db);
+              Alert.alert('Not ready yet', `LUCY Wrapped needs at least 30 organized memories. You have ${n} so far — keep capturing!`);
               return;
             }
-            // Navigate back to Dashboard and trigger Wrapped — simplest approach
-            // since we can't directly set App state from Settings.
-            Alert.alert('Open LUCY Wrapped', 'Close Settings and tap the header to find your Wrapped, or go to Home.', [{ text: 'OK' }]);
+            onOpenWrapped?.();
           }}
           actionLabel="View"
         />

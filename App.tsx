@@ -597,6 +597,7 @@ export default function App() {
                   backgroundEnabled={backgroundEnabled}
                   onChangeBackground={setBackgroundPreference}
                   onReprocessAll={reprocessAllMemories}
+                  onOpenWrapped={() => setWrappedVisible(true)}
                 />
               </View>
             </>
@@ -609,7 +610,7 @@ export default function App() {
             onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); goToDashView('Timeline'); }}
           >
             <View style={[styles.tabActivePill, (screen === 'dashboard' && dashCurrentView !== 'Brain') && styles.tabActivePillVisible]} />
-            <Text style={[styles.bottomTabIcon, (screen === 'dashboard' && dashCurrentView !== 'Brain') && styles.bottomTabIconActive]}>\u25c8</Text>
+            <Text style={[styles.bottomTabIcon, (screen === 'dashboard' && dashCurrentView !== 'Brain') && styles.bottomTabIconActive]}>{'\u2302'}</Text>
             <Text style={[styles.bottomTabLabel, (screen === 'dashboard' && dashCurrentView !== 'Brain') && styles.bottomTabLabelActive]}>Home</Text>
           </TouchableOpacity>
           {/* Brain */}
@@ -618,7 +619,7 @@ export default function App() {
             onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); goToDashView('Brain'); }}
           >
             <View style={[styles.tabActivePill, (screen === 'dashboard' && dashCurrentView === 'Brain') && styles.tabActivePillVisible]} />
-            <Text style={[styles.bottomTabIcon, (screen === 'dashboard' && dashCurrentView === 'Brain') && styles.bottomTabIconActive]}>\u25cd</Text>
+            <Text style={[styles.bottomTabIcon, (screen === 'dashboard' && dashCurrentView === 'Brain') && styles.bottomTabIconActive]}>{'\u25ce'}</Text>
             <Text style={[styles.bottomTabLabel, (screen === 'dashboard' && dashCurrentView === 'Brain') && styles.bottomTabLabelActive]}>Brain</Text>
           </TouchableOpacity>
 
@@ -637,7 +638,7 @@ export default function App() {
               {voiceStatus === 'recording' ? (
                 <View style={styles.voiceStopSquare} />
               ) : voiceStatus === 'transcribing' ? (
-                <Text style={styles.voiceButtonIcon}>\u22ef</Text>
+                <Text style={styles.voiceButtonIcon}>{'\u22ef'}</Text>
               ) : (
                 // Drawn mic icon
                 <View style={{ alignItems: 'center' }}>
@@ -658,7 +659,7 @@ export default function App() {
             onPress={() => { if (screen !== 'capture') { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setScreen('capture'); } }}
           >
             <View style={[styles.tabActivePill, screen === 'capture' && styles.tabActivePillVisible]} />
-            <Text style={[styles.bottomTabIcon, screen === 'capture' && styles.bottomTabIconActive]}>\u25a6</Text>
+            <Text style={[styles.bottomTabIcon, screen === 'capture' && styles.bottomTabIconActive]}>{'\u25a6'}</Text>
             <Text style={[styles.bottomTabLabel, screen === 'capture' && styles.bottomTabLabelActive]}>Tasks</Text>
           </TouchableOpacity>
           {/* Settings */}
@@ -667,7 +668,7 @@ export default function App() {
             onPress={() => { if (screen !== 'settings') { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setScreen('settings'); } }}
           >
             <View style={[styles.tabActivePill, screen === 'settings' && styles.tabActivePillVisible]} />
-            <Text style={[styles.bottomTabIcon, screen === 'settings' && styles.bottomTabIconActive]}>\u25c9</Text>
+            <Text style={[styles.bottomTabIcon, screen === 'settings' && styles.bottomTabIconActive]}>{'\u2699'}</Text>
             <Text style={[styles.bottomTabLabel, screen === 'settings' && styles.bottomTabLabelActive]}>Settings</Text>
           </TouchableOpacity>
         </View>

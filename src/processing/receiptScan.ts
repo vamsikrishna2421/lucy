@@ -36,9 +36,23 @@ export async function scanReceiptToText(): Promise<string | null> {
   try {
     const { processReceiptImage, receiptToCapture } = await import('./receiptOCR');
     const receipt = await processReceiptImage(uri);
-    return receiptToCapture(receipt);
-  } catch {
-    Alert.alert('Could not read receipt', 'Try a clearer photo, or type the expense instead.');
+    const text = receiptToCapture(receipt);
+    if (!receipt.merchant && !receipt.amount) {
+      // OCR couldn't read it — usually a missing OpenAI key (vision) or a blurry photo.
+      const { resolveRemoteAvailability } = await import('../ai/provider');
+      const { available } = await resolveRemoteAvailability();
+      Alert.alert(
+        available ? "Couldn't read the receipt" : 'OpenAI key needed',
+        available
+          ? 'I couldn\'t make out the merchant or amount. Try a clearer, well-lit photo — or type the expense.'
+          : 'Receipt scanning reads the photo with OpenAI vision. Add an OpenAI key in Settings → Remote intelligence, then try again.',
+      );
+      return text; // still return the placeholder so the user can edit
+    }
+    Alert.alert('Receipt read ✓', `${text}\n\nReview it in the capture box and tap send to save the expense.`);
+    return text;
+  } catch (e) {
+    Alert.alert('Could not read receipt', e instanceof Error ? e.message : 'Try a clearer photo, or type the expense instead.');
     return null;
   }
 }

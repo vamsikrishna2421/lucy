@@ -23,18 +23,27 @@ export interface WrappedSlide {
 const WRAPPED_LAST_KEY = 'lucy_wrapped_last_shown';
 const WRAPPED_DAYS_KEY = 'lucy_wrapped_days_since_install';
 
-/** Returns true if a Wrapped is due (quarterly, at least 30 days of data). */
+/** Number of organized memories available for a Wrapped. */
+export async function wrappedMemoryCount(db: SQLiteDatabase): Promise<number> {
+  const row = await db.getFirstAsync<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM captures WHERE processed = 1 AND archived_at IS NULL',
+  );
+  return Number(row?.n ?? 0);
+}
+
+/** True if there are enough memories to generate a meaningful Wrapped (manual view). */
+export async function hasEnoughForWrapped(db: SQLiteDatabase): Promise<boolean> {
+  return (await wrappedMemoryCount(db)) >= 30;
+}
+
+/** Returns true if a Wrapped should AUTO-pop (quarterly cooldown + enough data). */
 export async function isWrappedDue(db: SQLiteDatabase): Promise<boolean> {
   const last = await getSetting(db, WRAPPED_LAST_KEY);
   if (last) {
     const daysSince = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
     if (daysSince < 85) return false; // less than ~3 months
   }
-  // Need at least 30 captures to generate a meaningful Wrapped
-  const row = await db.getFirstAsync<{ n: number }>(
-    'SELECT COUNT(*) AS n FROM captures WHERE processed = 1 AND archived_at IS NULL',
-  );
-  return Number(row?.n ?? 0) >= 30;
+  return hasEnoughForWrapped(db);
 }
 
 /** Generates the Wrapped slides from real data. */

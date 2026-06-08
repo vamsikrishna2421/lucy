@@ -18,6 +18,7 @@ import {
 } from '../db/brainTopics';
 import { haptic } from '../config/haptics';
 import { StoryView, type StorySubject } from './StoryView';
+import { MemoryDetailSheet } from '../components/MemoryDetailSheet';
 
 // ─── Stack ────────────────────────────────────────────────────────────────────
 
@@ -382,6 +383,7 @@ export function GalaxyView() {
 
 function TopicItemList({ topicId, onOpenStory }: { topicId: number; onOpenStory: (s: StorySubject) => void }) {
   const { items, loading } = useTopicItems(topicId);
+  const [selectedCaptureId, setSelectedCaptureId] = useState<number | null>(null);
   if (loading) return <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, padding: 16 }}>Loading…</Text>;
   if (items.length === 0) return null;
   return (
@@ -393,10 +395,8 @@ function TopicItemList({ topicId, onOpenStory }: { topicId: number; onOpenStory:
           style={styles.itemRow}
           activeOpacity={item.table_name === 'captures' ? 0.75 : 1}
           onPress={() => {
-            // Captures → open Story View for the topic name (topic-level narrative)
-            if (item.table_name === 'captures') {
-              // Nothing yet — future: open single capture detail
-            }
+            // Tapping a captured memory opens its detail (summary + LUCY insight + ask).
+            if (item.table_name === 'captures') setSelectedCaptureId(item.row_id);
           }}
         >
           <Text style={styles.itemTableBadge}>{item.table_name.toUpperCase()}</Text>
@@ -404,6 +404,11 @@ function TopicItemList({ topicId, onOpenStory }: { topicId: number; onOpenStory:
           {item.subtitle ? <Text style={styles.itemSub} numberOfLines={1}>{item.subtitle}</Text> : null}
         </TouchableOpacity>
       ))}
+      <MemoryDetailSheet
+        captureId={selectedCaptureId}
+        visible={selectedCaptureId !== null}
+        onClose={() => setSelectedCaptureId(null)}
+      />
     </View>
   );
 }

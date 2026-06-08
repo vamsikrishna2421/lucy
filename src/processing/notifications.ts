@@ -8,7 +8,13 @@ const GUARDIAN_CHANNEL = 'lucy-guardian';
 const STATUS_CHANNEL = 'lucy-status';
 const PERSISTENT_NOTIF_ID = 'lucy-persistent-status';
 
-/** Writes every notification to the in-app log so it's never lost. */
+function stableHash(s: string): string {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+/** Writes a notification to the in-app log so it's never lost. */
 async function logToInApp(
   kind: string,
   tier: 1 | 2 | 3,
@@ -18,15 +24,22 @@ async function logToInApp(
 ): Promise<void> {
   try {
     const { getDatabase } = await import('../db');
-    const { upsertNotifLog } = await import('../db/notificationLog');
     const db = await getDatabase();
-    await upsertNotifLog(db, {
-      identifier: identifier ?? `lucy_${kind}_${Date.now()}`,
-      kind, tier, title, body,
-      scheduled_for: new Date().toISOString(),
-      entity_id: null, entity_kind: null,
-    });
-    // Keep table bounded to last 200 rows
+    if (identifier) {
+      // Caller supplied a stable id (e.g. a reminder) → upsert so it updates in place.
+      const { upsertNotifLog } = await import('../db/notificationLog');
+      await upsertNotifLog(db, {
+        identifier, kind, tier, title, body,
+        scheduled_for: new Date().toISOString(), entity_id: null, entity_kind: null,
+      });
+    } else {
+      // Insight/guardian notification → dedup by content so the SAME insight can't
+      // spam the bell. Content-hash key + INSERT-OR-IGNORE means identical text
+      // is logged at most once (and a dismissed one won't resurface).
+      const { insertDeliveredNotifLog } = await import('../db/notificationLog');
+      const dedupKey = `lucy_${kind}_${stableHash(`${title}|${body}`)}`;
+      await insertDeliveredNotifLog(db, { dedupKey, kind, tier, title, body: body || null });
+    }
     await db.runAsync(
       `DELETE FROM lucy_notifications WHERE id NOT IN
        (SELECT id FROM lucy_notifications ORDER BY created_at DESC LIMIT 200)`,

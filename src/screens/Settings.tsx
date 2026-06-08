@@ -15,6 +15,7 @@ import { getBackgroundProcessingState, type BackgroundProcessingState } from '..
 import { runEnglishDeviceBenchmark, type BenchmarkResult } from '../processing/benchmark';
 import { organizeMemory } from '../processing/organizer';
 import { CheckInScheduler } from '../components/CheckInScheduler';
+import { ScheduledRemindersManager } from '../components/ScheduledRemindersManager';
 import { getUserProfile, saveUserProfile, type UserProfile } from '../db/userProfile';
 
 interface SettingsScreenProps {
@@ -54,6 +55,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
   const [devLogVisible, setDevLogVisible] = useState(false);
   const [checkInSchedulerVisible, setCheckInSchedulerVisible] = useState(false);
+  const [remindersManagerVisible, setRemindersManagerVisible] = useState(false);
   const [queue, setQueue] = useState(emptyQueue);
   const [background, setBackground] = useState<BackgroundProcessingState>();
   const [changingBackground, setChangingBackground] = useState(false);
@@ -401,6 +403,13 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           active={checkInEnabled}
           onInfo={() => setCheckInSchedulerVisible(true)}
         />
+        <SettingsRow
+          title="Scheduled reminders"
+          value="Browse and cancel every reminder LUCY has scheduled"
+          actionLabel="Manage"
+          onAction={() => setRemindersManagerVisible(true)}
+          onInfo={() => setRemindersManagerVisible(true)}
+        />
         <SettingsSectionLabel label="Profile" />
         <SettingsRow
           title="About you"
@@ -671,6 +680,10 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         visible={checkInSchedulerVisible}
         onClose={() => setCheckInSchedulerVisible(false)}
         onChange={(en) => setCheckInEnabled(en)}
+      />
+      <ScheduledRemindersManager
+        visible={remindersManagerVisible}
+        onClose={() => setRemindersManagerVisible(false)}
       />
       <SettingsSheet title={panelTitle(activePanel)} visible={activePanel !== null} onClose={() => setActivePanel(null)}>
         {activePanel === 'intelligence' ? (

@@ -47,6 +47,16 @@ export function AnimatedFace({
   const glow = useRef(new Animated.Value(0)).current;
   const zDrift = useRef(new Animated.Value(0)).current;
   const happy = useRef(new Animated.Value(0)).current;
+  const shimmer = useRef(new Animated.Value(0)).current; // rotating sphere highlight
+
+  // Continuous shimmer rotation — gives the orb a "Vegas Sphere" living glow.
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(shimmer, {
+      toValue: 1, duration: mood === 'sleeping' ? 9000 : 5000, easing: Easing.linear, useNativeDriver: true,
+    }));
+    loop.start();
+    return () => loop.stop();
+  }, [mood]);
 
   // Mood follows the effective status (sleeping when status is sleeping, else awake).
   useEffect(() => {
@@ -130,10 +140,18 @@ export function AnimatedFace({
 
   return (
     <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={styles.wrap} accessibilityLabel="LUCY — open notifications">
-      {/* outer glow */}
+      {/* layered orb glow — outer (dim, wide) + inner (bright) for a sphere halo */}
+      <Animated.View style={[styles.glowOuter, { opacity: glowOpacity, transform: [{ scale }] }]} />
       <Animated.View style={[styles.glow, { opacity: glowOpacity, transform: [{ scale }] }]} />
       {/* sphere */}
       <Animated.View style={[styles.sphere, mood === 'sleeping' && styles.sphereSleeping, { transform: [{ scale }] }]}>
+        {/* rotating shimmer band — the living "sphere" light */}
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.shimmer, { transform: [{ rotate: shimmer.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }]}
+        />
+        {/* specular highlight (top-left) for 3D depth */}
+        <View style={styles.specular} />
         <View style={styles.face}>
           <View style={styles.eyesRow}>
             <Animated.View style={[styles.eye, { transform: [{ scaleY: eyeScaleY as unknown as number }] }]} />
@@ -160,7 +178,7 @@ export function AnimatedFace({
           ]}
         >
           <Text style={styles.cloudEmoji}>{STATUS_META[effectiveStatus].emoji}</Text>
-          <Text style={styles.cloudText}>{STATUS_META[effectiveStatus].label}</Text>
+          <Text style={styles.cloudText} numberOfLines={1}>{STATUS_META[effectiveStatus].label}</Text>
         </Animated.View>
       ) : null}
       {/* thought-tail dots from face to cloud */}
@@ -181,29 +199,35 @@ export function AnimatedFace({
 const FACE = '#1A1206';
 
 const styles = StyleSheet.create({
-  wrap: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  glow: { position: 'absolute', width: 52, height: 52, borderRadius: 26, backgroundColor: LUCY_COLORS.primary },
+  wrap: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center' },
+  glowOuter: { position: 'absolute', width: 60, height: 60, borderRadius: 30, backgroundColor: LUCY_COLORS.primary },
+  glow: { position: 'absolute', width: 48, height: 48, borderRadius: 24, backgroundColor: LUCY_COLORS.primaryGlow },
   sphere: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: LUCY_COLORS.primary,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 8,
+    width: 40, height: 40, borderRadius: 20, backgroundColor: LUCY_COLORS.primary,
+    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+    borderWidth: 1, borderColor: 'rgba(255,200,150,0.5)',
+    shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 9,
   },
-  sphereSleeping: { backgroundColor: '#8A5A2B' },
+  sphereSleeping: { backgroundColor: '#8A5A2B', borderColor: 'rgba(200,160,120,0.35)' },
+  // Rotating bright band across the orb — the "living sphere" shimmer.
+  shimmer: { position: 'absolute', width: 56, height: 12, backgroundColor: 'rgba(255,235,200,0.35)', top: 14, left: -8 },
+  // Specular highlight (top-left) for a glassy 3D sphere look.
+  specular: { position: 'absolute', top: 6, left: 8, width: 10, height: 7, borderRadius: 5, backgroundColor: 'rgba(255,245,230,0.55)' },
   face: { alignItems: 'center', justifyContent: 'center', gap: 3 },
   eyesRow: { flexDirection: 'row', gap: 7 },
   eye: { width: 4, height: 8, borderRadius: 2, backgroundColor: FACE },
   mouth: { width: 12, height: 6, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, borderWidth: 2, borderTopWidth: 0, borderColor: FACE, marginTop: 1 },
   mouthSleeping: { width: 7, height: 2, borderRadius: 1, borderWidth: 0, backgroundColor: FACE },
-  // Status thought-cloud: anchored to the face's top-right, content grows leftward.
+  // Status thought-cloud: above the face, right-anchored, content on a single line.
   cloud: {
-    position: 'absolute', top: -16, right: -4, flexDirection: 'row', alignItems: 'center', gap: 3,
+    position: 'absolute', top: -15, right: -6, flexDirection: 'row', alignItems: 'center', gap: 3,
     backgroundColor: '#241a10', borderRadius: 11,
-    paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,140,66,0.4)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 4, elevation: 6,
+    paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,140,66,0.45)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 4, elevation: 8,
   },
   cloudEmoji: { fontSize: 10 },
-  cloudText: { color: LUCY_COLORS.primaryGlow, fontSize: 9, fontWeight: '800', letterSpacing: 0.2 },
-  tailDot1: { position: 'absolute', top: 0, right: 4, width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,140,66,0.4)' },
+  cloudText: { color: LUCY_COLORS.primaryGlow, fontSize: 9, fontWeight: '800', letterSpacing: 0.2, flexShrink: 0 },
+  tailDot1: { position: 'absolute', top: 1, right: 5, width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,140,66,0.45)' },
   badge: { position: 'absolute', bottom: -2, right: -2, minWidth: 15, height: 15, borderRadius: 8, backgroundColor: '#ef4444', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: LUCY_COLORS.background },
   badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
 });

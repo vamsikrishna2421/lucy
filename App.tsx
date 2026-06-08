@@ -482,37 +482,46 @@ export default function App() {
         {/* Unified header shown on all screens — consistent controls everywhere */}
         <View style={styles.brand}>
           <View style={styles.brandRow}>
-            <Text style={styles.brandName}>LUC<Text style={{ color: '#FF8C42' }}>Y</Text></Text>
+            {/* Logo with star above the Y */}
+            <View style={styles.logoWrap}>
+              <Text style={styles.brandName}>LUC<Text style={{ color: '#FF8C42' }}>Y</Text></Text>
+              <Text style={styles.logoStar}>✦</Text>
+            </View>
             <View style={styles.headerActions}>
-              {/* LUCY's animated face — the attraction piece; also opens notifications */}
-              <AnimatedFace
-                unreadCount={unreadNotifCount}
-                celebrateKey={refreshToken}
-                onPress={() => setNotifCenterVisible(true)}
-              />
-              <TouchableOpacity
-                style={[styles.listenPill, meetingVisible && styles.listenPillActive]}
-                onPress={() => setMeetingVisible(true)}
-              >
-                <View style={[styles.listenDot, meetingVisible && styles.listenDotActive]} />
-                <Text style={[styles.listenText, meetingVisible && styles.listenTextActive]}>Meeting</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.listenPill, passiveState.status === 'listening' && styles.listenPillActive]} onPress={togglePassiveListening}>
-                <View style={[styles.listenDot, passiveState.status === 'listening' && styles.listenDotActive]} />
-                <Text style={[styles.listenText, passiveState.status === 'listening' && styles.listenTextActive]}>
-                  {passiveState.status === 'listening'
-                    ? (passiveState.noApiKey ? 'No key' : passiveState.mode === 'batch'
-                        ? (passiveState.wordsHeard > 0
-                            ? `${passiveState.wordsHeard}w · ${passiveState.secondsUntilNextBatch}s`
-                            : passiveState.secondsUntilNextBatch === 0
-                              ? '⟳'
-                              : `${passiveState.recordingSeconds}s / ${passiveState.secondsUntilNextBatch}s`)
-                        : `${passiveState.wordsHeard}w`)
-                    : passiveState.status === 'starting' || passiveState.status === 'stopping'
-                    ? '...'
-                    : 'Listen'}
-                </Text>
-              </TouchableOpacity>
+              {/* Meeting + Listen pills on top */}
+              <View style={styles.headerPillRow}>
+                <TouchableOpacity
+                  style={[styles.listenPill, meetingVisible && styles.listenPillActive]}
+                  onPress={() => setMeetingVisible(true)}
+                >
+                  <View style={[styles.listenDot, meetingVisible && styles.listenDotActive]} />
+                  <Text style={[styles.listenText, meetingVisible && styles.listenTextActive]}>Meeting</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.listenPill, passiveState.status === 'listening' && styles.listenPillActive]} onPress={togglePassiveListening}>
+                  <View style={[styles.listenDot, passiveState.status === 'listening' && styles.listenDotActive]} />
+                  <Text style={[styles.listenText, passiveState.status === 'listening' && styles.listenTextActive]}>
+                    {passiveState.status === 'listening'
+                      ? (passiveState.noApiKey ? 'No key' : passiveState.mode === 'batch'
+                          ? (passiveState.wordsHeard > 0
+                              ? `${passiveState.wordsHeard}w · ${passiveState.secondsUntilNextBatch}s`
+                              : passiveState.secondsUntilNextBatch === 0
+                                ? '⟳'
+                                : `${passiveState.recordingSeconds}s / ${passiveState.secondsUntilNextBatch}s`)
+                          : `${passiveState.wordsHeard}w`)
+                      : passiveState.status === 'starting' || passiveState.status === 'stopping'
+                      ? '...'
+                      : 'Listen'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {/* LUCY's animated face — below the pills, the attraction piece + notifications */}
+              <View style={styles.headerFaceRow}>
+                <AnimatedFace
+                  unreadCount={unreadNotifCount}
+                  celebrateKey={refreshToken}
+                  onPress={() => setNotifCenterVisible(true)}
+                />
+              </View>
             </View>
           </View>
         </View>
@@ -607,9 +616,18 @@ export default function App() {
                 voiceStatus === 'transcribing' && styles.voiceButtonBusy,
               ]}
             >
-              <Text style={styles.voiceButtonIcon}>
-                {voiceStatus === 'recording' ? '\u25a0' : voiceStatus === 'transcribing' ? '\u22ef' : '\u2b24'}
-              </Text>
+              {voiceStatus === 'recording' ? (
+                <View style={styles.voiceStopSquare} />
+              ) : voiceStatus === 'transcribing' ? (
+                <Text style={styles.voiceButtonIcon}>\u22ef</Text>
+              ) : (
+                // Drawn mic icon
+                <View style={{ alignItems: 'center' }}>
+                  <View style={styles.micHead} />
+                  <View style={styles.micCradle} />
+                  <View style={styles.micStem} />
+                </View>
+              )}
             </TouchableOpacity>
             <Text style={styles.voiceButtonLabel}>
               {voiceStatus === 'recording' ? 'Tap / release' : voiceStatus === 'transcribing' ? 'Saving\u2026' : 'Hold to talk'}
@@ -674,10 +692,14 @@ export default function App() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: LUCY_COLORS.background },
   brand: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14 },
-  brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  brandRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  logoWrap: { position: 'relative', alignSelf: 'flex-start', marginTop: 6 },
+  logoStar: { position: 'absolute', top: -8, right: -14, color: '#FF8C42', fontSize: 14, fontWeight: '800', textShadowColor: 'rgba(255,139,61,0.7)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
+  headerPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerFaceRow: { alignItems: 'flex-end', marginTop: 8 },
   brandLogo: { height: 32, width: 160 },
   brandName: { color: LUCY_COLORS.textDark, fontSize: 24, fontWeight: '800', letterSpacing: 1.3 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerActions: { flexDirection: 'column', alignItems: 'flex-end' },
   meetingPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', flexDirection: 'row', alignItems: 'center', gap: 5 },
   bellBtn: { position: 'relative', width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
   bellIcon: { fontSize: 22, color: LUCY_COLORS.textMuted },
@@ -714,6 +736,10 @@ const styles = StyleSheet.create({
   voiceButtonRecording: { backgroundColor: '#ef4444', shadowColor: '#ef4444' },
   voiceButtonBusy: { backgroundColor: LUCY_COLORS.primaryGlow },
   voiceButtonIcon: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  voiceStopSquare: { width: 16, height: 16, borderRadius: 3, backgroundColor: '#fff' },
+  micHead: { width: 11, height: 16, borderRadius: 5.5, backgroundColor: '#fff' },
+  micCradle: { width: 17, height: 9, borderBottomLeftRadius: 9, borderBottomRightRadius: 9, borderColor: '#fff', borderWidth: 2, borderTopWidth: 0, marginTop: -5 },
+  micStem: { width: 2, height: 3, backgroundColor: '#fff', marginTop: 1 },
   voiceButtonLabel: { fontSize: 10, fontWeight: '700', color: LUCY_COLORS.textSubtle, marginTop: 2 },
   tabActivePill: { position: 'absolute', top: 0, width: 28, height: 3, borderRadius: 2, backgroundColor: 'transparent' },
   tabActivePillVisible: { backgroundColor: LUCY_COLORS.primary },

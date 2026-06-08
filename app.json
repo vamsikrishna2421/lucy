@@ -5,12 +5,12 @@
     "scheme": "lucy",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/lucy-icon.png",
+    "icon": "./assets/lucy-eye-icon.png",
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.100",
+      "buildNumber": "1.0.101",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
@@ -67,12 +67,12 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0D1015",
-        "foregroundImage": "./assets/lucy-adaptive-foreground.png"
+        "foregroundImage": "./assets/lucy-eye-adaptive.png"
       },
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.anonymous.lucy",
-      "versionCode": 55,
+      "versionCode": 56,
       "intentFilters": [
         {
           "action": "SEND",

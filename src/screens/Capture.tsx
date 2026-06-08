@@ -24,7 +24,6 @@ import {
   type ExpoSpeechRecognitionErrorEvent,
   type ExpoSpeechRecognitionResultEvent,
 } from 'expo-speech-recognition';
-import * as ImagePicker from 'expo-image-picker';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { AudioRecorder: AR } = require('expo-audio') as { AudioRecorder: new (opts: unknown) => { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void } };
 import { LUCY_COLORS } from '../config/colors';
@@ -549,26 +548,9 @@ export function CaptureScreen({
   const scanReceipt = async () => {
     setScanningReceipt(true);
     try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Camera access needed',
-          'LUCY needs camera access to scan receipts. Go to Settings → LUCY → Camera and turn it on.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => Linking.openSettings() },
-          ],
-        );
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: false });
-      if (result.canceled || !result.assets[0]) return;
-      const { processReceiptImage, receiptToCapture } = await import('../processing/receiptOCR');
-      const receipt = await processReceiptImage(result.assets[0].uri);
-      const captureText = receiptToCapture(receipt);
-      setText(captureText);
-    } catch {
-      Alert.alert('Could not scan', 'Something went wrong with the camera.');
+      const { scanReceiptToText } = await import('../processing/receiptScan');
+      const captureText = await scanReceiptToText();
+      if (captureText) setText(captureText);
     } finally {
       setScanningReceipt(false);
     }

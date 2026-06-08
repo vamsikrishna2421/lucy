@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.105",
+      "buildNumber": "1.0.106",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
@@ -33,6 +33,7 @@
         "NSMicrophoneUsageDescription": "LUCY listens in the background to capture your thoughts, ideas, and songs automatically.",
         "NSSpeechRecognitionUsageDescription": "LUCY uses on-device speech recognition to transcribe what you say during passive listening mode.",
         "NSPhotoLibraryUsageDescription": "LUCY may save audio recordings to your library when capturing memories.",
+        "NSCameraUsageDescription": "LUCY uses the camera to scan receipts so it can track your expenses automatically.",
         "NSCalendarsUsageDescription": "LUCY reads your calendar to send pre-meeting briefs and help you prepare — all data stays on your device.",
         "NSLocationWhenInUseUsageDescription": "LUCY uses your location to add context to your daily brief and answer location questions — never shared externally.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "LUCY records your city-level location (~1 mile precision) once per hour to build your personal travel timeline — never precise GPS, never shared externally.",
@@ -72,7 +73,7 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.anonymous.lucy",
-      "versionCode": 60,
+      "versionCode": 61,
       "intentFilters": [
         {
           "action": "SEND",
@@ -107,6 +108,13 @@
         }
       ],
       "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "LUCY accesses your photos so you can scan a saved receipt to track an expense.",
+          "cameraPermission": "LUCY uses the camera to scan receipts so it can track your expenses automatically."
+        }
+      ],
       [
         "expo-media-library",
         {

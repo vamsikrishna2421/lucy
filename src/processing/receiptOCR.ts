@@ -17,19 +17,9 @@ export interface ExtractedReceipt {
 }
 
 async function imageToBase64(uri: string): Promise<string> {
-  const { readAsBase64: readAsBase64Async } = await import('expo-file-system') as any;
-  if (readAsBase64Async) {
-    return readAsBase64Async(uri);
-  }
-  // Fallback: fetch the file and convert
-  const response = await fetch(uri);
-  const blob = await response.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+  // SDK 56: read base64 via the legacy file-system module (stable API).
+  const { readAsStringAsync, EncodingType } = await import('expo-file-system/legacy');
+  return readAsStringAsync(uri, { encoding: EncodingType.Base64 });
 }
 
 async function extractWithVision(base64Image: string, apiKey: string): Promise<ExtractedReceipt | null> {
@@ -84,9 +74,7 @@ export async function processReceiptImage(imageUri: string): Promise<ExtractedRe
     try {
       const apiKey = await getRemoteOpenAIKey();
       if (apiKey) {
-        // Use expo-file-system to read as base64
-        const { readAsStringAsync, EncodingType } = await import('expo-file-system');
-        const base64 = await readAsStringAsync(imageUri, { encoding: EncodingType.Base64 });
+        const base64 = await imageToBase64(imageUri);
         const result = await extractWithVision(base64, apiKey);
         if (result) return result;
       }

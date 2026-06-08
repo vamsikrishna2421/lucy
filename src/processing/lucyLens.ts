@@ -10,7 +10,8 @@
  * is NEVER saved — deleted immediately after extraction.
  */
 
-import { readAsStringAsync, EncodingType, deleteAsync } from 'expo-file-system';
+// SDK 56 deprecated these on the main entry; the legacy module keeps them stable.
+import { readAsStringAsync, EncodingType, deleteAsync } from 'expo-file-system/legacy';
 import { enqueueTranscript } from './extract';
 import { resolveRemoteAvailability } from '../ai/provider';
 import { promptAI } from '../ai/openai';

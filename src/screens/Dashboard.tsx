@@ -1283,6 +1283,17 @@ function TimelineView({
           onSubmitEditing={() => void sendQuick()}
           blurOnSubmit={false}
         />
+        {/* Receipt scan — capture an expense from a photo */}
+        <TouchableOpacity
+          style={styles.tlReceiptBtn}
+          onPress={async () => {
+            const { scanReceiptToText } = await import('../processing/receiptScan');
+            const text = await scanReceiptToText();
+            if (text) setQuickText(text);
+          }}
+        >
+          <Text style={styles.tlReceiptIcon}>🧾</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tlQuickSend, (!quickText.trim() || quickSending) && { opacity: 0.4 }]}
           onPress={() => void sendQuick()}
@@ -2294,6 +2305,8 @@ const styles = StyleSheet.create({
   captureStatus: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 12, textTransform: 'capitalize' },
   tlQuickBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.primary + '44', paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, gap: 10 },
   tlQuickInput: { flex: 1, color: LUCY_COLORS.textDark, fontSize: 15, paddingVertical: 0 },
+  tlReceiptBtn: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 6, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  tlReceiptIcon: { fontSize: 16 },
   tlQuickSend: { backgroundColor: LUCY_COLORS.primary, width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   tlQuickSendText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8, gap: 8 },

@@ -44,6 +44,8 @@ export interface PassiveListenerState {
   noApiKey: boolean;
   /** True when microphone permission was denied */
   noMicAccess: boolean;
+  /** True when this session is a one-shot "hold to talk" capture (not Listen mode). */
+  quickCapture: boolean;
 }
 
 class PassiveListenerManager {
@@ -53,7 +55,7 @@ class PassiveListenerManager {
   private state: PassiveListenerState = {
     status: 'off', wordsHeard: 0, sessionStartedAt: null,
     recordingSeconds: 0, secondsUntilNextBatch: PassiveListenerManager.BATCH_SECONDS,
-    mode: 'none', noApiKey: false, noMicAccess: false,
+    mode: 'none', noApiKey: false, noMicAccess: false, quickCapture: false,
   };
   private batchStartedAt = 0;
   private stateListeners: Array<(s: PassiveListenerState) => void> = [];
@@ -96,10 +98,11 @@ class PassiveListenerManager {
   private emit(): void { for (const fn of this.stateListeners) fn({ ...this.state }); }
   private patch(patch: Partial<PassiveListenerState>): void { this.state = { ...this.state, ...patch }; this.emit(); }
 
-  async start(options?: { meetingMode?: boolean }): Promise<void> {
+  async start(options?: { meetingMode?: boolean; quickCapture?: boolean }): Promise<void> {
     if (this.state.status !== 'off') return;
-    this.meetingMode = options?.meetingMode ?? false;
-    this.patch({ status: 'starting', wordsHeard: 0, sessionStartedAt: Date.now(), recordingSeconds: 0 });
+    // quickCapture (hold-to-talk) behaves like a titleless meeting: accumulate only.
+    this.meetingMode = (options?.meetingMode ?? false) || (options?.quickCapture ?? false);
+    this.patch({ status: 'starting', wordsHeard: 0, sessionStartedAt: Date.now(), recordingSeconds: 0, quickCapture: options?.quickCapture ?? false });
     this.transcriptAccumulator = [];
     this.sessionId = Crypto.randomUUID();
     this.active = true;
@@ -140,7 +143,7 @@ class PassiveListenerManager {
       preferDeviceSTT = profile.transcriptionEngine === 'device';
     } catch { /* non-critical */ }
 
-    const useDeviceSpeech = preferDeviceSTT;
+    let useDeviceSpeech = preferDeviceSTT;
 
     // Check if API key is present (batch mode needs it to count words)
     let noApiKey = false;
@@ -149,6 +152,15 @@ class PassiveListenerManager {
         const key = await getRemoteOpenAIKey();
         noApiKey = !key;
       } catch { noApiKey = true; }
+    }
+
+    // Hold-to-talk (quickCapture) must work out of the box. If Whisper is the
+    // chosen engine but there's no OpenAI key, transparently fall back to free
+    // on-device speech recognition so the mic still produces text. (Listen mode
+    // intentionally stays in batch mode so the no-key banner can prompt the user.)
+    if (this.state.quickCapture && noApiKey && !useDeviceSpeech) {
+      useDeviceSpeech = true;
+      noApiKey = false;
     }
 
     if (useDeviceSpeech) {
@@ -438,7 +450,7 @@ class PassiveListenerManager {
     }
     try { await setAudioModeAsync({ allowsRecording: false }); } catch { /* non-fatal */ }
     this.sessionId = null;
-    this.patch({ status: 'off', sessionStartedAt: null });
+    this.patch({ status: 'off', sessionStartedAt: null, quickCapture: false });
   }
 }
 

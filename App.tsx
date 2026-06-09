@@ -443,37 +443,26 @@ export default function App() {
     return () => { responseSub.remove(); receivedSub.remove(); };
   }, []);
 
-  // Quick-voice (bottom-nav mic) status subscription.
-  useEffect(() => {
-    let unsub = () => {};
-    void import('./src/audio/quickVoice').then(({ quickVoice }) => { unsub = quickVoice.subscribe(setVoiceStatus); });
-    return () => unsub();
-  }, []);
-
+  // Hold-to-talk uses the SAME proven engine as Meeting mode (PassiveListener):
+  // it records from press, stops on release, and transcribes the whole utterance —
+  // a meeting with no title. We drive voiceStatus manually around the calls.
   const finishVoiceCapture = useCallback(async () => {
+    setVoiceStatus('transcribing');
     try {
-      const { quickVoice } = await import('./src/audio/quickVoice');
-      const text = await quickVoice.stop();
-      if (text && text.trim()) {
-        await enqueueTranscript(text.trim(), 'voice', false);
+      // stop() transcribes the final clip; grab the accumulated transcript AFTER.
+      await passiveListener.stop();
+      const text = passiveListener.getAccumulatedTranscript().trim();
+      passiveListener.clearTranscript();
+      if (text) {
+        await enqueueTranscript(text, 'voice', false);
         setRefreshToken((v) => v + 1);
         void drainQueue();
       } else {
-        // Diagnose why: missing OpenAI key (Whisper engine) vs no speech heard.
-        const db = await getDatabase();
-        const { getUserProfile } = await import('./src/db/userProfile');
-        const profile = await getUserProfile(db);
-        if (profile.transcriptionEngine !== 'device') {
-          const { resolveRemoteAvailability } = await import('./src/ai/provider');
-          const { available } = await resolveRemoteAvailability();
-          if (!available) {
-            Alert.alert('OpenAI key needed', 'Voice uses OpenAI Whisper to transcribe. Add an OpenAI key in Settings → Remote intelligence, or switch to on-device transcription in Settings → About you.');
-            return;
-          }
-        }
-        Alert.alert('Nothing captured', 'I didn\'t catch any speech — hold the mic and speak clearly for a couple of seconds, then release.');
+        Alert.alert('Nothing captured', 'I didn\'t catch any speech — hold the mic and speak for a couple of seconds, then release.');
       }
-    } catch { /* non-critical */ }
+    } catch { /* non-critical */ } finally {
+      setVoiceStatus('idle');
+    }
   }, [drainQueue]);
 
   const onVoicePressIn = useCallback(() => {
@@ -485,8 +474,10 @@ export default function App() {
     }
     voiceRecording.current = true;
     voicePressStart.current = Date.now();
-    void import('./src/audio/quickVoice').then(({ quickVoice }) => quickVoice.start()).then((ok) => {
-      if (!ok) { voiceRecording.current = false; }
+    setVoiceStatus('recording');
+    void passiveListener.start({ quickCapture: true }).then(() => {
+      // If the session didn't actually start (mic denied), reset.
+      if (passiveListener.getState().status === 'off') { voiceRecording.current = false; setVoiceStatus('idle'); }
     });
   }, [finishVoiceCapture]);
 
@@ -511,6 +502,11 @@ export default function App() {
     return () => { cancelled = true; void import('./src/processing/lucyActions').then(({ setActionsAppliedListener }) => setActionsAppliedListener(null)); };
   }, []);
 
+  // Listen mode is "active" only for real Listen sessions — a quickCapture
+  // (hold-to-talk) session also reports status 'listening' but must NOT light
+  // up the Listen pill or trigger the no-key banner.
+  const listenActive = passiveState.status === 'listening' && !passiveState.quickCapture;
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
@@ -533,10 +529,10 @@ export default function App() {
                   <MaterialCommunityIcons name="microphone" size={13} color={meetingVisible ? LUCY_COLORS.primary : LUCY_COLORS.textMuted} />
                   <Text style={[styles.listenText, meetingVisible && styles.listenTextActive]}>Meeting</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.listenPill, passiveState.status === 'listening' && styles.listenPillActive]} onPress={togglePassiveListening}>
-                  <MaterialCommunityIcons name="ear-hearing" size={13} color={passiveState.status === 'listening' ? LUCY_COLORS.primary : LUCY_COLORS.textMuted} />
-                  <Text style={[styles.listenText, passiveState.status === 'listening' && styles.listenTextActive]}>
-                    {passiveState.status === 'listening'
+                <TouchableOpacity style={[styles.listenPill, listenActive && styles.listenPillActive]} onPress={togglePassiveListening}>
+                  <MaterialCommunityIcons name="ear-hearing" size={13} color={listenActive ? LUCY_COLORS.primary : LUCY_COLORS.textMuted} />
+                  <Text style={[styles.listenText, listenActive && styles.listenTextActive]}>
+                    {listenActive
                       ? (passiveState.noApiKey ? 'No key' : passiveState.mode === 'batch'
                           ? (passiveState.wordsHeard > 0
                               ? `${passiveState.wordsHeard}w · ${passiveState.secondsUntilNextBatch}s`
@@ -570,7 +566,7 @@ export default function App() {
           </View>
         </View>
         {/* No-key warning banner — shows when Listen is active but transcription can't run */}
-        {passiveState.status === 'listening' && passiveState.noApiKey ? (
+        {listenActive && passiveState.noApiKey ? (
           <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderBottomWidth: 1, borderBottomColor: 'rgba(245,158,11,0.25)', paddingHorizontal: 16, paddingVertical: 7 }}>
             <Text style={{ color: '#F59E0B', fontSize: 12, fontWeight: '600', textAlign: 'center' }}>
               ⚠ Listen mode is recording but cannot transcribe — add an OpenAI key in Settings → Remote intelligence.

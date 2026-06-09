@@ -448,7 +448,19 @@ export default function App() {
         setRefreshToken((v) => v + 1);
         void drainQueue();
       } else {
-        Alert.alert('Nothing captured', "I didn't catch any speech. Try again, or check your microphone and transcription settings.");
+        // Diagnose why: missing OpenAI key (Whisper engine) vs no speech heard.
+        const db = await getDatabase();
+        const { getUserProfile } = await import('./src/db/userProfile');
+        const profile = await getUserProfile(db);
+        if (profile.transcriptionEngine !== 'device') {
+          const { resolveRemoteAvailability } = await import('./src/ai/provider');
+          const { available } = await resolveRemoteAvailability();
+          if (!available) {
+            Alert.alert('OpenAI key needed', 'Voice uses OpenAI Whisper to transcribe. Add an OpenAI key in Settings → Remote intelligence, or switch to on-device transcription in Settings → About you.');
+            return;
+          }
+        }
+        Alert.alert('Nothing captured', 'I didn\'t catch any speech — hold the mic and speak clearly for a couple of seconds, then release.');
       }
     } catch { /* non-critical */ }
   }, [drainQueue]);

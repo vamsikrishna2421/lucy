@@ -1295,16 +1295,32 @@ function TimelineView({
           onSubmitEditing={() => void sendQuick()}
           blurOnSubmit={false}
         />
-        {/* Receipt scan — capture an expense from a photo */}
+        {/* Snap an image — receipt (expense) or any note/document → stored as memory */}
         <TouchableOpacity
           style={styles.tlReceiptBtn}
-          onPress={async () => {
-            const { scanReceiptToText } = await import('../processing/receiptScan');
-            const text = await scanReceiptToText();
-            if (text) setQuickText(text);
+          onPress={() => {
+            Alert.alert('Snap an image', 'What are you capturing?', [
+              {
+                text: '🧾 Receipt (expense)',
+                onPress: async () => {
+                  const { scanReceiptToText } = await import('../processing/receiptScan');
+                  const text = await scanReceiptToText();
+                  if (text) setQuickText(text);
+                },
+              },
+              {
+                text: '📝 Note / document / image',
+                onPress: async () => {
+                  const { snapImageToMemory } = await import('../processing/imageCapture');
+                  const ok = await snapImageToMemory();
+                  if (ok) onQueued?.();
+                },
+              },
+              { text: 'Cancel', style: 'cancel' },
+            ]);
           }}
         >
-          <Text style={styles.tlReceiptIcon}>🧾</Text>
+          <Ionicons name="camera-outline" size={18} color={LUCY_COLORS.textMuted} />
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tlQuickSend, (!quickText.trim() || quickSending) && { opacity: 0.4 }]}

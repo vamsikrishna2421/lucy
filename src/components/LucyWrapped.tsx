@@ -3,11 +3,12 @@
  * Tap anywhere to advance. Share button on the last slide.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useRef, useState } from 'react';
 import {
-  Animated, Easing, Modal, Platform, Pressable, Share,
+  Alert, Animated, Easing, Modal, Platform, Pressable, Share,
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
+import { captureRef } from 'react-native-view-shot';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import { haptic } from '../config/haptics';
@@ -56,6 +57,8 @@ export function LucyWrapped({ visible, onClose }: { visible: boolean; onClose: (
   const [slides, setSlides] = useState<WrappedSlide[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [sharing, setSharing] = useState(false);
+  const shareCardRef = useRef<View>(null);
 
   useEffect(() => {
     if (!visible) { setIndex(0); return; }
@@ -78,16 +81,33 @@ export function LucyWrapped({ visible, onClose }: { visible: boolean; onClose: (
     }
   };
 
+  // Share the whole Wrapped as ONE beautiful poster image: all the stat cards are
+  // composited into a single tall card (rendered off-screen) and captured as a PNG.
   const share = async () => {
+    if (slides.length === 0) return;
+    setSharing(true);
     try {
-      const lines = slides.filter((s) => s.id !== 'close').map(
-        (s) => `${s.emoji} ${s.headline} ${s.sub}`
-      );
-      const text = `My LUCY Wrapped:\n\n${lines.join('\n')}\n\nMy second brain is growing 🧠`;
-      // React Native's Share handles plain text directly on iOS + Android — no
-      // temp file, no expo-sharing availability check that can silently no-op.
-      await Share.share({ message: text });
-    } catch { /* user cancelled or non-critical */ }
+      await new Promise((r) => setTimeout(r, 60)); // let the off-screen card lay out
+      let uri: string;
+      try {
+        uri = await captureRef(shareCardRef, { format: 'png', quality: 1, result: 'tmpfile' });
+      } catch {
+        await new Promise((r) => setTimeout(r, 250));
+        uri = await captureRef(shareCardRef, { format: 'png', quality: 0.9, result: 'tmpfile' });
+      }
+      const Sharing = await import('expo-sharing');
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share your LUCY Wrapped' });
+      } else {
+        // Fallback: share text if image sharing isn't available on this device.
+        const lines = slides.filter((s) => s.id !== 'close').map((s) => `${s.emoji} ${s.headline} ${s.sub}`);
+        await Share.share({ message: `My LUCY Wrapped:\n\n${lines.join('\n')}\n\nMy second brain is growing 🧠` });
+      }
+    } catch (e) {
+      Alert.alert('Could not create image', e instanceof Error ? e.message : String(e));
+    } finally {
+      setSharing(false);
+    }
   };
 
   const current = slides[index];
@@ -105,8 +125,8 @@ export function LucyWrapped({ visible, onClose }: { visible: boolean; onClose: (
             <SlideView slide={current} index={index} total={slides.length} />
             {isLast ? (
               <View style={styles.shareRow}>
-                <TouchableOpacity style={[styles.shareBtn, { backgroundColor: current.accent }]} onPress={() => void share()}>
-                  <Text style={styles.shareBtnText}>Share ↗</Text>
+                <TouchableOpacity style={[styles.shareBtn, { backgroundColor: current.accent }, sharing && { opacity: 0.6 }]} onPress={() => void share()} disabled={sharing}>
+                  <Text style={styles.shareBtnText}>{sharing ? 'Preparing…' : 'Share ↗'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.closeBtn} onPress={() => { void getDatabase().then((db) => markWrappedShown(db)); onClose(); }}>
                   <Text style={styles.closeBtnText}>Done</Text>
@@ -115,10 +135,47 @@ export function LucyWrapped({ visible, onClose }: { visible: boolean; onClose: (
             ) : null}
           </>
         ) : null}
+
+        {/* Off-screen composite poster — captured as one image when sharing.
+            Positioned far left so it's laid out but never visible. */}
+        {slides.length > 0 ? (
+          <View style={styles.offscreen} pointerEvents="none">
+            <WrappedShareCard ref={shareCardRef} slides={slides} />
+          </View>
+        ) : null}
       </Pressable>
     </Modal>
   );
 }
+
+// ─── Composite share poster ─────────────────────────────────────────────────────
+// All the stat slides stacked into ONE tall, branded card → a single shareable image.
+const WrappedShareCard = forwardRef<View, { slides: WrappedSlide[] }>(({ slides }, ref) => {
+  const stats = slides.filter((s) => s.id !== 'close');
+  const period = new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  return (
+    <View ref={ref} collapsable={false} style={styles.poster}>
+      <View style={styles.posterHeader}>
+        <Text style={styles.posterBrand}>LUCY <Text style={{ color: LUCY_COLORS.primary }}>✦</Text></Text>
+        <Text style={styles.posterTitle}>My Wrapped</Text>
+        <Text style={styles.posterPeriod}>{period}</Text>
+      </View>
+      <View style={styles.posterStats}>
+        {stats.map((s, i) => (
+          <View key={s.id} style={[styles.posterStat, i === stats.length - 1 && { borderBottomWidth: 0 }]}>
+            <Text style={styles.posterStatEmoji}>{s.emoji}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.posterStatHeadline, { color: s.accent }]} numberOfLines={1} adjustsFontSizeToFit>{s.headline}</Text>
+              <Text style={styles.posterStatSub} numberOfLines={2}>{s.sub}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+      <Text style={styles.posterFooter}>my second brain is growing 🧠</Text>
+    </View>
+  );
+});
+WrappedShareCard.displayName = 'WrappedShareCard';
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#0C0B0980', justifyContent: 'center', alignItems: 'center', padding: 24 },
@@ -139,6 +196,20 @@ const styles = StyleSheet.create({
   sub: { color: LUCY_COLORS.textDark, fontSize: 22, fontWeight: '700', textAlign: 'center', lineHeight: 30, letterSpacing: -0.3 },
   detail: { color: LUCY_COLORS.textSubtle, fontSize: 14, textAlign: 'center', lineHeight: 20, marginTop: 4 },
   tapHint: { color: LUCY_COLORS.textSubtle, fontSize: 12, textAlign: 'center', marginTop: 28, fontWeight: '600' },
+  // Off-screen container for the capture-only poster.
+  offscreen: { position: 'absolute', left: -2000, top: 0 },
+  // Composite share poster (one image for all stats).
+  poster: { width: 360, backgroundColor: LUCY_COLORS.surface, borderRadius: 28, paddingVertical: 28, paddingHorizontal: 26, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  posterHeader: { alignItems: 'center', gap: 2, marginBottom: 18 },
+  posterBrand: { color: LUCY_COLORS.textDark, fontSize: 22, fontWeight: '900', letterSpacing: 1 },
+  posterTitle: { color: LUCY_COLORS.textDark, fontSize: 34, fontWeight: '900', letterSpacing: -1, marginTop: 2 },
+  posterPeriod: { color: LUCY_COLORS.textSubtle, fontSize: 13, fontWeight: '700', marginTop: 2 },
+  posterStats: { gap: 0 },
+  posterStat: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.border },
+  posterStatEmoji: { fontSize: 30, width: 38, textAlign: 'center' },
+  posterStatHeadline: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
+  posterStatSub: { color: LUCY_COLORS.textMuted, fontSize: 13, fontWeight: '600', lineHeight: 18, marginTop: 1 },
+  posterFooter: { color: LUCY_COLORS.textSubtle, fontSize: 13, fontWeight: '700', textAlign: 'center', marginTop: 20 },
   shareRow: { flexDirection: 'row', gap: 12, marginTop: 16, width: '100%', maxWidth: 360 },
   shareBtn: { flex: 2, borderRadius: 16, paddingVertical: 14, alignItems: 'center' },
   shareBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },

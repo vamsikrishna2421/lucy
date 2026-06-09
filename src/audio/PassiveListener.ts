@@ -318,6 +318,11 @@ class PassiveListenerManager {
     if (this.voiceBuffer.length === 0) return;
     const text = this.voiceBuffer.join(' ').trim();
     this.voiceBuffer = [];
+    // In meeting / hold-to-talk (quickCapture) mode we only accumulate the
+    // transcript (transcriptAccumulator, populated by the result listener); the
+    // caller persists it once. Enqueuing here too would create a duplicate
+    // "Listen" capture alongside the meeting/voice entry.
+    if (this.meetingMode) return;
     if (text.split(/\s+/).length >= 5) { try { await enqueueTranscript(text, 'passive', false, this.sessionId); } catch { /* non-critical */ } }
   }
 

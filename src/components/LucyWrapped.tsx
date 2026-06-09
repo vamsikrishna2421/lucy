@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  Animated, Easing, Modal, Platform, Pressable,
+  Animated, Easing, Modal, Platform, Pressable, Share,
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
@@ -80,17 +80,14 @@ export function LucyWrapped({ visible, onClose }: { visible: boolean; onClose: (
 
   const share = async () => {
     try {
-      const { isAvailableAsync, shareAsync } = await import('expo-sharing');
-      if (!await isAvailableAsync()) return;
       const lines = slides.filter((s) => s.id !== 'close').map(
         (s) => `${s.emoji} ${s.headline} ${s.sub}`
       );
       const text = `My LUCY Wrapped:\n\n${lines.join('\n')}\n\nMy second brain is growing 🧠`;
-      const { writeAsStringAsync, cacheDirectory } = await import('expo-file-system/legacy') as unknown as { writeAsStringAsync: (uri: string, c: string) => Promise<void>; cacheDirectory: string };
-      const dir = cacheDirectory ?? '';
-      await writeAsStringAsync(`${dir}lucy-wrapped.txt`, text);
-      await shareAsync(`${dir}lucy-wrapped.txt`, { mimeType: 'text/plain', dialogTitle: 'Share your LUCY Wrapped' });
-    } catch { /* non-critical */ }
+      // React Native's Share handles plain text directly on iOS + Android — no
+      // temp file, no expo-sharing availability check that can silently no-op.
+      await Share.share({ message: text });
+    } catch { /* user cancelled or non-critical */ }
   };
 
   const current = slides[index];

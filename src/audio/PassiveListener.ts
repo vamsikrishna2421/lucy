@@ -71,6 +71,10 @@ class PassiveListenerManager {
   private voiceBuffer: string[] = [];
   private voiceRestartTimer: ReturnType<typeof setTimeout> | null = null;
   private transcriptAccumulator: string[] = [];
+  // Latest non-final on-device result. Only tracked when interimResults is on
+  // (hold-to-talk / quickCapture), used as a fallback for utterances too short
+  // to ever emit a "final" before the user releases.
+  private deviceLastInterim = '';
   // UUID generated at session start, set on every enqueued batch so all clips
   // from one session can be grouped together in the Brain → Listen tab.
   private sessionId: string | null = null;
@@ -104,6 +108,7 @@ class PassiveListenerManager {
     this.meetingMode = (options?.meetingMode ?? false) || (options?.quickCapture ?? false);
     this.patch({ status: 'starting', wordsHeard: 0, sessionStartedAt: Date.now(), recordingSeconds: 0, quickCapture: options?.quickCapture ?? false });
     this.transcriptAccumulator = [];
+    this.deviceLastInterim = '';
     this.sessionId = Crypto.randomUUID();
     this.active = true;
     // Request microphone permission explicitly — prepareToRecordAsync() throws silently if denied.
@@ -241,9 +246,15 @@ class PassiveListenerManager {
     this.deviceSpeechFatalError = false;
     this.deviceSpeechSubscriptions = [
       ExpoSpeechRecognitionModule.addListener('result', (event: ExpoSpeechRecognitionResultEvent) => {
-        if (!event.isFinal) return;
         const text = event.results[0]?.transcript.trim() ?? '';
         if (!text) return;
+        if (!event.isFinal) {
+          // Only meaningful when interimResults is on (quickCapture). Keeps the
+          // latest partial so a short utterance isn't lost if no final lands.
+          this.deviceLastInterim = text;
+          return;
+        }
+        this.deviceLastInterim = '';
         this.voiceBuffer.push(text);
         this.transcriptAccumulator.push(text);
         this.patch({ wordsHeard: this.state.wordsHeard + text.split(/\s+/).length });
@@ -274,7 +285,9 @@ class PassiveListenerManager {
     try {
       ExpoSpeechRecognitionModule.start({
         lang: this.deviceSpeechLocale,
-        interimResults: false,
+        // Hold-to-talk needs interims as a fallback for short utterances; Listen
+        // mode stays final-only to avoid noisy partial captures.
+        interimResults: this.state.quickCapture,
         maxAlternatives: 1,
         continuous: true,
         requiresOnDeviceRecognition: true,
@@ -439,10 +452,17 @@ class PassiveListenerManager {
     this.secondTimer = null;
     this.voiceRestartTimer = null;
     if (this.state.mode === 'stt') {
+      const quick = this.state.quickCapture;
       try { ExpoSpeechRecognitionModule.stop(); } catch { /* ignore */ }
-      await new Promise<void>((resolve) => setTimeout(resolve, 400));
+      // Hold-to-talk waits a touch longer for a trailing final to land.
+      await new Promise<void>((resolve) => setTimeout(resolve, quick ? 900 : 400));
       this.clearDeviceSpeechListeners();
       await this.flushVoiceBuffer();
+      // Short hold-to-talk utterances may never emit a "final" — fall back to the
+      // last interim so the capture isn't silently lost.
+      if (quick && this.transcriptAccumulator.length === 0 && this.deviceLastInterim.trim()) {
+        this.transcriptAccumulator.push(this.deviceLastInterim.trim());
+      }
     }
     const uri = await this.stopRecorder();
     if (uri) {

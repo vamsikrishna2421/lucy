@@ -709,12 +709,12 @@ export default function App() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: LUCY_COLORS.background },
-  brand: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14 },
+  brand: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 2 },
   brandRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   logoWrap: { position: 'relative', alignSelf: 'flex-start', marginTop: 6 },
   logoStar: { position: 'absolute', top: -8, right: -14, color: '#FF8C42', fontSize: 14, fontWeight: '800', textShadowColor: 'rgba(255,139,61,0.7)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
   headerPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerFaceRow: { alignItems: 'flex-end', marginTop: 8 },
+  headerFaceRow: { alignItems: 'flex-end', marginTop: 2 },
   brandLogo: { height: 32, width: 160 },
   brandName: { color: LUCY_COLORS.textDark, fontSize: 24, fontWeight: '800', letterSpacing: 1.3 },
   headerActions: { flexDirection: 'column', alignItems: 'flex-end' },
@@ -735,7 +735,7 @@ const styles = StyleSheet.create({
   meetingHeaderPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', flexDirection: 'row', alignItems: 'center', gap: 5 },
   brainHeaderPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: LUCY_COLORS.primarySoft, flexDirection: 'row', alignItems: 'center' },
   brainHeaderText: { color: LUCY_COLORS.primary, fontWeight: '700', fontSize: 11 },
-  container: { flex: 1, paddingHorizontal: 20, paddingTop: 4 },
+  container: { flex: 1, paddingHorizontal: 20, paddingTop: 0 },
   bottomNav: {
     flexDirection: 'row',
     backgroundColor: LUCY_COLORS.surface,

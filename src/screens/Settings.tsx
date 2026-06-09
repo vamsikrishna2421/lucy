@@ -332,8 +332,9 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         follow_ups: followUps,
       };
       const json = JSON.stringify(exportData, null, 2);
-      // Write to a temp file and share
-      const { cacheDirectory, writeAsStringAsync } = require('expo-file-system') as { cacheDirectory: string; writeAsStringAsync: (path: string, content: string) => Promise<void> };
+      // Write to a temp file and share. SDK 56: cacheDirectory/writeAsStringAsync
+      // live in expo-file-system/legacy — the bare module returns undefined.
+      const { cacheDirectory, writeAsStringAsync } = require('expo-file-system/legacy') as { cacheDirectory: string; writeAsStringAsync: (path: string, content: string) => Promise<void> };
       const exportPath = `${cacheDirectory}lucy-export-${Date.now()}.json`;
       await writeAsStringAsync(exportPath, json);
       await shareAsync(exportPath, { mimeType: 'application/json', dialogTitle: 'Export LUCY data' });
@@ -648,9 +649,8 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
                 ].join('\n')),
               ].join('\n');
 
-              const { cacheDirectory, writeAsStringAsync } = await import('expo-file-system') as any;
-              const documentDirectory = cacheDirectory;
-              const path = `${documentDirectory}lucy-export-${Date.now()}.md`;
+              const { cacheDirectory, writeAsStringAsync } = await import('expo-file-system/legacy') as any;
+              const path = `${cacheDirectory}lucy-export-${Date.now()}.md`;
               await writeAsStringAsync(path, md);
               await shareAsync(path, { mimeType: 'text/markdown', dialogTitle: 'Export LUCY as Markdown' });
             } catch { Alert.alert('Export failed', 'Please try again.'); }

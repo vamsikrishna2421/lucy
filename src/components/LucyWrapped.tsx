@@ -86,8 +86,8 @@ export function LucyWrapped({ visible, onClose }: { visible: boolean; onClose: (
         (s) => `${s.emoji} ${s.headline} ${s.sub}`
       );
       const text = `My LUCY Wrapped:\n\n${lines.join('\n')}\n\nMy second brain is growing 🧠`;
-      const { writeAsStringAsync } = await import('expo-file-system') as unknown as { writeAsStringAsync: (uri: string, c: string) => Promise<void> };
-      const dir = (await import('expo-file-system') as unknown as { documentDirectory: string }).documentDirectory ?? '';
+      const { writeAsStringAsync, cacheDirectory } = await import('expo-file-system/legacy') as unknown as { writeAsStringAsync: (uri: string, c: string) => Promise<void>; cacheDirectory: string };
+      const dir = cacheDirectory ?? '';
       await writeAsStringAsync(`${dir}lucy-wrapped.txt`, text);
       await shareAsync(`${dir}lucy-wrapped.txt`, { mimeType: 'text/plain', dialogTitle: 'Share your LUCY Wrapped' });
     } catch { /* non-critical */ }

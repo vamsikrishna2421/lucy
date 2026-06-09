@@ -5,7 +5,7 @@
  * Uses a simple in-component stack (no navigator required).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert, Animated, Easing, FlatList, Modal, Pressable,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
@@ -97,48 +97,48 @@ function useTopicItems(topicId: number) {
   const [items, setItems] = useState<ItemDisplay[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    void (async () => {
-      setLoading(true);
-      try {
-        const db = await getDatabase();
-        const rows = await listItemsInSubtree(db, topicId, undefined, 40);
-        const ids = rows.reduce<Record<string, number[]>>((acc, r) => {
-          (acc[r.table_name] = acc[r.table_name] ?? []).push(r.row_id);
-          return acc;
-        }, {});
-        const display: ItemDisplay[] = [];
-        for (const [table, rowIds] of Object.entries(ids)) {
-          if (rowIds.length === 0) continue;
-          const placeholders = rowIds.map(() => '?').join(',');
-          if (table === 'captures') {
-            const caps = await db.getAllAsync<{ id: number; extracted_title: string | null; raw_transcript: string }>(
-              `SELECT id, extracted_title, raw_transcript FROM captures WHERE id IN (${placeholders}) ORDER BY created_at DESC`,
-              ...rowIds,
-            );
-            caps.forEach((c) => display.push({
-              table_name: 'captures', row_id: c.id,
-              label: c.extracted_title ?? c.raw_transcript.slice(0, 60),
-            }));
-          } else if (table === 'todos') {
-            const t = await db.getAllAsync<{ id: number; task: string; urgency: string }>(
-              `SELECT id, task, urgency FROM todos WHERE id IN (${placeholders})`, ...rowIds,
-            );
-            t.forEach((r) => display.push({ table_name: 'todos', row_id: r.id, label: r.task, subtitle: r.urgency }));
-          } else if (table === 'ideas') {
-            const t = await db.getAllAsync<{ id: number; title: string; description: string }>(
-              `SELECT id, title, description FROM ideas WHERE id IN (${placeholders})`, ...rowIds,
-            );
-            t.forEach((r) => display.push({ table_name: 'ideas', row_id: r.id, label: r.title, subtitle: r.description.slice(0, 80) }));
-          }
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const db = await getDatabase();
+      const rows = await listItemsInSubtree(db, topicId, undefined, 40);
+      const ids = rows.reduce<Record<string, number[]>>((acc, r) => {
+        (acc[r.table_name] = acc[r.table_name] ?? []).push(r.row_id);
+        return acc;
+      }, {});
+      const display: ItemDisplay[] = [];
+      for (const [table, rowIds] of Object.entries(ids)) {
+        if (rowIds.length === 0) continue;
+        const placeholders = rowIds.map(() => '?').join(',');
+        if (table === 'captures') {
+          const caps = await db.getAllAsync<{ id: number; extracted_title: string | null; raw_transcript: string }>(
+            `SELECT id, extracted_title, raw_transcript FROM captures WHERE id IN (${placeholders}) ORDER BY created_at DESC`,
+            ...rowIds,
+          );
+          caps.forEach((c) => display.push({
+            table_name: 'captures', row_id: c.id,
+            label: c.extracted_title ?? c.raw_transcript.slice(0, 60),
+          }));
+        } else if (table === 'todos') {
+          const t = await db.getAllAsync<{ id: number; task: string; urgency: string }>(
+            `SELECT id, task, urgency FROM todos WHERE id IN (${placeholders})`, ...rowIds,
+          );
+          t.forEach((r) => display.push({ table_name: 'todos', row_id: r.id, label: r.task, subtitle: r.urgency }));
+        } else if (table === 'ideas') {
+          const t = await db.getAllAsync<{ id: number; title: string; description: string }>(
+            `SELECT id, title, description FROM ideas WHERE id IN (${placeholders})`, ...rowIds,
+          );
+          t.forEach((r) => display.push({ table_name: 'ideas', row_id: r.id, label: r.title, subtitle: r.description.slice(0, 80) }));
         }
-        setItems(display);
-      } catch { /* non-critical */ }
-      setLoading(false);
-    })();
+      }
+      setItems(display);
+    } catch { /* non-critical */ }
+    setLoading(false);
   }, [topicId]);
 
-  return { items, loading };
+  useEffect(() => { void load(); }, [load]);
+
+  return { items, loading, reload: load };
 }
 
 // ─── Main Galaxy view ─────────────────────────────────────────────────────────
@@ -382,13 +382,45 @@ export function GalaxyView() {
 // ─── Items list inside a topic ────────────────────────────────────────────────
 
 function TopicItemList({ topicId, onOpenStory }: { topicId: number; onOpenStory: (s: StorySubject) => void }) {
-  const { items, loading } = useTopicItems(topicId);
+  const { items, loading, reload } = useTopicItems(topicId);
   const [selectedCaptureId, setSelectedCaptureId] = useState<number | null>(null);
+
+  // Long-press a leaf item → confirm + delete the bad capture/task/idea.
+  const handleLongPressItem = (item: ItemDisplay) => {
+    haptic.longPress();
+    const niceType = item.table_name === 'captures' ? 'memory' : item.table_name === 'todos' ? 'task' : 'idea';
+    Alert.alert(
+      `Delete this ${niceType}?`,
+      item.label.slice(0, 120),
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: async () => {
+          haptic.destructive();
+          try {
+            const db = await getDatabase();
+            if (item.table_name === 'captures') {
+              const { deleteCaptureCompletely } = await import('../db/captures');
+              await deleteCaptureCompletely(db, item.row_id);
+            } else if (item.table_name === 'todos') {
+              const { deleteTodo } = await import('../db/todos');
+              await deleteTodo(db, item.row_id);
+            } else if (item.table_name === 'ideas') {
+              const { deleteIdea } = await import('../db/ideas');
+              await deleteIdea(db, item.row_id);
+            }
+          } catch { /* non-critical */ }
+          void reload();
+        }},
+      ],
+    );
+  };
+
   if (loading) return <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, padding: 16 }}>Loading…</Text>;
   if (items.length === 0) return null;
   return (
     <View>
       <Text style={[styles.sectionLabel, { marginTop: 16 }]}>ITEMS</Text>
+      <Text style={styles.itemsHint}>Tap to open · long-press to delete</Text>
       {items.map((item) => (
         <TouchableOpacity
           key={`${item.table_name}-${item.row_id}`}
@@ -398,6 +430,8 @@ function TopicItemList({ topicId, onOpenStory }: { topicId: number; onOpenStory:
             // Tapping a captured memory opens its detail (summary + LUCY insight + ask).
             if (item.table_name === 'captures') setSelectedCaptureId(item.row_id);
           }}
+          onLongPress={() => handleLongPressItem(item)}
+          delayLongPress={350}
         >
           <Text style={styles.itemTableBadge}>{item.table_name.toUpperCase()}</Text>
           <Text style={styles.itemLabel} numberOfLines={2}>{item.label}</Text>
@@ -444,6 +478,7 @@ const styles = StyleSheet.create({
   topicCount: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 2 },
   topicChevron: { color: LUCY_COLORS.textSubtle, fontSize: 18, fontWeight: '600' },
   // Items
+  itemsHint: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginHorizontal: 16, marginTop: -4, marginBottom: 8 },
   itemRow: { marginHorizontal: 12, marginBottom: 8, backgroundColor: LUCY_COLORS.surface, borderRadius: 12, padding: 12, gap: 4, borderWidth: 1, borderColor: LUCY_COLORS.border },
   itemTableBadge: { color: LUCY_COLORS.textSubtle, fontSize: 9, fontWeight: '800', letterSpacing: 1 },
   itemLabel: { color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '600' },

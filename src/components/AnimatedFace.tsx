@@ -168,7 +168,8 @@ export function AnimatedFace({
     : Animated.multiply(blink, happy.interpolate({ inputRange: [0, 1], outputRange: [1, 0.35] }));
 
   return (
-    <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={styles.wrap} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }} accessibilityLabel="LUCY — open notifications">
+    <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={styles.touch} hitSlop={{ top: 10, bottom: 16, left: 16, right: 16 }} accessibilityLabel="LUCY — open notifications">
+     <View style={styles.wrap} pointerEvents="none">
       {/* layered orb glow — outer (dim, wide) + inner (bright) for a sphere halo */}
       <Animated.View style={[styles.glowOuter, { opacity: glowOpacity, transform: [{ scale }] }]} />
       <Animated.View style={[styles.glow, { opacity: glowOpacity, transform: [{ scale }] }]} />
@@ -229,6 +230,7 @@ export function AnimatedFace({
           <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : String(unreadCount)}</Text>
         </View>
       ) : null}
+     </View>
     </TouchableOpacity>
   );
 }
@@ -236,6 +238,9 @@ export function AnimatedFace({
 const FACE = '#1A1206';
 
 const styles = StyleSheet.create({
+  // Outer touch target — padding around the orb so the whole sphere + halo (and
+  // a comfortable margin) is tappable, not just the 40px sphere itself.
+  touch: { padding: 12, alignItems: 'center', justifyContent: 'center' },
   wrap: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center' },
   glowOuter: { position: 'absolute', width: 60, height: 60, borderRadius: 30, backgroundColor: LUCY_COLORS.primary },
   glow: { position: 'absolute', width: 48, height: 48, borderRadius: 24, backgroundColor: LUCY_COLORS.primaryGlow },

@@ -730,10 +730,10 @@ function PulseCard({ pulse, onDismiss }: { pulse: import('../db/brainPulses').Br
                 const shareText = `LUCY noticed: "${pulse.headline}" — captured by my second brain`;
                 if (await isAvailableAsync()) {
                   // Write to a temp file since expo-sharing needs a URI on some platforms
-                  const fs = await import('expo-file-system');
+                  const fs = await import('expo-file-system/legacy');
                   const writeAsStringAsync = (fs as unknown as { writeAsStringAsync: (uri: string, contents: string) => Promise<void> }).writeAsStringAsync;
-                  const documentDirectory = (fs as unknown as { documentDirectory: string }).documentDirectory ?? '';
-                  const uri = `${documentDirectory}lucy-pulse.txt`;
+                  const cacheDirectory = (fs as unknown as { cacheDirectory: string }).cacheDirectory ?? '';
+                  const uri = `${cacheDirectory}lucy-pulse.txt`;
                   await writeAsStringAsync(uri, shareText);
                   await shareAsync(uri, { mimeType: 'text/plain', dialogTitle: 'Share LUCY insight' });
                 }

@@ -557,8 +557,10 @@ export default function App() {
                   celebrateKey={refreshToken}
                   status={
                     voiceStatus === 'transcribing' ? 'saving'
+                    : meetingVisible ? 'reading'
                     : (voiceStatus === 'recording' || passiveState.status === 'listening') ? 'listening'
                     : processingActive ? 'organizing'
+                    : (screen === 'dashboard' && dashCurrentView === 'Ask Lucy') ? 'thinking'
                     : 'idle'
                   }
                   onPress={() => setNotifCenterVisible(true)}

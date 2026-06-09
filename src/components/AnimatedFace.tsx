@@ -3,7 +3,7 @@ import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'reac
 import { LUCY_COLORS } from '../config/colors';
 
 type Mood = 'awake' | 'happy' | 'sleeping';
-export type LucyStatus = 'idle' | 'organizing' | 'listening' | 'saving' | 'sleeping';
+export type LucyStatus = 'idle' | 'organizing' | 'listening' | 'saving' | 'sleeping' | 'thinking' | 'reading';
 
 function moodForHour(hour: number): Mood {
   if (hour >= 22 || hour < 6) return 'sleeping';
@@ -15,7 +15,36 @@ const STATUS_META: Record<Exclude<LucyStatus, 'idle'>, { emoji: string; label: s
   listening: { emoji: '🎧', label: 'Listening' },
   saving: { emoji: '💾', label: 'Saving' },
   sleeping: { emoji: '😴', label: 'Sleeping' },
+  thinking: { emoji: '💭', label: 'Thinking' },
+  reading: { emoji: '📖', label: 'Reading' },
 };
+
+// A floating particle that drifts up around the orb and fades — premium "alive" feel.
+function Particle({ delay, x }: { delay: number; x: number }) {
+  const t = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(t, { toValue: 1, duration: 2200, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute', bottom: 8, left: 23 + x, width: 3, height: 3, borderRadius: 1.5,
+        backgroundColor: LUCY_COLORS.primaryGlow,
+        opacity: t.interpolate({ inputRange: [0, 0.2, 0.8, 1], outputRange: [0, 0.9, 0.6, 0] }),
+        transform: [
+          { translateY: t.interpolate({ inputRange: [0, 1], outputRange: [0, -34] }) },
+          { translateX: t.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, x > 0 ? 4 : -4, 0] }) },
+        ],
+      }}
+    />
+  );
+}
 
 /**
  * LUCY's animated face — the top-right "attraction piece".
@@ -143,6 +172,14 @@ export function AnimatedFace({
       {/* layered orb glow — outer (dim, wide) + inner (bright) for a sphere halo */}
       <Animated.View style={[styles.glowOuter, { opacity: glowOpacity, transform: [{ scale }] }]} />
       <Animated.View style={[styles.glow, { opacity: glowOpacity, transform: [{ scale }] }]} />
+      {/* floating particles when LUCY is actively working (not idle/sleeping) */}
+      {effectiveStatus !== 'idle' && effectiveStatus !== 'sleeping' ? (
+        <>
+          <Particle delay={0} x={-6} />
+          <Particle delay={700} x={6} />
+          <Particle delay={1400} x={0} />
+        </>
+      ) : null}
       {/* sphere */}
       <Animated.View style={[styles.sphere, mood === 'sleeping' && styles.sphereSleeping, { transform: [{ scale }] }]}>
         {/* rotating shimmer band — the living "sphere" light */}

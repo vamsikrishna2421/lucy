@@ -714,7 +714,7 @@ const styles = StyleSheet.create({
   logoWrap: { position: 'relative', alignSelf: 'flex-start', marginTop: 6 },
   logoStar: { position: 'absolute', top: -8, right: -14, color: '#FF8C42', fontSize: 14, fontWeight: '800', textShadowColor: 'rgba(255,139,61,0.7)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
   headerPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerFaceRow: { alignItems: 'flex-end', marginTop: 2 },
+  headerFaceRow: { alignItems: 'flex-end', marginTop: 18 },
   brandLogo: { height: 32, width: 160 },
   brandName: { color: LUCY_COLORS.textDark, fontSize: 24, fontWeight: '800', letterSpacing: 1.3 },
   headerActions: { flexDirection: 'column', alignItems: 'flex-end' },

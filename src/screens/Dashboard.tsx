@@ -2179,7 +2179,7 @@ const styles = StyleSheet.create({
   activeViewText: { color: LUCY_COLORS.primaryGlow },
   content: { flex: 1 },
   tonight: { backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderRadius: 24, padding: 19, marginBottom: 19 },
-  todayDate: { color: LUCY_COLORS.textSubtle, fontSize: 12, fontWeight: '600', letterSpacing: 0.3, marginBottom: 2, marginTop: -34 },
+  todayDate: { color: LUCY_COLORS.textSubtle, fontSize: 12, fontWeight: '600', letterSpacing: 0.3, marginBottom: 2, marginTop: -50 },
   eyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
   tonightTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '700', marginTop: 9 },
   tonightDetail: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 7 },

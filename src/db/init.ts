@@ -455,6 +455,17 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_staleness_kind_item ON pending_staleness_reviews(kind, item_id, dismissed_at);
 
+    CREATE TABLE IF NOT EXISTS online_resources (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      url TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL DEFAULT '',
+      platform TEXT NOT NULL DEFAULT 'web',
+      thumbnail TEXT,
+      topic TEXT NOT NULL DEFAULT 'General',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_online_resources_topic ON online_resources(topic, created_at DESC);
+
     CREATE TABLE IF NOT EXISTS brain_pulses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

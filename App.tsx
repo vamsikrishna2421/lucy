@@ -253,7 +253,18 @@ export default function App() {
           return;
         }
         recentShare.current = { text: sharedText, receivedAt: Date.now() };
-        await enqueueTranscript(sharedText, Platform.OS === 'ios' ? 'ios' : 'android');
+        // A shared reel/short/article link → save as an Online Resource (Brain), not a normal capture.
+        let toastMsg = '';
+        const { isResourceShare, saveOnlineResource } = await import('./src/processing/onlineResource');
+        if (isResourceShare(sharedText)) {
+          try {
+            const db = await getDatabase();
+            const res = await saveOnlineResource(db, sharedText);
+            toastMsg = res ? `Saved to Online Resources · ${res.topic}` : 'Link saved';
+          } catch { toastMsg = 'Link saved'; }
+        } else {
+          await enqueueTranscript(sharedText, Platform.OS === 'ios' ? 'ios' : 'android');
+        }
         clearSharedPayloads();
         // Navigate to Timeline so the user can see their capture appear
         setScreen('dashboard');
@@ -261,7 +272,7 @@ export default function App() {
         void drainQueue();
         // Show a brief confirmation banner
         const label = payloads[0] ? ((payloads[0] as Record<string, unknown>).originalName as string | undefined) ?? null : null;
-        const toastMsg = label ? `"${label}" captured` : 'Shared content captured';
+        if (!toastMsg) toastMsg = label ? `"${label}" captured` : 'Shared content captured';
         setShareToast(toastMsg);
         shareToastAnim.setValue(0);
         Animated.sequence([

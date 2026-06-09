@@ -40,7 +40,7 @@ import {
 } from '../processing/stalenessEngine';
 
 type ViewMode = 'Focus Now' | 'Timeline' | 'Ask Lucy' | 'Health' | 'Brain';
-type LibraryTab = 'Galaxy' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
+type LibraryTab = 'Galaxy' | 'Resources' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
 
 function displayTimestamp(value: string): string {
   return new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`).toLocaleString();
@@ -1763,7 +1763,7 @@ function LibraryView({
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const tabs: LibraryTab[] = ['Galaxy', 'Todos', 'Ideas', 'Expenses', 'People', 'Meetings', 'Listen'];
+  const tabs: LibraryTab[] = ['Galaxy', 'Resources', 'Todos', 'Ideas', 'Expenses', 'People', 'Meetings', 'Listen'];
 
   // Galaxy is the full-screen topic-tree browser; render it without the inner ScrollView.
   if (tab === 'Galaxy') {
@@ -1797,6 +1797,7 @@ function LibraryView({
         {tab === 'Ideas' && ideas.map((item) => <Card key={item.id} title={item.title} detail={item.description} privacy={item.privacy_level} onDelete={() => void deleteIdea(item.id)} />)}
         {tab === 'Expenses' && expenses.map((item) => <Card key={item.id} title={`${item.amount ?? '-'} - ${item.description}`} detail={item.category} privacy={item.privacy_level} onDelete={() => void deleteExpense(item.id)} />)}
         {tab === 'People' && <PeopleTab />}
+        {tab === 'Resources' && <ResourcesTab />}
         {tab === 'Meetings' && <MeetingsTab />}
         {tab === 'Listen' && <ListenTab />}
       </ScrollView>
@@ -1957,6 +1958,70 @@ function ListenTab() {
               ))}
             </View>
           ) : null}
+        </View>
+      ))}
+    </>
+  );
+}
+
+function ResourcesTab() {
+  const [resources, setResources] = useState<import('../processing/onlineResource').OnlineResourceRow[]>([]);
+
+  useEffect(() => {
+    void (async () => {
+      const db = await getDatabase();
+      const { listOnlineResources } = await import('../processing/onlineResource');
+      setResources(await listOnlineResources(db));
+    })();
+  }, []);
+
+  const remove = async (id: number) => {
+    const db = await getDatabase();
+    const { deleteOnlineResource } = await import('../processing/onlineResource');
+    await deleteOnlineResource(db, id);
+    setResources((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  if (resources.length === 0) {
+    return (
+      <View style={{ padding: 20, gap: 8 }}>
+        <Text style={styles.empty}>No saved resources yet.</Text>
+        <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, lineHeight: 19 }}>
+          Share a YouTube short, Instagram reel, TikTok, or article link to LUCY — it saves here, organized by topic.
+        </Text>
+      </View>
+    );
+  }
+
+  // Group by topic
+  const byTopic = new Map<string, typeof resources>();
+  for (const r of resources) {
+    const arr = byTopic.get(r.topic) ?? [];
+    arr.push(r);
+    byTopic.set(r.topic, arr);
+  }
+
+  const platformIcon: Record<string, keyof typeof Ionicons.glyphMap> = {
+    youtube: 'logo-youtube', instagram: 'logo-instagram', tiktok: 'logo-tiktok', twitter: 'logo-twitter', vimeo: 'videocam', web: 'link',
+  };
+
+  return (
+    <>
+      {[...byTopic.entries()].map(([topic, items]) => (
+        <View key={topic}>
+          <SectionTitle title={topic} count={items.length} />
+          {items.map((r) => (
+            <TouchableOpacity key={r.id} style={[styles.card, { flexDirection: 'row', alignItems: 'center', gap: 12 }]} onPress={() => void Linking.openURL(r.url).catch(() => {})}>
+              <Ionicons name={platformIcon[r.platform] ?? 'link'} size={22} color={LUCY_COLORS.primaryGlow} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle} numberOfLines={2}>{r.title}</Text>
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 2, textTransform: 'capitalize' }}>{r.platform}</Text>
+              </View>
+              <TouchableOpacity onPress={() => void remove(r.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={{ color: '#ef4444', fontSize: 16, fontWeight: '700' }}>✕</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          ))}
         </View>
       ))}
     </>

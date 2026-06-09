@@ -139,7 +139,7 @@ export function AnimatedFace({
     : Animated.multiply(blink, happy.interpolate({ inputRange: [0, 1], outputRange: [1, 0.35] }));
 
   return (
-    <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={styles.wrap} accessibilityLabel="LUCY — open notifications">
+    <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={styles.wrap} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }} accessibilityLabel="LUCY — open notifications">
       {/* layered orb glow — outer (dim, wide) + inner (bright) for a sphere halo */}
       <Animated.View style={[styles.glowOuter, { opacity: glowOpacity, transform: [{ scale }] }]} />
       <Animated.View style={[styles.glow, { opacity: glowOpacity, transform: [{ scale }] }]} />

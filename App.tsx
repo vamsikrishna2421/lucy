@@ -21,6 +21,7 @@ import { archiveUnmatchedCompletionRetries } from './src/processing/followUp';
 import { initializeNotifications, updatePersistentStatusNotification } from './src/processing/notifications';
 import { NotificationCenter } from './src/components/NotificationCenter';
 import { AnimatedFace } from './src/components/AnimatedFace';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTotalUnreadCount } from './src/db/notificationLog';
 import { initializeVault } from './src/processing/vault';
 import { archiveMisclassifiedArtifacts } from './src/processing/artifactCleanup';
@@ -506,11 +507,11 @@ export default function App() {
                   style={[styles.listenPill, meetingVisible && styles.listenPillActive]}
                   onPress={() => setMeetingVisible(true)}
                 >
-                  <View style={[styles.listenDot, meetingVisible && styles.listenDotActive]} />
+                  <MaterialCommunityIcons name="microphone" size={13} color={meetingVisible ? LUCY_COLORS.primary : LUCY_COLORS.textMuted} />
                   <Text style={[styles.listenText, meetingVisible && styles.listenTextActive]}>Meeting</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.listenPill, passiveState.status === 'listening' && styles.listenPillActive]} onPress={togglePassiveListening}>
-                  <View style={[styles.listenDot, passiveState.status === 'listening' && styles.listenDotActive]} />
+                  <MaterialCommunityIcons name="ear-hearing" size={13} color={passiveState.status === 'listening' ? LUCY_COLORS.primary : LUCY_COLORS.textMuted} />
                   <Text style={[styles.listenText, passiveState.status === 'listening' && styles.listenTextActive]}>
                     {passiveState.status === 'listening'
                       ? (passiveState.noApiKey ? 'No key' : passiveState.mode === 'batch'
@@ -609,18 +610,20 @@ export default function App() {
             style={styles.bottomTab}
             onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); goToDashView('Timeline'); }}
           >
-            <View style={[styles.tabActivePill, (screen === 'dashboard' && dashCurrentView !== 'Brain') && styles.tabActivePillVisible]} />
-            <Text style={[styles.bottomTabIcon, (screen === 'dashboard' && dashCurrentView !== 'Brain') && styles.bottomTabIconActive]}>{'\u2302'}</Text>
-            <Text style={[styles.bottomTabLabel, (screen === 'dashboard' && dashCurrentView !== 'Brain') && styles.bottomTabLabelActive]}>Home</Text>
+            {(() => { const a = screen === 'dashboard' && dashCurrentView !== 'Brain'; return (<>
+            <View style={[styles.tabActivePill, a && styles.tabActivePillVisible]} />
+            <Ionicons name={a ? 'home' : 'home-outline'} size={22} color={a ? LUCY_COLORS.primary : LUCY_COLORS.textSubtle} />
+            <Text style={[styles.bottomTabLabel, a && styles.bottomTabLabelActive]}>Home</Text></>); })()}
           </TouchableOpacity>
           {/* Brain */}
           <TouchableOpacity
             style={styles.bottomTab}
             onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); goToDashView('Brain'); }}
           >
-            <View style={[styles.tabActivePill, (screen === 'dashboard' && dashCurrentView === 'Brain') && styles.tabActivePillVisible]} />
-            <Text style={[styles.bottomTabIcon, (screen === 'dashboard' && dashCurrentView === 'Brain') && styles.bottomTabIconActive]}>{'\u25ce'}</Text>
-            <Text style={[styles.bottomTabLabel, (screen === 'dashboard' && dashCurrentView === 'Brain') && styles.bottomTabLabelActive]}>Brain</Text>
+            {(() => { const a = screen === 'dashboard' && dashCurrentView === 'Brain'; return (<>
+            <View style={[styles.tabActivePill, a && styles.tabActivePillVisible]} />
+            <MaterialCommunityIcons name={a ? 'brain' : 'brain'} size={22} color={a ? LUCY_COLORS.primary : LUCY_COLORS.textSubtle} />
+            <Text style={[styles.bottomTabLabel, a && styles.bottomTabLabelActive]}>Brain</Text></>); })()}
           </TouchableOpacity>
 
           {/* Center voice button \u2014 hold to talk, or tap to start / tap again to stop */}
@@ -636,16 +639,11 @@ export default function App() {
               ]}
             >
               {voiceStatus === 'recording' ? (
-                <View style={styles.voiceStopSquare} />
+                <Ionicons name="stop" size={24} color="#fff" />
               ) : voiceStatus === 'transcribing' ? (
-                <Text style={styles.voiceButtonIcon}>{'\u22ef'}</Text>
+                <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
               ) : (
-                // Drawn mic icon
-                <View style={{ alignItems: 'center' }}>
-                  <View style={styles.micHead} />
-                  <View style={styles.micCradle} />
-                  <View style={styles.micStem} />
-                </View>
+                <Ionicons name="mic" size={26} color="#fff" />
               )}
             </TouchableOpacity>
             <Text style={styles.voiceButtonLabel}>
@@ -658,18 +656,20 @@ export default function App() {
             style={styles.bottomTab}
             onPress={() => { if (screen !== 'capture') { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setScreen('capture'); } }}
           >
-            <View style={[styles.tabActivePill, screen === 'capture' && styles.tabActivePillVisible]} />
-            <Text style={[styles.bottomTabIcon, screen === 'capture' && styles.bottomTabIconActive]}>{'\u25a6'}</Text>
-            <Text style={[styles.bottomTabLabel, screen === 'capture' && styles.bottomTabLabelActive]}>Tasks</Text>
+            {(() => { const a = screen === 'capture'; return (<>
+            <View style={[styles.tabActivePill, a && styles.tabActivePillVisible]} />
+            <Ionicons name={a ? 'checkbox' : 'checkbox-outline'} size={21} color={a ? LUCY_COLORS.primary : LUCY_COLORS.textSubtle} />
+            <Text style={[styles.bottomTabLabel, a && styles.bottomTabLabelActive]}>Tasks</Text></>); })()}
           </TouchableOpacity>
           {/* Settings */}
           <TouchableOpacity
             style={styles.bottomTab}
             onPress={() => { if (screen !== 'settings') { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setScreen('settings'); } }}
           >
-            <View style={[styles.tabActivePill, screen === 'settings' && styles.tabActivePillVisible]} />
-            <Text style={[styles.bottomTabIcon, screen === 'settings' && styles.bottomTabIconActive]}>{'\u2699'}</Text>
-            <Text style={[styles.bottomTabLabel, screen === 'settings' && styles.bottomTabLabelActive]}>Settings</Text>
+            {(() => { const a = screen === 'settings'; return (<>
+            <View style={[styles.tabActivePill, a && styles.tabActivePillVisible]} />
+            <Ionicons name={a ? 'settings' : 'settings-outline'} size={21} color={a ? LUCY_COLORS.primary : LUCY_COLORS.textSubtle} />
+            <Text style={[styles.bottomTabLabel, a && styles.bottomTabLabelActive]}>Settings</Text></>); })()}
           </TouchableOpacity>
         </View>
       </SafeAreaView>

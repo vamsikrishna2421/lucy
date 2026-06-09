@@ -20,6 +20,14 @@ import { enqueueTranscript } from '../processing/extract';
 import { archiveTodo } from '../db/todos';
 import { GalaxyView } from './Galaxy';
 import { AskScreen } from './Ask';
+import { Ionicons } from '@expo/vector-icons';
+
+const VIEW_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
+  'Timeline': 'time-outline',
+  'Focus Now': 'flash-outline',
+  'Ask Lucy': 'chatbubble-ellipses-outline',
+  'Health': 'heart-outline',
+};
 import { StoryView, type StorySubject } from './StoryView';
 import { StalenessReviewCard, ContextBatchCard } from '../components/StalenessReviewCard';
 import {
@@ -255,11 +263,15 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
       <Text style={styles.title}>{greetingForHour(new Date().getHours())}{userName ? `, ${userName}` : ''}</Text>
       <Text style={styles.subtitle}>What matters now, pulled from your memory.</Text>
       <View style={styles.viewNav}>
-        {views.map((item) => (
-          <TouchableOpacity key={item} style={[styles.viewTab, view === item && styles.activeView]} onPress={() => setView(item)}>
-            <Text style={[styles.viewText, view === item && styles.activeViewText]}>{item}</Text>
-          </TouchableOpacity>
-        ))}
+        {views.map((item) => {
+          const active = view === item;
+          return (
+            <TouchableOpacity key={item} style={[styles.viewTab, active && styles.activeView]} onPress={() => setView(item)}>
+              <Ionicons name={VIEW_ICON[item]} size={14} color={active ? LUCY_COLORS.primaryGlow : LUCY_COLORS.textMuted} style={{ marginBottom: 2 }} />
+              <Text style={[styles.viewText, active && styles.activeViewText]}>{item}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
       {view === 'Focus Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} stalenessReviews={stalenessReviews} contextBatch={contextBatch} onStalenessResolved={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} onAskAbout={onAskAbout} /> : null}
@@ -2173,9 +2185,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 30, letterSpacing: -0.8, fontWeight: '800', color: LUCY_COLORS.textDark },
   subtitle: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 4, marginBottom: 16 },
   viewNav: { flexDirection: 'row', padding: 4, borderRadius: 18, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, marginBottom: 17 },
-  viewTab: { flex: 1, alignItems: 'center', paddingVertical: 13, borderRadius: 14 },  // larger tap target
+  viewTab: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 14 },  // icon + label stack
   activeView: { backgroundColor: LUCY_COLORS.surfaceRaised },
-  viewText: { color: LUCY_COLORS.textMuted, fontWeight: '700', fontSize: 13 },  // was 11 (too small)
+  viewText: { color: LUCY_COLORS.textMuted, fontWeight: '700', fontSize: 12 },
   activeViewText: { color: LUCY_COLORS.primaryGlow },
   content: { flex: 1 },
   tonight: { backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderRadius: 24, padding: 19, marginBottom: 19 },

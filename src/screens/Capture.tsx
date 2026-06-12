@@ -18,19 +18,15 @@ import {
 } from 'react-native';
 import type { PassiveListenerState } from '../audio/PassiveListener';
 import { haptic } from '../config/haptics';
-import { RecordingPresets, setAudioModeAsync } from 'expo-audio';
 import {
   ExpoSpeechRecognitionModule,
   type ExpoSpeechRecognitionErrorEvent,
   type ExpoSpeechRecognitionResultEvent,
 } from 'expo-speech-recognition';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { AudioRecorder: AR } = require('expo-audio') as { AudioRecorder: new (opts: unknown) => { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void } };
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import { listPendingTodos, archiveTodo, type TodoRow } from '../db/todos';
 import { enqueueTranscript, analyzeTranscript } from '../processing/extract';
-import { transcribeAudioFile } from '../audio/WhisperTranscriber';
 import { getRemoteAccessState } from '../ai/remoteAccess';
 import { CaptureReplay } from '../components/CaptureReplay';
 import { detectAutomationIntent, executeAction, type ExtractedAction } from '../processing/automationEngine';
@@ -464,8 +460,6 @@ export function CaptureScreen({
   const [pendingAction, setPendingAction] = useState<ExtractedAction | null>(null);
   const [executingAction, setExecutingAction] = useState(false);
   const [openCategory, setOpenCategory] = useState<TaskCategory | null>(null);
-  type RecInst = { prepareToRecordAsync(): Promise<void>; record(): void; stop(): Promise<void>; uri: string | null; release?: () => void };
-  const audioRecorder = useRef<RecInst | null>(null);
   const speechSubscriptions = useRef<Array<{ remove(): void }>>([]);
 
   useEffect(() => {
@@ -583,16 +577,6 @@ export function CaptureScreen({
         try { ExpoSpeechRecognitionModule.stop(); } catch { /* already stopped */ }
         await new Promise<void>((resolve) => setTimeout(resolve, 300));
         clearSpeechSubscriptions();
-      } else if (audioRecorder.current) {
-        await audioRecorder.current.stop();
-        const uri = audioRecorder.current.uri;
-        audioRecorder.current.release?.();
-        audioRecorder.current = null;
-        if (uri) {
-          const transcript = await transcribeAudioFile(uri);
-          if (transcript) setText((prev) => prev ? `${prev} ${transcript}` : transcript);
-          else Alert.alert('Could not transcribe', 'Enable Remote Intelligence in Settings for voice transcription.');
-        }
       }
       return;
     }
@@ -645,11 +629,12 @@ export function CaptureScreen({
           addsPunctuation: true,
         });
       } else {
-        // Keep the one-shot voice button useful on devices without a local recognizer.
-        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-        audioRecorder.current = new AR(RecordingPresets.HIGH_QUALITY);
-        await audioRecorder.current.prepareToRecordAsync();
-        audioRecorder.current.record();
+        // LUCY transcribes on-device only — no cloud fallback.
+        Alert.alert(
+          'On-device dictation unavailable',
+          'This device does not support private on-device speech recognition. You can still type your thought.',
+        );
+        return;
       }
       haptic.listenStart();
       animateMicToRecording();
@@ -711,13 +696,6 @@ export function CaptureScreen({
   // Label shown in the listen pill — gives real feedback in batch (Whisper) mode
   function listenPillLabel(): string {
     if (!passiveState || passiveState.status !== 'listening') return 'Listen';
-    if (passiveState.noApiKey) return 'No key';
-    if (passiveState.mode === 'batch') {
-      if (passiveState.wordsHeard > 0) return `${passiveState.wordsHeard}w`;
-      const s = passiveState.recordingSeconds;
-      if (s < 60) return `Rec ${s}s`;
-      return `Rec ${Math.floor(s / 60)}m${s % 60 > 0 ? `${s % 60}s` : ''}`;
-    }
     return `${passiveState.wordsHeard}w`;
   }
 

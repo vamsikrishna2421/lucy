@@ -74,8 +74,8 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [organizationRun, setOrganizationRun] = useState<OrganizationRunRow | null>(null);
   const [organizingNow, setOrganizingNow] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
-  const [profile, setProfile] = useState<UserProfile>({ name: '', about: '', languages: [], transcriptionEngine: 'whisper' });
-  const [profileDraft, setProfileDraft] = useState<UserProfile>({ name: '', about: '', languages: [], transcriptionEngine: 'whisper' });
+  const [profile, setProfile] = useState<UserProfile>({ name: '', about: '', languages: [] });
+  const [profileDraft, setProfileDraft] = useState<UserProfile>({ name: '', about: '', languages: [] });
   const [savingProfile, setSavingProfile] = useState(false);
   const [checkInEnabled, setCheckInEnabled] = useState(false);
   const [aiModel, setAiModel] = useState('gpt-4o-mini');
@@ -771,7 +771,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
               </View>
             )}
             <Text style={styles.keyLabel}>OpenAI API key</Text>
-            <Text style={styles.hint}>LUCY uses your OpenAI key for Whisper voice transcription and GPT extraction. Do not enter Claude or other provider tokens here.</Text>
+            <Text style={styles.hint}>LUCY uses your OpenAI key for GPT extraction and summaries. Voice is transcribed on-device — no key needed for that. Do not enter Claude or other provider tokens here.</Text>
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
@@ -937,24 +937,8 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
               );
             })()}
 
-            <Text style={styles.fieldLabel}>Voice transcription engine</Text>
-            <Text style={styles.hint}>On-device requires a speech model supported by this phone and keeps recognition local. Whisper uploads audio to OpenAI for higher-quality transcription and uses API credits.</Text>
-            {(['whisper', 'device'] as const).map((eng) => {
-              const selected = (profileDraft.transcriptionEngine ?? 'whisper') === eng;
-              const labels: Record<string, string> = { whisper: 'OpenAI Whisper (cloud, high quality)', device: 'On-device speech recognition (private)' };
-              return (
-                <TouchableOpacity
-                  key={eng}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: selected ? LUCY_COLORS.primary : LUCY_COLORS.border, backgroundColor: selected ? LUCY_COLORS.primarySoft : 'transparent', marginBottom: 8 }}
-                  onPress={() => setProfileDraft((p) => ({ ...p, transcriptionEngine: eng }))}
-                >
-                  <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: selected ? LUCY_COLORS.primary : LUCY_COLORS.border, alignItems: 'center', justifyContent: 'center' }}>
-                    {selected ? <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: LUCY_COLORS.primary }} /> : null}
-                  </View>
-                  <Text style={{ color: selected ? LUCY_COLORS.textDark : LUCY_COLORS.textMuted, fontSize: 13, fontWeight: selected ? '700' : '400', flex: 1 }}>{labels[eng]}</Text>
-                </TouchableOpacity>
-              );
-            })}
+            <Text style={styles.fieldLabel}>Voice transcription</Text>
+            <Text style={styles.hint}>LUCY transcribes your voice entirely on-device — private, free, and offline. Your spoken languages above set the recognition locale.</Text>
 
             <SecondaryButton
               disabled={savingProfile}

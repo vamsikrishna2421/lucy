@@ -1,0 +1,59 @@
+/**
+ * Privacy Shield round-trip tests. Pure module (no expo), runs via `tsx tests/shield.ts`.
+ */
+import assert from 'node:assert';
+import { findProtectedValues, shieldText, restoreText } from '../src/processing/sensitiveShield';
+
+// --- Passwords / secrets ---
+{
+  const text = 'My wifi password is hunter2 and the PIN is 4821.';
+  const { redacted, map } = shieldText(text, []);
+  assert.ok(redacted.includes('[SECRET_1]'), 'password should be tokenized');
+  assert.ok(!redacted.includes('hunter2'), 'raw password must not be in redacted text');
+  assert.ok(!redacted.includes('4821'), 'raw PIN must not be in redacted text');
+  assert.equal(restoreText(redacted, map), text, 'restore must reproduce the original exactly');
+}
+
+// "change my password" has no value → nothing grabbed.
+{
+  const { redacted } = shieldText('I need to change my password tomorrow.', []);
+  assert.ok(!redacted.includes('[SECRET'), 'no value present → no secret token');
+}
+
+// --- People names ---
+{
+  // Contact name
+  const { redacted, map } = shieldText('Met Sam at 3pm to discuss the plan.', ['Sam']);
+  assert.ok(redacted.includes('[PERSON_1]'), 'contact name should be tokenized');
+  assert.ok(!/\bSam\b/.test(redacted), 'raw name must not be in redacted text');
+  assert.ok(restoreText(redacted, map).includes('Sam'), 'restore brings the name back');
+}
+{
+  // Same name twice → one token, both occurrences replaced.
+  const { redacted, map } = shieldText('Sam called. I will call Sam back.', ['Sam']);
+  const personTokens = map.filter((m) => m.kind === 'person');
+  assert.equal(personTokens.length, 1, 'one unique person → one token');
+  assert.ok(!/\bSam\b/.test(redacted), 'all occurrences replaced');
+}
+{
+  // Cue-based detection for an unknown (non-contact) name.
+  const found = findProtectedValues('I met Priya near the office.', []);
+  assert.ok(found.some((f) => f.kind === 'person' && f.value === 'Priya'), 'cue + gazetteer catches Priya');
+}
+
+// --- No over-redaction of capitalized non-names ---
+{
+  const found = findProtectedValues('On Monday I flew to London for a meeting.', []);
+  assert.ok(!found.some((f) => f.value.toLowerCase() === 'monday'), 'weekday is not a person');
+  assert.ok(!found.some((f) => f.value.toLowerCase() === 'london'), 'place is not a person');
+}
+
+// --- Mixed ---
+{
+  const text = 'Texted Sam that the account number is AB12345 today.';
+  const { redacted, map } = shieldText(text, ['Sam']);
+  assert.ok(redacted.includes('[PERSON_1]') && redacted.includes('[SECRET_1]'), 'both kinds tokenized');
+  assert.equal(restoreText(redacted, map), text, 'mixed round-trip restores exactly');
+}
+
+console.log('shield.ts: all assertions passed ✓');

@@ -333,6 +333,11 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
   if (!existing.has('guardian_note')) {
     await db.execAsync('ALTER TABLE captures ADD COLUMN guardian_note TEXT;');
   }
+  if (!existing.has('protected_values')) {
+    // JSON array of {value, kind} that the Privacy Shield masked from the cloud
+    // (passwords + people names). Used to highlight protected values in the UI.
+    await db.execAsync('ALTER TABLE captures ADD COLUMN protected_values TEXT;');
+  }
   const todoColumns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(todos)');
   const existingTodoColumns = new Set(todoColumns.map((column) => column.name));
   if (!existingTodoColumns.has('archived_at')) {

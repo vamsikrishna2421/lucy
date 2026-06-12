@@ -1,15 +1,25 @@
 import { config } from '../config';
-import { jsonrepair } from 'jsonrepair';
 import type { ExtractionResult, PrivacyLevel } from '../types/extraction';
 import { analyzeWithDevice, promptDevice } from './device';
 import { analyzeWithOllama, promptOllama } from './ollama';
 import { analyzeWithOpenAI, promptAI } from './openai';
-import { dailySummaryPrompt, privateRemoteRedactionPrompt, urgentScanPrompt } from './prompts';
+import { dailySummaryPrompt, urgentScanPrompt } from './prompts';
 import { getRemoteAccessState, getRemoteOpenAIKey, getClaudeApiKey } from './remoteAccess';
-import { redactForRemote } from '../processing/redaction';
+import { shieldText, restoreText, rehydrateExtraction, PLACEHOLDER_NOTE } from '../processing/sensitiveShield';
 import { getPreferredModel } from './modelPreference';
 import { getDatabase } from '../db';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
+import type { SQLiteDatabase } from 'expo-sqlite';
+
+/** Loads saved contact names so the on-device shield can recognise them. Never throws. */
+async function loadContactNames(db: SQLiteDatabase): Promise<string[]> {
+  try {
+    const rows = await db.getAllAsync<{ name: string }>('SELECT name FROM people');
+    return rows.map((r) => r.name).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 /** Resolves whether remote analysis is available for the *currently selected* model,
  *  checking the correct provider's key (Anthropic for claude-*, OpenAI otherwise).
@@ -42,25 +52,6 @@ function localPrompt(prompt: string): Promise<string> {
     : promptDevice(prompt);
 }
 
-function parseSanitizedText(raw: string): string {
-  const start = raw.indexOf('{');
-  const end = raw.lastIndexOf('}');
-  if (start === -1 || end === -1) {
-    throw new Error('Protected remote masking did not return JSON.');
-  }
-  const parsed = JSON.parse(jsonrepair(raw.slice(start, end + 1))) as { sanitized_text?: string; redacted?: boolean };
-  const sanitized = parsed.sanitized_text?.trim() ?? '';
-  if (!parsed.redacted || !sanitized || !/\[(?:PRIVATE|PERSON|HEALTH|CREDENTIAL|ACCOUNT|CARD)_\d+\]/i.test(sanitized)) {
-    throw new Error('Protected content was not safely masked for remote processing.');
-  }
-  return redactForRemote(sanitized).text;
-}
-
-async function sanitizePrivatelyForRemote(transcript: string): Promise<string> {
-  const raw = await localPrompt(`${privateRemoteRedactionPrompt}\nInput:\n${transcript}\n/no_think`);
-  return parseSanitizedText(raw);
-}
-
 export const AIProvider = {
   async analyzeLocally(transcript: string): Promise<ExtractionResult> {
     return localAnalyze(transcript);
@@ -72,22 +63,27 @@ export const AIProvider = {
     }
     const db = await getDatabase();
     const profile = await getUserProfile(db);
-    const userContextPrefix = buildUserContextPrefix(profile);
+    // Privacy Shield: replace passwords + people names with placeholder tokens on-device
+    // before the remote call, then restore the real values in the result.
+    const contacts = await loadContactNames(db);
+    const { redacted, map } = shieldText(transcript, contacts);
+    const userContextPrefix = buildUserContextPrefix(profile) + (map.length ? PLACEHOLDER_NOTE : '');
     const model = getPreferredModel(config.openAIModel);
     const t0 = Date.now();
     let result: ExtractionResult;
     try {
-      result = await analyzeWithOpenAI(transcript, openAIKey, userContextPrefix);
+      result = await analyzeWithOpenAI(redacted, openAIKey, userContextPrefix);
+      result = rehydrateExtraction(result, map);
       void import('../db/devLog').then(({ insertDevLog }) => insertDevLog(db, {
         category: 'extraction', model,
-        input_preview: transcript.slice(0, 300),
+        input_preview: redacted.slice(0, 300),
         output_preview: result.title ?? result.summary ?? '',
         duration_ms: Date.now() - t0, error: null,
       })).catch(() => {});
     } catch (e) {
       void import('../db/devLog').then(({ insertDevLog }) => insertDevLog(db, {
         category: 'extraction', model,
-        input_preview: transcript.slice(0, 300),
+        input_preview: redacted.slice(0, 300),
         output_preview: '',
         duration_ms: Date.now() - t0,
         error: e instanceof Error ? e.message : String(e),
@@ -103,14 +99,18 @@ export const AIProvider = {
     if (!available) {
       return localPrompt(`${urgentScanPrompt}\nTranscript:\n${transcript}`);
     }
-    return promptAI(urgentScanPrompt, transcript, openAIKey);
+    const { redacted, map } = await shieldInput(transcript);
+    const out = await promptAI(urgentScanPrompt + (map.length ? PLACEHOLDER_NOTE : ''), redacted, openAIKey);
+    return restoreText(out, map);
   },
   async summarize(notes: string, _privacyLevel: PrivacyLevel = 'normal'): Promise<string> {
     const { available, openAIKey } = await resolveRemoteAvailability();
     if (!available) {
       return localPrompt(`${dailySummaryPrompt}\nNotes:\n${notes}`);
     }
-    return promptAI(dailySummaryPrompt, notes, openAIKey);
+    const { redacted, map } = await shieldInput(notes);
+    const out = await promptAI(dailySummaryPrompt + (map.length ? PLACEHOLDER_NOTE : ''), redacted, openAIKey);
+    return restoreText(out, map);
   },
   /** Generic provider-aware prompt (Claude or OpenAI based on selected model). */
   async prompt(system: string, input: string): Promise<string> {
@@ -118,6 +118,19 @@ export const AIProvider = {
     if (!available) {
       return localPrompt(`${system}\n${input}`);
     }
-    return promptAI(system, input, openAIKey);
+    const { redacted, map } = await shieldInput(input);
+    const out = await promptAI(system + (map.length ? PLACEHOLDER_NOTE : ''), redacted, openAIKey);
+    return restoreText(out, map);
   },
 };
+
+/** Shields a free-text input for remote prompts (insight/Ask/summary/urgent scan). */
+async function shieldInput(input: string): Promise<{ redacted: string; map: ReturnType<typeof shieldText>['map'] }> {
+  try {
+    const db = await getDatabase();
+    const contacts = await loadContactNames(db);
+    return shieldText(input, contacts);
+  } catch {
+    return { redacted: input, map: [] };
+  }
+}

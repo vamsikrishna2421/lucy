@@ -15,6 +15,7 @@ import { listFollowUps, resolveFollowUp, type FollowUpRow } from '../db/followUp
 import { listReminders, type ReminderRow } from '../db/reminders';
 import { listTodos, type TodoRow } from '../db/todos';
 import { protectedPreview } from '../processing/privacy';
+import { ShieldedText, type ProtectedValueLite } from '../components/ShieldedText';
 import { organizeMemory } from '../processing/organizer';
 import { enqueueTranscript } from '../processing/extract';
 import { archiveTodo } from '../db/todos';
@@ -1496,9 +1497,17 @@ function TimelineView({
 
                       {/* ── Title ── */}
                       {item.extracted_title ? (
-                        <Text style={styles.tlTitle} numberOfLines={isExpanded ? undefined : 2}>
-                          {protectedPreview(item.extracted_title)}
-                        </Text>
+                        (() => {
+                          let pv: ProtectedValueLite[] = [];
+                          try { pv = item.protected_values ? JSON.parse(item.protected_values) as ProtectedValueLite[] : []; } catch { /* ignore */ }
+                          return pv.length > 0 ? (
+                            <ShieldedText style={styles.tlTitle} text={item.extracted_title} protectedValues={pv} numberOfLines={isExpanded ? undefined : 2} />
+                          ) : (
+                            <Text style={styles.tlTitle} numberOfLines={isExpanded ? undefined : 2}>
+                              {protectedPreview(item.extracted_title)}
+                            </Text>
+                          );
+                        })()
                       ) : item.processed === -1 ? (
                         <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '600', lineHeight: 19 }}>
                           Couldn't organize — tap ⋯ to retry

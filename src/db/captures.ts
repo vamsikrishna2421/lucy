@@ -22,6 +22,7 @@ export interface CaptureRow {
   archive_reason: string | null;
   guardian_note: string | null;
   listen_session_id: string | null;
+  protected_values: string | null;
 }
 
 export type CaptureStatus = 'queued' | 'processing' | 'complete' | 'retrying' | 'archived';
@@ -148,6 +149,19 @@ export async function updateCaptureResult(
 
 export async function updateCaptureGuardianNote(db: SQLiteDatabase, id: number, note: string): Promise<void> {
   await db.runAsync('UPDATE captures SET guardian_note = ? WHERE id = ?', note, id);
+}
+
+/** Stores the Privacy Shield's protected values (JSON [{value, kind}]) for UI highlighting. */
+export async function updateCaptureProtectedValues(
+  db: SQLiteDatabase,
+  id: number,
+  protectedValues: Array<{ value: string; kind: 'secret' | 'person' }>,
+): Promise<void> {
+  await db.runAsync(
+    'UPDATE captures SET protected_values = ? WHERE id = ?',
+    protectedValues.length ? JSON.stringify(protectedValues) : null,
+    id,
+  );
 }
 
 export async function updateCaptureStructuredText(

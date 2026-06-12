@@ -57,7 +57,9 @@ assert.equal(getDeviceSpeechLocale(['en', 'te']), 'te-IN', 'local mixed-language
 assert.equal(getDeviceSpeechLocale(['en']), 'en-US', 'local English recognition should use US English');
 assert.equal(protectByUserChoice('Met Sam for coffee.', true).level, 'private', 'user may explicitly protect a thought');
 assert.match(protectByUserChoice('Met Sam for coffee.', true).reason, /Marked private/);
-assert.match(protectByUserChoice('Password is ExampleOnly-4829.', false).reason, /credential/i);
+// Passwords are NOT auto-withheld now — they are tokenized by the Privacy Shield and
+// the capture still processes normally unless the user explicitly marks it private.
+assert.equal(protectByUserChoice('Password is ExampleOnly-4829.', false).level, 'normal', 'passwords are shielded, not auto-private');
 
 const expense = enforcePrivacy(
   fixture({ expenses: [{ amount: '180', description: 'Auto fare', category: 'transport' }] }),
@@ -89,20 +91,21 @@ assert.match(connectionNote, /\[\[Daily\/2026-05-25-2-Plan-launch\|Plan launch\]
 assert.match(connectionNote, /\[\[Projects\/LUCY\/Workspace\|LUCY\]\]/);
 assert.match(connectionNote, /\[\[People\/Sam\|Sam\]\]/);
 
+// Ideas (incl. startup ideas) are NO LONGER auto-private — only passwords + names are
+// protected, via the on-device shield. An idea capture stays normal.
 const idea = enforcePrivacy(
   fixture({ ideas: [{ title: 'Private memory app', description: 'Organize family memories locally', type: 'startup' }] }),
   classifyPrivacy(ideaSample),
 );
-assert.equal(idea.privacy_level, 'private');
-assert.match(idea.privacy_reason, /idea|business/i);
-assert.equal(shouldWriteMarkdown(idea), false, 'ideas must never be eligible for markdown');
+assert.equal(idea.privacy_level, 'normal', 'startup ideas are no longer auto-private');
+assert.equal(shouldWriteMarkdown(idea), true, 'normal idea capture is eligible for markdown');
 
-const ideaWithoutKeyword = enforcePrivacy(
+// An explicit user mark still forces a fully-local capture.
+const userMarked = enforcePrivacy(
   fixture({ ideas: [{ title: 'Unannounced concept', description: 'Keep private', type: 'creative' }] }),
-  classifyPrivacy('Oka kottha concept vachindi.'),
+  protectByUserChoice('Oka kottha concept vachindi.', true),
 );
-assert.equal(ideaWithoutKeyword.privacy_level, 'private', 'extracted ideas default to private');
-assert.equal(shouldWriteMarkdown(ideaWithoutKeyword), false);
+assert.equal(userMarked.privacy_level, 'private', 'user-marked captures stay private');
 
 const normalized = normalizeExtraction({
   ...fixture({}),

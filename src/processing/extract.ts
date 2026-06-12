@@ -7,9 +7,11 @@ import {
   markCaptureProcessing,
   nextQueuedCapture,
   updateCaptureGuardianNote,
+  updateCaptureProtectedValues,
   updateCaptureResult,
   type CaptureRow,
 } from '../db/captures';
+import { findProtectedValues } from './sensitiveShield';
 import { getDatabase } from '../db';
 import { insertExpense } from '../db/expenses';
 import { insertContextRequest } from '../db/contextRequests';
@@ -263,6 +265,13 @@ async function persistExtraction(
     }
     await insertExtractionSnapshot(db, capture.id, extraction);
     await updateCaptureResult(db, capture.id, extraction.privacy_level, extraction.title, formatStructuredMemory(extraction));
+    // Record which passwords/names the Privacy Shield masked from the cloud, so the
+    // UI can highlight them. Deterministic re-detection over the raw capture text.
+    try {
+      const contactRows = await db.getAllAsync<{ name: string }>('SELECT name FROM people');
+      const protectedValues = findProtectedValues(capture.raw_transcript ?? '', contactRows.map((r) => r.name));
+      await updateCaptureProtectedValues(db, capture.id, protectedValues);
+    } catch { /* highlighting is non-critical */ }
     await markCaptureProcessed(db, capture.id);
     // Store a detected action so the Timeline can offer it as a "LUCY can do this" card
     // after the capture finishes processing — avoids synchronous regex false positives.

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
+import { ShieldedText, type ProtectedValueLite } from './ShieldedText';
 
 interface CaptureDetail {
   id: number;
@@ -9,6 +10,7 @@ interface CaptureDetail {
   raw_transcript: string;
   extracted_title: string | null;
   structured_text: string | null;
+  protected_values: string | null;
 }
 
 /**
@@ -31,7 +33,7 @@ export function MemoryDetailSheet({ captureId, visible, onClose }: { captureId: 
       try {
         const db = await getDatabase();
         const row = await db.getFirstAsync<CaptureDetail>(
-          'SELECT id, created_at, raw_transcript, extracted_title, structured_text FROM captures WHERE id = ?',
+          'SELECT id, created_at, raw_transcript, extracted_title, structured_text, protected_values FROM captures WHERE id = ?',
           captureId,
         );
         setDetail(row ?? null);
@@ -85,11 +87,25 @@ export function MemoryDetailSheet({ captureId, visible, onClose }: { captureId: 
             <View style={{ padding: 40, alignItems: 'center' }}><ActivityIndicator color={LUCY_COLORS.primary} /></View>
           ) : (
             <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <Text style={s.title}>{detail.extracted_title || 'Untitled memory'}</Text>
-              <Text style={s.date}>{dateStr}</Text>
+              {(() => {
+                let protectedValues: ProtectedValueLite[] = [];
+                try { protectedValues = detail.protected_values ? JSON.parse(detail.protected_values) as ProtectedValueLite[] : []; } catch { /* ignore */ }
+                const body = detail.structured_text || detail.raw_transcript || 'No content.';
+                return (
+                  <>
+                    <ShieldedText style={s.title} text={detail.extracted_title || 'Untitled memory'} protectedValues={protectedValues} />
+                    <Text style={s.date}>{dateStr}</Text>
+                    {protectedValues.length > 0 ? (
+                      <View style={s.shieldNote}>
+                        <Text style={s.shieldNoteText}>🛡 Passwords & names were kept private from the cloud — LUCY processed placeholders, not your real values.</Text>
+                      </View>
+                    ) : null}
 
-              <Text style={s.sectionLabel}>SUMMARY</Text>
-              <Text style={s.body}>{detail.structured_text || detail.raw_transcript || 'No content.'}</Text>
+                    <Text style={s.sectionLabel}>SUMMARY</Text>
+                    <ShieldedText style={s.body} text={body} protectedValues={protectedValues} />
+                  </>
+                );
+              })()}
 
               <Text style={s.sectionLabel}>✦ LUCY'S INSIGHT</Text>
               {insightLoading ? (
@@ -138,6 +154,8 @@ const s = StyleSheet.create({
   date: { color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 4 },
   sectionLabel: { color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginTop: 20, marginBottom: 8 },
   body: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21 },
+  shieldNote: { backgroundColor: 'rgba(52,199,89,0.10)', borderRadius: 10, padding: 10, marginTop: 12, borderWidth: 1, borderColor: 'rgba(52,199,89,0.28)' },
+  shieldNoteText: { color: '#2FBF71', fontSize: 12, fontWeight: '600', lineHeight: 17 },
   muted: { color: LUCY_COLORS.textSubtle, fontSize: 13, fontStyle: 'italic' },
   insightCard: { backgroundColor: 'rgba(255,140,66,0.08)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(255,140,66,0.25)' },
   insightText: { color: LUCY_COLORS.textDark, fontSize: 14, lineHeight: 21 },

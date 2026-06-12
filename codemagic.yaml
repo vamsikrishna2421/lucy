@@ -90,3 +90,55 @@ workflows:
         notify:
           success: true
           failure: true
+
+  android-apk:
+    name: LUCY — Android APK
+    max_build_duration: 90
+    instance_type: linux_x2
+
+    environment:
+      node: latest
+      java: 17
+      vars:
+        PACKAGE_NAME: com.anonymous.lucy
+
+    triggering:
+      events: []   # manual builds only — start from the Codemagic dashboard
+
+    scripts:
+      - name: Install dependencies
+        script: npm install
+
+      - name: Apply patches
+        script: npx patch-package
+
+      - name: Auto-increment versionCode BEFORE prebuild
+        script: |
+          # Expo bakes android.versionCode into the native project during prebuild,
+          # so it MUST be set in app.json first. Use Codemagic's monotonic
+          # $BUILD_NUMBER + 100 (mirrors the iOS workflow) so versionCode always grows.
+          NUM=$(( ${BUILD_NUMBER:-1} + 100 ))
+          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('app.json','utf8'));a.expo.android=a.expo.android||{};a.expo.android.versionCode=$NUM;fs.writeFileSync('app.json',JSON.stringify(a,null,2));console.log('android versionCode=',a.expo.android.versionCode);"
+
+      - name: Expo prebuild (generate native Android project)
+        script: npx expo prebuild --platform android --non-interactive
+
+      - name: Build release APK
+        script: |
+          # Expo's prebuild template signs the release buildType with the standard
+          # Android debug keystore, so assembleRelease produces an installable,
+          # side-loadable APK with no extra keystore setup. (Not Play-Store eligible —
+          # that would need a real upload keystore, which we can add later.)
+          cd android
+          ./gradlew assembleRelease --no-daemon
+
+    artifacts:
+      - android/app/build/outputs/**/*.apk
+
+    publishing:
+      email:
+        recipients:
+          - vamsy.24@gmail.com
+        notify:
+          success: true
+          failure: true

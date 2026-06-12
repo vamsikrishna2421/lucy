@@ -94,7 +94,10 @@ workflows:
   android-apk:
     name: LUCY — Android APK
     max_build_duration: 90
-    instance_type: linux_x2
+    # Use the same Mac instance the iOS job uses — the personal billing plan only
+    # has this instance enabled (linux_x2 fails with "instance type not available").
+    # Codemagic's macOS images ship the full Android SDK + JDK, so Gradle builds fine.
+    instance_type: mac_mini_m2
 
     environment:
       node: latest

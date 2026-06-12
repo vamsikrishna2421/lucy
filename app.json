@@ -148,7 +148,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0F0E0B"
+          "backgroundColor": "#0F0E0B",
+          "image": "./assets/lucy-splash-icon.png",
+          "imageWidth": 200
         }
       ],
       [

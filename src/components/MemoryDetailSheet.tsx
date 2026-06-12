@@ -45,13 +45,13 @@ export function MemoryDetailSheet({ captureId, visible, onClose }: { captureId: 
   const generateInsight = async (row: CaptureDetail) => {
     setInsightLoading(true);
     try {
-      const { resolveRemoteAvailability } = await import('../ai/provider');
-      const { promptAI } = await import('../ai/openai');
-      const { available, openAIKey } = await resolveRemoteAvailability();
+      const { resolveRemoteAvailability, AIProvider } = await import('../ai/provider');
+      const { available } = await resolveRemoteAvailability();
       if (!available) { setInsight(''); return; }
       const sys = 'You are LUCY, a personal second-brain. In 2-3 sentences, give a sharp, useful insight about this single memory — what it reveals, a connection, or a next step. Plain text, warm, specific. No preamble.';
       const text = row.structured_text || row.raw_transcript || '';
-      const out = await promptAI(sys, text.slice(0, 1500), openAIKey);
+      // AIProvider.prompt shields passwords/names before the cloud call and restores them after.
+      const out = await AIProvider.prompt(sys, text.slice(0, 1500));
       setInsight(out.trim());
     } catch { setInsight(''); } finally { setInsightLoading(false); }
   };
@@ -61,13 +61,13 @@ export function MemoryDetailSheet({ captureId, visible, onClose }: { captureId: 
     if (!q || asking || !detail) return;
     setAsking(true); setAnswer('');
     try {
-      const { resolveRemoteAvailability } = await import('../ai/provider');
-      const { promptAI } = await import('../ai/openai');
-      const { available, openAIKey } = await resolveRemoteAvailability();
+      const { resolveRemoteAvailability, AIProvider } = await import('../ai/provider');
+      const { available } = await resolveRemoteAvailability();
       if (!available) { setAnswer('Enable Remote Intelligence in Settings to ask about memories.'); return; }
       const sys = 'You are LUCY answering a question about ONE specific memory the user captured. Use only this memory plus general knowledge. Be concise, warm, plain text.';
       const input = `MEMORY:\n${(detail.structured_text || detail.raw_transcript || '').slice(0, 1500)}\n\nQUESTION: ${q}`;
-      const out = await promptAI(sys, input, openAIKey);
+      // Shielded: real passwords/names never leave the device; the answer restores them locally.
+      const out = await AIProvider.prompt(sys, input);
       setAnswer(out.trim());
     } catch { setAnswer('I had trouble answering that.'); } finally { setAsking(false); }
   };
@@ -103,6 +103,15 @@ export function MemoryDetailSheet({ captureId, visible, onClose }: { captureId: 
 
                     <Text style={s.sectionLabel}>SUMMARY</Text>
                     <ShieldedText style={s.body} text={body} protectedValues={protectedValues} />
+
+                    {/* When values were shielded, always show the original note so the user
+                        can see their real password/name (highlighted) — it lives on-device. */}
+                    {protectedValues.length > 0 && detail.raw_transcript && detail.raw_transcript.trim() !== body.trim() ? (
+                      <>
+                        <Text style={s.sectionLabel}>ORIGINAL NOTE (on this device)</Text>
+                        <ShieldedText style={s.body} text={detail.raw_transcript} protectedValues={protectedValues} />
+                      </>
+                    ) : null}
                   </>
                 );
               })()}

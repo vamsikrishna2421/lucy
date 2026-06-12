@@ -13,6 +13,7 @@ import { organizeMemory } from './organizer';
 import { promptAI } from '../ai/openai';
 import { resolveRemoteAvailability } from '../ai/provider';
 import { promptDevice } from '../ai/device';
+import { shieldText, restoreText, PLACEHOLDER_NOTE } from './sensitiveShield';
 import { memoryAnswerSystemPrompt } from '../ai/prompts';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
 import { getDeviceContext, enrichWithUsagePatterns } from '../ai/deviceContext';
@@ -313,7 +314,14 @@ async function answerWithLLM(question: string, history: AskTurn[] = []): Promise
   try {
     const { available, openAIKey } = await resolveRemoteAvailability();
     if (available) {
-      llmResponse = await promptAI(systemPrompt, input, openAIKey);
+      // Privacy Shield: passwords + names in the retrieved memory context are tokenized
+      // on-device before the cloud call, and restored in the answer afterwards. So LUCY
+      // can answer "what is my wifi password" with the real value WITHOUT it ever leaving
+      // the device — the model only ever sees/says [SECRET_1].
+      const contacts = (await db.getAllAsync<{ name: string }>('SELECT name FROM people')).map((r) => r.name);
+      const { redacted, map } = shieldText(input, contacts);
+      const shieldedSystem = systemPrompt + (map.length ? PLACEHOLDER_NOTE : '');
+      llmResponse = restoreText(await promptAI(shieldedSystem, redacted, openAIKey), map);
     } else {
       llmResponse = await promptDevice(`${systemPrompt}\n${input}\n/no_think`);
     }

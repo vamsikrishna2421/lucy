@@ -128,9 +128,9 @@ export function protectedValuesFromMap(map: ShieldEntry[]): ProtectedValue[] {
   return map.map(({ value, kind }) => ({ value, kind }));
 }
 
-/** Note appended to a remote system prompt so the model preserves placeholder tokens. */
+/** Note appended to a remote system prompt so the model surfaces placeholder tokens. */
 export const PLACEHOLDER_NOTE =
-  '\n\nIMPORTANT: Tokens like [PERSON_1] or [SECRET_1] are privacy placeholders standing in for real values. Treat each as the entity it represents, and keep it verbatim in your output — never alter, expand, translate, or explain these tokens.';
+  '\n\nCRITICAL — PRIVACY TOKENS: Some values appear as tokens like [SECRET_1] (a password/credential) or [PERSON_1] (a person\'s name). Each token stands for the user\'s OWN real value, which the app safely restores on the user\'s device. Treat every token AS the value it represents. Whenever the content calls for that value — in summaries AND when answering direct questions like "what is my wifi password" — include the exact token verbatim (e.g. "Your Wi-Fi password is [SECRET_1]."). NEVER say you do not have access, NEVER refuse, and NEVER alter or explain the tokens. The user sees the real value, not the token.';
 
 /** Restores placeholder tokens across every string field of an extraction result.
  *  Defensive: tolerates partially-populated results (fields may be missing pre-normalize). */

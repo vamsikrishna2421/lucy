@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.122",
+      "buildNumber": "1.0.123",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
@@ -73,7 +73,7 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.anonymous.lucy",
-      "versionCode": 77,
+      "versionCode": 78,
       "intentFilters": [
         {
           "action": "SEND",
@@ -148,9 +148,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0F0E0B",
+          "backgroundColor": "#03050D",
           "image": "./assets/lucy-splash-icon.png",
-          "imageWidth": 200
+          "imageWidth": 220
         }
       ],
       [

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 18 (search negation) ─────────────────────── */
+/* ─── LUCY web · premium · dashboard rev 19 (search precision) ─────────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -560,11 +560,13 @@ function parseQuery(q){const toks=q.toLowerCase().replace(/,/g,' ').split(/\s+/)
     (mode==='pos'?pos:neg).push(t);
   }
   return {pos,neg};}
+/* Whole-word match so short tokens (us, id, ind) don't match inside "status"/"video". */
+function hit(hay,s){return new RegExp('\\b'+s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i').test(hay);}
 function smartMatch(item,q){const hay=((item.title||'')+' '+(item.description||'')+' '+(item.bucket||'')+' '+(item.keywords||'')).toLowerCase();
   const {pos,neg}=parseQuery(q);
-  if(neg.some(t=>expand(t).some(s=>hay.includes(s))))return false; // an excluded term is present
+  if(neg.some(t=>expand(t).some(s=>hit(hay,s))))return false; // an excluded term is present
   if(!pos.length)return true; // only filler/negation → show the rest
-  return pos.every(t=>expand(t).some(s=>hay.includes(s)));}
+  return pos.every(t=>expand(t).some(s=>hit(hay,s)));}
 async function reorganize(){if(!VAULT||!VAULT.length){toast('Nothing to organize yet');return;}
   if(!confirm('Re-analyze all '+VAULT.length+' documents into smart categories? Uses AI per document.'))return;
   for(let i=0;i<VAULT.length;i++){toast('Re-organizing '+(i+1)+' of '+VAULT.length+'…');try{await api('/api/vault/reclassify',{method:'POST',body:JSON.stringify({id:VAULT[i].id})});}catch(e){}if(i%4===3)await loadVault();}

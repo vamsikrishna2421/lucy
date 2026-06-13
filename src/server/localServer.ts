@@ -290,6 +290,13 @@ async function route(req: ParsedRequest): Promise<string> {
       const count = await reflectOnUser(db, true);
       return json(200, { ok: true, learned: count });
     }
+    // Dev logs (incl. crashes) — for diagnosing field issues over the LAN.
+    if (req.method === 'GET' && req.path === '/api/logs') {
+      const { listDevLogs } = await import('../db/devLog');
+      const rows = await listDevLogs(db, 100);
+      const onlyCrash = req.query.crash === '1';
+      return json(200, { logs: onlyCrash ? rows.filter((r) => r.category === 'crash' || r.error) : rows });
+    }
     // Cost guard status + temporary snooze (for bulk uploads/reclassify from the laptop).
     if (req.method === 'GET' && req.path === '/api/costguard') {
       const { getCostGuard } = await import('../ai/rateLimit');

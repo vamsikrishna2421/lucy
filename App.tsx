@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Animated, AppState, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { passiveListener, type PassiveListenerState } from './src/audio/PassiveListener';
 import { SplashAnimation } from './src/components/SplashAnimation';
+import { ErrorBoundary, installGlobalErrorLogger } from './src/components/ErrorBoundary';
 import { MeetingMode } from './src/components/MeetingMode';
 import { Onboarding } from './src/components/Onboarding';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -33,6 +34,9 @@ import { SettingsScreen } from './src/screens/Settings';
 import { LucyWrapped } from './src/components/LucyWrapped';
 import { ConnectorsScreen } from './src/screens/Connectors';
 import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
+
+// Capture non-React JS errors (async/timers/native callbacks) to dev_log from first load.
+installGlobalErrorLogger();
 
 export default function App() {
   const [screen, setScreen] = useState<'capture' | 'dashboard' | 'settings'>('dashboard');
@@ -508,6 +512,7 @@ export default function App() {
   const listenActive = passiveState.status === 'listening' && !passiveState.quickCapture;
 
   return (
+   <ErrorBoundary>
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
         <StatusBar style="light" />
@@ -725,6 +730,7 @@ export default function App() {
         } catch { /* non-critical */ }
       }} />
     </SafeAreaProvider>
+   </ErrorBoundary>
   );
 }
 

@@ -247,7 +247,15 @@ async function route(req: ParsedRequest): Promise<string> {
       const { listVaultItems } = await import('../processing/documentVault');
       const items = await listVaultItems(db);
       // Return list metadata + thumbnails (small); never the full images here.
-      return json(200, { items: items.map((i) => ({ id: i.id, title: i.title, description: i.description, bucket: i.bucket, thumb: i.thumb, gallery_saved: i.gallery_saved, created_at: i.created_at })) });
+      return json(200, { items: items.map((i) => ({ id: i.id, title: i.title, description: i.description, bucket: i.bucket, keywords: i.keywords, thumb: i.thumb, gallery_saved: i.gallery_saved, created_at: i.created_at })) });
+    }
+    // Re-run classification on one stored document (dynamic buckets + keywords).
+    if (req.method === 'POST' && req.path === '/api/vault/reclassify') {
+      const id = Number(payload.id);
+      if (!id) return json(400, { error: 'Missing id' });
+      const { reclassifyVaultItem } = await import('../processing/documentVault');
+      const ok = await reclassifyVaultItem(db, id);
+      return json(200, { ok });
     }
     if (req.method === 'GET' && req.path.startsWith('/api/vault/item/')) {
       const id = Number(req.path.split('/').pop());

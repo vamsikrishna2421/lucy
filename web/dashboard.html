@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 13 (documents manager) ─────────────────────── */
+/* ─── LUCY web · premium · dashboard rev 14 (smart search + dynamic buckets) ─────────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -243,6 +243,10 @@ nav{display:flex;flex-direction:column;gap:1px}
 }
 .scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25}.scrim.on{display:block}
 /* ─── Library / vault ─── */
+.vsearch{width:100%;background:var(--card);border:1px solid var(--border);border-radius:30px;color:var(--text);
+  padding:13px 20px;font-size:15px;outline:none;box-shadow:var(--shadow-sm);margin:4px 0 14px}
+.vsearch:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(255,140,66,.12)}
+.kw{display:inline-block;background:var(--raised);border:1px solid var(--border);border-radius:12px;padding:2px 9px;font-size:11px;color:var(--subtle);margin:3px 5px 0 0}
 .vchips{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 18px}
 .vchip{background:var(--card);border:1px solid var(--border);color:var(--muted);border-radius:30px;padding:7px 14px;font-size:13px;font-weight:550;transition:.15s}
 .vchip:hover{border-color:var(--primary);color:var(--text)}
@@ -520,25 +524,44 @@ async function handleFile(file){return handleFiles(file?[file]:[]);}
 /* ─── Library / Document Vault ─── */
 let VAULT=[],VBUCKET='All';
 const DEFAULT_BUCKETS=['ID & Cards','Certificates','Financial','Medical','Travel','Receipts','Notes','Other'];
-function vLibrary(){return `<div class="greet"><h1 style="font-size:24px">Documents Manager</h1><div class="grow"></div><button class="btn" onclick="pickFile()">＋ Upload</button></div>
-  <div class="subtle-line">Your documents — certificates, IDs, receipts — organized by LUCY, stored on your device.</div>
+function vLibrary(){return `<div class="greet"><h1 style="font-size:24px">Documents Manager</h1><div class="grow"></div><button class="btn ghost sm" onclick="reorganize()">↻ Re-organize</button><button class="btn" onclick="pickFile()">＋ Upload</button></div>
+  <div class="subtle-line">Your documents, auto-organized by LUCY and stored on your device.</div>
+  <input id="vSearch" class="vsearch" placeholder="🔎 Search — e.g. nokia payslips, usa docs, aadhaar, 2024" oninput="renderVault()"/>
   <div id="vaultChips" class="vchips"></div>
   <div id="vaultGrid"><div class="empty"><div class="big">◌</div>Loading documents…</div></div>`;}
+/* Synonyms so "payslips"/"salary", "usa"/"america", etc. all match. */
+const SYN=[['payslip','payslips','salary','salaryslip','salary slip','pay slip','wage','wages','paystub','paycheck'],
+  ['usa','us','america','american','united states','u.s','u.s.a'],['india','indian','bharat','ind'],
+  ['uk','united kingdom','britain','british','england'],['id','identity','identification','card','cards'],
+  ['certificate','certificates','cert','certification'],['invoice','invoices','bill','bills','receipt','receipts'],
+  ['statement','statements','bankstatement','bank statement'],['visa','visas'],['passport','passports'],
+  ['tax','taxes','taxation','w2','1099','itr'],['insurance','policy','policies'],['offer','offerletter','offer letter']];
+function expand(tok){for(const g of SYN){if(g.includes(tok))return g;}return tok.length>4&&tok.endsWith('s')?[tok,tok.slice(0,-1)]:[tok];}
+function smartMatch(item,q){const hay=((item.title||'')+' '+(item.description||'')+' '+(item.bucket||'')+' '+(item.keywords||'')).toLowerCase();
+  return q.toLowerCase().split(/\s+/).filter(Boolean).every(t=>expand(t).some(s=>hay.includes(s)));}
+async function reorganize(){if(!VAULT||!VAULT.length){toast('Nothing to organize yet');return;}
+  if(!confirm('Re-analyze all '+VAULT.length+' documents into smart categories? Uses AI per document.'))return;
+  for(let i=0;i<VAULT.length;i++){toast('Re-organizing '+(i+1)+' of '+VAULT.length+'…');try{await api('/api/vault/reclassify',{method:'POST',body:JSON.stringify({id:VAULT[i].id})});}catch(e){}if(i%4===3)await loadVault();}
+  toast('Re-organized ✓');await loadVault();}
 async function loadVault(){try{const r=await api('/api/vault');VAULT=(r&&r.items)||[];}catch(e){VAULT=null;}if(ROUTE==='library')renderVault();}
 function renderVault(){const grid=$('vaultGrid'),chips=$('vaultChips');if(!grid)return;
   if(VAULT===null){grid.innerHTML=empty('🗂','Vault ships via OTA','The document vault activates after the new build + update lands.');if(chips)chips.innerHTML='';return;}
   if(!VAULT.length){grid.innerHTML=empty('🗂','Your vault is empty','Click ＋ Upload to add a certificate, ID, or receipt — image or PDF.');if(chips)chips.innerHTML='';return;}
   const buckets=['All',...Array.from(new Set(VAULT.map(v=>v.bucket||'Other')))];
   if(chips)chips.innerHTML=buckets.map(b=>`<button class="vchip ${VBUCKET===b?'on':''}" onclick="VBUCKET=this.dataset.b;renderVault()" data-b="${esc(b)}">${esc(b)}${b!=='All'?` <span class="vn">${VAULT.filter(v=>(v.bucket||'Other')===b).length}</span>`:''}</button>`).join('');
-  const items=VAULT.filter(v=>VBUCKET==='All'||(v.bucket||'Other')===VBUCKET);
-  grid.innerHTML='<div class="vgrid">'+items.map(v=>`<div class="vcard" onclick="openDoc(${v.id})">
+  const q=($('vSearch')&&$('vSearch').value||'').trim();
+  let items=VAULT.filter(v=>VBUCKET==='All'||(v.bucket||'Other')===VBUCKET);
+  if(q)items=items.filter(v=>smartMatch(v,q));
+  if(!items.length){grid.innerHTML=empty('🔎','No matches',q?('Nothing matches “'+esc(q)+'”. Try fewer or different words.'):'');return;}
+  grid.innerHTML=(q?`<div class="subtle-line" style="margin:-4px 0 12px">${items.length} match${items.length===1?'':'es'} for “${esc(q)}”</div>`:'')+'<div class="vgrid">'+items.map(v=>`<div class="vcard" onclick="openDoc(${v.id})">
     <div class="vthumb">${v.thumb?`<img src="${v.thumb}" alt=""/>`:'<div class="vph">🗂</div>'}<span class="vbucket">${esc(v.bucket||'Other')}</span></div>
     <div class="vmeta"><div class="vtitle">${esc(v.title||'Document')}</div><div class="vdate">${fmt(v.created_at)}</div></div></div>`).join('')+'</div>';}
 async function openDoc(id){const v=VAULT.find(x=>x.id===id);if(!v)return;const m=$('modal');m.classList.add('on');
-  const opts=Array.from(new Set([...DEFAULT_BUCKETS,v.bucket||'Other']));
+  const opts=Array.from(new Set([...VAULT.map(x=>x.bucket).filter(Boolean),...DEFAULT_BUCKETS,v.bucket||'Other']));
   $('modalBody').innerHTML=`<div class="doc-detail"><div class="dl-img" id="dlImg"><div class="empty"><div class="big">◌</div>Loading image…</div></div>
     <div class="dl-side"><div class="dl-bucket">${esc(v.bucket||'Other')}</div><h3 class="dl-title">${esc(v.title||'Document')}</h3>
     <div class="dl-desc">${esc(v.description||'No description yet.')}</div>
+    ${v.keywords?`<div style="margin-top:10px">${v.keywords.split(',').map(k=>k.trim()).filter(Boolean).slice(0,12).map(k=>`<span class="kw">${esc(k)}</span>`).join('')}</div>`:''}
     <div class="dl-date">${fmt(v.created_at)}${v.gallery_saved?' · also in Photos':''}</div>
     <div class="dl-row"><select id="dlBucket" class="dl-select">${opts.map(b=>`<option ${b===(v.bucket||'Other')?'selected':''}>${esc(b)}</option>`).join('')}</select><button class="btn sm" onclick="refile(${id})">Re-file</button></div>
     <button class="btn ghost sm" onclick="addCustomBucket(${id})">＋ Custom bucket</button>

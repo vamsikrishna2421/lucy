@@ -289,6 +289,7 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       title TEXT,
       description TEXT,
       bucket TEXT DEFAULT 'Other',
+      keywords TEXT,
       file_path TEXT,
       thumb TEXT,
       mime TEXT DEFAULT 'image/jpeg',
@@ -627,5 +628,10 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     if (!nc.has('entity_id'))     await db.execAsync('ALTER TABLE lucy_notifications ADD COLUMN entity_id TEXT;');
     if (!nc.has('entity_kind'))   await db.execAsync('ALTER TABLE lucy_notifications ADD COLUMN entity_kind TEXT;');
     if (!nc.has('expired_at'))    await db.execAsync('ALTER TABLE lucy_notifications ADD COLUMN expired_at DATETIME;');
+  }
+
+  const vaultCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(vault_items)');
+  if (vaultCols.length > 0 && !new Set(vaultCols.map((c) => c.name)).has('keywords')) {
+    await db.execAsync('ALTER TABLE vault_items ADD COLUMN keywords TEXT;');
   }
 }

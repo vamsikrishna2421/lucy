@@ -24,6 +24,7 @@ export interface VaultItem {
   title: string | null;
   description: string | null;
   bucket: string;
+  keywords: string | null;
   file_path: string | null;
   thumb: string | null;
   mime: string;
@@ -32,11 +33,12 @@ export interface VaultItem {
 }
 
 const VAULT_SYSTEM = `You are LUCY, filing a document into the user's personal vault.
-Look at the image and return JSON only:
-{"title":"short human title (e.g. 'Aadhaar card', 'AWS certificate', 'Electricity bill Mar')",
- "bucket":"one of: ID & Cards | Certificates | Financial | Medical | Travel | Receipts | Notes | Other",
- "description":"a concise, searchable description. Extract key text verbatim — names, ID numbers, dates, amounts, issuer. Plain text, no markdown."}
-Pick the single best bucket. Be specific in the title so the user can find it later.`;
+Return JSON only:
+{"title":"short specific title (e.g. 'Nokia payslip — Mar 2024', 'US visa', 'Aadhaar card')",
+ "bucket":"the DOCUMENT TYPE as a concise Title-Case plural category that you invent from the document itself (e.g. Payslips, Bank Statements, Visas, Certificates, ID Cards, Insurance Policies, Medical Reports, Receipts, Tax Documents, Offer Letters). Be specific to the document — prefer 'Payslips' over a vague 'Financial'.",
+ "description":"a concise, searchable description. Extract key text verbatim — names, ID numbers, dates, amounts, issuer.",
+ "keywords":["6-15 lowercase search tags. ALWAYS include: the document type AND its synonyms (payslip, payslips, salary slip, salary); the organization/employer/issuer (nokia, hdfc, aws); the country inferred from currency/address/issuer (₹/PAN/Aadhaar→india, $/SSN→usa, £→uk); the year/month; any person names."]}
+Be generous and specific with keywords — they power search. Return JSON only.`;
 
 const VAULT_DIR = `${documentDirectory}docvault/`;
 
@@ -47,8 +49,16 @@ async function ensureVaultDir(): Promise<void> {
   } catch { /* best effort */ }
 }
 
-/** Vision classification for the vault (separate prompt from Lens; same OpenAI vision path). */
-async function classify(base64: string, hint: string): Promise<{ title: string; bucket: string; description: string } | null> {
+/** Distinct categories LUCY has already created — so it reuses them instead of fragmenting. */
+async function existingBuckets(db: SQLiteDatabase): Promise<string[]> {
+  try {
+    const rows = await db.getAllAsync<{ bucket: string }>("SELECT DISTINCT bucket FROM vault_items WHERE bucket IS NOT NULL AND bucket != ''");
+    return rows.map((r) => r.bucket);
+  } catch { return []; }
+}
+
+/** Vision classification for the vault — dynamic buckets that reuse existing categories. */
+async function classify(base64: string, hint: string, buckets: string[]): Promise<{ title: string; bucket: string; description: string; keywords: string } | null> {
   try {
     const db = await getDatabase();
     const { available, openAIKey } = await resolveRemoteAvailability();
@@ -57,6 +67,9 @@ async function classify(base64: string, hint: string): Promise<{ title: string; 
       m.getPreferredModel(require('../config').config.openAIModel))).startsWith('claude-');
     const apiKey = isOpenAI ? openAIKey : await import('../ai/remoteAccess').then((m) => m.getRemoteOpenAIKey());
     if (!apiKey) return null;
+    const existing = buckets.length
+      ? `\n\nExisting categories already in this vault — REUSE the exact name if this document belongs to one of them; only invent a new category if none fits: ${buckets.join(', ')}.`
+      : '';
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -66,7 +79,7 @@ async function classify(base64: string, hint: string): Promise<{ title: string; 
         messages: [{
           role: 'user',
           content: [
-            { type: 'text', text: `${VAULT_SYSTEM}\n\nFilename hint: ${hint}` },
+            { type: 'text', text: `${VAULT_SYSTEM}${existing}\n\nFilename hint: ${hint}` },
             { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}`, detail: 'low' } },
           ],
         }],
@@ -78,9 +91,13 @@ async function classify(base64: string, hint: string): Promise<{ title: string; 
     const content = json.choices?.[0]?.message?.content ?? '';
     const start = content.indexOf('{'); const end = content.lastIndexOf('}');
     if (start === -1 || end === -1) return null;
-    const parsed = JSON.parse(content.slice(start, end + 1)) as { title?: string; bucket?: string; description?: string };
-    const bucket = (VAULT_BUCKETS as readonly string[]).includes(parsed.bucket ?? '') ? parsed.bucket! : 'Other';
-    return { title: parsed.title?.trim() || hint || 'Document', bucket, description: parsed.description?.trim() || '' };
+    const parsed = JSON.parse(content.slice(start, end + 1)) as { title?: string; bucket?: string; description?: string; keywords?: string[] };
+    let bucket = (parsed.bucket || 'Documents').trim().replace(/\s+/g, ' ');
+    // Reuse the existing category's exact casing if it's the same one (avoids Payslips/payslip splits).
+    const dupe = buckets.find((b) => b.toLowerCase() === bucket.toLowerCase());
+    if (dupe) bucket = dupe;
+    const keywords = Array.isArray(parsed.keywords) ? parsed.keywords.map((k) => String(k).toLowerCase().trim()).filter(Boolean).join(', ') : '';
+    return { title: parsed.title?.trim() || hint || 'Document', bucket, description: parsed.description?.trim() || '', keywords };
   } catch { return null; }
 }
 
@@ -99,8 +116,9 @@ export async function saveImageToVault(
   try { base64 = await readAsStringAsync(tempUri, { encoding: EncodingType.Base64 }); }
   catch { return null; }
 
-  const meta = await classify(base64, originalName ?? 'document')
-    ?? { title: originalName || 'Document', bucket: 'Other', description: 'Saved document (enable Remote Intelligence for auto-description).' };
+  const db0 = await getDatabase();
+  const meta = await classify(base64, originalName ?? 'document', await existingBuckets(db0))
+    ?? { title: originalName || 'Document', bucket: 'Documents', description: 'Saved document (enable Remote Intelligence for auto-description).', keywords: '' };
 
   // Persist the full image into the private vault dir.
   await ensureVaultDir();
@@ -120,9 +138,9 @@ export async function saveImageToVault(
 
   const db = await getDatabase();
   const res = await db.runAsync(
-    `INSERT INTO vault_items (title, description, bucket, file_path, thumb, mime, gallery_saved, source)
-     VALUES (?, ?, ?, ?, ?, 'image/jpeg', ?, 'upload')`,
-    meta.title, meta.description, meta.bucket, path, thumbDataUrl ?? null, gallerySaved,
+    `INSERT INTO vault_items (title, description, bucket, keywords, file_path, thumb, mime, gallery_saved, source)
+     VALUES (?, ?, ?, ?, ?, ?, 'image/jpeg', ?, 'upload')`,
+    meta.title, meta.description, meta.bucket, meta.keywords, path, thumbDataUrl ?? null, gallerySaved,
   );
 
   // Also enqueue a capture so the document is part of the searchable memory/timeline.
@@ -147,6 +165,23 @@ export async function getVaultImage(db: SQLiteDatabase, id: number): Promise<str
     const b64 = await readAsStringAsync(row.file_path, { encoding: EncodingType.Base64 });
     return `data:${row.mime || 'image/jpeg'};base64,${b64}`;
   } catch { return null; }
+}
+
+/** Re-runs classification on an already-stored document (dynamic buckets + keywords). Used by
+ *  "Re-organize" to fix items filed under the old fixed taxonomy. Reads the stored image. */
+export async function reclassifyVaultItem(db: SQLiteDatabase, id: number): Promise<boolean> {
+  const row = await db.getFirstAsync<VaultItem>('SELECT file_path FROM vault_items WHERE id = ?', id);
+  if (!row?.file_path) return false;
+  let base64: string;
+  try { base64 = await readAsStringAsync(row.file_path, { encoding: EncodingType.Base64 }); }
+  catch { return false; }
+  const meta = await classify(base64, 'document', await existingBuckets(db));
+  if (!meta) return false;
+  await db.runAsync(
+    'UPDATE vault_items SET title = ?, description = ?, bucket = ?, keywords = ? WHERE id = ?',
+    meta.title, meta.description, meta.bucket, meta.keywords, id,
+  );
+  return true;
 }
 
 export async function refileVaultItem(db: SQLiteDatabase, id: number, bucket: string): Promise<void> {

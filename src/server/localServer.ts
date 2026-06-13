@@ -200,6 +200,26 @@ async function route(req: ParsedRequest): Promise<string> {
       await upsertLearnedFact(db, category as never, text, 'feedback');
       return json(200, { ok: true });
     }
+    // Upload an image (receipt / note / photo) from the laptop. The browser sends a
+    // downscaled JPEG as a base64 data URL; we write it to a temp file and run it through
+    // the same vision pipeline the app's "Snap to memory" uses (extracts a memory + enqueues
+    // a capture, then deletes the image). Base64-in-JSON keeps it text-safe over the socket.
+    if (req.method === 'POST' && req.path === '/api/upload') {
+      const dataUrl = String(payload.image ?? '');
+      const b64 = dataUrl.includes(',') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl;
+      if (!b64) return json(400, { error: 'No image' });
+      const name = String(payload.name ?? 'upload.jpg');
+      try {
+        const fs = await import('expo-file-system/legacy');
+        const path = `${fs.cacheDirectory}lucy-upload-${Date.now()}.jpg`;
+        await fs.writeAsStringAsync(path, b64, { encoding: fs.EncodingType.Base64 });
+        const { processImageToMemory } = await import('../processing/lucyLens');
+        const result = await processImageToMemory(path, name); // reads, extracts, enqueues, deletes
+        return json(200, { ok: true, memory: result?.memoryText ?? null, category: result?.category ?? null });
+      } catch (e) {
+        return json(500, { error: e instanceof Error ? e.message : 'Upload failed' });
+      }
+    }
     // Edit the "about you" profile blurb from the laptop.
     if (req.method === 'POST' && req.path === '/api/profile') {
       const { setSetting } = await import('../db/settings');

@@ -1538,14 +1538,20 @@ function TimelineView({
                         // Collapsed: show ~3 lines of summary (numberOfLines clips the rest).
                         // Expanded: show full text.
                         // We always show the summary; chips only appear after expansion.
+                        let pv: ProtectedValueLite[] = [];
+                        try { pv = item.protected_values ? JSON.parse(item.protected_values) as ProtectedValueLite[] : []; } catch { /* ignore */ }
                         return (
                           <View style={{ marginTop: 5 }}>
-                            <Text
-                              style={styles.tlSummaryText}
-                              numberOfLines={isExpanded ? undefined : 3}
-                            >
-                              {summaryText}
-                            </Text>
+                            {pv.length > 0 ? (
+                              <ShieldedText style={styles.tlSummaryText} text={summaryText} protectedValues={pv} numberOfLines={isExpanded ? undefined : 3} />
+                            ) : (
+                              <Text
+                                style={styles.tlSummaryText}
+                                numberOfLines={isExpanded ? undefined : 3}
+                              >
+                                {summaryText}
+                              </Text>
+                            )}
                             {/* Expand/collapse affordance */}
                             {!isExpanded ? (
                               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 }}>

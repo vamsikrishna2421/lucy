@@ -20,8 +20,25 @@ export interface ServerState {
 }
 
 const PORT = 8088;
+// The dashboard HTML is pulled from the public repo at runtime so it can be iterated
+// WITHOUT an app rebuild: edit web/dashboard.html → push → POST /api/dashboard/refresh.
+// The baked-in DASHBOARD_HTML is the offline/first-run fallback.
+const DASHBOARD_RAW_URL = 'https://raw.githubusercontent.com/vamsikrishna2421/lucy/master/web/dashboard.html';
+let dashboardCache: string | null = null;
+
 interface TcpServer { close: () => void; listen?: (opts: unknown) => void; on?: (e: string, cb: (a: unknown) => void) => void; }
 let server: TcpServer | null = null;
+
+/** Pulls the latest dashboard from the repo and caches it. Returns bytes (0 on failure). */
+async function fetchRemoteDashboard(): Promise<number> {
+  try {
+    const res = await fetch(`${DASHBOARD_RAW_URL}?t=${Date.now()}`, { headers: { 'Cache-Control': 'no-cache' } });
+    if (!res.ok) return 0;
+    const html = await res.text();
+    if (html && html.includes('</html>')) { dashboardCache = html; return html.length; }
+    return 0;
+  } catch { return 0; }
+}
 let state: ServerState = { running: false, ip: null, port: PORT, pin: null, error: null };
 const listeners = new Set<(s: ServerState) => void>();
 
@@ -88,7 +105,7 @@ const json = (status: number, obj: unknown) => httpResponse(status, 'application
 // ─── Routing ─────────────────────────────────────────────────────────────────
 async function route(req: ParsedRequest): Promise<string> {
   if (req.method === 'OPTIONS') return httpResponse(204, 'text/plain', '');
-  if (req.method === 'GET' && req.path === '/') return httpResponse(200, 'text/html; charset=utf-8', DASHBOARD_HTML);
+  if (req.method === 'GET' && req.path === '/') return httpResponse(200, 'text/html; charset=utf-8', dashboardCache ?? DASHBOARD_HTML);
 
   if (req.path.startsWith('/api/')) {
     // No auth at this stage — LAN-only, security comes later.
@@ -121,6 +138,11 @@ async function route(req: ParsedRequest): Promise<string> {
       const { reflectOnUser } = await import('../processing/reflectOnUser');
       const count = await reflectOnUser(db, true);
       return json(200, { ok: true, learned: count });
+    }
+    // Hot-reload the dashboard from the repo — lets UAT refresh the website with no app rebuild.
+    if (req.method === 'POST' && req.path === '/api/dashboard/refresh') {
+      const bytes = await fetchRemoteDashboard();
+      return json(200, { ok: bytes > 0, bytes, served: dashboardCache ? 'remote' : 'baked-in' });
     }
     if (req.method === 'DELETE' && req.path.startsWith('/api/capture/')) {
       const id = Number(req.path.split('/').pop());
@@ -168,6 +190,7 @@ export async function startServer(): Promise<ServerState> {
     server?.on?.('error', (e: unknown) => setState({ error: e instanceof Error ? e.message : 'Server error', running: false }));
 
     setState({ running: true, ip, pin: null, error: null });
+    void fetchRemoteDashboard(); // pull the latest dashboard in the background
     return state;
   } catch (e) {
     setState({ running: false, error: e instanceof Error ? e.message : 'Could not start server' });

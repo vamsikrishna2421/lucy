@@ -287,6 +287,19 @@ async function route(req: ParsedRequest): Promise<string> {
       const count = await reflectOnUser(db, true);
       return json(200, { ok: true, learned: count });
     }
+    // Cost guard status + temporary snooze (for bulk uploads/reclassify from the laptop).
+    if (req.method === 'GET' && req.path === '/api/costguard') {
+      const { getCostGuard } = await import('../ai/rateLimit');
+      return json(200, await getCostGuard(db));
+    }
+    if (req.method === 'POST' && req.path === '/api/costguard') {
+      const minutes = Number(payload.minutes ?? 0);
+      const { snoozeCostGuard, getCostGuard } = await import('../ai/rateLimit');
+      await snoozeCostGuard(db, minutes);
+      // Resuming the queue: kick the processor in case it was paused by the cap.
+      if (minutes > 0) { const { processQueue } = await import('../processing/extract'); void processQueue(); }
+      return json(200, await getCostGuard(db));
+    }
     // Hot-reload the dashboard from the repo — lets UAT refresh the website with no app rebuild.
     if (req.method === 'POST' && req.path === '/api/dashboard/refresh') {
       const bytes = await fetchRemoteDashboard();

@@ -1150,7 +1150,7 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
   const [diag, setDiag] = useState<{ model: string; available: boolean } | null>(null);
   const [errors, setErrors] = useState<Array<{ id: number; occurred_at: string; context: string; message: string }>>([]);
   const [showErrors, setShowErrors] = useState(false);
-  const [guard, setGuard] = useState<{ enabled: boolean; max: number; used: number } | null>(null);
+  const [guard, setGuard] = useState<{ enabled: boolean; max: number; used: number; snoozedUntil: string | null } | null>(null);
   const [guardRefresh, setGuardRefresh] = useState(0);
 
   useEffect(() => {
@@ -1185,6 +1185,23 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
     const { COST_GUARD_MAX_KEY } = await import('../ai/rateLimit');
     await setSetting(db, COST_GUARD_MAX_KEY, String(next));
     setGuardRefresh((v) => v + 1);
+  };
+
+  const snoozeGuard = async () => {
+    const db = await getDatabase();
+    const { snoozeCostGuard } = await import('../ai/rateLimit');
+    const isSnoozed = !!guard?.snoozedUntil;
+    if (isSnoozed) {
+      await snoozeCostGuard(db, 0);
+      setGuardRefresh((v) => v + 1);
+      return;
+    }
+    Alert.alert('Pause cost guard', 'Temporarily allow unlimited AI calls (e.g. for a bulk import). It re-enables automatically.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: '30 min', onPress: async () => { await snoozeCostGuard(db, 30); setGuardRefresh((v) => v + 1); } },
+      { text: '1 hour', onPress: async () => { await snoozeCostGuard(db, 60); setGuardRefresh((v) => v + 1); } },
+      { text: '3 hours', onPress: async () => { await snoozeCostGuard(db, 180); setGuardRefresh((v) => v + 1); } },
+    ]);
   };
 
   useEffect(() => {
@@ -1266,12 +1283,23 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
           </View>
           {guard.enabled ? (
             <>
-              <Text style={{ color: guard.used >= guard.max ? '#F59E0B' : LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '600', marginTop: 4 }}>
-                {guard.used} / {guard.max} AI calls this hour{guard.used >= guard.max ? ' — paused until the hour clears' : ''}
-              </Text>
-              <TouchableOpacity onPress={() => void cycleGuardLimit()} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
-                <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '700' }}>Limit: {guard.max}/hr — tap to change</Text>
-              </TouchableOpacity>
+              {guard.snoozedUntil ? (
+                <Text style={{ color: '#4ADE80', fontSize: 11, fontWeight: '600', marginTop: 4 }}>
+                  Paused (unlimited) until {new Date(guard.snoozedUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                </Text>
+              ) : (
+                <Text style={{ color: guard.used >= guard.max ? '#F59E0B' : LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '600', marginTop: 4 }}>
+                  {guard.used} / {guard.max} AI calls this hour{guard.used >= guard.max ? ' — paused until the hour clears' : ''}
+                </Text>
+              )}
+              <View style={{ flexDirection: 'row', gap: 14, marginTop: 6 }}>
+                <TouchableOpacity onPress={() => void cycleGuardLimit()}>
+                  <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '700' }}>Limit: {guard.max}/hr</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => void snoozeGuard()}>
+                  <Text style={{ color: guard.snoozedUntil ? '#4ADE80' : LUCY_COLORS.primary, fontSize: 11, fontWeight: '700' }}>{guard.snoozedUntil ? 'Resume now' : 'Pause for a while'}</Text>
+                </TouchableOpacity>
+              </View>
             </>
           ) : (
             <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 4 }}>No automatic limit on AI calls. Tap ON to cap spend.</Text>

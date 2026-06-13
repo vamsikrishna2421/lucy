@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 15 (search stopwords) ─────────────────────── */
+/* ─── LUCY web · premium · dashboard rev 16 (cost guard snooze) ─────────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -243,6 +243,11 @@ nav{display:flex;flex-direction:column;gap:1px}
 }
 .scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25}.scrim.on{display:block}
 /* ─── Library / vault ─── */
+.guardbar{display:flex;align-items:center;gap:12px;font-size:12.5px;color:var(--subtle);margin:0 0 10px}
+.guardbar:empty{display:none}
+.guardbar.g-cap{color:var(--warning)}
+.guardbar.g-on{color:var(--success)}
+.guardbar .btn{margin-left:auto}
 .vsearch{width:100%;background:var(--card);border:1px solid var(--border);border-radius:30px;color:var(--text);
   padding:13px 20px;font-size:15px;outline:none;box-shadow:var(--shadow-sm);margin:4px 0 14px}
 .vsearch:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(255,140,66,.12)}
@@ -526,6 +531,7 @@ let VAULT=[],VBUCKET='All';
 const DEFAULT_BUCKETS=['ID & Cards','Certificates','Financial','Medical','Travel','Receipts','Notes','Other'];
 function vLibrary(){return `<div class="greet"><h1 style="font-size:24px">Documents Manager</h1><div class="grow"></div><button class="btn ghost sm" onclick="reorganize()">↻ Re-organize</button><button class="btn" onclick="pickFile()">＋ Upload</button></div>
   <div class="subtle-line">Your documents, auto-organized by LUCY and stored on your device.</div>
+  <div id="guardBar" class="guardbar"></div>
   <input id="vSearch" class="vsearch" placeholder="🔎 Search — e.g. nokia payslips, usa docs, aadhaar, 2024" oninput="renderVault()"/>
   <div id="vaultChips" class="vchips"></div>
   <div id="vaultGrid"><div class="empty"><div class="big">◌</div>Loading documents…</div></div>`;}
@@ -547,7 +553,16 @@ async function reorganize(){if(!VAULT||!VAULT.length){toast('Nothing to organize
   if(!confirm('Re-analyze all '+VAULT.length+' documents into smart categories? Uses AI per document.'))return;
   for(let i=0;i<VAULT.length;i++){toast('Re-organizing '+(i+1)+' of '+VAULT.length+'…');try{await api('/api/vault/reclassify',{method:'POST',body:JSON.stringify({id:VAULT[i].id})});}catch(e){}if(i%4===3)await loadVault();}
   toast('Re-organized ✓');await loadVault();}
-async function loadVault(){try{const r=await api('/api/vault');VAULT=(r&&r.items)||[];}catch(e){VAULT=null;}if(ROUTE==='library')renderVault();}
+async function loadVault(){try{const r=await api('/api/vault');VAULT=(r&&r.items)||[];}catch(e){VAULT=null;}if(ROUTE==='library')renderVault();loadGuard();}
+let GUARD=null;
+async function loadGuard(){try{GUARD=await api('/api/costguard');}catch(e){GUARD=null;}renderGuard();}
+function renderGuard(){const el=$('guardBar');if(!el)return;if(!GUARD||!GUARD.enabled){el.innerHTML='';return;}
+  const sn=GUARD.snoozedUntil;const capped=GUARD.used>=GUARD.max;
+  const label=sn?('⏸ AI limit paused until '+new Date(sn).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})):(GUARD.used+' / '+GUARD.max+' AI calls this hour'+(capped?' — paused':''));
+  el.className='guardbar'+(sn?' g-on':(capped?' g-cap':''));
+  el.innerHTML=`<span>${label}</span><button class="btn ghost sm" onclick="${sn?'resumeGuard()':'pauseGuard()'}">${sn?'Resume now':'Pause AI limit'}</button>`;}
+async function pauseGuard(){await api('/api/costguard',{method:'POST',body:JSON.stringify({minutes:60})});toast('AI limit paused for 1 hour');await loadGuard();await loadVault();}
+async function resumeGuard(){await api('/api/costguard',{method:'POST',body:JSON.stringify({minutes:0})});toast('Cost guard resumed');await loadGuard();}
 function renderVault(){const grid=$('vaultGrid'),chips=$('vaultChips');if(!grid)return;
   if(VAULT===null){grid.innerHTML=empty('🗂','Vault ships via OTA','The document vault activates after the new build + update lands.');if(chips)chips.innerHTML='';return;}
   if(!VAULT.length){grid.innerHTML=empty('🗂','Your vault is empty','Click ＋ Upload to add a certificate, ID, or receipt — image or PDF.');if(chips)chips.innerHTML='';return;}

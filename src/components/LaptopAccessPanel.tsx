@@ -43,9 +43,7 @@ export function LaptopAccessPanel() {
         <View style={s.info}>
           <Text style={s.infoLabel}>Open this on your laptop browser</Text>
           <Text style={s.url}>http://{srv.ip ?? '<phone-ip>'}:{srv.port}</Text>
-          <Text style={s.infoLabel}>PIN</Text>
-          <Text style={s.pin}>{srv.pin}</Text>
-          <Text style={s.note}>Same WiFi only · keep LUCY open · this PIN changes each time you turn it on.</Text>
+          <Text style={s.note}>Same WiFi only · keep LUCY open. No PIN for now — anyone on this WiFi can access it.</Text>
         </View>
       ) : null}
 

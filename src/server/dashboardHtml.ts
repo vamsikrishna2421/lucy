@@ -25,14 +25,7 @@ button.ghost{background:transparent;color:var(--subtle);border:1px solid var(--b
 .counts{margin-left:auto;display:flex;gap:14px}.count b{color:var(--primary)}.count{font-size:12px;color:var(--subtle)}
 .empty{color:var(--subtle);font-style:italic}
 </style></head><body>
-<div id="gate" class="gate">
-  <div class="brand">LUC<span class="y">Y</span></div>
-  <div style="color:var(--muted)">Enter the PIN shown on your phone.</div>
-  <input id="pinin" inputmode="numeric" placeholder="4-digit PIN" style="text-align:center;font-size:22px;letter-spacing:6px"/>
-  <button onclick="connect()">Connect</button>
-  <div id="gerr" style="color:#ff6b6b;font-size:13px"></div>
-</div>
-<div id="app" style="display:none">
+<div id="app">
 <header><div class="brand">LUC<span class="y">Y</span> · Live</div><div class="dot" title="connected"></div>
   <div class="counts" id="counts"></div></header>
 <main>
@@ -41,12 +34,12 @@ button.ghost{background:transparent;color:var(--subtle);border:1px solid var(--b
   <div id="content"></div>
 </main></div>
 <script>
-let PIN='';const $=id=>document.getElementById(id);
+const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const fmt=s=>{if(!s)return'';const d=new Date(String(s).includes('T')?s:String(s).replace(' ','T')+'Z');return isNaN(d)?s:d.toLocaleDateString(undefined,{month:'short',day:'numeric'})};
-async function api(path,opts={}){opts.headers=Object.assign({'X-LUCY-PIN':PIN,'Content-Type':'application/json'},opts.headers||{});const r=await fetch(path,opts);if(r.status===401)throw new Error('Bad PIN');return r.headers.get('content-type','').includes('json')?r.json():r.text();}
-async function connect(){PIN=$('pinin').value.trim();try{await api('/api/memory');$('gate').style.display='none';$('app').style.display='block';load();}catch(e){$('gerr').textContent='Could not connect — check the PIN.';}}
+async function api(path,opts={}){opts.headers=Object.assign({'Content-Type':'application/json'},opts.headers||{});const r=await fetch(path,opts);return (r.headers.get('content-type')||'').includes('json')?r.json():r.text();}
 async function load(){let d;try{d=await api('/api/memory');}catch(e){return;}render(d);}
+load();
 function render(d){
   const p=d.profile||{};
   $('counts').innerHTML=[['captures',d.captures],['tasks',d.todos],['learned',d.learned_profile]].filter(([,a])=>a).map(([k,a])=>'<span class="count"><b>'+a.length+'</b> '+k+'</span>').join('');

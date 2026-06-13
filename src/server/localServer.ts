@@ -35,8 +35,6 @@ export function subscribeServer(fn: (s: ServerState) => void): () => void {
   listeners.add(fn); fn(state); return () => listeners.delete(fn);
 }
 
-function randomPin(): string { return String(Math.floor(1000 + Math.random() * 9000)); }
-
 // ─── HTTP helpers ──────────────────────────────────────────────────────────────
 interface ParsedRequest { method: string; path: string; query: Record<string, string>; headers: Record<string, string>; body: string; }
 
@@ -80,9 +78,7 @@ async function route(req: ParsedRequest): Promise<string> {
   if (req.method === 'GET' && req.path === '/') return httpResponse(200, 'text/html; charset=utf-8', DASHBOARD_HTML);
 
   if (req.path.startsWith('/api/')) {
-    const pin = req.headers['x-lucy-pin'] ?? req.query.pin ?? '';
-    if (!state.pin || pin !== state.pin) return json(401, { error: 'Bad or missing PIN' });
-
+    // No auth at this stage — LAN-only, security comes later.
     const db = await getDatabase();
     let payload: Record<string, unknown> = {};
     try { payload = req.body ? JSON.parse(req.body) : {}; } catch { payload = {}; }
@@ -134,7 +130,6 @@ export async function startServer(): Promise<ServerState> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const TcpSocket = require('react-native-tcp-socket').default ?? require('react-native-tcp-socket');
-    const pin = randomPin();
     let ip: string | null = null;
     try { ip = await Network.getIpAddressAsync(); } catch { /* ignore */ }
 
@@ -156,7 +151,7 @@ export async function startServer(): Promise<ServerState> {
     server?.listen?.({ port: PORT, host: '0.0.0.0' });
     server?.on?.('error', (e: unknown) => setState({ error: e instanceof Error ? e.message : 'Server error', running: false }));
 
-    setState({ running: true, ip, pin, error: null });
+    setState({ running: true, ip, pin: null, error: null });
     return state;
   } catch (e) {
     setState({ running: false, error: e instanceof Error ? e.message : 'Could not start server' });

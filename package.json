@@ -65,7 +65,9 @@
     "bench:kaggle-eleanor:openai": "node --env-file=.env.local --import tsx tests/kaggle-eleanor.openai-redacted.ts",
     "bench:kaggle-eleanor:timeline": "tsx tests/kaggle-eleanor.timeline.ts",
     "test:live-claude": "node --env-file=.env.local --import tsx tests/live-claude.ts",
-    "test:claude-english": "node --env-file=.env.local --import tsx tests/live-claude-english.ts"
+    "test:claude-english": "node --env-file=.env.local --import tsx tests/live-claude-english.ts",
+    "ota:check": "node tools/needs-rebuild.mjs",
+    "ota:push": "node tools/needs-rebuild.mjs && eas update --branch production"
   },
   "private": true
 }

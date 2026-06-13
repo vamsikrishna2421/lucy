@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 16 (cost guard snooze) ─────────────────────── */
+/* ─── LUCY web · premium · dashboard rev 17 (guard in settings) ─────────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -366,6 +366,7 @@ function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offset
   if(!DATA){v.innerHTML='';return;}
   v.innerHTML=({home:vHome,timeline:vTimeline,ask:vAsk,tasks:vTasks,library:vLibrary,brain:vBrain,people:vPeople,health:vHealth,money:vMoney,about:vAbout}[ROUTE]||vHome)();
   if(ROUTE==='library')loadVault();
+  if(ROUTE==='about')loadGuard();
   if(ROUTE==='ask')afterAsk();}
 
 /* ─── HOME (the mockup) ─── */
@@ -470,6 +471,7 @@ function vAbout(){const d=DATA;const facts=(d.learned_profile||[]);
     <div class="sec"><h2>Tell LUCY something</h2></div><div class="composer"><input id="fb" placeholder="e.g. I prefer short answers" onkeydown="if(event.key==='Enter')sendFeedback()"/><button class="btn" onclick="sendFeedback()">Teach</button></div>
     <div class="sec"><h2>What LUCY has learned · ${facts.length}</h2><div class="grow"></div><button class="btn ghost sm" id="reflectBtn" onclick="reflect()">Reflect now</button></div>`;
   h+=facts.length?'<div class="col">'+facts.map(f=>`<div class="card"><div style="flex:1"><span class="cat">${esc(f.category)}</span><span class="ttl" style="font-weight:500">${esc(f.statement)}</span></div><span class="pill ${esc(f.confidence)}">${esc(f.confidence)}</span><button class="ico-btn danger" onclick="delFact(${f.id})">✕</button></div>`).join('')+'</div>':empty('☻','Nothing learned yet','Capture a few notes, then "Reflect now".');
+  h+=`<div class="sec"><h2>AI cost guard</h2></div><div class="subtle-line" style="margin-bottom:8px">A platform-wide hourly cap on remote AI calls. Pause it temporarily for bulk work — it re-enables automatically.</div><div class="guardbar"></div>`;
   return h;}
 
 function stat(n,l){return `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;}
@@ -556,11 +558,12 @@ async function reorganize(){if(!VAULT||!VAULT.length){toast('Nothing to organize
 async function loadVault(){try{const r=await api('/api/vault');VAULT=(r&&r.items)||[];}catch(e){VAULT=null;}if(ROUTE==='library')renderVault();loadGuard();}
 let GUARD=null;
 async function loadGuard(){try{GUARD=await api('/api/costguard');}catch(e){GUARD=null;}renderGuard();}
-function renderGuard(){const el=$('guardBar');if(!el)return;if(!GUARD||!GUARD.enabled){el.innerHTML='';return;}
-  const sn=GUARD.snoozedUntil;const capped=GUARD.used>=GUARD.max;
-  const label=sn?('⏸ AI limit paused until '+new Date(sn).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})):(GUARD.used+' / '+GUARD.max+' AI calls this hour'+(capped?' — paused':''));
-  el.className='guardbar'+(sn?' g-on':(capped?' g-cap':''));
-  el.innerHTML=`<span>${label}</span><button class="btn ghost sm" onclick="${sn?'resumeGuard()':'pauseGuard()'}">${sn?'Resume now':'Pause AI limit'}</button>`;}
+function renderGuard(){const els=document.querySelectorAll('.guardbar');if(!els.length)return;
+  els.forEach((el)=>{if(!GUARD||!GUARD.enabled){el.innerHTML='';el.className='guardbar';return;}
+    const sn=GUARD.snoozedUntil;const capped=GUARD.used>=GUARD.max;
+    const label=sn?('⏸ AI limit paused until '+new Date(sn).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})):(GUARD.used+' / '+GUARD.max+' AI calls this hour'+(capped?' — paused':''));
+    el.className='guardbar'+(sn?' g-on':(capped?' g-cap':''));
+    el.innerHTML=`<span>${label}</span><button class="btn ghost sm" onclick="${sn?'resumeGuard()':'pauseGuard()'}">${sn?'Resume now':'Pause AI limit'}</button>`;});}
 async function pauseGuard(){await api('/api/costguard',{method:'POST',body:JSON.stringify({minutes:60})});toast('AI limit paused for 1 hour');await loadGuard();await loadVault();}
 async function resumeGuard(){await api('/api/costguard',{method:'POST',body:JSON.stringify({minutes:0})});toast('Cost guard resumed');await loadGuard();}
 function renderVault(){const grid=$('vaultGrid'),chips=$('vaultChips');if(!grid)return;

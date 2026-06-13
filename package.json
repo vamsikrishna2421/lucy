@@ -38,6 +38,7 @@
     "react-native-executorch": "^0.9.0",
     "react-native-executorch-expo-resource-fetcher": "^0.9.0",
     "react-native-safe-area-context": "~5.7.0",
+    "react-native-tcp-socket": "^6.4.1",
     "react-native-view-shot": "5.1.0"
   },
   "devDependencies": {

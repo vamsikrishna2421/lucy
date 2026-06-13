@@ -62,6 +62,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [changingBackground, setChangingBackground] = useState(false);
   const [localRefresh, setLocalRefresh] = useState(0);
   const [deviceModel, setDeviceModel] = useState<DeviceModelState>(getDeviceModelState());
+  const [shieldLlm, setShieldLlm] = useState(false);
   const [preparingModel, setPreparingModel] = useState(false);
   const [clearingModel, setClearingModel] = useState(false);
   const [selectingModel, setSelectingModel] = useState(false);
@@ -110,6 +111,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       setProfile(userProfile);
       setProfileDraft(userProfile);
       setCheckInEnabled(!!(await getSetting(db, 'progress_checkin_notification_id')));
+      setShieldLlm((await getSetting(db, 'shield_use_local_llm')) === 'true');
     })();
   }, [backgroundEnabled, localRefresh, refreshToken]);
 
@@ -157,6 +159,13 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
     } finally {
       setSelectingModel(false);
     }
+  };
+
+  const toggleShieldLlm = async () => {
+    const db = await getDatabase();
+    const next = !shieldLlm;
+    await setSetting(db, 'shield_use_local_llm', next ? 'true' : 'false');
+    setShieldLlm(next);
   };
 
   const chooseAiModel = async (m: ModelOption) => {
@@ -729,6 +738,21 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
                   label={clearingModel ? 'Removing...' : 'Remove local model download'}
                   onPress={() => void clearModel()}
                 />
+
+                {/* Opt-in: use the on-device model to detect names for the Privacy Shield */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, gap: 10 }}>
+                  <View style={styles.flex}>
+                    <Text style={styles.modelName}>Use on-device AI to protect names</Text>
+                    <Text style={styles.hint}>When on, the local model also finds people&apos;s names to mask from the cloud — including unfamiliar ones. Needs a prepared model and adds ~20-30s per note. Passwords and known/listed names are always protected either way.</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => void toggleShieldLlm()}
+                    style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10, backgroundColor: shieldLlm ? LUCY_COLORS.primarySoft : LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: shieldLlm ? LUCY_COLORS.primary : LUCY_COLORS.border }}
+                  >
+                    <Text style={{ color: shieldLlm ? LUCY_COLORS.primary : LUCY_COLORS.textMuted, fontWeight: '800', fontSize: 12 }}>{shieldLlm ? 'On' : 'Off'}</Text>
+                  </TouchableOpacity>
+                </View>
+
                 <Text style={styles.activity}>Local quality check</Text>
                 <Text style={styles.hint}>Test common English memory and privacy cases locally. Test phrases are never remembered.</Text>
                 {benchmarkProgress ? <Text style={styles.activity}>{benchmarkProgress}</Text> : null}

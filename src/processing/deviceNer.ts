@@ -10,6 +10,21 @@
  * "contacts" so they get tokenized before any remote call.
  */
 import { promptDevice, getDeviceModelState } from '../ai/device';
+import { getDatabase } from '../db';
+import { getSetting } from '../db/settings';
+
+/** Settings key for the opt-in "use on-device AI to detect & protect sensitive info" toggle. */
+export const SHIELD_LLM_SETTING = 'shield_use_local_llm';
+
+/** Whether the user has opted into LLM-based name detection for the shield. */
+export async function isLocalShieldNerEnabled(): Promise<boolean> {
+  try {
+    const db = await getDatabase();
+    return (await getSetting(db, SHIELD_LLM_SETTING)) === 'true';
+  } catch {
+    return false;
+  }
+}
 
 const NER_PROMPT =
   'You extract people\'s names from text. List EVERY person name that appears (first names, full names, nicknames). ' +
@@ -20,9 +35,11 @@ const NER_PROMPT =
 /** Returns person names detected by the on-device LLM, or [] if unavailable. Never throws. */
 export async function detectNamesOnDevice(text: string): Promise<string[]> {
   if (!text || !text.trim()) return [];
-  // Only use the LLM if the user has already prepared a local model — never block a
-  // shield call on a multi-GB download.
+  // Only use the LLM if a local model is prepared (never block on a download) AND the
+  // user has opted in via Settings. The cheap sync status check is first so the common
+  // "off" case returns instantly with no DB read.
   if (getDeviceModelState().status !== 'ready') return [];
+  if (!(await isLocalShieldNerEnabled())) return [];
   try {
     const raw = await promptDevice(`${NER_PROMPT}${text.slice(0, 4000)}\n/no_think`);
     const start = raw.indexOf('[');

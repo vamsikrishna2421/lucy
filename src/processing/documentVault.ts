@@ -10,7 +10,6 @@
  */
 import { readAsStringAsync, writeAsStringAsync, EncodingType, deleteAsync, makeDirectoryAsync, getInfoAsync, documentDirectory } from 'expo-file-system/legacy';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { enqueueTranscript } from './extract';
 import { resolveRemoteAvailability } from '../ai/provider';
 import { isAiCallCapReached, recordAiCall } from '../ai/rateLimit';
 import { getDatabase } from '../db';
@@ -143,9 +142,9 @@ export async function saveImageToVault(
     meta.title, meta.description, meta.bucket, meta.keywords, path, thumbDataUrl ?? null, gallerySaved,
   );
 
-  // Also enqueue a capture so the document is part of the searchable memory/timeline.
-  try { await enqueueTranscript(`[Document · ${meta.bucket}] ${meta.title}${meta.description ? ` — ${meta.description}` : ''}`, 'text', false); }
-  catch { /* non-fatal */ }
+  // NOTE: vault documents are NOT enqueued as captures — the vault item IS the memory.
+  // (Enqueuing ran each doc through todo/idea extraction, flooding the task list with
+  //  non-tasks. The Documents Manager + memoryExport.vault keep docs searchable instead.)
 
   // Remove the incoming temp file (the persisted copy lives in VAULT_DIR).
   deleteAsync(tempUri, { idempotent: true }).catch(() => {});

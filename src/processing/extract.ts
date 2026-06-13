@@ -269,10 +269,15 @@ async function persistExtraction(
     await insertExtractionSnapshot(db, capture.id, extraction);
     await updateCaptureResult(db, capture.id, extraction.privacy_level, extraction.title, formatStructuredMemory(extraction));
     // Record which passwords/names the Privacy Shield masked from the cloud, so the
-    // UI can highlight them. Deterministic re-detection over the raw capture text.
+    // UI can highlight them. Deterministic detection over the raw text, augmented with
+    // the people the model extracted (covers names the on-device LLM caught for shielding).
     try {
+      const raw = capture.raw_transcript ?? '';
       const contactRows = await db.getAllAsync<{ name: string }>('SELECT name FROM people');
-      const protectedValues = findProtectedValues(capture.raw_transcript ?? '', contactRows.map((r) => r.name));
+      const peopleInText = (extraction.people ?? []).filter(
+        (p) => p && raw.toLowerCase().includes(p.split(/\s+/)[0].toLowerCase()),
+      );
+      const protectedValues = findProtectedValues(raw, [...contactRows.map((r) => r.name), ...peopleInText]);
       await updateCaptureProtectedValues(db, capture.id, protectedValues);
     } catch { /* highlighting is non-critical */ }
     await markCaptureProcessed(db, capture.id);

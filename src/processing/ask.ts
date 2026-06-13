@@ -319,7 +319,9 @@ async function answerWithLLM(question: string, history: AskTurn[] = []): Promise
       // can answer "what is my wifi password" with the real value WITHOUT it ever leaving
       // the device — the model only ever sees/says [SECRET_1].
       const contacts = (await db.getAllAsync<{ name: string }>('SELECT name FROM people')).map((r) => r.name);
-      const { redacted, map } = shieldText(input, contacts);
+      const { detectNamesOnDevice } = await import('./deviceNer');
+      const llmNames = await detectNamesOnDevice(input);
+      const { redacted, map } = shieldText(input, [...contacts, ...llmNames]);
       const shieldedSystem = systemPrompt + (map.length ? PLACEHOLDER_NOTE : '');
       llmResponse = restoreText(await promptAI(shieldedSystem, redacted, openAIKey), map);
     } else {

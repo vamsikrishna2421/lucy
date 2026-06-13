@@ -64,9 +64,13 @@ export const AIProvider = {
     const db = await getDatabase();
     const profile = await getUserProfile(db);
     // Privacy Shield: replace passwords + people names with placeholder tokens on-device
-    // before the remote call, then restore the real values in the result.
+    // before the remote call, then restore the real values in the result. The on-device
+    // LLM (Phi-4) finds names the deterministic detector would miss; they're passed in as
+    // extra "contacts" so they get tokenized too.
     const contacts = await loadContactNames(db);
-    const { redacted, map } = shieldText(transcript, contacts);
+    const { detectNamesOnDevice } = await import('../processing/deviceNer');
+    const llmNames = await detectNamesOnDevice(transcript);
+    const { redacted, map } = shieldText(transcript, [...contacts, ...llmNames]);
     const userContextPrefix = buildUserContextPrefix(profile) + (map.length ? PLACEHOLDER_NOTE : '');
     const model = getPreferredModel(config.openAIModel);
     const t0 = Date.now();
@@ -129,7 +133,9 @@ async function shieldInput(input: string): Promise<{ redacted: string; map: Retu
   try {
     const db = await getDatabase();
     const contacts = await loadContactNames(db);
-    return shieldText(input, contacts);
+    const { detectNamesOnDevice } = await import('../processing/deviceNer');
+    const llmNames = await detectNamesOnDevice(input);
+    return shieldText(input, [...contacts, ...llmNames]);
   } catch {
     return { redacted: input, map: [] };
   }

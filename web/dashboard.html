@@ -99,9 +99,9 @@ nav{display:flex;flex-direction:column;gap:3px;flex:1;overflow-y:auto}
 .wave{color:var(--primary);font-size:20px}
 .subtle-line{color:var(--subtle);font-size:14.5px;margin-bottom:18px}
 .maincol{position:relative}
-.orb-float{position:absolute;top:-6px;right:6px;display:flex;flex-direction:column;align-items:center;
-  transform:scale(.62);transform-origin:top right;z-index:1;pointer-events:none}
-@media(max-width:760px){.orb-float{display:none}}
+.side-orb{display:flex;justify-content:center;align-items:flex-end;padding:12px 0 16px;pointer-events:none}
+.side-orb .orb-scale{transform:scale(.72);transform-origin:bottom center}
+.side-orb .cloud{top:-20px;left:50%;transform:translateX(-50%);font-size:13px;padding:3px 12px}
 .cloud{position:absolute;top:-30px;font-style:italic;font-size:16px;color:var(--muted);
   background:var(--card);border:1px solid var(--border);padding:5px 16px;border-radius:30px;box-shadow:var(--shadow-sm)}
 .cloud::after{content:"";position:absolute;bottom:-6px;left:30px;width:9px;height:9px;border-radius:50%;background:var(--card);border:1px solid var(--border)}
@@ -238,6 +238,7 @@ nav{display:flex;flex-direction:column;gap:3px;flex:1;overflow-y:auto}
   <aside id="side">
     <div class="brand"><span class="logo">LUC<span style="position:relative">Y<span class="spark" style="position:absolute;top:-6px;right:-10px">✦</span></span></span></div>
     <nav id="nav"></nav>
+    <div class="side-orb"><div class="orb-scale"><div class="cloud">Lucy</div><div class="orb"></div></div></div>
     <div class="profile-chip"><div class="avatar" id="pavatar">V</div><div><div class="nm" id="pname">You</div><div class="pl">Pro Plan</div></div><span class="cv">⌄</span></div>
   </aside>
   <div class="scrim" id="scrim" onclick="toggleSide(false)"></div>
@@ -293,7 +294,6 @@ function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offset
 function vHome(){const d=DATA;const name=(d.profile&&d.profile.name)||'';const tasks=d.todos.filter(pending);
   const now=new Date();const dateStr=now.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
   let h=`<div class="layout"><div class="maincol">
-    <div class="orb-float"><div class="cloud">Lucy</div><div class="orb"></div></div>
     <div class="date">${dateStr}</div>
     <div class="greet"><h1>${greet()}, ${esc(name)||'there'}</h1><span class="wave">◖◗</span></div>
     <div class="subtle-line">What matters now, pulled from your memory.</div>

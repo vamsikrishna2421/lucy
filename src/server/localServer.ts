@@ -38,6 +38,19 @@ export function subscribeServer(fn: (s: ServerState) => void): () => void {
 // ─── HTTP helpers ──────────────────────────────────────────────────────────────
 interface ParsedRequest { method: string; path: string; query: Record<string, string>; headers: Record<string, string>; body: string; }
 
+/** UTF-8 byte length of a string (HTTP Content-Length must be bytes, not JS chars). */
+function utf8Len(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff) { n += 4; i++; } // surrogate pair (emoji)
+    else n += 3;
+  }
+  return n;
+}
+
 function parseRequest(raw: string): ParsedRequest | null {
   const headerEnd = raw.indexOf('\r\n\r\n');
   if (headerEnd === -1) return null;
@@ -52,18 +65,18 @@ function parseRequest(raw: string): ParsedRequest | null {
   }
   const contentLength = parseInt(headers['content-length'] ?? '0', 10) || 0;
   const body = raw.slice(headerEnd + 4);
-  if (body.length < contentLength) return null; // wait for more
+  if (utf8Len(body) < contentLength) return null; // wait for the full body (byte-accurate)
   const [path, qs] = fullPath.split('?');
   const query: Record<string, string> = {};
   if (qs) for (const pair of qs.split('&')) { const [k, v] = pair.split('='); query[decodeURIComponent(k)] = decodeURIComponent(v ?? ''); }
-  return { method, path, query, headers, body: body.slice(0, contentLength) };
+  return { method, path, query, headers, body };
 }
 
 function httpResponse(status: number, contentType: string, body: string): string {
   const statusText = status === 200 ? 'OK' : status === 401 ? 'Unauthorized' : status === 404 ? 'Not Found' : status === 204 ? 'No Content' : 'Error';
   return `HTTP/1.1 ${status} ${statusText}\r\n`
     + `Content-Type: ${contentType}\r\n`
-    + `Content-Length: ${body.length}\r\n`
+    + `Content-Length: ${utf8Len(body)}\r\n`
     + 'Access-Control-Allow-Origin: *\r\n'
     + 'Access-Control-Allow-Headers: Content-Type, X-LUCY-PIN\r\n'
     + 'Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS\r\n'
@@ -133,18 +146,21 @@ export async function startServer(): Promise<ServerState> {
     let ip: string | null = null;
     try { ip = await Network.getIpAddressAsync(); } catch { /* ignore */ }
 
-    server = TcpSocket.createServer((socket: { on: (e: string, cb: (d?: unknown) => void) => void; write: (s: string) => void; destroy: () => void }) => {
+    server = TcpSocket.createServer((socket: { on: (e: string, cb: (d?: unknown) => void) => void; write: (s: string) => void; end: (s?: string) => void; destroy: () => void }) => {
       let buffer = '';
+      const send = (res: string) => {
+        // write() then end() flushes the full response before the FIN, so large
+        // payloads (the whole memory export) aren't truncated.
+        try { socket.write(res); socket.end(); } catch { try { socket.destroy(); } catch { /* ignore */ } }
+      };
       socket.on('data', (data?: unknown) => {
         buffer += typeof data === 'string' ? data : String(data);
         const req = parseRequest(buffer);
         if (!req) return; // wait for the rest
-        const current = buffer; buffer = '';
+        buffer = '';
         void route(req)
-          .then((res) => { try { socket.write(res); } catch { /* ignore */ } })
-          .catch(() => { try { socket.write(json(500, { error: 'Server error' })); } catch { /* ignore */ } })
-          .finally(() => { setTimeout(() => { try { socket.destroy(); } catch { /* ignore */ } }, 50); });
-        void current;
+          .then((res) => send(res))
+          .catch(() => send(json(500, { error: 'Server error' })));
       });
       socket.on('error', () => { try { socket.destroy(); } catch { /* ignore */ } });
     });

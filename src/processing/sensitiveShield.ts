@@ -29,9 +29,13 @@ const CARD_PATTERN = /\b(?:\d[ -]*?){13,19}\b/g;
 
 // Relational cues that flag the adjacent capitalized word as a person, even if it
 // isn't a saved contact or in the gazetteer.
-const CUE_BEFORE = /\b(?:met|meeting|with|saw|called|texted|messaged|emailed|told|asked|thanked|spoke to|talked to|talk to|met with)\s+([A-Z][a-zA-Z]+)\b/g;
-const CUE_AFTER = /\b([A-Z][a-zA-Z]+)\s+(?:said|told|asked|called|texted|messaged|emailed|mentioned|wants|needs|came over|stopped by|gave me|sent me)\b/g;
-const CAPITAL_WORD = /\b([A-Z][a-zA-Z]+)\b/g;
+// Cues are matched case-insensitively (they can open a sentence, e.g. "Meet ..."),
+// but the captured name must still be Capitalized (checked in code).
+const CUE_BEFORE = /\b(?:met with|meet with|met|meet|meeting|with|saw|seeing|call|called|calling|text|texted|message|messaged|email|emailed|told|tell|ask|asked|thank|thanked|spoke to|speak to|talked to|talk to)\s+([A-Za-z]+)\b/gi;
+const CUE_AFTER = /\b([A-Za-z]+)\s+(?:said|told|asked|called|texted|messaged|emailed|mentioned|wants|needs|came over|stopped by|gave me|sent me)\b/gi;
+// A run of 1-3 consecutive capitalized words — so a full name ("Jan Pyda") is caught
+// as a unit once its first word qualifies as a person.
+const CAPITAL_RUN = /\b[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2}\b/g;
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -77,18 +81,40 @@ export function findProtectedValues(text: string, contacts: string[] = []): Prot
   for (const re of [CUE_BEFORE, CUE_AFTER]) {
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = re.exec(text)) !== null) if (m[1]) cueNames.add(m[1].toLowerCase());
+    while ((m = re.exec(text)) !== null) {
+      const name = m[1];
+      // The cue word itself is matched case-insensitively, but only treat the captured
+      // word as a name if it is Capitalized and not a common non-name word.
+      if (name && /^[A-Z]/.test(name) && !CAPITALIZED_STOPWORDS.has(name.toLowerCase())) {
+        cueNames.add(name.toLowerCase());
+      }
+    }
   }
 
-  CAPITAL_WORD.lastIndex = 0;
-  let wm: RegExpExecArray | null;
-  while ((wm = CAPITAL_WORD.exec(text)) !== null) {
-    const word = wm[1];
-    const lower = word.toLowerCase();
-    if (CAPITALIZED_STOPWORDS.has(lower)) continue;
-    if (contactSet.has(lower) || COMMON_FIRST_NAMES.has(lower) || cueNames.has(lower)) {
-      record(word, 'person');
+  const isName = (w: string): boolean => {
+    const lower = w.toLowerCase();
+    return contactSet.has(lower) || COMMON_FIRST_NAMES.has(lower) || cueNames.has(lower);
+  };
+
+  CAPITAL_RUN.lastIndex = 0;
+  let rm: RegExpExecArray | null;
+  while ((rm = CAPITAL_RUN.exec(text)) !== null) {
+    const words = rm[0].split(/\s+/);
+    // Find the first word that qualifies as a person (skipping non-name capitalized
+    // words like a sentence-opening "Meet"). Then extend through following capitalized
+    // words (the surname) until a stopword — so "Meet Jan Pyda" → "Jan Pyda".
+    let start = -1;
+    for (let i = 0; i < words.length; i++) {
+      if (CAPITALIZED_STOPWORDS.has(words[i].toLowerCase())) continue;
+      if (isName(words[i])) { start = i; break; }
     }
+    if (start === -1) continue;
+    const nameWords: string[] = [];
+    for (let i = start; i < words.length; i++) {
+      if (CAPITALIZED_STOPWORDS.has(words[i].toLowerCase())) break;
+      nameWords.push(words[i]);
+    }
+    if (nameWords.length) record(nameWords.join(' '), 'person');
   }
 
   return [...byValue.values()];

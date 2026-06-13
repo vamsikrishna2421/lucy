@@ -40,6 +40,18 @@ import { findProtectedValues, shieldText, restoreText } from '../src/processing/
   const found = findProtectedValues('I met Priya near the office.', []);
   assert.ok(found.some((f) => f.kind === 'person' && f.value === 'Priya'), 'cue + gazetteer catches Priya');
 }
+{
+  // Full name (first + surname) caught as a unit, even after a sentence-opening cue word.
+  const found = findProtectedValues('Meet Jan Pyda tomorrow.', []);
+  assert.ok(found.some((f) => f.kind === 'person' && f.value === 'Jan Pyda'), 'full name "Jan Pyda" is protected');
+  assert.ok(!found.some((f) => f.value === 'Meet' || f.value === 'Tomorrow'), 'cue/stopwords are not names');
+}
+{
+  // Surname not absorbed past a stopword.
+  const found = findProtectedValues('Call Sam Monday.', ['Sam']);
+  assert.ok(found.some((f) => f.value === 'Sam'), 'Sam protected');
+  assert.ok(!found.some((f) => f.value.includes('Monday')), 'weekday not absorbed into the name');
+}
 
 // --- No over-redaction of capitalized non-names ---
 {

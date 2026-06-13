@@ -24,6 +24,7 @@ export interface VaultItem {
   description: string | null;
   bucket: string;
   keywords: string | null;
+  hash: string | null;
   file_path: string | null;
   thumb: string | null;
   mime: string;
@@ -105,17 +106,33 @@ async function classify(base64: string, hint: string, buckets: string[]): Promis
  * app sandbox, optionally copies to Photos, stores a thumbnail + row, and enqueues a
  * capture so it shows in the timeline/memory too. Deletes only the incoming temp file.
  */
+export interface VaultSaveResult {
+  duplicate?: boolean;
+  existing?: { id: number; title: string | null; bucket: string } | null;
+  item?: VaultItem | null;
+}
+
 export async function saveImageToVault(
   tempUri: string,
   originalName: string | null,
   thumbDataUrl: string | null,
   saveToGallery: boolean,
-): Promise<VaultItem | null> {
+  hash?: string | null,
+): Promise<VaultSaveResult> {
+  const db0 = await getDatabase();
+
+  // Duplicate check FIRST (by content hash) — skip before spending an AI classify call.
+  if (hash) {
+    const existing = await db0.getFirstAsync<{ id: number; title: string | null; bucket: string }>(
+      'SELECT id, title, bucket FROM vault_items WHERE hash = ?', hash,
+    );
+    if (existing) { deleteAsync(tempUri, { idempotent: true }).catch(() => {}); return { duplicate: true, existing }; }
+  }
+
   let base64: string;
   try { base64 = await readAsStringAsync(tempUri, { encoding: EncodingType.Base64 }); }
-  catch { return null; }
+  catch { return { item: null }; }
 
-  const db0 = await getDatabase();
   const meta = await classify(base64, originalName ?? 'document', await existingBuckets(db0))
     ?? { title: originalName || 'Document', bucket: 'Documents', description: 'Saved document (enable Remote Intelligence for auto-description).', keywords: '' };
 
@@ -123,7 +140,7 @@ export async function saveImageToVault(
   await ensureVaultDir();
   const path = `${VAULT_DIR}doc-${Date.now()}.jpg`;
   try { await writeAsStringAsync(path, base64, { encoding: EncodingType.Base64 }); }
-  catch { return null; }
+  catch { return { item: null }; }
 
   // Optionally copy into the device photo gallery (best-effort; needs permission once).
   let gallerySaved = 0;
@@ -137,19 +154,16 @@ export async function saveImageToVault(
 
   const db = await getDatabase();
   const res = await db.runAsync(
-    `INSERT INTO vault_items (title, description, bucket, keywords, file_path, thumb, mime, gallery_saved, source)
-     VALUES (?, ?, ?, ?, ?, ?, 'image/jpeg', ?, 'upload')`,
-    meta.title, meta.description, meta.bucket, meta.keywords, path, thumbDataUrl ?? null, gallerySaved,
+    `INSERT INTO vault_items (title, description, bucket, keywords, hash, file_path, thumb, mime, gallery_saved, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'image/jpeg', ?, 'upload')`,
+    meta.title, meta.description, meta.bucket, meta.keywords, hash ?? null, path, thumbDataUrl ?? null, gallerySaved,
   );
 
   // NOTE: vault documents are NOT enqueued as captures — the vault item IS the memory.
-  // (Enqueuing ran each doc through todo/idea extraction, flooding the task list with
-  //  non-tasks. The Documents Manager + memoryExport.vault keep docs searchable instead.)
 
-  // Remove the incoming temp file (the persisted copy lives in VAULT_DIR).
   deleteAsync(tempUri, { idempotent: true }).catch(() => {});
-
-  return db.getFirstAsync<VaultItem>('SELECT * FROM vault_items WHERE id = ?', res.lastInsertRowId);
+  const item = await db.getFirstAsync<VaultItem>('SELECT * FROM vault_items WHERE id = ?', res.lastInsertRowId);
+  return { item };
 }
 
 export async function listVaultItems(db: SQLiteDatabase): Promise<VaultItem[]> {

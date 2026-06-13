@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 19 (search precision) ─────────────────────── */
+/* ─── LUCY web · premium · dashboard rev 20 (dup detection) ─────────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -504,28 +504,37 @@ let _pdfjs=null;
 async function loadPdfJs(){if(_pdfjs)return _pdfjs;await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';_pdfjs=window.pdfjsLib;return _pdfjs;}
 /* Render a PDF's first page to a JPEG data URL — so it flows through the image vision pipeline. */
 async function pdfFirstPage(file,max,q){const lib=await loadPdfJs();const buf=await file.arrayBuffer();const pdf=await lib.getDocument({data:buf}).promise;const page=await pdf.getPage(1);let vp=page.getViewport({scale:1});const scale=Math.min(max/vp.width,max/vp.height)||1;vp=page.getViewport({scale:Math.max(scale,0.3)});const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);await page.render({canvasContext:ctx,viewport:vp}).promise;return c.toDataURL('image/jpeg',q);}
-/* Process one file → returns {ok, title?, bucket?, error?}. */
+/* Content hash of the ORIGINAL file bytes (crypto.subtle is unavailable over http LAN,
+   so a JS hash: length + two FNV-1a passes — collision-safe at personal scale). */
+async function fileHash(file){const b=new Uint8Array(await file.arrayBuffer());let h1=0x811c9dc5,h2=0x52dce729;
+  for(let i=0;i<b.length;i++){h1^=b[i];h1=Math.imul(h1,0x01000193)>>>0;h2=Math.imul(h2^b[i],0x5bd1e995)>>>0;}
+  return b.length.toString(36)+'-'+h1.toString(36)+h2.toString(36);}
+/* Process one file → {ok, duplicate?, title?, bucket?, error?}. */
 async function uploadOne(file){const isPdf=file.type==='application/pdf'||/\.pdf$/i.test(file.name);
   if(!/^image\//.test(file.type)&&!isPdf)return {ok:false,error:'not an image/PDF'};
-  let full,thumb;
+  let full,thumb,hash;
   try{
+    hash=await fileHash(file);
     if(isPdf){full=await pdfFirstPage(file,1400,0.78);thumb=await downscaleSrc(full,260,0.6);}
     else{full=await downscale(file,1280,0.72);thumb=await downscale(file,260,0.6);}
   }catch(e){return {ok:false,error:'unreadable'};}
-  try{const r=await api('/api/upload',{method:'POST',body:JSON.stringify({image:full,thumb,name:file.name})});return r&&r.ok?{ok:true,title:r.title,bucket:r.bucket}:{ok:false,error:(r&&r.error)||'needs update'};}
+  try{const r=await api('/api/upload',{method:'POST',body:JSON.stringify({image:full,thumb,name:file.name,hash})});
+    if(r&&r.duplicate)return {ok:true,duplicate:true,title:(r.existing&&r.existing.title)||file.name};
+    return r&&r.ok?{ok:true,title:r.title,bucket:r.bucket}:{ok:false,error:(r&&r.error)||'needs update'};}
   catch(e){return {ok:false,error:'unreachable'};}}
 /* Upload one or many files sequentially, with progress. */
 async function handleFiles(fileList){const files=Array.from(fileList||[]);if(!files.length)return;
   if(ROUTE!=='library')go('library');
-  let ok=0,fail=0;
+  let ok=0,dup=0,fail=0;
   for(let i=0;i<files.length;i++){
     toast(files.length>1?`Filing ${i+1} of ${files.length}…`:'LUCY is filing it…');
     const r=await uploadOne(files[i]);
-    if(r.ok){ok++;if(files.length===1)toast('Filed ✓ '+(r.bucket?('→ '+r.bucket):'')+(r.title?(' · '+r.title.slice(0,30)):''));}
+    if(r.duplicate){dup++;if(files.length===1)toast('Already in your vault'+(r.title?(' · '+r.title.slice(0,34)):'')+' — skipped');}
+    else if(r.ok){ok++;if(files.length===1)toast('Filed ✓ '+(r.bucket?('→ '+r.bucket):'')+(r.title?(' · '+r.title.slice(0,30)):''));}
     else fail++;
     if(ROUTE==='library')await loadVault();
   }
-  if(files.length>1)toast(`Filed ${ok} document${ok===1?'':'s'}${fail?` · ${fail} failed`:''} ✓`);
+  if(files.length>1)toast(`Filed ${ok}${dup?` · ${dup} duplicate${dup===1?'':'s'} skipped`:''}${fail?` · ${fail} failed`:''} ✓`);
   setTimeout(()=>load(true),1500);}
 async function handleFile(file){return handleFiles(file?[file]:[]);}
 /* ─── Library / Document Vault ─── */

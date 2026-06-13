@@ -231,13 +231,16 @@ async function route(req: ParsedRequest): Promise<string> {
       if (!b64) return json(400, { error: 'No image' });
       const name = String(payload.name ?? 'upload.jpg');
       const thumb = typeof payload.thumb === 'string' ? payload.thumb : null;
+      const hash = typeof payload.hash === 'string' ? payload.hash : null;
       const saveToGallery = payload.gallery !== false; // default: also save to Photos
       try {
         const fs = await import('expo-file-system/legacy');
         const path = `${fs.cacheDirectory}lucy-upload-${Date.now()}.jpg`;
         await fs.writeAsStringAsync(path, b64, { encoding: fs.EncodingType.Base64 });
         const { saveImageToVault } = await import('../processing/documentVault');
-        const item = await saveImageToVault(path, name, thumb, saveToGallery);
+        const r = await saveImageToVault(path, name, thumb, saveToGallery, hash);
+        if (r.duplicate) return json(200, { ok: true, duplicate: true, existing: r.existing });
+        const item = r.item;
         return json(200, { ok: !!item, id: item?.id, title: item?.title, bucket: item?.bucket, description: item?.description });
       } catch (e) {
         return json(500, { error: e instanceof Error ? e.message : 'Upload failed' });

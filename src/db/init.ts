@@ -290,6 +290,7 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       description TEXT,
       bucket TEXT DEFAULT 'Other',
       keywords TEXT,
+      hash TEXT,
       file_path TEXT,
       thumb TEXT,
       mime TEXT DEFAULT 'image/jpeg',
@@ -631,7 +632,9 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
   }
 
   const vaultCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(vault_items)');
-  if (vaultCols.length > 0 && !new Set(vaultCols.map((c) => c.name)).has('keywords')) {
-    await db.execAsync('ALTER TABLE vault_items ADD COLUMN keywords TEXT;');
+  if (vaultCols.length > 0) {
+    const vc = new Set(vaultCols.map((c) => c.name));
+    if (!vc.has('keywords')) await db.execAsync('ALTER TABLE vault_items ADD COLUMN keywords TEXT;');
+    if (!vc.has('hash')) await db.execAsync('ALTER TABLE vault_items ADD COLUMN hash TEXT;');
   }
 }

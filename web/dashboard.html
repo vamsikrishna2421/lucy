@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 7 (orb moods) ─────────────────────── */
+/* ─── LUCY web · premium · dashboard rev 8 (vault) ─────────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -242,6 +242,42 @@ nav{display:flex;flex-direction:column;gap:1px}
   #scrollarea{padding:8px 16px 60px}#topbar{padding:14px 16px 4px}.greet h1{font-size:25px}
 }
 .scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25}.scrim.on{display:block}
+/* ─── Library / vault ─── */
+.vchips{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 18px}
+.vchip{background:var(--card);border:1px solid var(--border);color:var(--muted);border-radius:30px;padding:7px 14px;font-size:13px;font-weight:550;transition:.15s}
+.vchip:hover{border-color:var(--primary);color:var(--text)}
+.vchip.on{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-deep)}
+[data-theme="dark"] .vchip.on{color:var(--primary-glow)}
+.vchip .vn{opacity:.6;font-size:11px}
+.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+.vcard{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;cursor:pointer;box-shadow:var(--shadow-sm);transition:.18s}
+.vcard:hover{transform:translateY(-3px);border-color:var(--primary);box-shadow:var(--shadow)}
+.vthumb{position:relative;aspect-ratio:4/3;background:var(--raised);display:grid;place-items:center;overflow:hidden}
+.vthumb img{width:100%;height:100%;object-fit:cover}
+.vthumb .vph{font-size:34px;opacity:.4}
+.vbucket{position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.55);color:#fff;font-size:10.5px;font-weight:650;padding:2px 9px;border-radius:20px;backdrop-filter:blur(4px)}
+.vmeta{padding:11px 13px}
+.vtitle{font-weight:650;font-size:13.5px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.vdate{color:var(--faint);font-size:11.5px;margin-top:4px}
+.modal{display:none;position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:30px}
+.modal.on{display:flex}
+.modal-card{position:relative;background:var(--bg2);border:1px solid var(--border);border-radius:20px;max-width:920px;width:100%;max-height:88vh;overflow:hidden;box-shadow:var(--shadow)}
+.modal-x{position:absolute;top:12px;right:12px;z-index:2;width:34px;height:34px;border-radius:50%;background:var(--card);border:1px solid var(--border);color:var(--muted);font-size:15px}
+.modal-x:hover{color:var(--text)}
+.modal-body{display:grid;grid-template-columns:1.4fr 1fr;max-height:88vh}
+@media(max-width:680px){.modal-body{grid-template-columns:1fr;overflow-y:auto}}
+.dl-img{background:var(--sheet,#0c0a07);display:grid;place-items:center;min-height:260px;max-height:88vh;overflow:auto}
+.dl-img img{max-width:100%;max-height:88vh;object-fit:contain;display:block}
+.dl-side{padding:24px;display:flex;flex-direction:column;border-left:1px solid var(--border)}
+.dl-bucket{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--primary-deep);margin-bottom:6px}
+[data-theme="dark"] .dl-bucket{color:var(--primary-glow)}
+.dl-title{margin:0 0 10px;font-size:19px;font-weight:740;line-height:1.25}
+.dl-desc{color:var(--muted);font-size:13.5px;line-height:1.5;white-space:pre-wrap;overflow-y:auto;max-height:36vh}
+.dl-date{color:var(--faint);font-size:12px;margin-top:10px}
+.dl-row{display:flex;gap:8px;margin-top:16px}
+.dl-select{flex:1;background:var(--raised);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:8px 10px;font-size:13px;font-family:inherit}
+.dl-del{color:#FB7185;margin-top:10px}
+.dl-del:hover{border-color:#FB7185}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);z-index:50;background:var(--elevated);border:1px solid var(--border);color:var(--text);padding:11px 20px;border-radius:30px;font-size:13.5px;opacity:0;transition:.25s;box-shadow:var(--shadow);pointer-events:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
@@ -276,6 +312,7 @@ nav{display:flex;flex-direction:column;gap:1px}
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="modal" id="modal" onclick="if(event.target===this)closeModal()"><div class="modal-card"><button class="modal-x" onclick="closeModal()">✕</button><div class="modal-body" id="modalBody"></div></div></div>
 <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFile(this.files&&this.files[0]);this.value='';"/>
 <script>
 let DATA=null, ROUTE='home', CHAT=[], busy=false;
@@ -296,7 +333,7 @@ function toggleTheme(){applyTheme(document.documentElement.getAttribute('data-th
 applyTheme((()=>{try{return localStorage.getItem('lucy-theme')||'dark';}catch(e){return'dark';}})());
 
 const NAV=[['home','◉','Home'],['timeline','≣','Timeline'],['ask','✦','Ask Lucy'],['tasks','◇','Tasks'],
-  ['brain','❋','Brain'],['people','◐','People'],['health','♥','Health'],['money','▦','Money'],['about','☻','About You']];
+  ['library','🗂','Library'],['brain','❋','Brain'],['people','◐','People'],['health','♥','Health'],['money','▦','Money'],['about','☻','About You']];
 function renderNav(){$('nav').innerHTML=NAV.map(([k,ic,label])=>{
   let badge='';if(DATA){if(k==='tasks')badge=DATA.todos.filter(pending).length||'';if(k==='timeline')badge=(DATA.captures||[]).length||'';if(k==='people')badge=(DATA.people||[]).length||'';}
   return `<div class="nav-i ${ROUTE===k?'on':''}" onclick="go('${k}')"><span class="ic">${ic}</span>${label}${badge?`<span class="badge">${badge}</span>`:''}</div>`;}).join('');}
@@ -309,7 +346,8 @@ async function load(silent){
 }
 function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offsetWidth;v.classList.add('fade');
   if(!DATA){v.innerHTML='';return;}
-  v.innerHTML=({home:vHome,timeline:vTimeline,ask:vAsk,tasks:vTasks,brain:vBrain,people:vPeople,health:vHealth,money:vMoney,about:vAbout}[ROUTE]||vHome)();
+  v.innerHTML=({home:vHome,timeline:vTimeline,ask:vAsk,tasks:vTasks,library:vLibrary,brain:vBrain,people:vPeople,health:vHealth,money:vMoney,about:vAbout}[ROUTE]||vHome)();
+  if(ROUTE==='library')loadVault();
   if(ROUTE==='ask')afterAsk();}
 
 /* ─── HOME (the mockup) ─── */
@@ -440,12 +478,44 @@ function pickFile(){$('fileInput').click();}
 /* Downscale to keep the base64 payload small over the LAN socket (max 1280px, JPEG q.72). */
 function downscale(file,max=1280,q=0.72){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{let w=img.width,h=img.height;if(w>max||h>max){const s=max/Math.max(w,h);w=Math.round(w*s);h=Math.round(h*s);}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);res(c.toDataURL('image/jpeg',q));URL.revokeObjectURL(img.src);};img.onerror=rej;img.src=URL.createObjectURL(file);});}
 async function handleFile(file){if(!file)return;if(!/^image\//.test(file.type)){toast('Pick an image file');return;}
-  toast('Reading image…');let dataUrl;try{dataUrl=await downscale(file);}catch(e){toast('Could not read that image');return;}
-  toast('LUCY is reading it…');
-  try{const r=await api('/api/upload',{method:'POST',body:JSON.stringify({image:dataUrl,name:file.name})});
-    if(r&&r.ok){toast('Saved ✓ '+(r.memory?('— '+r.memory.slice(0,38)):''));setTimeout(()=>load(),1800);}
+  toast('Reading image…');let full,thumb;try{full=await downscale(file,1280,0.72);thumb=await downscale(file,260,0.6);}catch(e){toast('Could not read that image');return;}
+  toast('LUCY is filing it…');
+  try{const r=await api('/api/upload',{method:'POST',body:JSON.stringify({image:full,thumb,name:file.name})});
+    if(r&&r.ok){toast('Filed ✓ '+(r.bucket?('→ '+r.bucket):'')+(r.title?(' · '+r.title.slice(0,30)):''));if(ROUTE==='library')loadVault();else go('library');setTimeout(()=>load(true),1800);}
     else toast(r&&r.error?('Upload: '+r.error):'Upload needs the new build');}
   catch(e){toast('Image upload needs the new build (ships via OTA)');}}
+/* ─── Library / Document Vault ─── */
+let VAULT=[],VBUCKET='All';
+const DEFAULT_BUCKETS=['ID & Cards','Certificates','Financial','Medical','Travel','Receipts','Notes','Other'];
+function vLibrary(){return `<div class="greet"><h1 style="font-size:24px">Library</h1><div class="grow"></div><button class="btn" onclick="pickFile()">＋ Upload</button></div>
+  <div class="subtle-line">Your documents — certificates, IDs, receipts — organized by LUCY, stored on your device.</div>
+  <div id="vaultChips" class="vchips"></div>
+  <div id="vaultGrid"><div class="empty"><div class="big">◌</div>Loading documents…</div></div>`;}
+async function loadVault(){try{const r=await api('/api/vault');VAULT=(r&&r.items)||[];}catch(e){VAULT=null;}if(ROUTE==='library')renderVault();}
+function renderVault(){const grid=$('vaultGrid'),chips=$('vaultChips');if(!grid)return;
+  if(VAULT===null){grid.innerHTML=empty('🗂','Vault ships via OTA','The document vault activates after the new build + update lands.');if(chips)chips.innerHTML='';return;}
+  if(!VAULT.length){grid.innerHTML=empty('🗂','Your vault is empty','Click ＋ Upload to add a certificate, ID card, or receipt.');if(chips)chips.innerHTML='';return;}
+  const buckets=['All',...Array.from(new Set(VAULT.map(v=>v.bucket||'Other')))];
+  if(chips)chips.innerHTML=buckets.map(b=>`<button class="vchip ${VBUCKET===b?'on':''}" onclick="VBUCKET=this.dataset.b;renderVault()" data-b="${esc(b)}">${esc(b)}${b!=='All'?` <span class="vn">${VAULT.filter(v=>(v.bucket||'Other')===b).length}</span>`:''}</button>`).join('');
+  const items=VAULT.filter(v=>VBUCKET==='All'||(v.bucket||'Other')===VBUCKET);
+  grid.innerHTML='<div class="vgrid">'+items.map(v=>`<div class="vcard" onclick="openDoc(${v.id})">
+    <div class="vthumb">${v.thumb?`<img src="${v.thumb}" alt=""/>`:'<div class="vph">🗂</div>'}<span class="vbucket">${esc(v.bucket||'Other')}</span></div>
+    <div class="vmeta"><div class="vtitle">${esc(v.title||'Document')}</div><div class="vdate">${fmt(v.created_at)}</div></div></div>`).join('')+'</div>';}
+async function openDoc(id){const v=VAULT.find(x=>x.id===id);if(!v)return;const m=$('modal');m.classList.add('on');
+  const opts=Array.from(new Set([...DEFAULT_BUCKETS,v.bucket||'Other']));
+  $('modalBody').innerHTML=`<div class="dl-img" id="dlImg"><div class="empty"><div class="big">◌</div>Loading image…</div></div>
+    <div class="dl-side"><div class="dl-bucket">${esc(v.bucket||'Other')}</div><h3 class="dl-title">${esc(v.title||'Document')}</h3>
+    <div class="dl-desc">${esc(v.description||'No description yet.')}</div>
+    <div class="dl-date">${fmt(v.created_at)}${v.gallery_saved?' · also in Photos':''}</div>
+    <div class="dl-row"><select id="dlBucket" class="dl-select">${opts.map(b=>`<option ${b===(v.bucket||'Other')?'selected':''}>${esc(b)}</option>`).join('')}</select><button class="btn sm" onclick="refile(${id})">Re-file</button></div>
+    <button class="btn ghost sm" onclick="addCustomBucket(${id})">＋ Custom bucket</button>
+    <div class="grow"></div><button class="btn ghost sm dl-del" onclick="deleteDoc(${id})">Delete document</button></div>`;
+  try{const r=await api('/api/vault/item/'+id);$('dlImg').innerHTML=(r&&r.dataUrl)?`<img src="${r.dataUrl}" alt=""/>`:empty('🗂','Image unavailable','');}
+  catch(e){$('dlImg').innerHTML=empty('🗂','Image ships via OTA','');}}
+function closeModal(){$('modal').classList.remove('on');}
+async function refile(id){const b=$('dlBucket').value;await api('/api/vault/refile',{method:'POST',body:JSON.stringify({id,bucket:b})});toast('Re-filed → '+b);closeModal();await loadVault();}
+async function addCustomBucket(id){const name=prompt('New bucket name (e.g. House papers):');if(!name||!name.trim())return;await api('/api/vault/refile',{method:'POST',body:JSON.stringify({id,bucket:name.trim()})});toast('Filed → '+name.trim());closeModal();await loadVault();}
+async function deleteDoc(id){await api('/api/vault/'+id,{method:'DELETE'});toast('Deleted');closeModal();await loadVault();}
 async function addTask(){const i=$('ntask');const v=i.value.trim();if(!v)return;i.value='';await api('/api/task',{method:'POST',body:JSON.stringify({action:'create',task:v})});toast('Task added ✓');await load();}
 async function task(id,action){await api('/api/task',{method:'POST',body:JSON.stringify({id,action})});toast(action==='complete'?'Done ✓':'Deleted');await load();}
 async function delCapture(id){await api('/api/capture/'+id,{method:'DELETE'});toast('Deleted');await load();}

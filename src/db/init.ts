@@ -283,6 +283,19 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       FOREIGN KEY (capture_id) REFERENCES captures(id)
     );
 
+    CREATE TABLE IF NOT EXISTS vault_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      title TEXT,
+      description TEXT,
+      bucket TEXT DEFAULT 'Other',
+      file_path TEXT,
+      thumb TEXT,
+      mime TEXT DEFAULT 'image/jpeg',
+      gallery_saved INTEGER DEFAULT 0,
+      source TEXT DEFAULT 'upload'
+    );
+
     CREATE TABLE IF NOT EXISTS music_captures (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

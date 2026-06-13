@@ -200,25 +200,51 @@ async function route(req: ParsedRequest): Promise<string> {
       await upsertLearnedFact(db, category as never, text, 'feedback');
       return json(200, { ok: true });
     }
-    // Upload an image (receipt / note / photo) from the laptop. The browser sends a
-    // downscaled JPEG as a base64 data URL; we write it to a temp file and run it through
-    // the same vision pipeline the app's "Snap to memory" uses (extracts a memory + enqueues
-    // a capture, then deletes the image). Base64-in-JSON keeps it text-safe over the socket.
+    // Upload an image into the Document Vault. The browser sends a downscaled JPEG (full)
+    // + a small thumbnail as base64 data URLs; we write the full image to a temp file and
+    // hand it to the vault (classifies into a bucket, persists to the app sandbox, optionally
+    // copies to Photos, enqueues a capture). Base64-in-JSON keeps it text-safe over the socket.
     if (req.method === 'POST' && req.path === '/api/upload') {
       const dataUrl = String(payload.image ?? '');
       const b64 = dataUrl.includes(',') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl;
       if (!b64) return json(400, { error: 'No image' });
       const name = String(payload.name ?? 'upload.jpg');
+      const thumb = typeof payload.thumb === 'string' ? payload.thumb : null;
+      const saveToGallery = payload.gallery !== false; // default: also save to Photos
       try {
         const fs = await import('expo-file-system/legacy');
         const path = `${fs.cacheDirectory}lucy-upload-${Date.now()}.jpg`;
         await fs.writeAsStringAsync(path, b64, { encoding: fs.EncodingType.Base64 });
-        const { processImageToMemory } = await import('../processing/lucyLens');
-        const result = await processImageToMemory(path, name); // reads, extracts, enqueues, deletes
-        return json(200, { ok: true, memory: result?.memoryText ?? null, category: result?.category ?? null });
+        const { saveImageToVault } = await import('../processing/documentVault');
+        const item = await saveImageToVault(path, name, thumb, saveToGallery);
+        return json(200, { ok: !!item, id: item?.id, title: item?.title, bucket: item?.bucket, description: item?.description });
       } catch (e) {
         return json(500, { error: e instanceof Error ? e.message : 'Upload failed' });
       }
+    }
+    if (req.method === 'GET' && req.path === '/api/vault') {
+      const { listVaultItems } = await import('../processing/documentVault');
+      const items = await listVaultItems(db);
+      // Return list metadata + thumbnails (small); never the full images here.
+      return json(200, { items: items.map((i) => ({ id: i.id, title: i.title, description: i.description, bucket: i.bucket, thumb: i.thumb, gallery_saved: i.gallery_saved, created_at: i.created_at })) });
+    }
+    if (req.method === 'GET' && req.path.startsWith('/api/vault/item/')) {
+      const id = Number(req.path.split('/').pop());
+      const { getVaultImage } = await import('../processing/documentVault');
+      const dataUrl = id ? await getVaultImage(db, id) : null;
+      return dataUrl ? json(200, { ok: true, dataUrl }) : json(404, { error: 'Not found' });
+    }
+    if (req.method === 'POST' && req.path === '/api/vault/refile') {
+      const id = Number(payload.id); const bucket = String(payload.bucket ?? '');
+      if (!id || !bucket) return json(400, { error: 'Missing id/bucket' });
+      const { refileVaultItem } = await import('../processing/documentVault');
+      await refileVaultItem(db, id, bucket);
+      return json(200, { ok: true });
+    }
+    if (req.method === 'DELETE' && req.path.startsWith('/api/vault/')) {
+      const id = Number(req.path.split('/').pop());
+      if (id) { const { deleteVaultItem } = await import('../processing/documentVault'); await deleteVaultItem(db, id); }
+      return json(200, { ok: true });
     }
     // Edit the "about you" profile blurb from the laptop.
     if (req.method === 'POST' && req.path === '/api/profile') {

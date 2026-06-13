@@ -20,6 +20,7 @@ export interface MemoryExport {
   people: unknown[];
   open_loops: unknown[];
   follow_ups: unknown[];
+  vault: unknown[];
 }
 
 export async function buildMemoryExport(db: SQLiteDatabase): Promise<MemoryExport> {
@@ -28,7 +29,7 @@ export async function buildMemoryExport(db: SQLiteDatabase): Promise<MemoryExpor
   };
   const [
     captures, todos, expenses, reminders, ideas, people, openLoops, followUps,
-    learnedFacts, knowledgeEntities, knowledgeConnections, knowledgeInsights, moodEntries, profile,
+    learnedFacts, knowledgeEntities, knowledgeConnections, knowledgeInsights, moodEntries, vault, profile,
   ] = await Promise.all([
     safe('SELECT * FROM captures ORDER BY created_at DESC'),
     safe('SELECT * FROM todos ORDER BY created_at DESC'),
@@ -45,6 +46,7 @@ export async function buildMemoryExport(db: SQLiteDatabase): Promise<MemoryExpor
           LEFT JOIN knowledge_entities t ON t.id = c.target_entity_id ORDER BY c.evidence_count DESC`),
     safe('SELECT * FROM knowledge_insights ORDER BY observed_at DESC'),
     safe('SELECT * FROM mood_entries ORDER BY id DESC LIMIT 500'),
+    safe('SELECT id, title, description, bucket, created_at FROM vault_items ORDER BY created_at DESC'),
     getUserProfile(db),
   ]);
 
@@ -63,5 +65,6 @@ export async function buildMemoryExport(db: SQLiteDatabase): Promise<MemoryExpor
     people,
     open_loops: openLoops,
     follow_ups: followUps,
+    vault,
   };
 }

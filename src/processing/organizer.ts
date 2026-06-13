@@ -164,16 +164,24 @@ export function deriveKnowledgeProjection(evidence: ExtractionEvidenceRow[]): {
       latestCaptureId: entity.latestCaptureId,
       privacyLevel: entity.privacyLevel,
     })),
-    connections: [...connections.values()].map((connection) => ({
-      sourceKey: connection.sourceKey,
-      relation: connection.relation,
-      targetKey: connection.targetKey,
-      evidenceCount: connection.captureIds.size,
-      confidence: confidenceFromEvidence(connection.captureIds.size),
-      explanation: `Seen together in ${connection.captureIds.size} remembered thought${connection.captureIds.size === 1 ? '' : 's'}.`,
-      latestCaptureId: connection.latestCaptureId,
-      privacyLevel: connection.privacyLevel,
-    })),
+    connections: [...connections.values()]
+      // Cut graph noise: a generic co-occurrence ("appears with"/"relates to") only counts
+      // if two things showed up together in 2+ captures. Structural relations (belongs to
+      // area, includes, involves, …) are meaningful even from a single capture, so keep them.
+      .filter((connection) => {
+        const generic = connection.relation === 'appears with' || connection.relation === 'relates to';
+        return !generic || connection.captureIds.size >= 2;
+      })
+      .map((connection) => ({
+        sourceKey: connection.sourceKey,
+        relation: connection.relation,
+        targetKey: connection.targetKey,
+        evidenceCount: connection.captureIds.size,
+        confidence: confidenceFromEvidence(connection.captureIds.size),
+        explanation: `Seen together in ${connection.captureIds.size} remembered thought${connection.captureIds.size === 1 ? '' : 's'}.`,
+        latestCaptureId: connection.latestCaptureId,
+        privacyLevel: connection.privacyLevel,
+      })),
   };
 }
 

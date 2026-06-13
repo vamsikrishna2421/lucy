@@ -219,6 +219,19 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       insight_count INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS learned_facts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category TEXT NOT NULL,
+      statement TEXT NOT NULL,
+      normalized TEXT UNIQUE NOT NULL,
+      confidence TEXT DEFAULT 'emerging',
+      evidence_count INTEGER DEFAULT 1,
+      source TEXT DEFAULT 'reflection',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS open_loops (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

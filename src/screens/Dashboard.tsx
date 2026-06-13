@@ -1252,6 +1252,16 @@ function TimelineView({
          WHERE id = ?`,
         feedbackText.trim(), feedbackTarget.id,
       );
+      // If the feedback reads like a general instruction about how LUCY should behave
+      // ("always keep it short", "don't add tasks", "I prefer…"), remember it as a
+      // durable learned fact so future AI calls honour it.
+      const fb = feedbackText.trim();
+      if (/\b(always|never|don'?t|do not|stop|please keep|i prefer|i like|i hate|make sure|from now on|in future|going forward|remember to)\b/i.test(fb)) {
+        try {
+          const { upsertLearnedFact } = await import('../db/learnedProfile');
+          await upsertLearnedFact(db, /\b(don'?t|do not|stop|never)\b/i.test(fb) ? 'correction' : 'preference', fb, 'feedback');
+        } catch { /* non-critical */ }
+      }
       setFeedbackTarget(null); setFeedbackText(''); onFeedback();
     } finally { setSending(false); }
   };

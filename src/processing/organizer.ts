@@ -234,4 +234,10 @@ export async function organizeMemory(db: SQLiteDatabase, trigger: string): Promi
       // Non-critical.
     }
   }
+
+  // Daily "learns about you" reflection — piggybacks the periodic background pass.
+  // Self-gated to once/day and never throws, so it's safe to fire-and-forget.
+  if (trigger === 'background') {
+    void import('./reflectOnUser').then(({ reflectOnUser }) => reflectOnUser(db)).catch(() => {});
+  }
 }

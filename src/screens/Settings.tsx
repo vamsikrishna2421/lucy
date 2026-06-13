@@ -16,6 +16,7 @@ import { runEnglishDeviceBenchmark, type BenchmarkResult } from '../processing/b
 import { organizeMemory } from '../processing/organizer';
 import { CheckInScheduler } from '../components/CheckInScheduler';
 import { ScheduledRemindersManager } from '../components/ScheduledRemindersManager';
+import { LearnedProfilePanel } from '../components/LearnedProfilePanel';
 import { getUserProfile, saveUserProfile, type UserProfile } from '../db/userProfile';
 
 interface SettingsScreenProps {
@@ -979,6 +980,9 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
                 }
               }}
             />
+
+            <Text style={[styles.fieldLabel, { marginTop: 22 }]}>What LUCY has learned about you</Text>
+            <LearnedProfilePanel />
           </KeyboardAvoidingView>
         ) : null}
       </SettingsSheet>

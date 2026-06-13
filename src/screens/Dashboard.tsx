@@ -20,6 +20,7 @@ import { organizeMemory } from '../processing/organizer';
 import { enqueueTranscript } from '../processing/extract';
 import { archiveTodo } from '../db/todos';
 import { GalaxyView } from './Galaxy';
+import { DocumentsTab } from '../components/DocumentsTab';
 import { AskScreen } from './Ask';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -41,7 +42,7 @@ import {
 } from '../processing/stalenessEngine';
 
 type ViewMode = 'Focus Now' | 'Timeline' | 'Ask Lucy' | 'Health' | 'Brain';
-type LibraryTab = 'Galaxy' | 'Resources' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
+type LibraryTab = 'Galaxy' | 'Documents' | 'Resources' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
 
 function displayTimestamp(value: string): string {
   return new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`).toLocaleString();
@@ -1797,10 +1798,10 @@ function LibraryView({
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const tabs: LibraryTab[] = ['Galaxy', 'Resources', 'Todos', 'Ideas', 'Expenses', 'People', 'Meetings', 'Listen'];
+  const tabs: LibraryTab[] = ['Galaxy', 'Documents', 'Resources', 'Todos', 'Ideas', 'Expenses', 'People', 'Meetings', 'Listen'];
 
-  // Galaxy is the full-screen topic-tree browser; render it without the inner ScrollView.
-  if (tab === 'Galaxy') {
+  // Galaxy + Documents are full-screen browsers; render them without the inner ScrollView.
+  if (tab === 'Galaxy' || tab === 'Documents') {
     return (
       <View style={styles.library}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs}>
@@ -1811,7 +1812,7 @@ function LibraryView({
           ))}
         </ScrollView>
         <View style={{ flex: 1 }}>
-          <GalaxyView />
+          {tab === 'Galaxy' ? <GalaxyView /> : <DocumentsTab />}
         </View>
       </View>
     );

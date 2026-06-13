@@ -102,13 +102,15 @@ export function DocumentsTab() {
         onChangeText={setQuery}
         autoCapitalize="none"
       />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips}>
-        {buckets.map((b) => (
-          <TouchableOpacity key={b} style={[styles.chip, b === bucket && styles.chipOn]} onPress={() => setBucket(b)}>
-            <Text style={[styles.chipText, b === bucket && styles.chipTextOn]}>{b}{b !== 'All' ? ` ${items.filter((i) => (i.bucket || 'Other') === b).length}` : ''}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={styles.chipsWrap}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsContent}>
+          {buckets.map((b) => (
+            <TouchableOpacity key={b} style={[styles.chip, b === bucket && styles.chipOn]} onPress={() => setBucket(b)}>
+              <Text style={[styles.chipText, b === bucket && styles.chipTextOn]}>{b}{b !== 'All' ? ` ${items.filter((i) => (i.bucket || 'Other') === b).length}` : ''}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
       <ScrollView contentContainerStyle={styles.grid}>
         {shown.length === 0 ? (
           <Text style={styles.empty}>{query ? `No matches for “${query}”` : 'No documents yet — tap ＋ Upload.'}</Text>
@@ -159,9 +161,10 @@ const styles = StyleSheet.create({
   count: { color: LUCY_COLORS.textMuted, fontSize: 13, fontWeight: '600' },
   uploadBtn: { backgroundColor: LUCY_COLORS.primary, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },
   uploadText: { color: LUCY_COLORS.white, fontWeight: '700', fontSize: 13 },
-  search: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, color: LUCY_COLORS.textDark, paddingHorizontal: 16, paddingVertical: 11, fontSize: 15, marginBottom: 12, borderWidth: 1, borderColor: LUCY_COLORS.border },
-  chips: { flexGrow: 0, marginBottom: 12 },
-  chip: { paddingHorizontal: 13, paddingVertical: 7, borderRadius: 18, marginRight: 7, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  search: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, color: LUCY_COLORS.textDark, paddingHorizontal: 16, paddingVertical: 11, fontSize: 15, marginBottom: 14, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  chipsWrap: { marginBottom: 14 },
+  chipsContent: { alignItems: 'center', paddingRight: 10 },
+  chip: { height: 34, paddingHorizontal: 14, justifyContent: 'center', borderRadius: 17, marginRight: 8, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border },
   chipOn: { backgroundColor: LUCY_COLORS.primarySoft, borderColor: LUCY_COLORS.primary },
   chipText: { color: LUCY_COLORS.textMuted, fontWeight: '600', fontSize: 12.5 },
   chipTextOn: { color: LUCY_COLORS.primary },

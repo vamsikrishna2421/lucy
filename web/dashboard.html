@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 9 (capture detail) ─────────────────────── */
+/* ─── LUCY web · premium · dashboard rev 10 (reprocess/correct) ─────────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -523,9 +523,17 @@ async function openDoc(id){const v=VAULT.find(x=>x.id===id);if(!v)return;const m
   catch(e){$('dlImg').innerHTML=empty('🗂','Image ships via OTA','');}}
 function closeModal(){$('modal').classList.remove('on');}
 /* ─── Capture detail: full Summary ⇄ Raw idea, with copy ─── */
-let capCur=null, capView='summary';
-function openCapture(id){const c=(DATA.captures||[]).find(x=>x.id===id);if(!c)return;capCur=c;capView='summary';$('modal').classList.add('on');renderCapDetail();}
+let capCur=null, capView='summary', capEditing=false;
+function openCapture(id){const c=(DATA.captures||[]).find(x=>x.id===id);if(!c)return;capCur=c;capView='summary';capEditing=false;$('modal').classList.add('on');renderCapDetail();}
 function renderCapDetail(){const c=capCur;if(!c)return;const summary=capBody(c)||'(no summary)';const raw=c.raw_transcript||'(no raw text saved)';
+  if(capEditing){
+    $('modalBody').innerHTML=`<div class="cap-detail">
+      <div class="tags"><span class="tag kind">correct</span></div>
+      <h3>Correct this memory</h3>
+      <div class="subtle-line" style="margin-bottom:10px">Edit the original text — LUCY will re-extract everything from your correction.</div>
+      <textarea id="capEdit" class="cap-text" style="width:100%;min-height:180px">${esc(raw)}</textarea>
+      <div class="cap-actions"><button class="btn sm" onclick="saveCorrect(${c.id})">Save &amp; reprocess</button><button class="btn ghost sm" onclick="capEditing=false;renderCapDetail()">Cancel</button></div>
+    </div>`;return;}
   const text=capView==='summary'?summary:raw;
   $('modalBody').innerHTML=`<div class="cap-detail">
     <div class="tags"><span class="tag kind">${esc(c.capture_kind||'thought')}</span>${tagFor(c)}<span style="margin-left:auto;color:var(--faint);font-size:11.5px">${fmt(c.created_at)}</span></div>
@@ -534,14 +542,17 @@ function renderCapDetail(){const c=capCur;if(!c)return;const summary=capBody(c)|
     <div class="cap-text" id="capText">${esc(text)}</div>
     <div class="cap-actions">
       <button class="btn sm" onclick="copyCap()">⧉ Copy ${capView==='raw'?'raw':'summary'}</button>
-      <button class="btn ghost sm" onclick="askAboutCap()">✦ Ask Lucy about this</button>
+      <button class="btn ghost sm" onclick="askAboutCap()">✦ Ask Lucy</button>
+      <button class="btn ghost sm" onclick="capEditing=true;renderCapDetail()">✎ Correct</button>
+      <button class="btn ghost sm" onclick="reprocessCap(${c.id})">↻ Reprocess</button>
       <div class="grow" style="flex:1"></div>
       <button class="btn ghost sm dl-del" onclick="delCaptureModal(${c.id})">Delete</button>
     </div></div>`;}
 async function copyCap(){const t=capView==='summary'?(capBody(capCur)||''):(capCur.raw_transcript||'');try{await navigator.clipboard.writeText(t);toast('Copied ✓');}catch(e){toast('Copy not allowed by browser');}}
 function askAboutCap(){const c=capCur;closeModal();go('ask');setTimeout(()=>{const q=$('q');if(q){q.value='About this note — "'+capText(c)+'": ';q.focus();autoGrow(q);}},120);}
+async function reprocessCap(id){toast('Reprocessing…');try{await api('/api/capture/reprocess',{method:'POST',body:JSON.stringify({id})});toast('Reprocessing — updating shortly');}catch(e){toast('Reprocess needs the latest update');}closeModal();setTimeout(()=>load(),3000);}
+async function saveCorrect(id){const t=$('capEdit').value;if(!t.trim())return;toast('Saving & reprocessing…');try{await api('/api/capture/correct',{method:'POST',body:JSON.stringify({id,text:t})});toast('Corrected — re-extracting');}catch(e){toast('Correct needs the latest update');}capEditing=false;closeModal();setTimeout(()=>load(),3000);}
 async function delCaptureModal(id){await api('/api/capture/'+id,{method:'DELETE'});toast('Deleted');closeModal();await load();}
-function closeModalCapture(){$('modal').classList.remove('on');}
 async function refile(id){const b=$('dlBucket').value;await api('/api/vault/refile',{method:'POST',body:JSON.stringify({id,bucket:b})});toast('Re-filed → '+b);closeModal();await loadVault();}
 async function addCustomBucket(id){const name=prompt('New bucket name (e.g. House papers):');if(!name||!name.trim())return;await api('/api/vault/refile',{method:'POST',body:JSON.stringify({id,bucket:name.trim()})});toast('Filed → '+name.trim());closeModal();await loadVault();}
 async function deleteDoc(id){await api('/api/vault/'+id,{method:'DELETE'});toast('Deleted');closeModal();await loadVault();}

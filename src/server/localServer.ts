@@ -130,6 +130,27 @@ async function route(req: ParsedRequest): Promise<string> {
       void processQueue();
       return json(200, { ok: true });
     }
+    // Reprocess a capture — re-run extraction from scratch (clears derived data + re-queues).
+    if (req.method === 'POST' && req.path === '/api/capture/reprocess') {
+      const id = Number(payload.id);
+      if (!id) return json(400, { error: 'Missing id' });
+      const { resetCaptureForReprocess } = await import('../db/captures');
+      await resetCaptureForReprocess(db, id);
+      const { processQueue } = await import('../processing/extract');
+      void processQueue();
+      return json(200, { ok: true });
+    }
+    // Correct a capture's memory text directly, then reprocess so derived data realigns.
+    if (req.method === 'POST' && req.path === '/api/capture/correct') {
+      const id = Number(payload.id); const text = String(payload.text ?? '').trim();
+      if (!id || !text) return json(400, { error: 'Missing id/text' });
+      await db.runAsync('UPDATE captures SET raw_transcript = ? WHERE id = ?', text, id);
+      const { resetCaptureForReprocess } = await import('../db/captures');
+      await resetCaptureForReprocess(db, id);
+      const { processQueue } = await import('../processing/extract');
+      void processQueue();
+      return json(200, { ok: true });
+    }
     if (req.method === 'POST' && req.path === '/api/task') {
       const action = String(payload.action ?? '');
       const todos = await import('../db/todos');

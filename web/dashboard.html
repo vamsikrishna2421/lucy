@@ -55,11 +55,12 @@ button{font-family:inherit;cursor:pointer;color:inherit}
 /* ─── Sidebar ─── */
 #side{width:240px;flex:0 0 240px;height:100%;display:flex;flex-direction:column;
   background:linear-gradient(180deg,var(--side),var(--side2));border-right:1px solid var(--border-soft);padding:22px 16px;transition:background .4s}
-.brand{display:flex;align-items:center;gap:9px;padding:4px 8px 22px;position:relative}
+.brand{display:flex;align-items:center;gap:9px;padding:2px 8px 14px;position:relative}
 .brand .logo{font-size:22px;font-weight:800;letter-spacing:2px}
 .brand .spark{color:var(--primary);font-size:14px;margin-left:-2px;margin-top:-8px}
-nav{display:flex;flex-direction:column;gap:3px;flex:1;overflow-y:auto}
-.nav-i{display:flex;align-items:center;gap:13px;padding:10px 14px;border-radius:12px;color:var(--muted);
+nav{display:flex;flex-direction:column;gap:1px}
+.side-spacer{flex:1;min-height:6px}
+.nav-i{display:flex;align-items:center;gap:13px;padding:7px 14px;border-radius:11px;color:var(--muted);
   font-weight:550;font-size:14px;border:1px solid transparent;transition:.15s;user-select:none}
 .nav-i:hover{background:var(--raised);color:var(--text)}
 .nav-i.on{background:var(--primary-soft);color:var(--primary-deep);font-weight:650}
@@ -99,8 +100,8 @@ nav{display:flex;flex-direction:column;gap:3px;flex:1;overflow-y:auto}
 .wave{color:var(--primary);font-size:20px}
 .subtle-line{color:var(--subtle);font-size:14.5px;margin-bottom:18px}
 .maincol{position:relative}
-.side-orb{display:flex;justify-content:center;align-items:flex-end;padding:12px 0 16px;pointer-events:none}
-.side-orb .orb-scale{transform:scale(.72);transform-origin:bottom center}
+.side-orb{display:flex;justify-content:center;align-items:flex-end;padding:6px 0 12px;pointer-events:none}
+.side-orb .orb-scale{transform:scale(.56);transform-origin:bottom center}
 .side-orb .cloud{top:-20px;left:50%;transform:translateX(-50%);font-size:13px;padding:3px 12px}
 .cloud{position:absolute;top:-30px;font-style:italic;font-size:16px;color:var(--muted);
   background:var(--card);border:1px solid var(--border);padding:5px 16px;border-radius:30px;box-shadow:var(--shadow-sm)}
@@ -238,6 +239,7 @@ nav{display:flex;flex-direction:column;gap:3px;flex:1;overflow-y:auto}
   <aside id="side">
     <div class="brand"><span class="logo">LUC<span style="position:relative">Y<span class="spark" style="position:absolute;top:-6px;right:-10px">✦</span></span></span></div>
     <nav id="nav"></nav>
+    <div class="side-spacer"></div>
     <div class="side-orb"><div class="orb-scale"><div class="cloud">Lucy</div><div class="orb"></div></div></div>
     <div class="profile-chip"><div class="avatar" id="pavatar">V</div><div><div class="nm" id="pname">You</div><div class="pl">Pro Plan</div></div><span class="cv">⌄</span></div>
   </aside>

@@ -1494,9 +1494,7 @@ function TimelineView({
                               let count = 0;
                               try { count = item.protected_values ? (JSON.parse(item.protected_values) as unknown[]).length : 0; } catch { /* ignore */ }
                               return count > 0 ? (
-                                <View style={styles.tlShieldPill}>
-                                  <Text style={styles.tlShieldPillText}>🛡 Protected</Text>
-                                </View>
+                                <Text style={styles.tlShieldPillText}>🛡</Text>
                               ) : null;
                             })()}
 
@@ -2289,8 +2287,8 @@ function Card({ title, detail, privacy, onDelete }: { title: string; detail: str
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  title: { fontSize: 30, letterSpacing: -0.8, fontWeight: '800', color: LUCY_COLORS.textDark },
-  subtitle: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 4, marginBottom: 16 },
+  title: { fontSize: 23, letterSpacing: -0.6, fontWeight: '800', color: LUCY_COLORS.textDark },
+  subtitle: { color: LUCY_COLORS.textMuted, fontSize: 13, marginTop: 2, marginBottom: 10 },
   viewNav: { flexDirection: 'row', padding: 4, borderRadius: 18, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, marginBottom: 17 },
   viewTab: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 14 },  // icon + label stack
   activeView: { backgroundColor: LUCY_COLORS.surfaceRaised },
@@ -2328,16 +2326,7 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   tlTypePillText: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
-  tlShieldPill: {
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(52,199,89,0.4)',
-    backgroundColor: 'rgba(52,199,89,0.12)',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    marginRight: 6,
-  },
-  tlShieldPillText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.6, color: '#2FBF71' },
+  tlShieldPillText: { fontSize: 13, marginRight: 6 },
 
   // Card body
   tlTitle: { color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700', lineHeight: 20, marginBottom: 0 },

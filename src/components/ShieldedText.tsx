@@ -41,30 +41,21 @@ export function ShieldedText({
       {parts.map((part, i) => {
         const kind = part ? kindOf.get(part.toLowerCase()) : undefined;
         if (!kind) return <Text key={i}>{part}</Text>;
-        if (kind === 'secret') {
-          return (
-            <Text key={i} style={s.secret}>{' '}🛡 {part} </Text>
-          );
-        }
-        return (
-          <Text key={i} style={s.person}>{part}</Text>
-        );
+        return <Text key={i} style={kind === 'secret' ? s.secret : s.person}>{part}</Text>;
       })}
     </Text>
   );
 }
 
 const s = StyleSheet.create({
-  // Password / secret — strong "protected" signal.
+  // Password / secret — plain green text.
   secret: {
-    backgroundColor: 'rgba(52,199,89,0.18)',
     color: '#2FBF71',
-    fontWeight: '800',
+    fontWeight: '700',
   },
-  // Person name — lighter cosmetic accent.
+  // Person name — plain orange text.
   person: {
-    color: LUCY_COLORS.primaryGlow,
-    textDecorationLine: 'underline',
-    textDecorationStyle: 'dotted',
+    color: LUCY_COLORS.primary,
+    fontWeight: '600',
   },
 });

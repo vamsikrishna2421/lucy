@@ -332,6 +332,7 @@ nav{display:flex;flex-direction:column;gap:1px}
 <div class="toast" id="toast"></div>
 <div class="modal" id="modal" onclick="if(event.target===this)closeModal()"><div class="modal-card"><button class="modal-x" onclick="closeModal()">✕</button><div class="modal-body" id="modalBody"></div></div></div>
 <input type="file" id="fileInput" accept="image/*,application/pdf" multiple style="display:none" onchange="handleFiles(this.files);this.value='';"/>
+<input type="file" id="importInput" accept="application/json,.json" style="display:none" onchange="handleImport(this.files&&this.files[0]);this.value='';"/>
 <script>
 let DATA=null, ROUTE='home', CHAT=[], busy=false;
 const $=id=>document.getElementById(id);
@@ -472,7 +473,15 @@ function vAbout(){const d=DATA;const facts=(d.learned_profile||[]);
     <div class="sec"><h2>What LUCY has learned · ${facts.length}</h2><div class="grow"></div><button class="btn ghost sm" id="reflectBtn" onclick="reflect()">Reflect now</button></div>`;
   h+=facts.length?'<div class="col">'+facts.map(f=>`<div class="card"><div style="flex:1"><span class="cat">${esc(f.category)}</span><span class="ttl" style="font-weight:500">${esc(f.statement)}</span></div><span class="pill ${esc(f.confidence)}">${esc(f.confidence)}</span><button class="ico-btn danger" onclick="delFact(${f.id})">✕</button></div>`).join('')+'</div>':empty('☻','Nothing learned yet','Capture a few notes, then "Reflect now".');
   h+=`<div class="sec"><h2>AI cost guard</h2></div><div class="subtle-line" style="margin-bottom:8px">A platform-wide hourly cap on remote AI calls. Pause it temporarily for bulk work — it re-enables automatically.</div><div class="guardbar"></div>`;
+  h+=`<div class="sec"><h2>Backup &amp; restore</h2></div><div class="subtle-line" style="margin-bottom:8px">Import a memory export (JSON) — e.g. when switching devices. Document images aren't in the export; they stay on the original device.</div><button class="btn ghost sm" onclick="$('importInput').click()">⬆ Import memory (JSON)</button>`;
   return h;}
+async function handleImport(file){if(!file)return;toast('Reading export…');let data;
+  try{data=JSON.parse(await file.text());}catch(e){toast('Not valid JSON');return;}
+  toast('Importing…');
+  try{const r=await api('/api/import',{method:'POST',body:JSON.stringify({data})});
+    if(r&&r.ok){const n=Object.values(r.counts||{}).reduce((a,b)=>a+b,0);toast('Imported '+n+' items ✓');setTimeout(()=>load(),1500);}
+    else toast(r&&r.error?('Import: '+r.error):'Import needs the latest update');}
+  catch(e){toast('Import needs the latest update');}}
 
 function stat(n,l){return `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;}
 function taskCard(t){return `<div class="card"><div style="flex:1"><span class="ttl">${esc(t.task)}</span>${t.context?`<div class="sub">${esc(t.context)}</div>`:''}</div><span class="pill ${esc((t.urgency||'medium').toLowerCase())}">${esc(t.urgency||'')}</span><button class="ico-btn good" onclick="task(${t.id},'complete')">✓</button><button class="ico-btn danger" onclick="task(${t.id},'delete')">✕</button></div>`;}

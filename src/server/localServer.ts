@@ -290,6 +290,13 @@ async function route(req: ParsedRequest): Promise<string> {
       const count = await reflectOnUser(db, true);
       return json(200, { ok: true, learned: count });
     }
+    // Import a memory export JSON (device switch / restore) from the laptop.
+    if (req.method === 'POST' && req.path === '/api/import') {
+      const data = payload.data ?? payload; // accept {data:{...}} or the raw export
+      const { importMemoryExport } = await import('../processing/memoryImport');
+      const result = await importMemoryExport(db, data);
+      return json(result.ok ? 200 : 400, result);
+    }
     // Dev logs (incl. crashes) — for diagnosing field issues over the LAN.
     if (req.method === 'GET' && req.path === '/api/logs') {
       const { listDevLogs } = await import('../db/devLog');

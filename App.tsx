@@ -210,6 +210,7 @@ export default function App() {
     void (async () => {
       try {
         const parts: string[] = [];
+        let vaultSaved = 0; let vaultDup = 0;
         // Prefer resolved payloads (they expose contentUri + mime); fall back to raw.
         const payloads: Array<Record<string, unknown>> = resolvedSharedPayloads.length
           ? (resolvedSharedPayloads as unknown as Array<Record<string, unknown>>)
@@ -231,20 +232,33 @@ export default function App() {
               if (content) parts.push(content);
             } catch { /* unreadable file — skip */ }
           } else if (uri && (
-            mime.startsWith('image/') ||
-            /\.(jpg|jpeg|png|gif|webp|heic|heif)$/i.test(name || uri)
+            mime.startsWith('image/') || mime === 'application/pdf' ||
+            /\.(jpg|jpeg|png|gif|webp|heic|heif|pdf)$/i.test(name || uri)
           )) {
-            // Image share → LUCY Lens: extract visual memory, delete image immediately
+            // Image/PDF share → save into the Documents vault (classified + deduped).
             try {
-              const { processImageToMemory } = await import('./src/processing/lucyLens');
-              const result = await processImageToMemory(uri, name || null);
-              if (result?.confidence === 'low') {
-                // Low confidence means no remote AI — surface this to user
-                parts.push(`[Image shared — ${result.memoryText}]`);
-              }
-              // High confidence: already enqueued inside processImageToMemory, skip parts
+              const { saveImageToVault } = await import('./src/processing/documentVault');
+              const r = await saveImageToVault(uri, name || null, null, true, null);
+              if (r.duplicate) vaultDup += 1;
+              else if (r.item) vaultSaved += 1;
             } catch { /* non-critical */ }
           }
+        }
+        // Documents shared into the vault don't become captures — confirm + go to Brain.
+        if (vaultSaved > 0 || vaultDup > 0) {
+          clearSharedPayloads();
+          setScreen('dashboard');
+          setRefreshToken((value) => value + 1);
+          let msg = vaultSaved > 0 ? `Saved ${vaultSaved} to Documents` : '';
+          if (vaultDup > 0) msg += `${msg ? ' · ' : ''}${vaultDup} already in vault`;
+          setShareToast(msg || 'Added to Documents');
+          shareToastAnim.setValue(0);
+          Animated.sequence([
+            Animated.timing(shareToastAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
+            Animated.delay(2400),
+            Animated.timing(shareToastAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
+          ]).start(() => setShareToast(null));
+          return;
         }
         const sharedText = parts.join('\n').trim();
         if (!sharedText) {

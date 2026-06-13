@@ -651,6 +651,29 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           }}
           actionLabel="Export"
         />
+        <SettingsRow
+          title="Import memory"
+          value="Restore from an exported JSON (e.g. switching devices)"
+          onAction={async () => {
+            try {
+              const DocumentPicker = await import('expo-document-picker');
+              const res = await DocumentPicker.getDocumentAsync({ type: ['application/json', 'text/plain', '*/*'], copyToCacheDirectory: true });
+              if (res.canceled || !res.assets?.length) return;
+              const { readAsStringAsync } = await import('expo-file-system/legacy');
+              const text = await readAsStringAsync(res.assets[0].uri);
+              let data: unknown;
+              try { data = JSON.parse(text); } catch { Alert.alert('Import failed', 'That file is not valid JSON.'); return; }
+              const db = await getDatabase();
+              const { importMemoryExport } = await import('../processing/memoryImport');
+              const r = await importMemoryExport(db, data);
+              if (!r.ok) { Alert.alert('Import failed', r.error ?? 'Could not import.'); return; }
+              const total = Object.values(r.counts).reduce((a, b) => a + b, 0);
+              await import('../processing/organizer').then(({ organizeMemory }) => organizeMemory(db, 'manual')).catch(() => {});
+              Alert.alert('Imported ✓', `Restored ${total} items. Rebuilding your brain…`);
+            } catch (e) { Alert.alert('Import failed', e instanceof Error ? e.message : 'Please try again.'); }
+          }}
+          actionLabel="Import"
+        />
         <SettingsSectionLabel label="App" />
         <SettingsRow
           title="Check for updates"

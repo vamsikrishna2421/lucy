@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/lucy-eye-icon.png",
     "userInterfaceStyle": "dark",
-    "runtimeVersion": "1",
+    "runtimeVersion": "2",
     "updates": {
       "url": "https://u.expo.dev/1a602e40-067f-4786-a9a6-26c6cc15bda6",
       "requestHeaders": { "expo-channel-name": "production" },
@@ -89,6 +89,22 @@
             {"mimeType": "text/*"}
           ],
           "category": ["DEFAULT"]
+        },
+        {
+          "action": "SEND",
+          "data": [
+            {"mimeType": "image/*"},
+            {"mimeType": "application/pdf"}
+          ],
+          "category": ["DEFAULT"]
+        },
+        {
+          "action": "SEND_MULTIPLE",
+          "data": [
+            {"mimeType": "image/*"},
+            {"mimeType": "application/pdf"}
+          ],
+          "category": ["DEFAULT"]
         }
       ],
       "permissions": [
@@ -136,7 +152,9 @@
             "enabled": true,
             "activationRule": {
               "supportsText": true,
-              "supportsWebUrlWithMaxCount": 1
+              "supportsWebUrlWithMaxCount": 1,
+              "supportsImageWithMaxCount": 10,
+              "supportsFileWithMaxCount": 10
             }
           },
           "android": {
@@ -144,7 +162,9 @@
             "singleShareMimeTypes": [
               "text/plain",
               "text/markdown",
-              "text/*"
+              "text/*",
+              "image/*",
+              "application/pdf"
             ]
           }
         }

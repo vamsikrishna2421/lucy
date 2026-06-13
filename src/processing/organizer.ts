@@ -192,16 +192,23 @@ export async function organizeMemory(db: SQLiteDatabase, trigger: string): Promi
     }
   }
   const insights: KnowledgeInsightDraft[] = [
-    ...clarified.map((context) => ({
-      key: `clarification:${context.id}`,
-      type: 'clarification',
-      title: `Clarified memory: ${context.snippet?.trim() || 'Additional context'}`,
-      detail: context.answer_text?.trim() || 'Context was provided.',
-      evidenceCount: 1,
-      confidence: 'confirmed' as const,
-      privacyLevel: 'private' as const,
-      observedAt: context.answered_at,
-    })),
+    // Only clarifications with a SUBSTANTIVE answer become insights — skip empty / "no idea"
+    // responses that were flooding the Insights panel with noise.
+    ...clarified
+      .filter((context) => {
+        const a = (context.answer_text ?? '').trim();
+        return a.length > 2 && !/^(no idea|idk|i don'?t know|don'?t know|dont know|nothing|none|n\/?a|na|skip|maybe)\.?$/i.test(a);
+      })
+      .map((context) => ({
+        key: `clarification:${context.id}`,
+        type: 'clarification',
+        title: `Clarified memory: ${context.snippet?.trim() || 'Additional context'}`,
+        detail: context.answer_text?.trim() || 'Context was provided.',
+        evidenceCount: 1,
+        confidence: 'confirmed' as const,
+        privacyLevel: 'private' as const,
+        observedAt: context.answered_at,
+      })),
     ...questionIntents.map((intent) => ({
       key: `question-intent:${intent.intent}`,
       type: 'requested_view',

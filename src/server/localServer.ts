@@ -22,8 +22,10 @@ export interface ServerState {
 const PORT = 8088;
 // The dashboard HTML is pulled from the public repo at runtime so it can be iterated
 // WITHOUT an app rebuild: edit web/dashboard.html → push → POST /api/dashboard/refresh.
-// The baked-in DASHBOARD_HTML is the offline/first-run fallback.
-const DASHBOARD_RAW_URL = 'https://raw.githubusercontent.com/vamsikrishna2421/lucy/master/web/dashboard.html';
+// Uses the GitHub API (Accept: raw) instead of raw.githubusercontent.com because the raw
+// CDN caches by path and ignores cache-busters (stale for minutes); the API isn't CDN-
+// cached, so refresh is instant. The baked-in DASHBOARD_HTML is the offline/first-run fallback.
+const DASHBOARD_API_URL = 'https://api.github.com/repos/vamsikrishna2421/lucy/contents/web/dashboard.html?ref=master';
 let dashboardCache: string | null = null;
 
 interface TcpServer { close: () => void; listen?: (opts: unknown) => void; on?: (e: string, cb: (a: unknown) => void) => void; }
@@ -32,7 +34,10 @@ let server: TcpServer | null = null;
 /** Pulls the latest dashboard from the repo and caches it. Returns bytes (0 on failure). */
 async function fetchRemoteDashboard(): Promise<number> {
   try {
-    const res = await fetch(`${DASHBOARD_RAW_URL}?t=${Date.now()}`, { headers: { 'Cache-Control': 'no-cache' } });
+    const res = await fetch(`${DASHBOARD_API_URL}&t=${Date.now()}`, {
+      // GitHub API requires a User-Agent; Accept: raw returns the file content directly.
+      headers: { Accept: 'application/vnd.github.raw', 'User-Agent': 'LUCY-app', 'Cache-Control': 'no-cache' },
+    });
     if (!res.ok) return 0;
     const html = await res.text();
     if (html && html.includes('</html>')) { dashboardCache = html; return html.length; }

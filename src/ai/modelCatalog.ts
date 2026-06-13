@@ -15,7 +15,7 @@ export interface LocalModelOption {
     | ReturnType<typeof models.llm.phi_4_mini_4b>;
 }
 
-export const DEFAULT_LOCAL_MODEL_ID: LocalModelId = 'deep-phi';
+export const DEFAULT_LOCAL_MODEL_ID: LocalModelId = 'quick';
 
 export const localModelOptions: LocalModelOption[] = [
   {

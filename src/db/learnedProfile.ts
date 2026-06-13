@@ -28,6 +28,18 @@ export function normalizeStatement(statement: string): string {
   return statement.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+const FACT_STOPWORDS = new Set(['the', 'and', 'for', 'with', 'their', 'they', 'them', 'that', 'this', 'about', 'often', 'tends', 'around', 'user', 'usually', 'typically', 'into', 'over', 'through', 'rather', 'than', 'have', 'has', 'are', 'was', 'were', 'who', 'which', 'when', 'while']);
+function contentTokens(s: string): Set<string> {
+  return new Set(normalizeStatement(s).split(' ').filter((w) => w.length > 3 && !FACT_STOPWORDS.has(w)));
+}
+/** Token-overlap similarity (0-1) so rephrased facts ("logs work via voice notes" vs
+ *  "logs work progress through voice notes") are recognised as the same fact. */
+function similarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let m = 0; for (const t of a) if (b.has(t)) m++;
+  return m / Math.min(a.size, b.size);
+}
+
 const NEXT_CONFIDENCE: Record<LearnedConfidence, LearnedConfidence> = {
   emerging: 'supported',
   supported: 'confirmed',
@@ -50,17 +62,27 @@ export async function upsertLearnedFact(
   const normalized = normalizeStatement(text);
   if (!normalized) return;
 
-  const existing = await db.getFirstAsync<LearnedFactRow>(
-    'SELECT * FROM learned_facts WHERE normalized = ?',
-    normalized,
-  );
+  // Find a match: exact normalized first, else a fuzzy token-overlap match (the LLM
+  // rephrases facts each run, so exact-only dedup would let near-duplicates pile up
+  // and never escalate past "emerging").
+  let existing = await db.getFirstAsync<LearnedFactRow>('SELECT * FROM learned_facts WHERE normalized = ?', normalized);
+  if (!existing) {
+    const tk = contentTokens(text);
+    const all = await db.getAllAsync<LearnedFactRow>('SELECT * FROM learned_facts');
+    let best: LearnedFactRow | null = null; let bestSim = 0;
+    for (const row of all) {
+      const sim = similarity(tk, contentTokens(row.statement));
+      if (sim > bestSim) { bestSim = sim; best = row; }
+    }
+    if (best && bestSim >= 0.6) existing = best;
+  }
   if (existing) {
     const nextConf = source === 'feedback' ? 'confirmed' : NEXT_CONFIDENCE[existing.confidence];
     await db.runAsync(
       `UPDATE learned_facts SET evidence_count = evidence_count + 1, confidence = ?,
-         statement = ?, category = ?, updated_at = CURRENT_TIMESTAMP, last_seen_at = CURRENT_TIMESTAMP
+         statement = ?, normalized = ?, category = ?, updated_at = CURRENT_TIMESTAMP, last_seen_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      nextConf, text, category, existing.id,
+      nextConf, text, normalized, category, existing.id,
     );
     return;
   }
@@ -82,12 +104,14 @@ export async function listLearnedFacts(db: SQLiteDatabase, limit = 100): Promise
   );
 }
 
-/** Top facts worth injecting into a prompt — only supported/confirmed, capped. */
+/** Top facts to inject into a prompt — all confidences (so the profile influences the
+ *  AI from day one), strongest first, capped. Reinforced/confirmed facts outrank fresh
+ *  guesses; the user can prune wrong ones in the viewer. */
 export async function getInjectableLearnedFacts(db: SQLiteDatabase, limit = 12): Promise<string[]> {
   const rows = await db.getAllAsync<{ statement: string }>(
     `SELECT statement FROM learned_facts
-     WHERE confidence IN ('supported','confirmed')
-     ORDER BY CASE confidence WHEN 'confirmed' THEN 0 ELSE 1 END, evidence_count DESC, updated_at DESC
+     ORDER BY CASE confidence WHEN 'confirmed' THEN 0 WHEN 'supported' THEN 1 ELSE 2 END,
+       evidence_count DESC, updated_at DESC
      LIMIT ?`,
     limit,
   );

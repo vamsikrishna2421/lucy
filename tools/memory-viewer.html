@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LUCY — Memory Viewer</title>
+<style>
+  :root {
+    --bg:#0F0E0B; --surface:#1A1813; --raised:#221F18; --border:#332E24;
+    --text:#F5EFE6; --muted:#B8AD9C; --subtle:#8A7E6C; --primary:#FF8C42; --green:#2FBF71;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; }
+  header { padding:24px 32px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:20px; flex-wrap:wrap; position:sticky; top:0; background:var(--bg); z-index:10; }
+  .brand { font-size:26px; font-weight:900; letter-spacing:1px; }
+  .brand .y { color:var(--primary); }
+  .meta { color:var(--subtle); font-size:13px; }
+  .counts { margin-left:auto; display:flex; gap:14px; flex-wrap:wrap; }
+  .count { text-align:center; }
+  .count b { display:block; font-size:20px; color:var(--primary); }
+  .count span { font-size:11px; color:var(--subtle); text-transform:uppercase; letter-spacing:1px; }
+  main { max-width:1100px; margin:0 auto; padding:24px 32px 80px; }
+  .drop { border:2px dashed var(--border); border-radius:16px; padding:60px; text-align:center; color:var(--muted); cursor:pointer; }
+  .drop:hover { border-color:var(--primary); }
+  .drop input { display:none; }
+  section { margin-top:36px; }
+  h2 { font-size:13px; letter-spacing:1.5px; text-transform:uppercase; color:var(--primary); border-bottom:1px solid var(--border); padding-bottom:8px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-top:10px; }
+  .row { display:flex; gap:10px; align-items:flex-start; }
+  .pill { display:inline-block; font-size:10px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; padding:2px 7px; border-radius:6px; border:1px solid var(--border); color:var(--muted); }
+  .pill.high { color:#ff6b6b; border-color:#ff6b6b55; } .pill.conf { color:var(--green); border-color:#2fbf7155; }
+  .title { font-weight:700; } .sub { color:var(--muted); font-size:13px; margin-top:3px; }
+  .date { color:var(--subtle); font-size:12px; white-space:nowrap; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:10px; margin-top:10px; }
+  .facts { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .fact { background:var(--raised); border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-size:14px; }
+  .fact .cat { color:var(--primary); font-size:10px; text-transform:uppercase; letter-spacing:1px; display:block; margin-bottom:2px; }
+  .empty { color:var(--subtle); font-style:italic; }
+  .about { background:var(--raised); border-left:3px solid var(--primary); padding:12px 16px; border-radius:0 10px 10px 0; margin-top:10px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">LUC<span class="y">Y</span> · Memory</div>
+  <div class="meta" id="meta">No export loaded</div>
+  <div class="counts" id="counts"></div>
+</header>
+<main>
+  <label class="drop" id="drop">
+    <input type="file" id="file" accept="application/json,.json" />
+    <div style="font-size:40px">📂</div>
+    <div style="margin-top:10px;font-weight:700;color:var(--text)">Drop a LUCY export here, or click to choose</div>
+    <div style="margin-top:6px">Export from the phone: Settings → Your Data → Export as JSON. Everything stays on this computer.</div>
+  </label>
+  <div id="content"></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const fmtDate = (s) => { if(!s) return ''; const d=new Date(String(s).includes('T')?s:String(s).replace(' ','T')+'Z'); return isNaN(d)?s:d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); };
+
+$('file').addEventListener('change', e => { const f=e.target.files[0]; if(f) f.text().then(render); });
+['dragover','drop'].forEach(ev => $('drop').addEventListener(ev, e => e.preventDefault()));
+$('drop').addEventListener('drop', e => { const f=e.dataTransfer.files[0]; if(f) f.text().then(render); });
+
+function render(text) {
+  let d; try { d = JSON.parse(text); } catch { alert('That file is not valid JSON.'); return; }
+  $('drop').style.display='none';
+  const profile = d.profile || {};
+  $('meta').textContent = (profile.name ? profile.name+' · ' : '') + 'exported ' + fmtDate(d.exported_at) + (d.version?(' · v'+d.version):'');
+  const counts = [
+    ['captures', d.captures], ['tasks', d.todos], ['learned', d.learned_profile],
+    ['people', d.people], ['ideas', d.ideas], ['insights', d.knowledge && d.knowledge.insights],
+  ];
+  $('counts').innerHTML = counts.filter(([,a])=>a).map(([k,a])=>`<div class="count"><b>${a.length}</b><span>${k}</span></div>`).join('');
+
+  let h = '';
+
+  // Personality / learned profile — the highlight
+  if ((d.learned_profile && d.learned_profile.length) || profile.about) {
+    h += `<section><h2>Who this person is</h2>`;
+    if (profile.about) h += `<div class="about">${esc(profile.about)}</div>`;
+    if (d.learned_profile && d.learned_profile.length) {
+      h += `<div class="facts">` + d.learned_profile.map(f =>
+        `<div class="fact"><span class="cat">${esc(f.category)} · ${esc(f.confidence)}${f.source==='feedback'?' · stated':''}</span>${esc(f.statement)}</div>`
+      ).join('') + `</div>`;
+    }
+    h += `</section>`;
+  }
+
+  // Tasks
+  h += listSection('Tasks', d.todos, t =>
+    `<div class="row"><div style="flex:1"><span class="title">${esc(t.task)}</span>
+      <div class="sub">${esc(t.context||'')}</div></div>
+      <span class="pill ${t.urgency==='high'?'high':''}">${esc(t.urgency||'')}</span>
+      <span class="pill">${esc(t.status||'')}</span></div>`);
+
+  // Insights
+  if (d.knowledge && d.knowledge.insights) h += listSection('Insights LUCY found', d.knowledge.insights, i =>
+    `<div class="row"><div style="flex:1"><span class="title">${esc(i.title)}</span><div class="sub">${esc(i.detail||'')}</div></div>
+     <span class="pill conf">${esc(i.confidence||'')}</span></div>`);
+
+  // People + connections
+  if (d.people && d.people.length) {
+    h += `<section><h2>People</h2><div class="grid">` +
+      d.people.map(p=>`<div class="card"><span class="title">${esc(p.name)}</span><div class="sub">${esc((p.context||'').slice(0,120))}</div></div>`).join('') +
+      `</div>`;
+    const conns = (d.knowledge && d.knowledge.connections) || [];
+    if (conns.length) h += `<div class="facts">` + conns.map(c=>`<div class="fact">${esc(c.source_name)} <b style="color:var(--primary)">${esc(c.relation)}</b> ${esc(c.target_name)}</div>`).join('') + `</div>`;
+    h += `</section>`;
+  }
+
+  // Timeline of captures
+  h += listSection('Timeline', d.captures, c =>
+    `<div class="row"><div style="flex:1"><span class="title">${esc(c.extracted_title||(c.raw_transcript||'').slice(0,60))}</span>
+      <div class="sub">${esc((c.structured_text||c.raw_transcript||'').slice(0,200))}</div></div>
+      <span class="date">${fmtDate(c.created_at)}</span></div>`, 50);
+
+  // Ideas
+  h += listSection('Ideas', d.ideas, i=>`<span class="title">${esc(i.title)}</span><div class="sub">${esc(i.description||'')}</div>`);
+
+  $('content').innerHTML = h;
+}
+
+function listSection(title, arr, rowFn, limit) {
+  if (!arr || !arr.length) return '';
+  const items = limit ? arr.slice(0, limit) : arr;
+  return `<section><h2>${title} <span style="color:var(--subtle);font-size:11px">(${arr.length})</span></h2>` +
+    items.map(x=>`<div class="card">${rowFn(x)}</div>`).join('') +
+    (limit && arr.length>limit ? `<div class="empty" style="margin-top:8px">…and ${arr.length-limit} more</div>` : '') +
+    `</section>`;
+}
+</script>
+</body>
+</html>

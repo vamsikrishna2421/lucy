@@ -319,19 +319,37 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const exportAllData = async () => {
     try {
       const db = await getDatabase();
-      const [captures, todos, expenses, reminders, ideas, people, openLoops, followUps] = await Promise.all([
-        db.getAllAsync('SELECT * FROM captures ORDER BY created_at DESC'),
-        db.getAllAsync('SELECT * FROM todos ORDER BY created_at DESC'),
-        db.getAllAsync('SELECT * FROM expenses ORDER BY created_at DESC'),
-        db.getAllAsync('SELECT * FROM reminders ORDER BY created_at DESC'),
-        db.getAllAsync('SELECT * FROM ideas ORDER BY created_at DESC'),
-        db.getAllAsync('SELECT * FROM people ORDER BY name ASC'),
-        db.getAllAsync('SELECT * FROM open_loops ORDER BY created_at DESC'),
-        db.getAllAsync('SELECT * FROM follow_ups ORDER BY created_at DESC'),
+      const safe = async (sql: string): Promise<unknown[]> => { try { return await db.getAllAsync(sql); } catch { return []; } };
+      const [
+        captures, todos, expenses, reminders, ideas, people, openLoops, followUps,
+        learnedFacts, knowledgeEntities, knowledgeConnections, knowledgeInsights, moodEntries, profileRow,
+      ] = await Promise.all([
+        safe('SELECT * FROM captures ORDER BY created_at DESC'),
+        safe('SELECT * FROM todos ORDER BY created_at DESC'),
+        safe('SELECT * FROM expenses ORDER BY created_at DESC'),
+        safe('SELECT * FROM reminders ORDER BY created_at DESC'),
+        safe('SELECT * FROM ideas ORDER BY created_at DESC'),
+        safe('SELECT * FROM people ORDER BY name ASC'),
+        safe('SELECT * FROM open_loops ORDER BY created_at DESC'),
+        safe('SELECT * FROM follow_ups ORDER BY created_at DESC'),
+        safe("SELECT * FROM learned_facts ORDER BY CASE confidence WHEN 'confirmed' THEN 0 WHEN 'supported' THEN 1 ELSE 2 END, evidence_count DESC"),
+        safe('SELECT * FROM knowledge_entities ORDER BY evidence_count DESC'),
+        safe(`SELECT c.*, s.name AS source_name, t.name AS target_name FROM knowledge_connections c
+              LEFT JOIN knowledge_entities s ON s.id = c.source_entity_id
+              LEFT JOIN knowledge_entities t ON t.id = c.target_entity_id ORDER BY c.evidence_count DESC`),
+        safe('SELECT * FROM knowledge_insights ORDER BY observed_at DESC'),
+        safe('SELECT * FROM mood_entries ORDER BY id DESC LIMIT 500'),
+        getUserProfile(db),
       ]);
       const exportData = {
         exported_at: new Date().toISOString(),
-        version: '1.0',
+        app_version: require('../../app.json').expo?.ios?.buildNumber ?? null,
+        version: '2.0',
+        // The "who this person is" portrait — the heart of the export.
+        profile: { name: (profileRow as { name?: string }).name, about: (profileRow as { about?: string }).about, languages: (profileRow as { languages?: string[] }).languages },
+        learned_profile: learnedFacts,
+        knowledge: { entities: knowledgeEntities, connections: knowledgeConnections, insights: knowledgeInsights },
+        mood_entries: moodEntries,
         captures,
         todos,
         expenses,

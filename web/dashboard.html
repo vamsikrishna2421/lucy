@@ -114,10 +114,6 @@ nav{display:flex;flex-direction:column;gap:3px;flex:1;overflow-y:auto}
 .orb::before{left:38px}.orb::after{right:38px}
 .spark-dot{position:absolute;border-radius:50%;background:var(--primary-glow);opacity:.7;animation:twinkle 3s infinite}
 @keyframes twinkle{0%,100%{opacity:.2;transform:scale(.7)}50%{opacity:.9;transform:scale(1.1)}}
-.mini-face{position:absolute;right:8%;top:30%;width:54px;height:54px;border-radius:50%;
-  background:radial-gradient(circle at 38% 32%,var(--orb-a),var(--orb-b) 60%,var(--orb-c));
-  box-shadow:var(--shadow-sm),0 0 24px var(--glow);display:grid;place-items:center}
-.mini-face::after{content:"☺";font-size:24px;color:rgba(60,20,4,.7)}
 
 /* quick actions */
 .qa{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:26px}
@@ -301,8 +297,7 @@ function vHome(){const d=DATA;const name=(d.profile&&d.profile.name)||'';const t
     <div class="hero"><div class="orb-wrap"><div class="cloud">Lucy</div><div class="orb"></div></div>
       <span class="spark-dot" style="width:6px;height:6px;left:32%;top:20%"></span>
       <span class="spark-dot" style="width:4px;height:4px;left:64%;top:30%;animation-delay:1s"></span>
-      <span class="spark-dot" style="width:5px;height:5px;left:54%;top:12%;animation-delay:1.8s"></span>
-      <div class="mini-face"></div></div>
+      <span class="spark-dot" style="width:5px;height:5px;left:54%;top:12%;animation-delay:1.8s"></span></div>
     <div class="qa">
       ${qa('✎','Capture thought','Quick note or idea',"focusCap()")}
       ${qa('✦','Ask Lucy','Get insights',"go('ask')")}

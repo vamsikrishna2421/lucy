@@ -32,6 +32,7 @@
     "expo-status-bar": "~56.0.4",
     "expo-system-ui": "~56.0.5",
     "expo-task-manager": "~56.0.16",
+    "expo-updates": "~56.0.19",
     "jsonrepair": "^3.14.0",
     "react": "19.2.3",
     "react-native": "0.85.3",

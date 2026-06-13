@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 12 (multi-upload) ─────────────────────── */
+/* ─── LUCY web · premium · dashboard rev 13 (documents manager) ─────────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -342,7 +342,7 @@ function toggleTheme(){applyTheme(document.documentElement.getAttribute('data-th
 applyTheme((()=>{try{return localStorage.getItem('lucy-theme')||'dark';}catch(e){return'dark';}})());
 
 const NAV=[['home','◉','Home'],['timeline','≣','Timeline'],['ask','✦','Ask Lucy'],['tasks','◇','Tasks'],
-  ['library','🗂','Library'],['brain','❋','Brain'],['people','◐','People'],['health','♥','Health'],['money','▦','Money'],['about','☻','About You']];
+  ['library','🗂','Documents'],['brain','❋','Brain'],['people','◐','People'],['health','♥','Health'],['money','▦','Money'],['about','☻','About You']];
 function renderNav(){$('nav').innerHTML=NAV.map(([k,ic,label])=>{
   let badge='';if(DATA){if(k==='tasks')badge=DATA.todos.filter(pending).length||'';if(k==='timeline')badge=(DATA.captures||[]).length||'';if(k==='people')badge=(DATA.people||[]).length||'';}
   return `<div class="nav-i ${ROUTE===k?'on':''}" onclick="go('${k}')"><span class="ic">${ic}</span>${label}${badge?`<span class="badge">${badge}</span>`:''}</div>`;}).join('');}
@@ -520,7 +520,7 @@ async function handleFile(file){return handleFiles(file?[file]:[]);}
 /* ─── Library / Document Vault ─── */
 let VAULT=[],VBUCKET='All';
 const DEFAULT_BUCKETS=['ID & Cards','Certificates','Financial','Medical','Travel','Receipts','Notes','Other'];
-function vLibrary(){return `<div class="greet"><h1 style="font-size:24px">Library</h1><div class="grow"></div><button class="btn" onclick="pickFile()">＋ Upload</button></div>
+function vLibrary(){return `<div class="greet"><h1 style="font-size:24px">Documents Manager</h1><div class="grow"></div><button class="btn" onclick="pickFile()">＋ Upload</button></div>
   <div class="subtle-line">Your documents — certificates, IDs, receipts — organized by LUCY, stored on your device.</div>
   <div id="vaultChips" class="vchips"></div>
   <div id="vaultGrid"><div class="empty"><div class="big">◌</div>Loading documents…</div></div>`;}

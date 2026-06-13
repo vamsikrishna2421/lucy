@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 14 (smart search + dynamic buckets) ─────────────────────── */
+/* ─── LUCY web · premium · dashboard rev 15 (search stopwords) ─────────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -536,9 +536,13 @@ const SYN=[['payslip','payslips','salary','salaryslip','salary slip','pay slip',
   ['certificate','certificates','cert','certification'],['invoice','invoices','bill','bills','receipt','receipts'],
   ['statement','statements','bankstatement','bank statement'],['visa','visas'],['passport','passports'],
   ['tax','taxes','taxation','w2','1099','itr'],['insurance','policy','policies'],['offer','offerletter','offer letter']];
+/* Filler words that just mean "documents" or are noise — ignored so "usa docs" === "usa". */
+const STOP=new Set(['doc','docs','document','documents','file','files','my','all','the','a','an','of','for','in','on','show','find','get','me','please','related','about','any','some']);
 function expand(tok){for(const g of SYN){if(g.includes(tok))return g;}return tok.length>4&&tok.endsWith('s')?[tok,tok.slice(0,-1)]:[tok];}
 function smartMatch(item,q){const hay=((item.title||'')+' '+(item.description||'')+' '+(item.bucket||'')+' '+(item.keywords||'')).toLowerCase();
-  return q.toLowerCase().split(/\s+/).filter(Boolean).every(t=>expand(t).some(s=>hay.includes(s)));}
+  const toks=q.toLowerCase().split(/\s+/).filter(t=>t&&!STOP.has(t));
+  if(!toks.length)return true; // query was all filler → show everything
+  return toks.every(t=>expand(t).some(s=>hay.includes(s)));}
 async function reorganize(){if(!VAULT||!VAULT.length){toast('Nothing to organize yet');return;}
   if(!confirm('Re-analyze all '+VAULT.length+' documents into smart categories? Uses AI per document.'))return;
   for(let i=0;i<VAULT.length;i++){toast('Re-organizing '+(i+1)+' of '+VAULT.length+'…');try{await api('/api/vault/reclassify',{method:'POST',body:JSON.stringify({id:VAULT[i].id})});}catch(e){}if(i%4===3)await loadVault();}

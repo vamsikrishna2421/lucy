@@ -18,7 +18,8 @@ import { insertContextRequest } from '../db/contextRequests';
 import { insertExtractionSnapshot } from '../db/extractions';
 import { insertIdea } from '../db/ideas';
 import { upsertInterest } from '../db/interests';
-import { upsertPerson } from '../db/people';
+import { upsertPerson, looksLikePerson } from '../db/people';
+import { getSetting } from '../db/settings';
 import { insertPlace } from '../db/places';
 import { insertOpenLoop } from '../db/openLoops';
 import { insertFollowUp } from '../db/followUps';
@@ -240,7 +241,9 @@ async function persistExtraction(
     for (const interest of extraction.interests) {
       await upsertInterest(db, interest);
     }
+    const userName = (await getSetting(db, 'user_profile_name')) ?? '';
     for (const person of extraction.people) {
+      if (!looksLikePerson(person, userName)) continue; // skip the user themselves, orgs, junk
       await upsertPerson(db, person, extraction.summary);
       void updatePersonContext(db, person, capture.raw_transcript);
     }

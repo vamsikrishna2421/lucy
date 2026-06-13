@@ -38,6 +38,17 @@ export async function resolveOpenLoop(db: SQLiteDatabase, id: number): Promise<v
   );
 }
 
+/** Auto-resolve open loops that have gone stale (unresolved past `days`). Stops the
+ *  "unfinished threads" list from accumulating forever (it had grown to 200+). */
+export async function decayStaleOpenLoops(db: SQLiteDatabase, days = 30): Promise<number> {
+  const res = await db.runAsync(
+    `UPDATE open_loops SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP
+     WHERE status = 'open' AND created_at < datetime('now', ?)`,
+    `-${days} days`,
+  );
+  return res.changes ?? 0;
+}
+
 export async function countOpenLoops(db: SQLiteDatabase): Promise<number> {
   const row = await db.getFirstAsync<{ n: number }>("SELECT COUNT(*) AS n FROM open_loops WHERE status = 'open'");
   return row?.n ?? 0;

@@ -324,8 +324,22 @@ async function route(req: ParsedRequest): Promise<string> {
     }
     if (req.method === 'DELETE' && req.path.startsWith('/api/capture/')) {
       const id = Number(req.path.split('/').pop());
-      if (id) { const { deleteCaptureCompletely } = await import('../db/captures'); await deleteCaptureCompletely(db, id); }
+      if (id) {
+        const { deleteCaptureCompletely, purgeCaptureDerivedData } = await import('../db/captures');
+        if (req.query.hard === '1') { await purgeCaptureDerivedData(db, id); await db.runAsync('DELETE FROM captures WHERE id = ?', id); }
+        else await deleteCaptureCompletely(db, id);
+      }
       return json(200, { ok: true });
+    }
+    // One-shot data cleanup + graph rebuild (junk people, stale open loops). For maintenance.
+    if (req.method === 'POST' && req.path === '/api/cleanup') {
+      const { cleanupJunkPeople } = await import('../db/people');
+      const { decayStaleOpenLoops } = await import('../db/openLoops');
+      const peopleRemoved = await cleanupJunkPeople(db);
+      const loopsResolved = await decayStaleOpenLoops(db, Number(payload.loopDays) || 30);
+      const { organizeMemory } = await import('../processing/organizer');
+      await organizeMemory(db, 'manual');
+      return json(200, { ok: true, peopleRemoved, loopsResolved });
     }
     if (req.method === 'DELETE' && req.path.startsWith('/api/fact/')) {
       const id = Number(req.path.split('/').pop());

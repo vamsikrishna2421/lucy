@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 20 (dup detection) ─────────────────────── */
+/* ─── LUCY web · premium · dashboard rev 21 (clean capture body) ─────────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -344,7 +344,13 @@ function clock(d){if(!d)return'';const t=new Date((d+'').replace(' ','T')+((d+''
 function fmt(d){if(!d)return'';const t=new Date((d+'').replace(' ','T')+((d+'').includes('Z')?'':'Z'));if(isNaN(t))return'';const s=(Date.now()-t)/1000;if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';if(s<604800)return Math.floor(s/86400)+'d ago';return t.toLocaleDateString(undefined,{month:'short',day:'numeric'});}
 const pending=t=>(t.status!=='completed'&&!t.archived_at);
 function capText(c){return c.extracted_title||(c.raw_transcript||'').slice(0,80)||'Untitled';}
-function capBody(c){return (c.structured_text||c.raw_transcript||'');}
+/* Clean body: pull the Summary value from structured_text, skipping Title:/Type: labels
+   (mirrors the app). Handles old "Title:/Summary:/…" rows + the new title-less format. */
+function capBody(c){const st=c.structured_text;
+  if(st){const lines=st.split('\n');
+    for(const ln of lines){const i=ln.indexOf(':');if(i<0)continue;const lbl=ln.slice(0,i).trim().toLowerCase();if(lbl==='summary'){const v=ln.slice(i+1).trim();if(v)return v;}}
+    for(const ln of lines){const i=ln.indexOf(':');if(i<0){if(ln.trim().length>15)return ln.trim();continue;}const lbl=ln.slice(0,i).trim().toLowerCase();if(lbl==='title'||lbl==='type')continue;const v=ln.slice(i+1).trim();if(v.length>15)return v;}}
+  return (c.raw_transcript||'');}
 
 /* theme */
 function applyTheme(t){document.documentElement.setAttribute('data-theme',t);$('themeBtn').textContent=t==='dark'?'🌙':'☀️';try{localStorage.setItem('lucy-theme',t);}catch(e){}}

@@ -5,7 +5,9 @@ function sentenceList(values: string[]): string {
 }
 
 export function formatStructuredMemory(result: ExtractionResult): string {
-  const lines = [`Title: ${result.title}`];
+  // Title is stored separately (captures.extracted_title) — don't duplicate it here, it
+  // bloated the body and showed up as "Title: …" in views. Lead with the summary.
+  const lines: string[] = [];
   if (result.summary.trim()) {
     lines.push(`Summary: ${result.summary.trim()}`);
   }

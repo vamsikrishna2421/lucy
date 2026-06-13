@@ -651,6 +651,33 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           }}
           actionLabel="Export"
         />
+        <SettingsSectionLabel label="App" />
+        <SettingsRow
+          title="Check for updates"
+          value="Fetch the latest LUCY improvements and restart into them"
+          onAction={async () => {
+            try {
+              const Updates = await import('expo-updates');
+              if (!Updates.isEnabled) {
+                Alert.alert('Updates unavailable', 'Over-the-air updates run only in installed release builds, not in Expo Go / dev.');
+                return;
+              }
+              const res = await Updates.checkForUpdateAsync();
+              if (!res.isAvailable) {
+                Alert.alert('You’re up to date', 'LUCY already has the latest version.');
+                return;
+              }
+              await Updates.fetchUpdateAsync();
+              Alert.alert('Update ready', 'LUCY will restart to apply the latest version.', [
+                { text: 'Later', style: 'cancel' },
+                { text: 'Restart now', onPress: () => { void Updates.reloadAsync(); } },
+              ]);
+            } catch (e) {
+              Alert.alert('Update check failed', e instanceof Error ? e.message : 'Please try again later.');
+            }
+          }}
+          actionLabel="Check"
+        />
         <SettingsSectionLabel label="Danger Zone" />
         <SettingsRow
           title="Delete all memories"

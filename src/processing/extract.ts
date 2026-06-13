@@ -108,13 +108,16 @@ export async function analyzeTranscript(
   if (!trimmed) {
     throw new Error('Enter text before processing.');
   }
-  // Always use remote AI — on-device model disconnected until further notice.
-  // localOnly flag is intentionally ignored.
+  // On-device LLM (Phi-4 via executorch) is reconnected. localOnly forces fully
+  // local extraction; otherwise AIProvider.analyze uses remote when available and
+  // falls back to the on-device model when remote is unavailable (offline / no key).
   const privacyLevel = options.privacyLevel ?? 'normal';
   const explicitFact = extractExplicitEnglishFact(trimmed);
   const result = explicitFact
     ? normalizeExtraction(explicitFact)
-    : await AIProvider.analyze(trimmed, privacyLevel);
+    : options.localOnly
+      ? await AIProvider.analyzeLocally(trimmed)
+      : await AIProvider.analyze(trimmed, privacyLevel);
 
   // Credential auto-detection disabled — user manually marks sensitive content.
   const extraction = repairReminderTimes(normalizeExtraction(result), trimmed);

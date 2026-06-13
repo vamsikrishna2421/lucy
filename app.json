@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.135",
+      "buildNumber": "1.0.136",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
@@ -73,7 +73,7 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.anonymous.lucy",
-      "versionCode": 90,
+      "versionCode": 91,
       "intentFilters": [
         {
           "action": "SEND",
@@ -181,7 +181,9 @@
         {
           "android": {
             "minSdkVersion": 33,
-            "enableProguardInReleaseBuilds": true,
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "useLegacyPackaging": true,
             "abiFilters": ["arm64-v8a"],
             "manifestQueries": {
               "package": [

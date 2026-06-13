@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 21 (clean capture body) ─────────────────────── */
+/* ─── LUCY web · premium · dashboard rev 22 (mood tones) ─────────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -458,7 +458,7 @@ function vBrain(){const k=DATA.knowledge||{};const ents=(k.entities||[]).slice(0
   if(cons.length){h+=`<div class="sec"><h2>Connections · ${cons.length}</h2></div><div class="col">`+cons.map(c=>`<div class="card"><div style="flex:1"><span class="ttl">${esc(c.source_name||'?')}</span> <span style="color:var(--primary)">— ${esc(c.relation||'relates to')} →</span> <span class="ttl">${esc(c.target_name||'?')}</span>${c.explanation?`<div class="sub">${esc(c.explanation)}</div>`:''}</div><span class="pill ${esc(c.confidence||'emerging')}">${esc(c.confidence||'')}</span></div>`).join('')+'</div>';}return h;}
 function vPeople(){const ppl=(DATA.people||[]);if(!ppl.length)return `<div class="greet"><h1 style="font-size:24px">People</h1></div>`+empty('◐','No people yet','LUCY remembers people as you mention them.');
   return `<div class="greet"><h1 style="font-size:24px">People</h1></div><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">`+ppl.map(p=>`<div class="card" style="flex-direction:column;gap:7px"><div style="display:flex;width:100%;align-items:center;gap:9px"><div class="avatar">${esc((p.name||'?')[0].toUpperCase())}</div><span class="ttl" style="font-size:15.5px">${esc(p.name)}</span></div>${p.context?`<div class="sub">${esc(p.context)}</div>`:''}<div class="when" style="margin:0">${p.last_mentioned?'Last mentioned '+fmt(p.last_mentioned):''}</div></div>`).join('')+'</div>';}
-function vHealth(){const m=(DATA.mood_entries||[]);const h0=computeHealth();const tones={positive:'😊',neutral:'😐',low:'😔',negative:'😣'};
+function vHealth(){const m=(DATA.mood_entries||[]);const h0=computeHealth();const tones={positive:'😊',excited:'🤩',calm:'😌',neutral:'😐',low:'😔',frustrated:'😤',stressed:'😰',negative:'😣'};
   let h=`<div class="greet"><h1 style="font-size:24px">Health</h1></div>
     <div class="panel" style="margin-bottom:16px"><div class="health">${ring(h0.score)}<div class="lbl"><div class="big">${h0.label} · ${h0.score}</div><div class="sm">${h0.note}</div></div>${barsHtml(h0.bars)}</div></div>
     <div class="sec"><h2>Log how you feel</h2></div><div class="card" style="gap:10px;flex-wrap:wrap">`;

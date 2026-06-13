@@ -1,18 +1,34 @@
-import {
-  initExecutorch,
-  isAvailable,
-  LLMModule,
-  models,
-  type Message,
-} from 'react-native-executorch';
-import { ExpoResourceFetcher } from 'react-native-executorch-expo-resource-fetcher';
+// executorch is imported LAZILY + GUARDED — a static import crashes the whole app at startup
+// if the native module (org.pytorch.executorch.Module) isn't loadable. Types are erased, so
+// `import type` is safe; runtime values come through guarded require() accessors below.
+import type { LLMModule, Message } from 'react-native-executorch';
 import { jsonrepair } from 'jsonrepair';
 import { config } from '../config';
 import { getDatabase } from '../db';
 import { getSetting, setSetting } from '../db/settings';
 import type { ExtractionResult } from '../types/extraction';
 import { deviceExtractionPrompt, localReferenceTimestamp } from './prompts';
-import { DEFAULT_LOCAL_MODEL_ID, localModelOptions, resolveLocalModel, type LocalModelId } from './modelCatalog';
+import { DEFAULT_LOCAL_MODEL_ID, localModelOptions, resolveLocalModel, type LocalModelId, type LocalModelConfig } from './modelCatalog';
+
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-var-requires */
+// Guarded lazy access to react-native-executorch. Returns null if the native module is
+// missing/unloadable (older arch, failed build) so the feature degrades instead of crashing.
+let _et: any; // undefined = not tried, null = unavailable
+function et(): any {
+  if (_et !== undefined) return _et;
+  try { _et = require('react-native-executorch'); } catch { _et = null; }
+  return _et;
+}
+let _fetcher: any;
+function resourceFetcher(): any {
+  if (_fetcher !== undefined) return _fetcher;
+  try { _fetcher = require('react-native-executorch-expo-resource-fetcher').ExpoResourceFetcher; } catch { _fetcher = null; }
+  return _fetcher;
+}
+/** Whether on-device LLM is usable on this device/build (never throws). */
+function deviceLLMAvailable(): boolean {
+  try { const m = et(); return !!m && !!m.isAvailable; } catch { return false; }
+}
 
 export type DeviceModelStatus = 'not_loaded' | 'downloading' | 'ready' | 'error' | 'unavailable';
 
@@ -25,11 +41,18 @@ export interface DeviceModelState {
   error?: string;
 }
 
-const obsoleteFastModel = models.llm.lfm2_5_350m({ quant: true });
 const MODEL_SETTING = 'local_model_id';
 const configuredDefault = config.deviceModelTier === 'balanced' ? 'balanced' : DEFAULT_LOCAL_MODEL_ID;
 let selectedOption = resolveLocalModel(configuredDefault);
-let selectedModel = withDevelopmentAssetRelay(selectedOption.createModel());
+// Built lazily (createModel touches executorch) and reset when the selection changes.
+let _selectedModel: LocalModelConfig | undefined;
+function selectedModel(): LocalModelConfig {
+  if (!_selectedModel) _selectedModel = withDevelopmentAssetRelay(selectedOption.createModel());
+  return _selectedModel;
+}
+function obsoleteFastModel(): LocalModelConfig | null {
+  const m = et(); return m ? (m.models.llm.lfm2_5_350m({ quant: true }) as LocalModelConfig) : null;
+}
 
 function withDevelopmentAssetRelay<T extends { modelSource: string; tokenizerSource: string; tokenizerConfigSource: string }>(configuredModel: T): T {
   return config.deviceModelAssetBaseUrl
@@ -46,8 +69,8 @@ let model: LLMModule | undefined;
 let loading: Promise<LLMModule> | undefined;
 let initialized = false;
 let state: DeviceModelState = {
-  available: isAvailable,
-  status: isAvailable ? 'not_loaded' : 'unavailable',
+  available: deviceLLMAvailable(),
+  status: deviceLLMAvailable() ? 'not_loaded' : 'unavailable',
   progress: 0,
   modelName: selectedOption.name,
   modelId: selectedOption.id,
@@ -62,7 +85,8 @@ function initializeRuntime(): void {
   if (initialized) {
     return;
   }
-  initExecutorch({ resourceFetcher: ExpoResourceFetcher });
+  const m = et();
+  if (m) m.initExecutorch({ resourceFetcher: resourceFetcher() });
   initialized = true;
 }
 
@@ -86,7 +110,7 @@ export function subscribeToDeviceModel(listener: (next: DeviceModelState) => voi
 }
 
 export async function autoRestoreDeviceModel(): Promise<void> {
-  if (!isAvailable || model || loading) {
+  if (!deviceLLMAvailable() || model || loading) {
     return;
   }
   if (await selectedModelIsDownloaded()) {
@@ -97,7 +121,7 @@ export async function autoRestoreDeviceModel(): Promise<void> {
 export async function initializeDeviceModelSelection(): Promise<DeviceModelState> {
   const db = await getDatabase();
   selectedOption = resolveLocalModel(await getSetting(db, MODEL_SETTING) ?? configuredDefault);
-  selectedModel = withDevelopmentAssetRelay(selectedOption.createModel());
+  _selectedModel = undefined; // rebuild lazily for the new selection
   updateState({ modelId: selectedOption.id, modelName: selectedOption.name });
   return state;
 }
@@ -114,11 +138,11 @@ export async function selectDeviceModel(modelId: LocalModelId): Promise<DeviceMo
   const db = await getDatabase();
   await setSetting(db, MODEL_SETTING, modelId);
   selectedOption = resolveLocalModel(modelId);
-  selectedModel = withDevelopmentAssetRelay(selectedOption.createModel());
+  _selectedModel = undefined; // rebuild lazily for the new selection
   updateState({
     modelId: selectedOption.id,
     modelName: selectedOption.name,
-    status: isAvailable ? 'not_loaded' : 'unavailable',
+    status: deviceLLMAvailable() ? 'not_loaded' : 'unavailable',
     progress: 0,
     error: undefined,
   });
@@ -126,7 +150,7 @@ export async function selectDeviceModel(modelId: LocalModelId): Promise<DeviceMo
 }
 
 export async function prepareDeviceModel(): Promise<DeviceModelState> {
-  if (!isAvailable) {
+  if (!deviceLLMAvailable()) {
     updateState({ status: 'unavailable', error: 'On-device intelligence is unavailable on this device.' });
     return state;
   }
@@ -136,17 +160,17 @@ export async function prepareDeviceModel(): Promise<DeviceModelState> {
   if (!loading) {
     initializeRuntime();
     updateState({ status: 'downloading', progress: 0, error: undefined });
-    loading = LLMModule.fromModelName(
-      selectedModel,
-      (progress) => updateState({ progress }),
+    loading = et().LLMModule.fromModelName(
+      selectedModel(),
+      (progress: number) => updateState({ progress }),
     )
-      .then((loadedModel) => {
+      .then((loadedModel: LLMModule) => {
         loadedModel.configure({ generationConfig: { temperature: 0 } });
         model = loadedModel;
         updateState({ status: 'ready', progress: 1, error: undefined });
         return loadedModel;
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : 'On-device model setup failed.';
         updateState({ status: 'error', error: message });
         loading = undefined;
@@ -159,9 +183,11 @@ export async function prepareDeviceModel(): Promise<DeviceModelState> {
 
 async function selectedModelIsDownloaded(): Promise<boolean> {
   initializeRuntime();
-  const files = await ExpoResourceFetcher.listDownloadedFiles();
-  const filename = selectedModel.modelSource.split('/').pop();
-  return Boolean(filename && files.some((file) => file.includes(filename)));
+  const fetcher = resourceFetcher();
+  if (!fetcher) return false;
+  const files = await fetcher.listDownloadedFiles();
+  const filename = selectedModel().modelSource.split('/').pop();
+  return Boolean(filename && files.some((file: string) => file.includes(filename)));
 }
 
 export async function clearDownloadedDeviceModels(): Promise<void> {
@@ -171,12 +197,10 @@ export async function clearDownloadedDeviceModels(): Promise<void> {
   }
   loading = undefined;
   initializeRuntime();
-  await ExpoResourceFetcher.deleteResources(
-    selectedModel.modelSource,
-    selectedModel.tokenizerSource,
-    selectedModel.tokenizerConfigSource,
-  );
-  updateState({ status: isAvailable ? 'not_loaded' : 'unavailable', progress: 0, error: undefined });
+  const fetcher = resourceFetcher();
+  const sel = selectedModel();
+  if (fetcher) await fetcher.deleteResources(sel.modelSource, sel.tokenizerSource, sel.tokenizerConfigSource);
+  updateState({ status: deviceLLMAvailable() ? 'not_loaded' : 'unavailable', progress: 0, error: undefined });
 }
 
 export async function clearAllDownloadedDeviceModels(): Promise<void> {
@@ -186,17 +210,17 @@ export async function clearAllDownloadedDeviceModels(): Promise<void> {
   }
   loading = undefined;
   initializeRuntime();
-  const downloadable = localModelOptions.flatMap((option) => {
-    const configured = withDevelopmentAssetRelay(option.createModel());
-    return [configured.modelSource, configured.tokenizerSource, configured.tokenizerConfigSource];
-  });
-  await ExpoResourceFetcher.deleteResources(
-    obsoleteFastModel.modelSource,
-    obsoleteFastModel.tokenizerSource,
-    obsoleteFastModel.tokenizerConfigSource,
-    ...downloadable,
-  );
-  updateState({ status: isAvailable ? 'not_loaded' : 'unavailable', progress: 0, error: undefined });
+  const fetcher = resourceFetcher();
+  if (fetcher) {
+    const downloadable = localModelOptions.flatMap((option) => {
+      const configured = withDevelopmentAssetRelay(option.createModel());
+      return [configured.modelSource, configured.tokenizerSource, configured.tokenizerConfigSource];
+    });
+    const obsolete = obsoleteFastModel();
+    const obsoleteSrcs = obsolete ? [obsolete.modelSource, obsolete.tokenizerSource, obsolete.tokenizerConfigSource] : [];
+    await fetcher.deleteResources(...obsoleteSrcs, ...downloadable);
+  }
+  updateState({ status: deviceLLMAvailable() ? 'not_loaded' : 'unavailable', progress: 0, error: undefined });
 }
 
 async function generateOnDevice(messages: Message[]): Promise<string> {

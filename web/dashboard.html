@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 11 (pdf upload) ─────────────────────── */
+/* ─── LUCY web · premium · dashboard rev 12 (multi-upload) ─────────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -322,7 +322,7 @@ nav{display:flex;flex-direction:column;gap:1px}
 </div>
 <div class="toast" id="toast"></div>
 <div class="modal" id="modal" onclick="if(event.target===this)closeModal()"><div class="modal-card"><button class="modal-x" onclick="closeModal()">✕</button><div class="modal-body" id="modalBody"></div></div></div>
-<input type="file" id="fileInput" accept="image/*,application/pdf" style="display:none" onchange="handleFile(this.files&&this.files[0]);this.value='';"/>
+<input type="file" id="fileInput" accept="image/*,application/pdf" multiple style="display:none" onchange="handleFiles(this.files);this.value='';"/>
 <script>
 let DATA=null, ROUTE='home', CHAT=[], busy=false;
 const $=id=>document.getElementById(id);
@@ -493,18 +493,30 @@ let _pdfjs=null;
 async function loadPdfJs(){if(_pdfjs)return _pdfjs;await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';_pdfjs=window.pdfjsLib;return _pdfjs;}
 /* Render a PDF's first page to a JPEG data URL — so it flows through the image vision pipeline. */
 async function pdfFirstPage(file,max,q){const lib=await loadPdfJs();const buf=await file.arrayBuffer();const pdf=await lib.getDocument({data:buf}).promise;const page=await pdf.getPage(1);let vp=page.getViewport({scale:1});const scale=Math.min(max/vp.width,max/vp.height)||1;vp=page.getViewport({scale:Math.max(scale,0.3)});const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);await page.render({canvasContext:ctx,viewport:vp}).promise;return c.toDataURL('image/jpeg',q);}
-async function handleFile(file){if(!file)return;const isPdf=file.type==='application/pdf'||/\.pdf$/i.test(file.name);
-  if(!/^image\//.test(file.type)&&!isPdf){toast('Pick an image or PDF');return;}
+/* Process one file → returns {ok, title?, bucket?, error?}. */
+async function uploadOne(file){const isPdf=file.type==='application/pdf'||/\.pdf$/i.test(file.name);
+  if(!/^image\//.test(file.type)&&!isPdf)return {ok:false,error:'not an image/PDF'};
   let full,thumb;
   try{
-    if(isPdf){toast('Rendering PDF…');full=await pdfFirstPage(file,1400,0.78);thumb=await downscaleSrc(full,260,0.6);}
-    else{toast('Reading image…');full=await downscale(file,1280,0.72);thumb=await downscale(file,260,0.6);}
-  }catch(e){toast(isPdf?'Could not read that PDF':'Could not read that image');return;}
-  toast('LUCY is filing it…');
-  try{const r=await api('/api/upload',{method:'POST',body:JSON.stringify({image:full,thumb,name:file.name})});
-    if(r&&r.ok){toast('Filed ✓ '+(r.bucket?('→ '+r.bucket):'')+(r.title?(' · '+r.title.slice(0,30)):''));if(ROUTE==='library')loadVault();else go('library');setTimeout(()=>load(true),1800);}
-    else toast(r&&r.error?('Upload: '+r.error):'Upload needs the new build');}
-  catch(e){toast('Image upload needs the new build (ships via OTA)');}}
+    if(isPdf){full=await pdfFirstPage(file,1400,0.78);thumb=await downscaleSrc(full,260,0.6);}
+    else{full=await downscale(file,1280,0.72);thumb=await downscale(file,260,0.6);}
+  }catch(e){return {ok:false,error:'unreadable'};}
+  try{const r=await api('/api/upload',{method:'POST',body:JSON.stringify({image:full,thumb,name:file.name})});return r&&r.ok?{ok:true,title:r.title,bucket:r.bucket}:{ok:false,error:(r&&r.error)||'needs update'};}
+  catch(e){return {ok:false,error:'unreachable'};}}
+/* Upload one or many files sequentially, with progress. */
+async function handleFiles(fileList){const files=Array.from(fileList||[]);if(!files.length)return;
+  if(ROUTE!=='library')go('library');
+  let ok=0,fail=0;
+  for(let i=0;i<files.length;i++){
+    toast(files.length>1?`Filing ${i+1} of ${files.length}…`:'LUCY is filing it…');
+    const r=await uploadOne(files[i]);
+    if(r.ok){ok++;if(files.length===1)toast('Filed ✓ '+(r.bucket?('→ '+r.bucket):'')+(r.title?(' · '+r.title.slice(0,30)):''));}
+    else fail++;
+    if(ROUTE==='library')await loadVault();
+  }
+  if(files.length>1)toast(`Filed ${ok} document${ok===1?'':'s'}${fail?` · ${fail} failed`:''} ✓`);
+  setTimeout(()=>load(true),1500);}
+async function handleFile(file){return handleFiles(file?[file]:[]);}
 /* ─── Library / Document Vault ─── */
 let VAULT=[],VBUCKET='All';
 const DEFAULT_BUCKETS=['ID & Cards','Certificates','Financial','Medical','Travel','Receipts','Notes','Other'];

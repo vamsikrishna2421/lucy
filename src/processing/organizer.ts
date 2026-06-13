@@ -191,16 +191,24 @@ export async function organizeMemory(db: SQLiteDatabase, trigger: string): Promi
       // A malformed historical extraction remains auditable but cannot generate structured display text.
     }
   }
+  // A clarification only becomes an insight if it ADDS knowledge — not "I don't remember",
+  // not a "discard/forget this" command (those are noise / removal intents, not insights).
+  const clarificationIsSubstantive = (answer: string | null | undefined): boolean => {
+    const a = (answer ?? '').trim(); if (a.length <= 2) return false;
+    const low = a.toLowerCase();
+    if (/\b(discard|forget|drop|remove|delete)\b/.test(low) && /\b(brain|memor|completely|this|it|that)\b/.test(low)) return false;
+    if (/^(i\s+(really\s+)?(don'?t|do\s*not|dont)\s+(remember|know|recall)|no idea|idk|not sure|don'?t know|dont know|nothing|none|n\/?a|na|skip|maybe)\b/.test(low)) {
+      if (!/\b(but|however|actually|it'?s|its|basically|i think i|i did|implemented|because it'?s)\b/.test(low)) return false;
+    }
+    return true;
+  };
+  const norm = (s: string | null | undefined): string => (s ?? 'context').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'context';
   const insights: KnowledgeInsightDraft[] = [
-    // Only clarifications with a SUBSTANTIVE answer become insights — skip empty / "no idea"
-    // responses that were flooding the Insights panel with noise.
     ...clarified
-      .filter((context) => {
-        const a = (context.answer_text ?? '').trim();
-        return a.length > 2 && !/^(no idea|idk|i don'?t know|don'?t know|dont know|nothing|none|n\/?a|na|skip|maybe)\.?$/i.test(a);
-      })
+      .filter((context) => clarificationIsSubstantive(context.answer_text))
       .map((context) => ({
-        key: `clarification:${context.id}`,
+        // Key by topic (not row id) so re-clarifying the same thing updates one insight, not many.
+        key: `clarification:${norm(context.snippet)}`,
         type: 'clarification',
         title: `Clarified memory: ${context.snippet?.trim() || 'Additional context'}`,
         detail: context.answer_text?.trim() || 'Context was provided.',
@@ -222,8 +230,10 @@ export async function organizeMemory(db: SQLiteDatabase, trigger: string): Promi
       observedAt: intent.last_asked_at,
     })),
   ];
-  const summary = `Organized ${evidence.length} remembered thought${evidence.length === 1 ? '' : 's'} into ${projection.entities.length} entities, ${projection.connections.length} connections, and ${insights.length} insights.`;
-  await replaceKnowledgeProjection(db, projection.entities, projection.connections, insights, trigger, summary);
+  // Dedup by key (topic-keyed clarifications can collide) — keep the latest, avoid UNIQUE clashes.
+  const uniqueInsights = Array.from(new Map(insights.map((i) => [i.key, i])).values());
+  const summary = `Organized ${evidence.length} remembered thought${evidence.length === 1 ? '' : 's'} into ${projection.entities.length} entities, ${projection.connections.length} connections, and ${uniqueInsights.length} insights.`;
+  await replaceKnowledgeProjection(db, projection.entities, projection.connections, uniqueInsights, trigger, summary);
 
   const freshlyConfirmed = projection.entities.filter(
     (entity) => entity.confidence === 'confirmed' && entity.evidenceCount === 3,

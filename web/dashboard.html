@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 10 (reprocess/correct) ─────────────────────── */
+/* ─── LUCY web · premium · dashboard rev 11 (pdf upload) ─────────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -322,7 +322,7 @@ nav{display:flex;flex-direction:column;gap:1px}
 </div>
 <div class="toast" id="toast"></div>
 <div class="modal" id="modal" onclick="if(event.target===this)closeModal()"><div class="modal-card"><button class="modal-x" onclick="closeModal()">✕</button><div class="modal-body" id="modalBody"></div></div></div>
-<input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFile(this.files&&this.files[0]);this.value='';"/>
+<input type="file" id="fileInput" accept="image/*,application/pdf" style="display:none" onchange="handleFile(this.files&&this.files[0]);this.value='';"/>
 <script>
 let DATA=null, ROUTE='home', CHAT=[], busy=false;
 const $=id=>document.getElementById(id);
@@ -370,7 +370,7 @@ function vHome(){const d=DATA;const name=(d.profile&&d.profile.name)||'';const t
       ${qa('✎','Capture thought','Quick note or idea',"focusCap()")}
       ${qa('✦','Ask Lucy','Get insights',"go('ask')")}
       ${qa('◎','Focus Now','Start deep work',"go('tasks')")}
-      ${qa('⬆','Upload','Image, receipt, note',"pickFile()")}
+      ${qa('⬆','Upload','Image, PDF, receipt',"pickFile()")}
     </div>
     <div class="composer"><input id="cap" placeholder="Capture a thought…" onkeydown="if(event.key==='Enter')addCapture()"/><button class="btn" onclick="addCapture()">Send</button></div>
     <div class="sec"><h2>Today</h2><span style="color:var(--faint)">▾</span></div>
@@ -486,8 +486,20 @@ function orbLeave(){const o=$('orb');if(!o)return;o.classList.remove('peek');o.c
 function pickFile(){$('fileInput').click();}
 /* Downscale to keep the base64 payload small over the LAN socket (max 1280px, JPEG q.72). */
 function downscale(file,max=1280,q=0.72){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{let w=img.width,h=img.height;if(w>max||h>max){const s=max/Math.max(w,h);w=Math.round(w*s);h=Math.round(h*s);}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);res(c.toDataURL('image/jpeg',q));URL.revokeObjectURL(img.src);};img.onerror=rej;img.src=URL.createObjectURL(file);});}
-async function handleFile(file){if(!file)return;if(!/^image\//.test(file.type)){toast('Pick an image file');return;}
-  toast('Reading image…');let full,thumb;try{full=await downscale(file,1280,0.72);thumb=await downscale(file,260,0.6);}catch(e){toast('Could not read that image');return;}
+/* Re-encode a data URL at a smaller size (used to derive a thumbnail from a render). */
+function downscaleSrc(src,max,q){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{let w=img.width,h=img.height;if(w>max||h>max){const s=max/Math.max(w,h);w=Math.round(w*s);h=Math.round(h*s);}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);res(c.toDataURL('image/jpeg',q));};img.onerror=rej;img.src=src;});}
+/* Lazy-load pdf.js from CDN (needs internet on the laptop, which the browser has). */
+let _pdfjs=null;
+async function loadPdfJs(){if(_pdfjs)return _pdfjs;await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';_pdfjs=window.pdfjsLib;return _pdfjs;}
+/* Render a PDF's first page to a JPEG data URL — so it flows through the image vision pipeline. */
+async function pdfFirstPage(file,max,q){const lib=await loadPdfJs();const buf=await file.arrayBuffer();const pdf=await lib.getDocument({data:buf}).promise;const page=await pdf.getPage(1);let vp=page.getViewport({scale:1});const scale=Math.min(max/vp.width,max/vp.height)||1;vp=page.getViewport({scale:Math.max(scale,0.3)});const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);await page.render({canvasContext:ctx,viewport:vp}).promise;return c.toDataURL('image/jpeg',q);}
+async function handleFile(file){if(!file)return;const isPdf=file.type==='application/pdf'||/\.pdf$/i.test(file.name);
+  if(!/^image\//.test(file.type)&&!isPdf){toast('Pick an image or PDF');return;}
+  let full,thumb;
+  try{
+    if(isPdf){toast('Rendering PDF…');full=await pdfFirstPage(file,1400,0.78);thumb=await downscaleSrc(full,260,0.6);}
+    else{toast('Reading image…');full=await downscale(file,1280,0.72);thumb=await downscale(file,260,0.6);}
+  }catch(e){toast(isPdf?'Could not read that PDF':'Could not read that image');return;}
   toast('LUCY is filing it…');
   try{const r=await api('/api/upload',{method:'POST',body:JSON.stringify({image:full,thumb,name:file.name})});
     if(r&&r.ok){toast('Filed ✓ '+(r.bucket?('→ '+r.bucket):'')+(r.title?(' · '+r.title.slice(0,30)):''));if(ROUTE==='library')loadVault();else go('library');setTimeout(()=>load(true),1800);}
@@ -503,7 +515,7 @@ function vLibrary(){return `<div class="greet"><h1 style="font-size:24px">Librar
 async function loadVault(){try{const r=await api('/api/vault');VAULT=(r&&r.items)||[];}catch(e){VAULT=null;}if(ROUTE==='library')renderVault();}
 function renderVault(){const grid=$('vaultGrid'),chips=$('vaultChips');if(!grid)return;
   if(VAULT===null){grid.innerHTML=empty('🗂','Vault ships via OTA','The document vault activates after the new build + update lands.');if(chips)chips.innerHTML='';return;}
-  if(!VAULT.length){grid.innerHTML=empty('🗂','Your vault is empty','Click ＋ Upload to add a certificate, ID card, or receipt.');if(chips)chips.innerHTML='';return;}
+  if(!VAULT.length){grid.innerHTML=empty('🗂','Your vault is empty','Click ＋ Upload to add a certificate, ID, or receipt — image or PDF.');if(chips)chips.innerHTML='';return;}
   const buckets=['All',...Array.from(new Set(VAULT.map(v=>v.bucket||'Other')))];
   if(chips)chips.innerHTML=buckets.map(b=>`<button class="vchip ${VBUCKET===b?'on':''}" onclick="VBUCKET=this.dataset.b;renderVault()" data-b="${esc(b)}">${esc(b)}${b!=='All'?` <span class="vn">${VAULT.filter(v=>(v.bucket||'Other')===b).length}</span>`:''}</button>`).join('');
   const items=VAULT.filter(v=>VBUCKET==='All'||(v.bucket||'Other')===VBUCKET);

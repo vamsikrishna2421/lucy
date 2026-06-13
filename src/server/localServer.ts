@@ -131,12 +131,80 @@ async function route(req: ParsedRequest): Promise<string> {
       return json(200, { ok: true });
     }
     if (req.method === 'POST' && req.path === '/api/task') {
-      const id = Number(payload.id); const action = String(payload.action ?? '');
-      if (!id) return json(400, { error: 'Missing id' });
+      const action = String(payload.action ?? '');
       const todos = await import('../db/todos');
+      if (action === 'create') {
+        const task = String(payload.task ?? '').trim();
+        if (!task) return json(400, { error: 'Empty task' });
+        const urgency = ['high', 'medium', 'low'].includes(String(payload.urgency)) ? String(payload.urgency) : 'medium';
+        const category = String(payload.category ?? 'general').trim() || 'general';
+        await db.runAsync(
+          "INSERT INTO todos (task, category, urgency, context, status) VALUES (?, ?, ?, '', 'pending')",
+          task, category, urgency,
+        );
+        return json(200, { ok: true });
+      }
+      const id = Number(payload.id);
+      if (!id) return json(400, { error: 'Missing id' });
       if (action === 'complete') await todos.archiveTodo(db, id, 'completed from laptop');
       else if (action === 'delete') await todos.deleteTodo(db, id);
+      else if (action === 'snooze') await db.runAsync("UPDATE todos SET urgency = 'low' WHERE id = ?", id);
       else return json(400, { error: 'Bad action' });
+      return json(200, { ok: true });
+    }
+    // Ask Lucy — the full chat, from the laptop. Runs the same answer engine the app uses
+    // (memory retrieval + shielded LLM), so answers are grounded in on-device memory.
+    if (req.method === 'POST' && req.path === '/api/ask') {
+      const question = String(payload.question ?? '').trim();
+      if (!question) return json(400, { error: 'Empty question' });
+      const rawHistory = Array.isArray(payload.history) ? payload.history : [];
+      const history = rawHistory
+        .filter((t): t is { role: string; content: string } => !!t && typeof t === 'object')
+        .map((t) => ({ role: t.role === 'lucy' ? 'lucy' as const : 'user' as const, content: String(t.content ?? '') }))
+        .filter((t) => t.content)
+        .slice(-12);
+      const { askLucy } = await import('../processing/ask');
+      const capture = async (text: string): Promise<void> => {
+        const { enqueueTranscript, processQueue } = await import('../processing/extract');
+        await enqueueTranscript(text, 'text'); void processQueue();
+      };
+      const answer = await askLucy(question, capture, history);
+      // Prefer the LLM prose; fall back to the structured message.
+      const reply = (answer.llmResponse && answer.llmResponse.trim()) || answer.message || answer.title || '…';
+      return json(200, {
+        ok: true,
+        reply,
+        kind: answer.answerKind ?? 'llm',
+        title: answer.title,
+        tasks: answer.tasks ?? [],
+        sources: answer.sources ?? [],
+        expenses: answer.expenses ?? [],
+        expenseTotal: answer.expenseTotal,
+        spendingCategories: answer.spendingCategories ?? [],
+      });
+    }
+    // Log a mood entry from the laptop.
+    if (req.method === 'POST' && req.path === '/api/mood') {
+      const tone = ['positive', 'neutral', 'low', 'negative'].includes(String(payload.tone)) ? String(payload.tone) : 'neutral';
+      const energy = ['high', 'medium', 'low'].includes(String(payload.energy)) ? String(payload.energy) : 'medium';
+      await db.runAsync('INSERT INTO mood_entries (tone, energy) VALUES (?, ?)', tone, energy);
+      return json(200, { ok: true });
+    }
+    // Tell LUCY something directly — stored as a confirmed learned fact (feedback channel).
+    if (req.method === 'POST' && req.path === '/api/feedback') {
+      const text = String(payload.text ?? '').trim();
+      if (!text) return json(400, { error: 'Empty feedback' });
+      const category = ['preference', 'habit', 'trait', 'routine', 'goal', 'relationship', 'correction'].includes(String(payload.category))
+        ? String(payload.category) : 'preference';
+      const { upsertLearnedFact } = await import('../db/learnedProfile');
+      await upsertLearnedFact(db, category as never, text, 'feedback');
+      return json(200, { ok: true });
+    }
+    // Edit the "about you" profile blurb from the laptop.
+    if (req.method === 'POST' && req.path === '/api/profile') {
+      const { setSetting } = await import('../db/settings');
+      if (typeof payload.about === 'string') await setSetting(db, 'user_profile_about', String(payload.about).trim());
+      if (typeof payload.name === 'string' && String(payload.name).trim()) await setSetting(db, 'user_profile_name', String(payload.name).trim());
       return json(200, { ok: true });
     }
     if (req.method === 'POST' && req.path === '/api/reflect') {

@@ -52,6 +52,23 @@ import { findProtectedValues, shieldText, restoreText } from '../src/processing/
   assert.ok(found.some((f) => f.value === 'Sam'), 'Sam protected');
   assert.ok(!found.some((f) => f.value.includes('Monday')), 'weekday not absorbed into the name');
 }
+{
+  // Conjoined names: a name after "and" is caught even with no cue of its own.
+  const found = findProtectedValues('Told Priya and Raghavendra the plan.', []);
+  assert.ok(found.some((f) => f.value === 'Priya'), 'Priya (cue + gazetteer)');
+  assert.ok(found.some((f) => f.value === 'Raghavendra'), 'Raghavendra caught via "and" conjunction');
+}
+{
+  // Comma + and list.
+  const found = findProtectedValues('Met Sam, Priya and Kavya today.', []);
+  ['Sam', 'Priya', 'Kavya'].forEach((n) => assert.ok(found.some((f) => f.value === n), `${n} in the list is caught`));
+}
+{
+  // "and" must not drag in a non-name after a person.
+  const found = findProtectedValues('Met Sam and London was great.', []);
+  assert.ok(found.some((f) => f.value === 'Sam'), 'Sam caught');
+  assert.ok(!found.some((f) => f.value.toLowerCase() === 'london'), 'place after "and" is not a name');
+}
 
 // --- No over-redaction of capitalized non-names ---
 {

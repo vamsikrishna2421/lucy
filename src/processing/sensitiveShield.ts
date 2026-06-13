@@ -96,25 +96,44 @@ export function findProtectedValues(text: string, contacts: string[] = []): Prot
     return contactSet.has(lower) || COMMON_FIRST_NAMES.has(lower) || cueNames.has(lower);
   };
 
+  // Collect capitalized runs with their positions so we can propagate across
+  // conjunctions: in "Priya and Raghavendra", only "Priya" has a cue, but the name
+  // after "and"/","/"&" is a person too.
+  const runs: Array<{ start: number; end: number; words: string[] }> = [];
   CAPITAL_RUN.lastIndex = 0;
   let rm: RegExpExecArray | null;
   while ((rm = CAPITAL_RUN.exec(text)) !== null) {
-    const words = rm[0].split(/\s+/);
+    runs.push({ start: rm.index, end: rm.index + rm[0].length, words: rm[0].split(/\s+/) });
+  }
+
+  let prevPersonEnd = -1;
+  for (const run of runs) {
     // Find the first word that qualifies as a person (skipping non-name capitalized
-    // words like a sentence-opening "Meet"). Then extend through following capitalized
-    // words (the surname) until a stopword — so "Meet Jan Pyda" → "Jan Pyda".
+    // words like a sentence-opening "Meet").
     let start = -1;
-    for (let i = 0; i < words.length; i++) {
-      if (CAPITALIZED_STOPWORDS.has(words[i].toLowerCase())) continue;
-      if (isName(words[i])) { start = i; break; }
+    for (let i = 0; i < run.words.length; i++) {
+      if (CAPITALIZED_STOPWORDS.has(run.words[i].toLowerCase())) continue;
+      if (isName(run.words[i])) { start = i; break; }
+    }
+    // Conjunction propagation: if this run isn't a known name on its own but directly
+    // follows a person via "and" / "&" / "," (e.g. "...and Raghavendra"), treat its first
+    // non-stopword word as a name too.
+    if (start === -1 && prevPersonEnd >= 0 && /^[\s,]*(?:and|&|,|or)[\s,]*$/i.test(text.slice(prevPersonEnd, run.start))) {
+      for (let i = 0; i < run.words.length; i++) {
+        if (!CAPITALIZED_STOPWORDS.has(run.words[i].toLowerCase())) { start = i; break; }
+      }
     }
     if (start === -1) continue;
+    // Extend through following capitalized words (the surname) until a stopword.
     const nameWords: string[] = [];
-    for (let i = start; i < words.length; i++) {
-      if (CAPITALIZED_STOPWORDS.has(words[i].toLowerCase())) break;
-      nameWords.push(words[i]);
+    for (let i = start; i < run.words.length; i++) {
+      if (CAPITALIZED_STOPWORDS.has(run.words[i].toLowerCase())) break;
+      nameWords.push(run.words[i]);
     }
-    if (nameWords.length) record(nameWords.join(' '), 'person');
+    if (nameWords.length) {
+      record(nameWords.join(' '), 'person');
+      prevPersonEnd = run.end;
+    }
   }
 
   return [...byValue.values()];

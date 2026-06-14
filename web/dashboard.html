@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 33 (Workspace + Projects) ────────── */
+/* ─── LUCY web · premium · dashboard rev 34 (Workspace live tiles) ────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -256,6 +256,27 @@ nav{display:flex;flex-direction:column;gap:1px}
 .vchip{background:var(--card);border:1px solid var(--border);color:var(--muted);border-radius:30px;padding:7px 14px;font-size:13px;font-weight:550;transition:.15s}
 .vchip:hover{border-color:var(--primary);color:var(--text)}
 .vchip.on{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-deep)}
+/* Workspace live tiles */
+.wtiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0}
+@media(max-width:760px){.wtiles{grid-template-columns:repeat(2,1fr)}}
+.wtile{text-align:left;border-radius:18px;padding:16px;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;transition:.15s;
+  background:linear-gradient(155deg,color-mix(in srgb,var(--tc) 24%,transparent),color-mix(in srgb,var(--tc) 9%,transparent));border:1px solid color-mix(in srgb,var(--tc) 45%,transparent)}
+.wtile:hover{transform:translateY(-2px);box-shadow:0 10px 26px color-mix(in srgb,var(--tc) 22%,transparent)}
+.wtile-top{display:flex;align-items:center;justify-content:space-between}
+.wtile-ic{font-size:22px}
+.wtile-count{font-size:30px;font-weight:800;color:var(--text);line-height:1;font-variant-numeric:tabular-nums}
+.wtile-name{font-weight:700;font-size:15px;color:var(--text);margin-top:10px}
+.wtile-status{font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wfull{width:100%;text-align:left;border-radius:16px;padding:16px;margin-bottom:14px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:.15s;
+  background:linear-gradient(135deg,var(--primary-glow),var(--primary-deep));color:var(--on-primary);border:none}
+.wfull:hover{filter:brightness(1.06)}
+.wfull .subtle-line{color:rgba(255,255,255,.82)}
+.wfi{font-size:22px}.wchev{margin-left:auto;font-size:20px;opacity:.9}
+.wqa{background:var(--card);border:1px solid var(--border);color:var(--text);display:block}
+.wqgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(max-width:640px){.wqgrid{grid-template-columns:repeat(2,1fr)}}
+.wqbtn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;border-radius:12px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s}
+.wqbtn:hover{border-color:var(--primary);color:var(--primary-deep)}
 [data-theme="dark"] .vchip.on{color:var(--primary-glow)}
 .vchip .vn{opacity:.6;font-size:11px}
 .vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
@@ -359,7 +380,7 @@ applyTheme((()=>{try{return localStorage.getItem('lucy-theme')||'dark';}catch(e)
 
 const NAV=[['home','◉','Home'],['timeline','≣','Timeline'],['ask','✦','Ask Lucy'],['tasks','◇','Tasks'],
   ['productivity','▦','Workspace'],['brain','❋','Brain'],['people','◐','People'],['health','♥','Health'],['money','▦','Money'],['about','☻','About You']];
-let PROD_TAB='calendar';
+let PROD_TAB='home', WS=null;
 function curView(){return ROUTE==='productivity'?PROD_TAB:ROUTE;}
 function setProdTab(t){PROD_TAB=t;draw();}
 function renderNav(){$('nav').innerHTML=NAV.map(([k,ic,label])=>{
@@ -376,16 +397,47 @@ function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offset
   if(!DATA){v.innerHTML='';return;}
   v.innerHTML=({home:vHome,timeline:vTimeline,ask:vAsk,tasks:vTasks,productivity:vProductivity,brain:vBrain,people:vPeople,health:vHealth,money:vMoney,about:vAbout}[ROUTE]||vHome)();
   const view=curView();
+  if(view==='home')loadWorkspace();
   if(view==='library')loadVault();
   if(view==='calendar')loadSchedule();
   if(view==='links')loadLinks();
   if(view==='projects')loadProjects();
   if(ROUTE==='about')loadGuard();
   if(ROUTE==='ask')afterAsk();}
-function vProductivity(){const subs=[['calendar','◷','Calendar'],['library','🗂','Documents'],['links','🌐','Online resources'],['projects','📂','Projects']];
-  const strip=`<div class="vchips" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">${subs.map(([k,ic,l])=>`<button class="vchip ${PROD_TAB===k?'on':''}" onclick="setProdTab('${k}')">${ic} ${l}</button>`).join('')}</div>`;
-  const body=PROD_TAB==='library'?vLibrary():PROD_TAB==='links'?vLinks():PROD_TAB==='projects'?vProjects():vCalendar();
-  return `<div class="date">Workspace</div>${strip}${body}`;}
+/* Workspace = a Lumia live-tile command center. Home shows colorful tiles; a tile opens its section. */
+const WS_TILES=[
+  ['calendar','📅','Calendar','#FF8C42'],
+  ['library','📄','Documents','#4DA3FF'],
+  ['links','🌐','Resources','#34D399'],
+  ['projects','📂','Projects','#A78BFA'],
+  ['bookmarks','🔖','Bookmarks','#FB7185'],
+  ['suggested','✦','Lucy Suggested','#F5C451'],
+];
+function vProductivity(){
+  if(PROD_TAB!=='home'){
+    const body=PROD_TAB==='library'?vLibrary():PROD_TAB==='links'?vLinks():PROD_TAB==='projects'?vProjects():vCalendar();
+    return `<button class="btn ghost sm" onclick="setProdTab('home')" style="margin-bottom:12px">← Workspace</button>${body}`;}
+  return `<div class="date">Workspace</div><div class="greet"><h1 style="font-size:25px">Command center</h1></div>
+    <div class="subtle-line">Everything you manage, at a glance.</div>
+    <div id="wsTiles" class="wtiles"></div>
+    <button class="wfull" onclick="setProdTab('calendar');setTimeout(planDay,250)"><span class="wfi">✦</span><div><b>Plan My Day</b><div class="subtle-line">Let LUCY schedule your open tasks around your day</div></div><span class="wchev">→</span></button>
+    <div class="wfull wqa"><b style="display:block;margin-bottom:10px">Quick actions</b><div class="wqgrid">
+      ${qa2('✎','Capture','focusCap()')}${qa2('⬆','Upload doc','pickFile()')}${qa2('🌐','Add link','wsLinks()')}${qa2('📂','New project','newProject()')}${qa2('◷','Find time','wsCal()')}${qa2('✦','Ask Lucy','wsAsk()')}
+    </div></div>`;}
+function qa2(ic,label,act){return `<button class="wqbtn" onclick="${act}"><span style="font-size:18px">${ic}</span><span>${label}</span></button>`;}
+function wsLinks(){setProdTab('links');}
+function wsCal(){setProdTab('calendar');}
+function wsAsk(){go('ask');}
+function tileStatus(k){const t=WS&&WS.tiles&&WS.tiles[k];return t?{count:t.count,status:t.status}:{count:'—',status:''};}
+async function loadWorkspace(){try{WS=await api('/api/workspace');}catch(e){WS=null;}if(curView()==='home')renderTiles();}
+function renderTiles(){const g=$('wsTiles');if(!g)return;
+  g.innerHTML=WS_TILES.map(([k,ic,label,color])=>{const{count,status}=tileStatus(k);
+    return `<button class="wtile" style="--tc:${color}" onclick="openTile('${k}')">
+      <div class="wtile-top"><span class="wtile-ic">${ic}</span><span class="wtile-count">${count}</span></div>
+      <div class="wtile-name">${label}</div><div class="wtile-status">${esc(status||'')}</div></button>`;}).join('');}
+function openTile(k){if(k==='suggested'){setProdTab('calendar');setTimeout(planDay,250);return;}
+  if(k==='bookmarks'){toast('Bookmarks coming soon');return;}
+  setProdTab(k);}
 function vLinks(){return `<div class="greet"><h1 style="font-size:24px">Online resources</h1></div>
   <div class="subtle-line">Your saved links & resources.</div>
   <div id="linksWrap"><div class="empty"><div class="big">◌</div>Loading…</div></div>`;}

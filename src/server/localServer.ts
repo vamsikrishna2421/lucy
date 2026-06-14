@@ -371,6 +371,33 @@ async function route(req: ParsedRequest): Promise<string> {
       return json(200, { ok: true, items: rows });
     }
 
+    // ─── Workspace home (live-tile dashboard summary) ─────────────────────────
+    if (req.method === 'GET' && req.path === '/api/workspace') {
+      const now = Date.now();
+      const ds = new Date(); ds.setHours(0, 0, 0, 0); const dayStart = ds.getTime(); const dayEnd = dayStart + 86400000;
+      const docs = await db.getFirstAsync<{ n: number; b: number }>('SELECT COUNT(*) n, COUNT(DISTINCT bucket) b FROM vault_items');
+      const res = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) n FROM online_resources');
+      const proj = await db.getFirstAsync<{ n: number }>("SELECT COUNT(*) n FROM projects WHERE status != 'archived'");
+      const cal = await db.getAllAsync<{ title: string; start_at: number }>(
+        "SELECT title, start_at FROM scheduled_blocks WHERE status = 'committed' AND start_at >= ? AND start_at < ? ORDER BY start_at", dayStart, dayEnd,
+      );
+      const nextBlock = cal.find((b) => b.start_at >= now) || cal[0];
+      const { unscheduledPendingTodos } = await import('../scheduling');
+      const uns = await unscheduledPendingTodos(db);
+      const t = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      return json(200, {
+        ok: true,
+        tiles: {
+          calendar: { count: cal.length, status: nextBlock ? `Next: ${nextBlock.title} · ${t(nextBlock.start_at)}` : 'Nothing today — plan it' },
+          documents: { count: docs?.n ?? 0, status: `${docs?.b ?? 0} categories` },
+          resources: { count: res?.n ?? 0, status: (res?.n ?? 0) ? 'links saved' : 'Add your first link' },
+          projects: { count: proj?.n ?? 0, status: (proj?.n ?? 0) ? `${proj?.n} active` : 'Start a project' },
+          bookmarks: { count: 0, status: 'Coming soon' },
+          suggested: { count: uns.length, status: uns.length ? `${uns.length} task${uns.length === 1 ? '' : 's'} need a time` : 'All caught up' },
+        },
+      });
+    }
+
     // ─── Projects (Workspace → Projects) ──────────────────────────────────────
     if (req.method === 'GET' && req.path === '/api/projects') {
       const { listProjects } = await import('../db/projects');

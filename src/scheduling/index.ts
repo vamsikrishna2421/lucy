@@ -12,22 +12,21 @@ import { rationale } from './scorer';
 import { normalizeResources } from './resources';
 import { DAY, startOfLocalDay } from './time';
 import {
-  createScheduledBlock, listScheduledBlocks, getScheduledBlock, deleteScheduledBlock,
-  setBlockCalendarEvent, rowToBlock,
+  createScheduledBlock, listScheduledBlocks, getScheduledBlock, deleteScheduledBlock, rowToBlock,
 } from '../db/schedule';
 
 export * from './types';
 export { canCoexist, describeResources } from './resources';
 export { classifyTask } from './classify';
 
-/** Build the busy timeline: hard (sleep/hours/protected) + resource (calendar + committed blocks). */
+/**
+ * Build the busy timeline: hard (sleep/hours/protected) + resource (LUCY's own committed blocks).
+ * LUCY manages its OWN calendar entirely in on-device memory — no OS/Google Calendar dependency.
+ * Fixed commitments (meetings) are added as committed blocks too (see commitBlock / addFixedBlock).
+ */
 async function buildBusy(db: SQLiteDatabase, fromMs: number, toMs: number, av: Awaited<ReturnType<typeof getAvailability>>) {
-  const { calendarBusyBlocks } = await import('../processing/calendarConnector');
-  const [calBlocks, schedRows] = await Promise.all([
-    calendarBusyBlocks(fromMs, toMs).catch(() => [] as Block[]),
-    listScheduledBlocks(db, fromMs, toMs, ['committed']),
-  ]);
-  const resourceBlocks: Block[] = [...calBlocks, ...schedRows.map(rowToBlock)];
+  const schedRows = await listScheduledBlocks(db, fromMs, toMs, ['committed']);
+  const resourceBlocks: Block[] = schedRows.map(rowToBlock);
   const hardBlocks = nonWorkingBlocks(av, fromMs, toMs);
   return { resourceBlocks, hardBlocks };
 }
@@ -81,51 +80,53 @@ export interface CommitInput {
 export interface CommitResult {
   ok: boolean;
   blockId?: number;
-  calendarEventId?: string | null;
   conflict?: PlanConflict | null;
 }
 
 /**
- * Commit a slot: re-validates it's still conflict-free, writes a scheduled_block, and creates a
- * device-calendar event. Refuses (and reports) if a conflict appeared since the suggestion.
+ * Commit a slot into LUCY's own calendar (on-device only). Re-validates it's still conflict-free
+ * and refuses (reporting why) if a conflict appeared since the suggestion — unless `force` is set
+ * (used for fixed commitments the user KNOWS they have; the conflict is then surfaced in the plan).
  */
-export async function commitBlock(db: SQLiteDatabase, input: CommitInput): Promise<CommitResult> {
+export async function commitBlock(db: SQLiteDatabase, input: CommitInput, opts?: { force?: boolean }): Promise<CommitResult> {
   const resources = normalizeResources(input.resources ?? { axes: ['focus', 'self'], location: input.location ?? null });
   const av = await getAvailability(db);
   const { resourceBlocks, hardBlocks } = await buildBusy(db, input.startMs - DAY, input.endMs + DAY, av);
 
-  // Re-validate against the latest plan (defends the invariant at commit time).
   const candidate: Block = { title: input.title, start: input.startMs, end: input.endMs, resources, source: 'scheduled' };
-  for (const b of hardBlocks) {
-    if (b.start < candidate.end && candidate.start < b.end) {
-      return { ok: false, conflict: { a: candidate, b, reason: 'That time is in a sleep/off-hours/protected window.' } };
+  if (!opts?.force) {
+    // Defend the invariant at commit time (sleep/off-hours/protected, then resource conflicts).
+    for (const b of hardBlocks) {
+      if (b.start < candidate.end && candidate.start < b.end) {
+        return { ok: false, conflict: { a: candidate, b, reason: 'That time is in a sleep/off-hours/protected window.' } };
+      }
     }
+    const conflicts = validatePlan([...resourceBlocks, candidate]);
+    const mine = conflicts.find((c) => c.a === candidate || c.b === candidate);
+    if (mine) return { ok: false, conflict: mine };
   }
-  const conflicts = validatePlan([...resourceBlocks, candidate]);
-  const mine = conflicts.find((c) => c.a === candidate || c.b === candidate);
-  if (mine) return { ok: false, conflict: mine };
 
   const blockId = await createScheduledBlock(db, {
     todoId: input.todoId ?? null, title: input.title, startMs: input.startMs, endMs: input.endMs,
     resources, energy: input.energy ?? null, location: resources.location ?? null, status: 'committed',
   });
+  return { ok: true, blockId };
+}
 
-  let calendarEventId: string | null = null;
-  try {
-    const { createLucyEvent } = await import('../processing/calendarConnector');
-    calendarEventId = await createLucyEvent(input.title, input.startMs, input.endMs, resources.location ?? null);
-    if (calendarEventId) await setBlockCalendarEvent(db, blockId, calendarEventId);
-  } catch { /* block is still saved even if the calendar write fails */ }
-
-  return { ok: true, blockId, calendarEventId };
+/** Add a fixed commitment (a meeting/appointment the user has) to LUCY's calendar. Always added
+ *  (force) so it's ground truth; any resulting conflict is surfaced in the plan for re-slotting. */
+export async function addFixedBlock(
+  db: SQLiteDatabase, input: { title: string; startMs: number; endMs: number; parallelizable?: boolean; location?: string | null },
+): Promise<CommitResult> {
+  const resources = input.parallelizable
+    ? { axes: [], location: input.location ?? null }
+    : { axes: ['focus', 'self'] as Array<'focus' | 'self'>, location: input.location ?? null };
+  return commitBlock(db, { title: input.title, startMs: input.startMs, endMs: input.endMs, resources, energy: 'fixed', location: input.location ?? null }, { force: true });
 }
 
 export async function cancelBlock(db: SQLiteDatabase, id: number): Promise<boolean> {
   const row = await getScheduledBlock(db, id);
   if (!row) return false;
-  if (row.calendar_event_id) {
-    try { const { deleteLucyEvent } = await import('../processing/calendarConnector'); await deleteLucyEvent(row.calendar_event_id); } catch { /* ignore */ }
-  }
   await deleteScheduledBlock(db, id);
   return true;
 }

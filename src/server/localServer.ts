@@ -400,6 +400,16 @@ async function route(req: ParsedRequest): Promise<string> {
       });
       return json(r.ok ? 200 : 409, r);
     }
+    if (req.method === 'POST' && req.path === '/api/schedule/block') {
+      const { addFixedBlock } = await import('../scheduling');
+      const r = await addFixedBlock(db, {
+        title: String(payload.title ?? 'Busy'),
+        startMs: Number(payload.startMs), endMs: Number(payload.endMs),
+        parallelizable: payload.parallelizable === true,
+        location: typeof payload.location === 'string' ? payload.location : null,
+      });
+      return json(200, r);
+    }
     if (req.method === 'GET' && req.path === '/api/schedule') {
       const days = Math.max(1, Math.min(14, Number(req.query.days) || 2));
       const { getPlan, describeResources } = await import('../scheduling');

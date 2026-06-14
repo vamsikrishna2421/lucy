@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 28 (intelligent calendar) ───────────── */
+/* ─── LUCY web · premium · dashboard rev 29 (self-contained calendar) ────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -579,7 +579,7 @@ function clock(ms){return new Date(ms).toLocaleTimeString([],{hour:'numeric',min
 function dayKey(ms){const d=new Date(ms);d.setHours(0,0,0,0);return d.getTime();}
 function dayLabel(ms){const t=dayKey(Date.now()),d=dayKey(ms);if(d===t)return'Today';if(d===t+86400000)return'Tomorrow';return new Date(ms).toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'});}
 function vCalendar(){return `<div class="greet"><h1 style="font-size:24px">Calendar</h1><div class="grow"></div></div>
-  <div class="subtle-line">LUCY finds conflict-free time and never double-books work that can't run in parallel.</div>
+  <div class="subtle-line">LUCY keeps its own calendar on your device — no Google/Apple Calendar needed. It finds conflict-free time and never double-books work that can't run in parallel.</div>
   <div id="calWrap"><div class="empty"><div class="big">◌</div>Loading your schedule…</div></div>`;}
 async function loadSchedule(){try{SCHED=await api('/api/schedule?days=3');}catch(e){SCHED=null;}if(ROUTE==='calendar')renderSchedule();}
 function renderSchedule(){const w=$('calWrap');if(!w)return;
@@ -606,6 +606,18 @@ function renderSchedule(){const w=$('calWrap');if(!w)return;
       <button class="btn" onclick="suggestTime()">Suggest</button>
     </div>
     <div id="calSug" style="margin-top:12px"></div></div>`;
+  // Block out a fixed commitment (meeting/appointment) — replaces device-calendar events.
+  const dstr=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const fixedCard=`<div class="card" style="padding:16px;margin-bottom:16px">
+    <b>Block out a fixed commitment</b>
+    <div class="subtle-line" style="margin-top:4px">A meeting/appointment you already have, so LUCY schedules around it.</div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <input id="fxTitle" placeholder="e.g. Team meeting" style="flex:1;min-width:150px;padding:9px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text)"/>
+      <input id="fxDate" type="date" value="${dstr}" style="padding:9px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text)"/>
+      <input id="fxStart" type="time" value="14:00" style="padding:9px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text)"/>
+      <input id="fxEnd" type="time" value="15:00" style="padding:9px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text)"/>
+      <button class="btn" onclick="addFixed()">Block</button>
+    </div></div>`;
   // Conflicts
   const conf=(SCHED.conflicts&&SCHED.conflicts.length)?`<div class="card" style="padding:14px;margin-bottom:16px;border-color:var(--error,#e2574c)">
     <b style="color:var(--error,#e2574c)">⚠ ${SCHED.conflicts.length} conflict${SCHED.conflicts.length>1?'s':''}</b>
@@ -618,7 +630,12 @@ function renderSchedule(){const w=$('calWrap');if(!w)return;
     timeline=Object.keys(byDay).sort((a,b)=>a-b).map(k=>`<div style="margin-bottom:14px">
       <div style="font-weight:600;margin:6px 0;color:var(--muted)">${dayLabel(+k)}</div>
       ${byDay[k].map(b=>blockRow(b)).join('')}</div>`).join('');}
-  w.innerHTML=avCard+finder+conf+`<div><b>Your timetable</b><div style="margin-top:10px">${timeline}</div></div>`;}
+  w.innerHTML=avCard+finder+fixedCard+conf+`<div><b>Your timetable</b><div style="margin-top:10px">${timeline}</div></div>`;}
+async function addFixed(){const title=($('fxTitle').value||'').trim()||'Busy';const d=$('fxDate').value,s=$('fxStart').value,e=$('fxEnd').value;
+  if(!d||!s||!e){toast('Pick a date and time');return;}
+  const startMs=new Date(d+'T'+s).getTime(),endMs=new Date(d+'T'+e).getTime();
+  if(!(endMs>startMs)){toast('End must be after start');return;}
+  await api('/api/schedule/block',{method:'POST',body:JSON.stringify({title,startMs,endMs})});toast('Blocked ✓');$('fxTitle').value='';await loadSchedule();}
 function avInput(label,id,val,fallback){return `<label style="font-size:12px;color:var(--muted)">${label}<input id="${id}" type="time" value="${hm(val??fallback)}" style="width:100%;margin-top:4px;padding:6px;border-radius:9px;background:var(--card);border:1px solid var(--border);color:var(--text)"/></label>`;}
 function blockRow(b){const isLucy=b.source==='scheduled';const tag=isLucy?'◷ LUCY':'📅 Calendar';
   return `<div class="card" style="padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px">

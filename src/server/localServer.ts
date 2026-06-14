@@ -363,6 +363,14 @@ async function route(req: ParsedRequest): Promise<string> {
       return json(200, { ok: true });
     }
 
+    // ─── Resources / Links (Productivity → Links) ─────────────────────────────
+    if (req.method === 'GET' && req.path === '/api/resources') {
+      const rows = await db.getAllAsync(
+        'SELECT id, url, title, platform, topic, thumbnail, created_at FROM online_resources ORDER BY created_at DESC',
+      );
+      return json(200, { ok: true, items: rows });
+    }
+
     // ─── Intelligent Calendar ─────────────────────────────────────────────────
     if (req.method === 'GET' && req.path === '/api/schedule/availability') {
       const { getAvailability } = await import('../scheduling/availability');

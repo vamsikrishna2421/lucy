@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 30 (plan-my-day + todos) ────────── */
+/* ─── LUCY web · premium · dashboard rev 31 (Productivity hub) ────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -358,7 +358,10 @@ function toggleTheme(){applyTheme(document.documentElement.getAttribute('data-th
 applyTheme((()=>{try{return localStorage.getItem('lucy-theme')||'dark';}catch(e){return'dark';}})());
 
 const NAV=[['home','◉','Home'],['timeline','≣','Timeline'],['ask','✦','Ask Lucy'],['tasks','◇','Tasks'],
-  ['calendar','◷','Calendar'],['library','🗂','Documents'],['brain','❋','Brain'],['people','◐','People'],['health','♥','Health'],['money','▦','Money'],['about','☻','About You']];
+  ['productivity','▦','Productivity'],['brain','❋','Brain'],['people','◐','People'],['health','♥','Health'],['money','▦','Money'],['about','☻','About You']];
+let PROD_TAB='calendar';
+function curView(){return ROUTE==='productivity'?PROD_TAB:ROUTE;}
+function setProdTab(t){PROD_TAB=t;draw();}
 function renderNav(){$('nav').innerHTML=NAV.map(([k,ic,label])=>{
   let badge='';if(DATA){if(k==='tasks')badge=DATA.todos.filter(pending).length||'';if(k==='timeline')badge=(DATA.captures||[]).length||'';if(k==='people')badge=(DATA.people||[]).length||'';}
   return `<div class="nav-i ${ROUTE===k?'on':''}" onclick="go('${k}')"><span class="ic">${ic}</span>${label}${badge?`<span class="badge">${badge}</span>`:''}</div>`;}).join('');}
@@ -371,11 +374,26 @@ async function load(silent){
 }
 function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offsetWidth;v.classList.add('fade');
   if(!DATA){v.innerHTML='';return;}
-  v.innerHTML=({home:vHome,timeline:vTimeline,ask:vAsk,tasks:vTasks,calendar:vCalendar,library:vLibrary,brain:vBrain,people:vPeople,health:vHealth,money:vMoney,about:vAbout}[ROUTE]||vHome)();
-  if(ROUTE==='library')loadVault();
+  v.innerHTML=({home:vHome,timeline:vTimeline,ask:vAsk,tasks:vTasks,productivity:vProductivity,brain:vBrain,people:vPeople,health:vHealth,money:vMoney,about:vAbout}[ROUTE]||vHome)();
+  const view=curView();
+  if(view==='library')loadVault();
+  if(view==='calendar')loadSchedule();
+  if(view==='links')loadLinks();
   if(ROUTE==='about')loadGuard();
-  if(ROUTE==='calendar')loadSchedule();
   if(ROUTE==='ask')afterAsk();}
+function vProductivity(){const subs=[['calendar','◷','Calendar'],['library','🗂','Documents'],['links','🔗','Links']];
+  const strip=`<div class="vchips" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">${subs.map(([k,ic,l])=>`<button class="vchip ${PROD_TAB===k?'on':''}" onclick="setProdTab('${k}')">${ic} ${l}</button>`).join('')}</div>`;
+  const body=PROD_TAB==='library'?vLibrary():PROD_TAB==='links'?vLinks():vCalendar();
+  return `<div class="date">Productivity</div>${strip}${body}`;}
+function vLinks(){return `<div class="greet"><h1 style="font-size:24px">Links</h1></div>
+  <div class="subtle-line">Your saved links & resources.</div>
+  <div id="linksWrap"><div class="empty"><div class="big">◌</div>Loading…</div></div>`;}
+async function loadLinks(){let r=null;try{r=await api('/api/resources');}catch(e){}const w=$('linksWrap');if(!w)return;
+  const items=(r&&r.items)||[];
+  if(!items.length){w.innerHTML=empty('🔗','No links yet','Add links & resources from the LUCY app — they will show here.');return;}
+  w.innerHTML='<div style="display:flex;flex-direction:column;gap:8px">'+items.map(it=>`<a class="card" href="${esc(it.url||'#')}" target="_blank" rel="noopener" style="padding:12px 14px;display:block;text-decoration:none;color:inherit">
+    <div style="font-weight:500">${esc(it.title||it.url||'Link')}</div>${it.url?`<div class="subtle-line" style="margin-top:3px;word-break:break-all">${esc(it.url)}</div>`:''}
+    <div style="margin-top:6px">${it.platform?`<span class="kw">${esc(it.platform)}</span> `:''}${it.topic&&it.topic!=='General'?`<span class="kw" style="opacity:.7">${esc(it.topic)}</span>`:''}</div></a>`).join('')+'</div>';}
 
 /* ─── HOME (the mockup) ─── */
 function vHome(){const d=DATA;const name=(d.profile&&d.profile.name)||'';const tasks=d.todos.filter(pending);
@@ -556,7 +574,7 @@ async function uploadOne(file){const isPdf=file.type==='application/pdf'||/\.pdf
   catch(e){return {ok:false,error:'unreachable'};}}
 /* Upload one or many files sequentially, with progress. */
 async function handleFiles(fileList){const files=Array.from(fileList||[]);if(!files.length)return;
-  if(ROUTE!=='library')go('library');
+  PROD_TAB='library';if(ROUTE!=='productivity')go('productivity');
   let ok=0,dup=0,fail=0;
   for(let i=0;i<files.length;i++){
     toast(files.length>1?`Filing ${i+1} of ${files.length}…`:'LUCY is filing it…');
@@ -564,7 +582,7 @@ async function handleFiles(fileList){const files=Array.from(fileList||[]);if(!fi
     if(r.duplicate){dup++;if(files.length===1)toast('Already in your vault'+(r.title?(' · '+r.title.slice(0,34)):'')+' — skipped');}
     else if(r.ok){ok++;if(files.length===1)toast('Filed ✓ '+(r.bucket?('→ '+r.bucket):'')+(r.title?(' · '+r.title.slice(0,30)):''));}
     else fail++;
-    if(ROUTE==='library')await loadVault();
+    if(curView()==='library')await loadVault();
   }
   if(files.length>1)toast(`Filed ${ok}${dup?` · ${dup} duplicate${dup===1?'':'s'} skipped`:''}${fail?` · ${fail} failed`:''} ✓`);
   setTimeout(()=>load(true),1500);}
@@ -581,7 +599,7 @@ function dayLabel(ms){const t=dayKey(Date.now()),d=dayKey(ms);if(d===t)return'To
 function vCalendar(){return `<div class="greet"><h1 style="font-size:24px">Calendar</h1><div class="grow"></div></div>
   <div class="subtle-line">LUCY keeps its own calendar on your device — no Google/Apple Calendar needed. It finds conflict-free time and never double-books work that can't run in parallel.</div>
   <div id="calWrap"><div class="empty"><div class="big">◌</div>Loading your schedule…</div></div>`;}
-async function loadSchedule(){try{SCHED=await api('/api/schedule?days=3');}catch(e){SCHED=null;}if(ROUTE==='calendar')renderSchedule();}
+async function loadSchedule(){try{SCHED=await api('/api/schedule?days=3');}catch(e){SCHED=null;}if(curView()==='calendar')renderSchedule();}
 function renderSchedule(){const w=$('calWrap');if(!w)return;
   if(!SCHED||!SCHED.ok){w.innerHTML=empty('◷','Calendar needs the latest update','Relaunch LUCY so the scheduler ships, then reopen this page.');return;}
   const av=SCHED.availability||{};
@@ -735,7 +753,7 @@ async function reorganize(){if(!VAULT||!VAULT.length){toast('Nothing to organize
   if(!confirm('Re-analyze all '+VAULT.length+' documents into smart categories? Uses AI per document.'))return;
   for(let i=0;i<VAULT.length;i++){toast('Re-organizing '+(i+1)+' of '+VAULT.length+'…');try{await api('/api/vault/reclassify',{method:'POST',body:JSON.stringify({id:VAULT[i].id})});}catch(e){}if(i%4===3)await loadVault();}
   toast('Re-organized ✓');await loadVault();}
-async function loadVault(){try{const r=await api('/api/vault');VAULT=(r&&r.items)||[];}catch(e){VAULT=null;}if(ROUTE==='library')renderVault();loadGuard();}
+async function loadVault(){try{const r=await api('/api/vault');VAULT=(r&&r.items)||[];}catch(e){VAULT=null;}if(curView()==='library')renderVault();loadGuard();}
 let GUARD=null;
 async function loadGuard(){try{GUARD=await api('/api/costguard');}catch(e){GUARD=null;}renderGuard();}
 function renderGuard(){const els=document.querySelectorAll('.guardbar');if(!els.length)return;

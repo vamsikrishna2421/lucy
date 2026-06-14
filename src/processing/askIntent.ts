@@ -10,8 +10,18 @@ export function recognizesMemoryMapQuestion(question: string): boolean {
 
 export function recognizesMonthlySpendingQuestion(question: string): boolean {
   return /\b(summary|summarize|total|how much|show|what)\b/i.test(question)
-    && /\b(payment|payments|paid|expense|expenses|spend|spent|spending)\b/i.test(question)
-    && /\b(this month|month|monthly)\b/i.test(question);
+    && /\b(payment|payments|paid|expense|expenses|spend|spent|spending|cost|costs)\b/i.test(question);
+}
+
+/**
+ * Whether a spending question is scoped to all-time / total rather than the current month.
+ * "this month"/"monthly" → month scope; "total"/"all"/"so far"/"overall"/"ever"/"in total" → all-time.
+ * Defaults to all-time when no month phrase is present (so "how much have I spent?" sums everything).
+ */
+export function spendingScopeIsAllTime(question: string): boolean {
+  const monthly = /\b(this month|this\s+month'?s|monthly|past month|last month)\b/i.test(question);
+  if (monthly) return false;
+  return true;
 }
 
 export function normalizeMemoryLookupText(value: string): string {

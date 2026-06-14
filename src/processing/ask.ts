@@ -8,7 +8,7 @@ import { listPendingTodos, type TodoRow } from '../db/todos';
 import { listRecentCaptures } from '../db/captures';
 import type { ExtractionResult, PrivacyLevel } from '../types/extraction';
 import { isInvalidDeadline, isInvalidPendingTask } from './artifactCleanup';
-import { normalizeMemoryLookupText, recognizesMemoryMapQuestion, recognizesMonthlySpendingQuestion, recognizesTodayPlanQuestion, requestedTaskContext } from './askIntent';
+import { normalizeMemoryLookupText, recognizesMemoryMapQuestion, recognizesMonthlySpendingQuestion, recognizesTodayPlanQuestion, requestedTaskContext, spendingScopeIsAllTime } from './askIntent';
 import { organizeMemory } from './organizer';
 import { promptAI } from '../ai/openai';
 import { resolveRemoteAvailability } from '../ai/provider';
@@ -106,7 +106,10 @@ function recordedAmount(expense: ExpenseRow): number {
 
 async function answerMonthlySpending(question: string): Promise<LucyAnswer> {
   const db = await getDatabase();
-  const expenses = (await listExpenses(db)).filter((expense) => isCurrentMonth(expense.created_at));
+  const allTime = spendingScopeIsAllTime(question);
+  const expenses = allTime
+    ? await listExpenses(db)
+    : (await listExpenses(db)).filter((expense) => isCurrentMonth(expense.created_at));
   const total = expenses.reduce((sum, expense) => sum + recordedAmount(expense), 0);
   const grouped = new Map<string, LucySpendingCategory>();
   expenses.forEach((expense) => {
@@ -116,15 +119,16 @@ async function answerMonthlySpending(question: string): Promise<LucyAnswer> {
     grouped.set(expense.category, existing);
   });
   const categories = Array.from(grouped.values()).sort((left, right) => right.total - left.total);
+  const scopeWord = allTime ? 'in total' : 'this month';
   const summary = expenses.length
-    ? `I remember ${expenses.length} payment${expenses.length === 1 ? '' : 's'} this month, totaling ${total.toFixed(2)} in recorded amounts.`
-    : 'I do not remember any recorded payments for this month yet.';
-  await insertQuestionSignal(db, question, 'monthly_spending_summary', summary, 'Maintain a monthly spending insight view.');
+    ? `I remember ${expenses.length} payment${expenses.length === 1 ? '' : 's'} ${scopeWord}, totaling ${total.toFixed(2)} in recorded amounts.`
+    : `I do not remember any recorded payments ${scopeWord} yet.`;
+  await insertQuestionSignal(db, question, allTime ? 'total_spending_summary' : 'monthly_spending_summary', summary, 'Maintain a spending insight view.');
   await organizeMemory(db, 'question');
   return {
     supported: true,
     answerKind: 'spending',
-    title: 'Payments this month',
+    title: allTime ? 'Total recorded payments' : 'Payments this month',
     message: summary,
     tasks: [],
     deadlines: [],
@@ -147,7 +151,20 @@ async function answerFromMemoryMap(question: string): Promise<LucyAnswer> {
     const normalizedName = normalizeMemoryLookupText(entity.name);
     return normalizedName.length > 0 && normalizedQuestion.includes(normalizedName);
   });
-  const subject = matchedEntities[0]?.name;
+  // Pick the MOST SPECIFIC match, not the first. Generic single-word areas ("work", "life")
+  // otherwise hijack questions like "who is Monisha" or "my Snowflake work" — pulling the wrong
+  // sources (and previously leaking unrelated private captures). Demote generics, then prefer the
+  // longest entity name.
+  const GENERIC_AREAS = new Set(['work', 'life', 'personal', 'stuff', 'things', 'general', 'misc', 'product', 'focus']);
+  const rankedEntities = matchedEntities.slice().sort((a, b) => {
+    const na = normalizeMemoryLookupText(a.name);
+    const nb = normalizeMemoryLookupText(b.name);
+    const ga = GENERIC_AREAS.has(na) ? 1 : 0;
+    const gb = GENERIC_AREAS.has(nb) ? 1 : 0;
+    if (ga !== gb) return ga - gb; // non-generic first
+    return nb.length - na.length;  // then most specific (longest)
+  });
+  const subject = rankedEntities[0]?.name;
   if (!subject) {
     const message = 'I do not have an organized memory topic matching that question yet. Add context or capture a related thought, and I can connect it later.';
     await insertQuestionSignal(db, question, 'memory_map_lookup', message, 'Improve recall for missing memory subjects.');
@@ -164,7 +181,9 @@ async function answerFromMemoryMap(question: string): Promise<LucyAnswer> {
       recordedSignal: 'This memory question was remembered locally to improve future organization.',
     };
   }
-  const matchedNames = new Set(matchedEntities.map((entity) => normalizeMemoryLookupText(entity.name)));
+  // Scope evidence to the CHOSEN subject only, so a co-matched generic area ("work") can't drag in
+  // unrelated captures (including private ones) as sources.
+  const matchedNames = new Set([normalizeMemoryLookupText(subject)]);
   const relatedConnections = connections.filter((connection) => (
     matchedNames.has(normalizeMemoryLookupText(connection.source_name))
     || matchedNames.has(normalizeMemoryLookupText(connection.target_name))

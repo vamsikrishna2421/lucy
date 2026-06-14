@@ -42,6 +42,34 @@ Be generous and specific with keywords — they power search. Return JSON only.`
 
 const VAULT_DIR = `${documentDirectory}docvault/`;
 
+/** Last path segment of a stored file_path (handles old absolute paths and `/`+`\` separators). */
+function vaultBasename(stored: string): string {
+  const cleaned = stored.replace(/[/\\]+$/, '');
+  const idx = Math.max(cleaned.lastIndexOf('/'), cleaned.lastIndexOf('\\'));
+  return idx >= 0 ? cleaned.slice(idx + 1) : cleaned;
+}
+
+/**
+ * Candidate absolute paths for a stored file_path. iOS changes the app container UUID on every
+ * rebuild/reinstall, so an absolute `documentDirectory` path saved by a previous build goes stale.
+ * Always also try rebuilding `VAULT_DIR + basename` under the CURRENT container.
+ */
+function vaultPathCandidates(stored: string): string[] {
+  const out: string[] = [];
+  if (stored) out.push(stored);
+  const base = vaultBasename(stored);
+  if (base) out.push(`${VAULT_DIR}${base}`);
+  return Array.from(new Set(out));
+}
+
+/** Reads the vault image bytes, trying the stored path then the rebuilt current-container path. */
+async function readVaultBase64(stored: string): Promise<string | null> {
+  for (const p of vaultPathCandidates(stored)) {
+    try { return await readAsStringAsync(p, { encoding: EncodingType.Base64 }); } catch { /* try next */ }
+  }
+  return null;
+}
+
 async function ensureVaultDir(): Promise<void> {
   try {
     const info = await getInfoAsync(VAULT_DIR);
@@ -136,9 +164,11 @@ export async function saveImageToVault(
   const meta = await classify(base64, originalName ?? 'document', await existingBuckets(db0))
     ?? { title: originalName || 'Document', bucket: 'Documents', description: 'Saved document (enable Remote Intelligence for auto-description).', keywords: '' };
 
-  // Persist the full image into the private vault dir.
+  // Persist the full image into the private vault dir. Store only the FILENAME in the DB (not the
+  // absolute path) so it survives iOS container-UUID changes across rebuilds.
   await ensureVaultDir();
-  const path = `${VAULT_DIR}doc-${Date.now()}.jpg`;
+  const fileName = `doc-${Date.now()}.jpg`;
+  const path = `${VAULT_DIR}${fileName}`;
   try { await writeAsStringAsync(path, base64, { encoding: EncodingType.Base64 }); }
   catch { return { item: null }; }
 
@@ -156,7 +186,7 @@ export async function saveImageToVault(
   const res = await db.runAsync(
     `INSERT INTO vault_items (title, description, bucket, keywords, hash, file_path, thumb, mime, gallery_saved, source)
      VALUES (?, ?, ?, ?, ?, ?, ?, 'image/jpeg', ?, 'upload')`,
-    meta.title, meta.description, meta.bucket, meta.keywords, hash ?? null, path, thumbDataUrl ?? null, gallerySaved,
+    meta.title, meta.description, meta.bucket, meta.keywords, hash ?? null, fileName, thumbDataUrl ?? null, gallerySaved,
   );
 
   // NOTE: vault documents are NOT enqueued as captures — the vault item IS the memory.
@@ -170,14 +200,18 @@ export async function listVaultItems(db: SQLiteDatabase): Promise<VaultItem[]> {
   return db.getAllAsync<VaultItem>('SELECT * FROM vault_items ORDER BY created_at DESC');
 }
 
-/** Reads the full image off disk as a base64 data URL for the viewer. */
+/** Reads the full image off disk as a base64 data URL for the viewer. Falls back to the stored
+ *  thumbnail when the full image is missing (e.g. lost to an older absolute path), so the user
+ *  still sees the document instead of a broken "Not found". */
 export async function getVaultImage(db: SQLiteDatabase, id: number): Promise<string | null> {
-  const row = await db.getFirstAsync<VaultItem>('SELECT file_path, mime FROM vault_items WHERE id = ?', id);
-  if (!row?.file_path) return null;
-  try {
-    const b64 = await readAsStringAsync(row.file_path, { encoding: EncodingType.Base64 });
-    return `data:${row.mime || 'image/jpeg'};base64,${b64}`;
-  } catch { return null; }
+  const row = await db.getFirstAsync<VaultItem>('SELECT file_path, mime, thumb FROM vault_items WHERE id = ?', id);
+  if (!row) return null;
+  if (row.file_path) {
+    const b64 = await readVaultBase64(row.file_path);
+    if (b64) return `data:${row.mime || 'image/jpeg'};base64,${b64}`;
+  }
+  // Full image unavailable — serve the thumbnail (already a data URL) as a graceful fallback.
+  return row.thumb || null;
 }
 
 /** Re-runs classification on an already-stored document (dynamic buckets + keywords). Used by
@@ -185,9 +219,8 @@ export async function getVaultImage(db: SQLiteDatabase, id: number): Promise<str
 export async function reclassifyVaultItem(db: SQLiteDatabase, id: number): Promise<boolean> {
   const row = await db.getFirstAsync<VaultItem>('SELECT file_path FROM vault_items WHERE id = ?', id);
   if (!row?.file_path) return false;
-  let base64: string;
-  try { base64 = await readAsStringAsync(row.file_path, { encoding: EncodingType.Base64 }); }
-  catch { return false; }
+  const base64 = await readVaultBase64(row.file_path);
+  if (!base64) return false;
   const meta = await classify(base64, 'document', await existingBuckets(db));
   if (!meta) return false;
   await db.runAsync(
@@ -203,6 +236,8 @@ export async function refileVaultItem(db: SQLiteDatabase, id: number, bucket: st
 
 export async function deleteVaultItem(db: SQLiteDatabase, id: number): Promise<void> {
   const row = await db.getFirstAsync<VaultItem>('SELECT file_path FROM vault_items WHERE id = ?', id);
-  if (row?.file_path) deleteAsync(row.file_path, { idempotent: true }).catch(() => {});
+  if (row?.file_path) {
+    for (const p of vaultPathCandidates(row.file_path)) deleteAsync(p, { idempotent: true }).catch(() => {});
+  }
   await db.runAsync('DELETE FROM vault_items WHERE id = ?', id);
 }

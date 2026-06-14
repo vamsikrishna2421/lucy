@@ -264,8 +264,10 @@ export async function organizeMemory(db: SQLiteDatabase, trigger: string): Promi
   // Self-gated to once/day and never throws, so it's safe to fire-and-forget.
   if (trigger === 'background') {
     void import('./reflectOnUser').then(({ reflectOnUser }) => reflectOnUser(db)).catch(() => {});
-    // Self-heal: drop junk People (user themselves / orgs) + decay stale open loops.
+    // Self-heal: drop junk People (user themselves / orgs) + decay stale open loops +
+    // collapse near-duplicate learned facts the LLM restated across reflections.
     void import('../db/people').then(({ cleanupJunkPeople }) => cleanupJunkPeople(db)).catch(() => {});
     void import('../db/openLoops').then(({ decayStaleOpenLoops }) => decayStaleOpenLoops(db)).catch(() => {});
+    void import('../db/learnedProfile').then(({ dedupLearnedFacts }) => dedupLearnedFacts(db)).catch(() => {});
   }
 }

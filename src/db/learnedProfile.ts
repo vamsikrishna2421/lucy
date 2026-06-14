@@ -74,7 +74,7 @@ export async function upsertLearnedFact(
       const sim = similarity(tk, contentTokens(row.statement));
       if (sim > bestSim) { bestSim = sim; best = row; }
     }
-    if (best && bestSim >= 0.6) existing = best;
+    if (best && bestSim >= 0.52) existing = best;
   }
   if (existing) {
     const nextConf = source === 'feedback' ? 'confirmed' : NEXT_CONFIDENCE[existing.confidence];
@@ -120,6 +120,33 @@ export async function getInjectableLearnedFacts(db: SQLiteDatabase, limit = 12):
 
 export async function deleteLearnedFact(db: SQLiteDatabase, id: number): Promise<void> {
   await db.runAsync('DELETE FROM learned_facts WHERE id = ?', id);
+}
+
+const CONF_RANK: Record<LearnedConfidence, number> = { confirmed: 0, supported: 1, emerging: 2 };
+
+/**
+ * Collapses near-duplicate learned facts that piled up (the LLM rephrases the same fact each
+ * reflection — e.g. the data-engineering role or the ~7:45 morning routine stated 3 ways). Folds
+ * each weaker duplicate into the strongest matching primary (sums evidence), then deletes it.
+ * Returns the number merged away. Conservative threshold to avoid merging distinct facts.
+ */
+export async function dedupLearnedFacts(db: SQLiteDatabase, threshold = 0.52): Promise<number> {
+  const all = await db.getAllAsync<LearnedFactRow>('SELECT * FROM learned_facts');
+  // Strongest first so weaker rephrasings fold into the confirmed/most-evidenced primary.
+  all.sort((a, b) => (CONF_RANK[a.confidence] - CONF_RANK[b.confidence]) || (b.evidence_count - a.evidence_count) || (a.id - b.id));
+  const kept: Array<{ row: LearnedFactRow; tokens: Set<string> }> = [];
+  const drops: Array<{ id: number; into: number; evidence: number }> = [];
+  for (const row of all) {
+    const tk = contentTokens(row.statement);
+    const match = kept.find((k) => similarity(tk, k.tokens) >= threshold);
+    if (match) drops.push({ id: row.id, into: match.row.id, evidence: row.evidence_count });
+    else kept.push({ row, tokens: tk });
+  }
+  for (const d of drops) {
+    await db.runAsync('UPDATE learned_facts SET evidence_count = evidence_count + ? WHERE id = ?', d.evidence, d.into);
+    await db.runAsync('DELETE FROM learned_facts WHERE id = ?', d.id);
+  }
+  return drops.length;
 }
 
 /** Drops low-confidence facts not reinforced in ~45 days, so stale guesses fade out. */

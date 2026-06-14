@@ -35,7 +35,24 @@ export function DocumentsTab() {
   const [query, setQuery] = useState('');
   const [bucket, setBucket] = useState('All');
   const [selected, setSelected] = useState<VaultItem | null>(null);
+  const [bigImg, setBigImg] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
+
+  // Load the full image via the resilient getVaultImage (rebuilds container-safe paths, thumb
+  // fallback) — rendering selected.file_path directly fails for docs with stale absolute paths.
+  useEffect(() => {
+    let live = true;
+    setBigImg(null);
+    if (selected) {
+      (async () => {
+        const db = await getDatabase();
+        const { getVaultImage } = await import('../processing/documentVault');
+        const url = await getVaultImage(db, selected.id);
+        if (live) setBigImg(url);
+      })();
+    }
+    return () => { live = false; };
+  }, [selected]);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -131,7 +148,7 @@ export function DocumentsTab() {
             <TouchableOpacity style={styles.close} onPress={() => setSelected(null)}><Text style={styles.closeX}>✕</Text></TouchableOpacity>
             {selected ? (
               <ScrollView>
-                {(selected.file_path || selected.thumb) ? <Image source={{ uri: selected.file_path || selected.thumb || '' }} style={styles.bigImg} resizeMode="contain" /> : null}
+                {(bigImg || selected.thumb) ? <Image source={{ uri: bigImg || selected.thumb || '' }} style={styles.bigImg} resizeMode="contain" /> : null}
                 <Text style={styles.dBucket}>{selected.bucket || 'Other'}</Text>
                 <Text style={styles.dTitle}>{selected.title || 'Document'}</Text>
                 {selected.description ? <Text style={styles.dDesc}>{selected.description}</Text> : null}

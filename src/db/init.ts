@@ -300,6 +300,15 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       orig_mime TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      name TEXT NOT NULL,
+      description TEXT,
+      color TEXT,
+      status TEXT DEFAULT 'active'
+    );
+
     CREATE TABLE IF NOT EXISTS scheduled_blocks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

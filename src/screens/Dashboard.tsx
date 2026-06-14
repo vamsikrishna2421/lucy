@@ -22,6 +22,7 @@ import { archiveTodo } from '../db/todos';
 import { GalaxyView } from './Galaxy';
 import { DocumentsTab } from '../components/DocumentsTab';
 import { ScheduleTab } from '../components/ScheduleTab';
+import { ProjectsTab } from '../components/ProjectsTab';
 import { AskScreen } from './Ask';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -43,7 +44,14 @@ import {
 } from '../processing/stalenessEngine';
 
 type ViewMode = 'Focus Now' | 'Timeline' | 'Ask Lucy' | 'Health' | 'Brain';
-type LibraryTab = 'Galaxy' | 'Documents' | 'Calendar' | 'Resources' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
+type LibraryTab = 'Galaxy' | 'Documents' | 'Calendar' | 'Resources' | 'Projects' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
+
+// Display names for the Workspace tabs (internal keys kept stable).
+const TAB_LABEL: Record<LibraryTab, string> = {
+  Calendar: 'Calendar', Documents: 'Documents', Resources: 'Online resources', Galaxy: 'Glossary',
+  Meetings: 'Meetings', Listen: 'Listen data', Projects: 'Projects', Ideas: 'Ideas', Expenses: 'Expenses',
+  People: 'People', Todos: 'Todos',
+};
 
 function displayTimestamp(value: string): string {
   return new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`).toLocaleString();
@@ -169,7 +177,7 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
   initialAskQuestion?: string;
 }) {
   const [view, setView] = useState<ViewMode>('Timeline');
-  const [tab, setTab] = useState<LibraryTab>('Galaxy');
+  const [tab, setTab] = useState<LibraryTab>('Calendar');
   const [userName, setUserName] = useState('');
 
   // Allow the parent (bottom nav) to push a view in (e.g. Brain, Ask Lucy).
@@ -1799,7 +1807,8 @@ function LibraryView({
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const tabs: LibraryTab[] = ['Galaxy', 'Documents', 'Calendar', 'Resources', 'Todos', 'Ideas', 'Expenses', 'People', 'Meetings', 'Listen'];
+  // Workspace order (user-specified), then memory/overflow views so nothing is orphaned.
+  const tabs: LibraryTab[] = ['Calendar', 'Documents', 'Resources', 'Galaxy', 'Meetings', 'Listen', 'Projects', 'Ideas', 'Expenses', 'People', 'Todos'];
 
   // Galaxy + Documents + Calendar are full-screen browsers; render them without the inner ScrollView.
   if (tab === 'Galaxy' || tab === 'Documents' || tab === 'Calendar') {
@@ -1808,7 +1817,7 @@ function LibraryView({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs}>
           {tabs.map((item) => (
             <TouchableOpacity key={item} style={[styles.tab, item === tab && styles.activeTab]} onPress={() => setTab(item)}>
-              <Text style={[styles.tabText, item === tab && styles.activeText]}>{item}</Text>
+              <Text style={[styles.tabText, item === tab && styles.activeText]}>{TAB_LABEL[item] ?? item}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -1833,6 +1842,7 @@ function LibraryView({
         {tab === 'Ideas' && ideas.map((item) => <Card key={item.id} title={item.title} detail={item.description} privacy={item.privacy_level} onDelete={() => void deleteIdea(item.id)} />)}
         {tab === 'Expenses' && expenses.map((item) => <Card key={item.id} title={`${item.amount ?? '-'} - ${item.description}`} detail={item.category} privacy={item.privacy_level} onDelete={() => void deleteExpense(item.id)} />)}
         {tab === 'People' && <PeopleTab />}
+        {tab === 'Projects' && <ProjectsTab />}
         {tab === 'Resources' && <ResourcesTab />}
         {tab === 'Meetings' && <MeetingsTab />}
         {tab === 'Listen' && <ListenTab />}

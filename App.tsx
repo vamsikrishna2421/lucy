@@ -658,15 +658,15 @@ export default function App() {
             <Ionicons name={a ? 'home' : 'home-outline'} size={22} color={a ? LUCY_COLORS.primary : LUCY_COLORS.textSubtle} />
             <Text style={[styles.bottomTabLabel, a && styles.bottomTabLabelActive]}>Home</Text></>); })()}
           </TouchableOpacity>
-          {/* Brain */}
+          {/* Workspace (Calendar · Documents · Resources · memory views) */}
           <TouchableOpacity
             style={styles.bottomTab}
             onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); goToDashView('Brain'); }}
           >
             {(() => { const a = screen === 'dashboard' && dashCurrentView === 'Brain'; return (<>
             <View style={[styles.tabActivePill, a && styles.tabActivePillVisible]} />
-            <MaterialCommunityIcons name={a ? 'brain' : 'brain'} size={22} color={a ? LUCY_COLORS.primary : LUCY_COLORS.textSubtle} />
-            <Text style={[styles.bottomTabLabel, a && styles.bottomTabLabelActive]}>Brain</Text></>); })()}
+            <MaterialCommunityIcons name={a ? 'view-grid' : 'view-grid-outline'} size={22} color={a ? LUCY_COLORS.primary : LUCY_COLORS.textSubtle} />
+            <Text style={[styles.bottomTabLabel, a && styles.bottomTabLabelActive]}>Workspace</Text></>); })()}
           </TouchableOpacity>
 
           {/* Center voice button \u2014 hold to talk, or tap to start / tap again to stop */}

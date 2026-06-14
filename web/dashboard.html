@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 31 (Productivity hub) ────────── */
+/* ─── LUCY web · premium · dashboard rev 33 (Workspace + Projects) ────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -358,7 +358,7 @@ function toggleTheme(){applyTheme(document.documentElement.getAttribute('data-th
 applyTheme((()=>{try{return localStorage.getItem('lucy-theme')||'dark';}catch(e){return'dark';}})());
 
 const NAV=[['home','◉','Home'],['timeline','≣','Timeline'],['ask','✦','Ask Lucy'],['tasks','◇','Tasks'],
-  ['productivity','▦','Productivity'],['brain','❋','Brain'],['people','◐','People'],['health','♥','Health'],['money','▦','Money'],['about','☻','About You']];
+  ['productivity','▦','Workspace'],['brain','❋','Brain'],['people','◐','People'],['health','♥','Health'],['money','▦','Money'],['about','☻','About You']];
 let PROD_TAB='calendar';
 function curView(){return ROUTE==='productivity'?PROD_TAB:ROUTE;}
 function setProdTab(t){PROD_TAB=t;draw();}
@@ -379,15 +379,29 @@ function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offset
   if(view==='library')loadVault();
   if(view==='calendar')loadSchedule();
   if(view==='links')loadLinks();
+  if(view==='projects')loadProjects();
   if(ROUTE==='about')loadGuard();
   if(ROUTE==='ask')afterAsk();}
-function vProductivity(){const subs=[['calendar','◷','Calendar'],['library','🗂','Documents'],['links','🔗','Links']];
+function vProductivity(){const subs=[['calendar','◷','Calendar'],['library','🗂','Documents'],['links','🌐','Online resources'],['projects','📂','Projects']];
   const strip=`<div class="vchips" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">${subs.map(([k,ic,l])=>`<button class="vchip ${PROD_TAB===k?'on':''}" onclick="setProdTab('${k}')">${ic} ${l}</button>`).join('')}</div>`;
-  const body=PROD_TAB==='library'?vLibrary():PROD_TAB==='links'?vLinks():vCalendar();
-  return `<div class="date">Productivity</div>${strip}${body}`;}
-function vLinks(){return `<div class="greet"><h1 style="font-size:24px">Links</h1></div>
+  const body=PROD_TAB==='library'?vLibrary():PROD_TAB==='links'?vLinks():PROD_TAB==='projects'?vProjects():vCalendar();
+  return `<div class="date">Workspace</div>${strip}${body}`;}
+function vLinks(){return `<div class="greet"><h1 style="font-size:24px">Online resources</h1></div>
   <div class="subtle-line">Your saved links & resources.</div>
   <div id="linksWrap"><div class="empty"><div class="big">◌</div>Loading…</div></div>`;}
+function vProjects(){return `<div class="greet"><h1 style="font-size:24px">Projects</h1><div class="grow"></div><button class="btn" onclick="newProject()">＋ New project</button></div>
+  <div class="subtle-line">A dedicated space for each personal project.</div>
+  <div id="projWrap"><div class="empty"><div class="big">◌</div>Loading…</div></div>`;}
+async function loadProjects(){let r=null;try{r=await api('/api/projects');}catch(e){}const w=$('projWrap');if(!w)return;
+  const items=(r&&r.items)||[];
+  if(!items.length){w.innerHTML=empty('📂','No projects yet','Click ＋ New project to give a project its own space.');return;}
+  w.innerHTML='<div style="display:flex;flex-direction:column;gap:8px">'+items.map(p=>`<div class="card" style="padding:13px 15px;display:flex;align-items:center;gap:12px">
+    <span style="width:10px;height:10px;border-radius:50%;background:var(--accent,#FF8C42);flex:none"></span>
+    <div style="flex:1"><div style="font-weight:600">${esc(p.name)}</div>${p.description?`<div class="subtle-line" style="margin-top:2px">${esc(p.description)}</div>`:''}</div>
+    <button class="btn ghost sm" onclick="delProject(${p.id})">✕</button></div>`).join('')+'</div>';}
+async function newProject(){const name=prompt('Project name:');if(!name||!name.trim())return;const description=prompt('Short description (optional):')||'';
+  await api('/api/projects',{method:'POST',body:JSON.stringify({name:name.trim(),description})});toast('Project created ✓');await loadProjects();}
+async function delProject(id){if(!confirm('Delete this project?'))return;await api('/api/projects/'+id,{method:'DELETE'});toast('Deleted');await loadProjects();}
 async function loadLinks(){let r=null;try{r=await api('/api/resources');}catch(e){}const w=$('linksWrap');if(!w)return;
   const items=(r&&r.items)||[];
   if(!items.length){w.innerHTML=empty('🔗','No links yet','Add links & resources from the LUCY app — they will show here.');return;}

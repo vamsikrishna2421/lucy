@@ -371,6 +371,24 @@ async function route(req: ParsedRequest): Promise<string> {
       return json(200, { ok: true, items: rows });
     }
 
+    // ─── Projects (Workspace → Projects) ──────────────────────────────────────
+    if (req.method === 'GET' && req.path === '/api/projects') {
+      const { listProjects } = await import('../db/projects');
+      return json(200, { ok: true, items: await listProjects(db) });
+    }
+    if (req.method === 'POST' && req.path === '/api/projects') {
+      const name = String(payload.name ?? '').trim();
+      if (!name) return json(400, { error: 'Name required' });
+      const { createProject } = await import('../db/projects');
+      const id = await createProject(db, name, typeof payload.description === 'string' ? payload.description : null);
+      return json(200, { ok: true, id });
+    }
+    if (req.method === 'DELETE' && req.path.startsWith('/api/projects/')) {
+      const id = Number(req.path.split('/').pop());
+      if (id) { const { deleteProject } = await import('../db/projects'); await deleteProject(db, id); }
+      return json(200, { ok: true });
+    }
+
     // ─── Intelligent Calendar ─────────────────────────────────────────────────
     if (req.method === 'GET' && req.path === '/api/schedule/availability') {
       const { getAvailability } = await import('../scheduling/availability');

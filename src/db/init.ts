@@ -300,6 +300,21 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       orig_mime TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS scheduled_blocks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      todo_id INTEGER,
+      title TEXT,
+      start_at INTEGER,
+      end_at INTEGER,
+      resources TEXT,
+      energy TEXT,
+      location TEXT,
+      status TEXT DEFAULT 'committed',
+      locked INTEGER DEFAULT 0,
+      calendar_event_id TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS music_captures (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

@@ -362,6 +362,69 @@ async function route(req: ParsedRequest): Promise<string> {
       if (id) { const { deleteLearnedFact } = await import('../db/learnedProfile'); await deleteLearnedFact(db, id); }
       return json(200, { ok: true });
     }
+
+    // ─── Intelligent Calendar ─────────────────────────────────────────────────
+    if (req.method === 'GET' && req.path === '/api/schedule/availability') {
+      const { getAvailability } = await import('../scheduling/availability');
+      return json(200, { ok: true, availability: await getAvailability(db) });
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/availability') {
+      const { setAvailability } = await import('../scheduling/availability');
+      const av = await setAvailability(db, (payload.profile ?? payload) as Record<string, unknown>);
+      return json(200, { ok: true, availability: av });
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/suggest') {
+      const { suggestForText, suggestForTodo, describeResources } = await import('../scheduling');
+      const r = payload.todoId
+        ? await suggestForTodo(db, Number(payload.todoId))
+        : await suggestForText(db, String(payload.task ?? ''), {
+            durationMin: payload.durationMin ? Number(payload.durationMin) : undefined,
+            deadline: typeof payload.deadline === 'string' ? payload.deadline : null,
+          });
+      if (!r) return json(400, { error: 'Nothing to schedule' });
+      return json(200, {
+        ok: true,
+        meta: { ...r.meta, resourceLabel: describeResources(r.meta.resources) },
+        suggestions: r.suggestions,
+      });
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/commit') {
+      const { commitBlock } = await import('../scheduling');
+      const r = await commitBlock(db, {
+        title: String(payload.title ?? 'Task'),
+        startMs: Number(payload.startMs), endMs: Number(payload.endMs),
+        resources: payload.resources as undefined,
+        energy: typeof payload.energy === 'string' ? payload.energy : null,
+        location: typeof payload.location === 'string' ? payload.location : null,
+        todoId: payload.todoId ? Number(payload.todoId) : null,
+      });
+      return json(r.ok ? 200 : 409, r);
+    }
+    if (req.method === 'GET' && req.path === '/api/schedule') {
+      const days = Math.max(1, Math.min(14, Number(req.query.days) || 2));
+      const { getPlan, describeResources } = await import('../scheduling');
+      const { getAvailability } = await import('../scheduling/availability');
+      const now = Date.now();
+      const plan = await getPlan(db, now - 2 * 60 * 60 * 1000, now + days * 24 * 60 * 60 * 1000);
+      const availability = await getAvailability(db);
+      return json(200, {
+        ok: true,
+        availability,
+        blocks: plan.blocks.map((b) => ({
+          id: b.id ?? null, title: b.title, start: b.start, end: b.end,
+          source: b.source, todoId: b.todoId ?? null, locked: !!b.locked,
+          resourceLabel: describeResources(b.resources),
+        })),
+        conflicts: plan.conflicts.map((c) => ({ a: c.a.title, b: c.b.title, reason: c.reason })),
+      });
+    }
+    if (req.method === 'DELETE' && req.path.startsWith('/api/schedule/')) {
+      const id = Number(req.path.split('/').pop());
+      const { cancelBlock } = await import('../scheduling');
+      const okc = id ? await cancelBlock(db, id) : false;
+      return json(200, { ok: okc });
+    }
+
     return json(404, { error: 'No such endpoint' });
   }
   return httpResponse(404, 'text/plain', 'Not found');

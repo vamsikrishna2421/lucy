@@ -24,6 +24,20 @@ export function spendingScopeIsAllTime(question: string): boolean {
   return true;
 }
 
+export function recognizesSchedulingQuestion(question: string): boolean {
+  return /\b(when (should|can|do|could) i|find (me )?(a )?time|best time|good time|what time should|schedule (a|an|some|this|that|my|the)|plan my day|fit (it|this|that|.+) (in|into)|book (time|a slot|me)|squeeze in|make time for|free time for|time to)\b/i.test(question);
+}
+
+/** Strips the scheduling phrasing to recover the underlying task ("find time to call mom" → "call mom"). */
+export function extractSchedulableTask(question: string): string {
+  let t = question.trim();
+  t = t.replace(/^\s*(hey )?lucy[,\s]+/i, '');
+  t = t.replace(/\b(when (should|can|do|could) i|what time should i|find (me )?(a )?time (to|for)?|best time (to|for)?|good time (to|for)?|schedule|book (time )?(to|for)?|make time (to|for)?|squeeze in|fit (in )?|free time for|i need to|i want to|i have to|time to)\b/gi, ' ');
+  t = t.replace(/\b(today|tomorrow|this week|next week|please|sometime|some time)\b/gi, ' ');
+  t = t.replace(/[?.!]+$/g, '').replace(/\s+/g, ' ').trim();
+  return t || question.trim();
+}
+
 export function normalizeMemoryLookupText(value: string): string {
   return value
     .toLocaleLowerCase()

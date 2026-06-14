@@ -8,7 +8,7 @@ import { listPendingTodos, type TodoRow } from '../db/todos';
 import { listRecentCaptures } from '../db/captures';
 import type { ExtractionResult, PrivacyLevel } from '../types/extraction';
 import { isInvalidDeadline, isInvalidPendingTask } from './artifactCleanup';
-import { normalizeMemoryLookupText, recognizesMemoryMapQuestion, recognizesMonthlySpendingQuestion, recognizesTodayPlanQuestion, requestedTaskContext, spendingScopeIsAllTime } from './askIntent';
+import { normalizeMemoryLookupText, recognizesMemoryMapQuestion, recognizesMonthlySpendingQuestion, recognizesTodayPlanQuestion, requestedTaskContext, spendingScopeIsAllTime, recognizesSchedulingQuestion, extractSchedulableTask } from './askIntent';
 import { organizeMemory } from './organizer';
 import { promptAI } from '../ai/openai';
 import { resolveRemoteAvailability } from '../ai/provider';
@@ -47,9 +47,19 @@ export interface CitedSource {
   capturedAt: string;
 }
 
+export interface ScheduleSuggestionDTO {
+  title: string;
+  start: number;
+  end: number;
+  rationale: string;
+  resourceLabel: string;
+  durationMin: number;
+}
+
 export interface LucyAnswer {
   supported: boolean;
-  answerKind?: 'today' | 'memory' | 'spending' | 'llm';
+  answerKind?: 'today' | 'memory' | 'spending' | 'llm' | 'schedule';
+  scheduleSuggestions?: ScheduleSuggestionDTO[];
   title: string;
   message: string;
   tasks: TodoRow[];
@@ -435,6 +445,41 @@ async function answerWithLLM(question: string, history: AskTurn[] = []): Promise
   };
 }
 
+async function answerScheduling(question: string): Promise<LucyAnswer> {
+  const db = await getDatabase();
+  const task = extractSchedulableTask(question);
+  const { suggestForText } = await import('../scheduling');
+  const { describeResources } = await import('../scheduling/resources');
+  const r = await suggestForText(db, task, { maxResults: 3 });
+  const suggestions: ScheduleSuggestionDTO[] = r.suggestions.map((s) => ({
+    title: r.meta.title, start: s.start, end: s.end, rationale: s.rationale,
+    resourceLabel: describeResources(r.meta.resources), durationMin: r.meta.durationMin,
+  }));
+
+  let message: string;
+  if (suggestions.length === 0) {
+    message = `I couldn't find a free, conflict-free slot for "${r.meta.title}" in the next week within your available hours. Want to extend your working hours or shorten the task?`;
+  } else {
+    const top = suggestions[0];
+    const alts = suggestions.slice(1).map((s) => s.rationale).join('  ·  ');
+    message = `Best time for "${r.meta.title}" (${r.meta.durationMin} min, ${top.resourceLabel}): ${top.rationale}`
+      + (alts ? `\nAlso open: ${alts}` : '')
+      + `\nOpen Calendar to confirm and add it to your schedule.`;
+  }
+
+  await insertQuestionSignal(db, question, 'schedule_suggestion', message, 'Help the user find conflict-free time for new work.');
+  return {
+    supported: true,
+    answerKind: 'schedule',
+    scheduleSuggestions: suggestions,
+    title: suggestions.length ? `Suggested time for ${r.meta.title}` : 'No free slot found',
+    message,
+    tasks: [],
+    deadlines: [],
+    recordedSignal: 'Found conflict-free time based on your calendar and routines.',
+  };
+}
+
 export async function askLucy(
   question: string,
   captureCallback?: (text: string) => Promise<void>,
@@ -488,6 +533,9 @@ export async function askLucy(
       recordedSignal: '',
       llmResponse: `Got it, ${name}. I've saved that to your memory and will organize it shortly.`,
     };
+  }
+  if (recognizesSchedulingQuestion(trimmed)) {
+    return answerScheduling(trimmed);
   }
   if (recognizesMonthlySpendingQuestion(trimmed)) {
     return answerMonthlySpending(trimmed);

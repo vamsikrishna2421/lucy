@@ -88,6 +88,73 @@ export async function getUpcomingEvents(daysAhead = 7): Promise<CalendarEvent[]>
   }
 }
 
+// ─── Busy blocks + event creation (for the scheduler) ──────────────────────────
+
+/** Timed calendar events in [fromMs,toMs] as engine Blocks (busy = focus+self+location). */
+export async function calendarBusyBlocks(fromMs: number, toMs: number): Promise<import('../scheduling/types').Block[]> {
+  if (!(await hasCalendarPermission())) return [];
+  try {
+    const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+    const ids = calendars.map((c) => c.id);
+    if (ids.length === 0) return [];
+    const raw = await Calendar.getEventsAsync(ids, new Date(fromMs), new Date(toMs));
+    return raw
+      .filter((e) => e.title && !e.allDay)
+      .map((e) => ({
+        title: e.title,
+        start: new Date(e.startDate).getTime(),
+        end: new Date(e.endDate).getTime(),
+        resources: { axes: ['focus', 'self'] as Array<'focus' | 'self'>, location: e.location || null },
+        source: 'calendar' as const,
+        calendarEventId: e.id,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/** Find a writable calendar to create LUCY events in. */
+async function getWritableCalendarId(): Promise<string | null> {
+  try {
+    if (Platform.OS === 'ios') {
+      const def = await Calendar.getDefaultCalendarAsync();
+      if (def?.id) return def.id;
+    }
+    const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+    const writable = calendars.find((c) => c.allowsModifications);
+    return writable?.id ?? calendars[0]?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Create a calendar event for a LUCY-scheduled block. Returns the event id, or null. */
+export async function createLucyEvent(
+  title: string, startMs: number, endMs: number, location?: string | null, notes?: string | null,
+): Promise<string | null> {
+  if (!(await hasCalendarPermission())) {
+    if (!(await requestCalendarPermission())) return null;
+  }
+  const calId = await getWritableCalendarId();
+  if (!calId) return null;
+  try {
+    return await Calendar.createEventAsync(calId, {
+      title,
+      startDate: new Date(startMs),
+      endDate: new Date(endMs),
+      location: location || undefined,
+      notes: notes || 'Scheduled by LUCY',
+      timeZone: undefined,
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteLucyEvent(eventId: string): Promise<void> {
+  try { await Calendar.deleteEventAsync(eventId); } catch { /* best effort */ }
+}
+
 // ─── Format for Ask context ───────────────────────────────────────────────────
 
 export function formatCalendarContext(events: CalendarEvent[]): string {

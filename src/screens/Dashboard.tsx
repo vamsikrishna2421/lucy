@@ -21,6 +21,7 @@ import { enqueueTranscript } from '../processing/extract';
 import { archiveTodo } from '../db/todos';
 import { GalaxyView } from './Galaxy';
 import { DocumentsTab } from '../components/DocumentsTab';
+import { ScheduleTab } from '../components/ScheduleTab';
 import { AskScreen } from './Ask';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -42,7 +43,7 @@ import {
 } from '../processing/stalenessEngine';
 
 type ViewMode = 'Focus Now' | 'Timeline' | 'Ask Lucy' | 'Health' | 'Brain';
-type LibraryTab = 'Galaxy' | 'Documents' | 'Resources' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
+type LibraryTab = 'Galaxy' | 'Documents' | 'Calendar' | 'Resources' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
 
 function displayTimestamp(value: string): string {
   return new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`).toLocaleString();
@@ -1798,10 +1799,10 @@ function LibraryView({
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const tabs: LibraryTab[] = ['Galaxy', 'Documents', 'Resources', 'Todos', 'Ideas', 'Expenses', 'People', 'Meetings', 'Listen'];
+  const tabs: LibraryTab[] = ['Galaxy', 'Documents', 'Calendar', 'Resources', 'Todos', 'Ideas', 'Expenses', 'People', 'Meetings', 'Listen'];
 
-  // Galaxy + Documents are full-screen browsers; render them without the inner ScrollView.
-  if (tab === 'Galaxy' || tab === 'Documents') {
+  // Galaxy + Documents + Calendar are full-screen browsers; render them without the inner ScrollView.
+  if (tab === 'Galaxy' || tab === 'Documents' || tab === 'Calendar') {
     return (
       <View style={styles.library}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs}>
@@ -1812,7 +1813,7 @@ function LibraryView({
           ))}
         </ScrollView>
         <View style={{ flex: 1 }}>
-          {tab === 'Galaxy' ? <GalaxyView /> : <DocumentsTab />}
+          {tab === 'Galaxy' ? <GalaxyView /> : tab === 'Documents' ? <DocumentsTab /> : <ScheduleTab />}
         </View>
       </View>
     );

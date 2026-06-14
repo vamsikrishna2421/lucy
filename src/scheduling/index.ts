@@ -9,7 +9,7 @@ import { getAvailability } from './availability';
 import { nonWorkingBlocks } from './freeBusy';
 import { findSlots, validatePlan, type PlanConflict } from './scheduler';
 import { rationale } from './scorer';
-import { normalizeResources } from './resources';
+import { normalizeResources, describeResources } from './resources';
 import { DAY, startOfLocalDay } from './time';
 import {
   createScheduledBlock, listScheduledBlocks, getScheduledBlock, deleteScheduledBlock, rowToBlock,
@@ -138,10 +138,74 @@ export interface DayPlan {
   conflicts: PlanConflict[];
 }
 
-/** The plan for [fromMs,toMs]: calendar events + committed task-blocks + any conflicts. */
+/** The plan for [fromMs,toMs]: committed task-blocks + any conflicts. */
 export async function getPlan(db: SQLiteDatabase, fromMs: number, toMs: number): Promise<DayPlan> {
   const av = await getAvailability(db);
   const { resourceBlocks } = await buildBusy(db, fromMs, toMs, av);
   const blocks = resourceBlocks.filter((b) => b.end > fromMs && b.start < toMs).sort((a, b) => a.start - b.start);
   return { from: fromMs, to: toMs, blocks, conflicts: validatePlan(blocks) };
+}
+
+/** Pending todos that don't yet have a committed scheduled block. */
+export async function unscheduledPendingTodos(db: SQLiteDatabase): Promise<Array<{ id: number; task: string; urgency: string | null }>> {
+  const { listPendingTodos } = await import('../db/todos');
+  const todos = await listPendingTodos(db);
+  const scheduled = await db.getAllAsync<{ todo_id: number }>(
+    "SELECT DISTINCT todo_id FROM scheduled_blocks WHERE status = 'committed' AND todo_id IS NOT NULL",
+  );
+  const taken = new Set(scheduled.map((s) => s.todo_id));
+  return todos.filter((t) => !taken.has(t.id)).map((t) => ({ id: t.id, task: t.task, urgency: (t as { urgency?: string | null }).urgency ?? null }));
+}
+
+export interface DayProposal {
+  todoId: number | null;
+  title: string;
+  start: number;
+  end: number;
+  rationale: string;
+  resourceLabel: string;
+  durationMin: number;
+  resources: TaskResources;
+  energy: string;
+}
+
+/**
+ * Auto-plan: place all unscheduled pending todos into conflict-free slots (priority order:
+ * deadline, then urgency, then deep work first). Returns PROPOSALS to confirm — nothing is
+ * committed until the user accepts (locked decision #2: suggest + confirm).
+ */
+export async function autoPlanDay(db: SQLiteDatabase, opts?: { horizonDays?: number }): Promise<{ proposals: DayProposal[]; unplaced: string[] }> {
+  const av = await getAvailability(db);
+  const now = Date.now();
+  const horizonDays = opts?.horizonDays ?? 2;
+  const to = startOfLocalDay(now) + (horizonDays + 1) * DAY;
+  const { resourceBlocks, hardBlocks } = await buildBusy(db, now, to, av);
+  const todos = await unscheduledPendingTodos(db);
+
+  const URG: Record<string, number> = { high: 0, medium: 1, low: 2 };
+  const tasks = todos.map((t) => ({ t, meta: classifyTask(t.task) }));
+  tasks.sort((a, b) => {
+    const da = a.meta.deadline ? Date.parse(a.meta.deadline) : Infinity;
+    const dbb = b.meta.deadline ? Date.parse(b.meta.deadline) : Infinity;
+    if (da !== dbb) return da - dbb;
+    const ua = URG[a.t.urgency ?? 'medium'] ?? 1; const ub = URG[b.t.urgency ?? 'medium'] ?? 1;
+    if (ua !== ub) return ua - ub;
+    return (a.meta.energy === 'deep' ? 0 : 1) - (b.meta.energy === 'deep' ? 0 : 1);
+  });
+
+  const virtual: Block[] = [];
+  const proposals: DayProposal[] = [];
+  const unplaced: string[] = [];
+  for (const { t, meta } of tasks) {
+    const slots = findSlots({ meta, hardBlocks, resourceBlocks: [...resourceBlocks, ...virtual], availability: av, now, horizonDays, maxResults: 1 });
+    if (!slots.length) { unplaced.push(meta.title); continue; }
+    const s = slots[0];
+    virtual.push({ title: meta.title, start: s.start, end: s.end, resources: meta.resources, source: 'scheduled' });
+    proposals.push({
+      todoId: t.id, title: meta.title, start: s.start, end: s.end,
+      rationale: rationale(meta, s.start, s.end, s.reasons), resourceLabel: describeResources(meta.resources),
+      durationMin: meta.durationMin, resources: meta.resources, energy: meta.energy,
+    });
+  }
+  return { proposals, unplaced };
 }

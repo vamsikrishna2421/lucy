@@ -400,6 +400,11 @@ async function route(req: ParsedRequest): Promise<string> {
       });
       return json(r.ok ? 200 : 409, r);
     }
+    if (req.method === 'POST' && req.path === '/api/schedule/plan-day') {
+      const { autoPlanDay } = await import('../scheduling');
+      const r = await autoPlanDay(db, { horizonDays: Number(payload.horizonDays) || 2 });
+      return json(200, { ok: true, ...r });
+    }
     if (req.method === 'POST' && req.path === '/api/schedule/block') {
       const { addFixedBlock } = await import('../scheduling');
       const r = await addFixedBlock(db, {
@@ -412,11 +417,12 @@ async function route(req: ParsedRequest): Promise<string> {
     }
     if (req.method === 'GET' && req.path === '/api/schedule') {
       const days = Math.max(1, Math.min(14, Number(req.query.days) || 2));
-      const { getPlan, describeResources } = await import('../scheduling');
+      const { getPlan, describeResources, unscheduledPendingTodos } = await import('../scheduling');
       const { getAvailability } = await import('../scheduling/availability');
       const now = Date.now();
       const plan = await getPlan(db, now - 2 * 60 * 60 * 1000, now + days * 24 * 60 * 60 * 1000);
       const availability = await getAvailability(db);
+      const unscheduled = await unscheduledPendingTodos(db);
       return json(200, {
         ok: true,
         availability,
@@ -426,6 +432,7 @@ async function route(req: ParsedRequest): Promise<string> {
           resourceLabel: describeResources(b.resources),
         })),
         conflicts: plan.conflicts.map((c) => ({ a: c.a.title, b: c.b.title, reason: c.reason })),
+        unscheduled: unscheduled.slice(0, 12),
       });
     }
     if (req.method === 'DELETE' && req.path.startsWith('/api/schedule/')) {

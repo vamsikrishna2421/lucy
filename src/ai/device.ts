@@ -19,17 +19,34 @@ import { deviceExtractionPrompt, localReferenceTimestamp } from './prompts';
 import { DEFAULT_LOCAL_MODEL_ID, localModelOptions, resolveLocalModel, type LocalModelId, type LocalModelConfig } from './modelCatalog';
 
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-var-requires */
-// Guarded lazy access to react-native-executorch. Returns null if the native module is
-// missing/unloadable (older arch, failed build) so the feature degrades instead of crashing.
+// executorch only ships/works on arm64. On x86 (emulator) or armeabi-v7a (32-bit) just
+// REQUIRING react-native-executorch crashes the app: its module init accesses the ETInstaller
+// JSI HostObject, which throws a NATIVE exception (reported via ReactHost.handleHostException,
+// NOT a catchable JS throw — try/catch around require() can't stop it). So we must never even
+// require it unless the device is arm64. Arch is read synchronously from expo-device.
+let _arm64: boolean | undefined;
+function isArm64Device(): boolean {
+  if (_arm64 !== undefined) return _arm64;
+  try {
+    const arches: string[] | null = require('expo-device').supportedCpuArchitectures;
+    // Use the PRIMARY (preferred, first) ABI — Android lists most-preferred first. An x86_64
+    // emulator lists "x86_64,arm64-v8a" (claims arm64 for app compat) but can't run arm64
+    // native libs; its primary is x86_64. Only real 64-bit ARM phones have arm64-v8a primary.
+    _arm64 = !!arches && arches.length > 0 && /arm64|aarch64/i.test(arches[0]);
+  } catch { _arm64 = false; }
+  return _arm64;
+}
 let _et: any; // undefined = not tried, null = unavailable
 function et(): any {
   if (_et !== undefined) return _et;
+  if (!isArm64Device()) { _et = null; return _et; } // never require executorch off arm64
   try { _et = require('react-native-executorch'); } catch { _et = null; }
   return _et;
 }
 let _fetcher: any;
 function resourceFetcher(): any {
   if (_fetcher !== undefined) return _fetcher;
+  if (!isArm64Device()) { _fetcher = null; return _fetcher; }
   try { _fetcher = require('react-native-executorch-expo-resource-fetcher').ExpoResourceFetcher; } catch { _fetcher = null; }
   return _fetcher;
 }

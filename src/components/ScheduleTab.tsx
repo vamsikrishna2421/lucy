@@ -22,6 +22,9 @@ function dayLabel(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 }
 function hm(min: number): string { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`; }
+// Category → color (matches the web color legend).
+const CATS: Array<[string, RegExp]> = [['#22C55E', /walk|gym|run|workout|yoga|exercise|meditat/], ['#F5C451', /lunch|dinner|breakfast|meal|coffee|brunch/], ['#FF8C42', /call|meeting|standup|sync|interview|brief|1:1/], ['#A78BFA', /errand|buy|pick|store|grocery|bank|clinic|@/], ['#4DA3FF', /focus|deep|write|code|study|design|review|plan|research|report/]];
+function catColor(title: string, label: string): string { const s = `${title} ${label}`.toLowerCase(); for (const [c, re] of CATS) if (re.test(s)) return c; return '#8AA4FF'; }
 
 interface Sugg { meta: { title: string; durationMin: number; resources: TaskResources; energy: string; location?: string | null }; suggestions: SlotSuggestion[]; todoId?: number | null }
 
@@ -141,7 +144,7 @@ export function ScheduleTab() {
           {byDay[k].map((b, i) => {
             const conf = conflictTitles.has(b.title);
             return (
-              <View key={i} style={[styles.block, conf && { borderColor: LUCY_COLORS.error }]}>
+              <View key={i} style={[styles.block, { borderLeftWidth: 4, borderLeftColor: catColor(b.title, describeResources(b.resources)) }, conf && { borderColor: LUCY_COLORS.error }]}>
                 <Text style={styles.blockTime}>{clock(b.start)}–{clock(b.end)}</Text>
                 <View style={{ flex: 1 }}><Text style={styles.blockT}>{b.title}{conf ? ' ⚠' : ''}</Text><Text style={styles.rowD}>{describeResources(b.resources)} · {b.source === 'scheduled' ? '◷ LUCY' : '📅'}</Text></View>
                 {b.id ? <TouchableOpacity onPress={() => remove(b.id!)}><Text style={styles.x}>✕</Text></TouchableOpacity> : null}

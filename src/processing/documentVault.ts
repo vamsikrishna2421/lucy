@@ -166,10 +166,24 @@ export async function saveImageToVault(
 
   // Duplicate check FIRST (by content hash) — skip before spending an AI classify call.
   if (hash) {
-    const existing = await db0.getFirstAsync<{ id: number; title: string | null; bucket: string }>(
-      'SELECT id, title, bucket FROM vault_items WHERE hash = ?', hash,
+    const existing = await db0.getFirstAsync<{ id: number; title: string | null; bucket: string; orig_path: string | null }>(
+      'SELECT id, title, bucket, orig_path FROM vault_items WHERE hash = ?', hash,
     );
-    if (existing) { deleteAsync(tempUri, { idempotent: true }).catch(() => {}); return { duplicate: true, existing }; }
+    if (existing) {
+      // Backfill the ORIGINAL file onto a duplicate that was stored before original-retention
+      // existed, so re-uploading the same doc upgrades it to native-format download (no need to
+      // delete the old copy first — the hash match would otherwise just reject it).
+      if (original?.base64 && !existing.orig_path) {
+        try {
+          await ensureVaultDir();
+          const ofn = `orig-${Date.now()}.${extFor(original.mime, originalName)}`;
+          await writeAsStringAsync(`${VAULT_DIR}${ofn}`, original.base64, { encoding: EncodingType.Base64 });
+          await db0.runAsync('UPDATE vault_items SET orig_path = ?, orig_mime = ? WHERE id = ?', ofn, original.mime || null, existing.id);
+        } catch { /* keep the dup as-is if the write fails */ }
+      }
+      deleteAsync(tempUri, { idempotent: true }).catch(() => {});
+      return { duplicate: true, existing: { id: existing.id, title: existing.title, bucket: existing.bucket } };
+    }
   }
 
   let base64: string;

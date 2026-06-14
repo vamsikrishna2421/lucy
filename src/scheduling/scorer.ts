@@ -4,7 +4,7 @@
  */
 import type { AvailabilityProfile, SchedTaskMeta } from './types';
 import { isInPeakWindow } from './freeBusy';
-import { HOUR, fmtDay, fmtTime, localMinutes } from './time';
+import { HOUR, DAY, fmtDay, fmtTime, localMinutes, startOfLocalDay } from './time';
 
 export interface ScoreResult {
   score: number;
@@ -44,10 +44,11 @@ export function scoreSlot(
     }
   }
 
-  // 3) Sooner is mildly better (don't let things drift) — small decay per day out.
-  const daysOut = Math.floor((startMs - now) / (24 * HOUR));
+  // 3) Sooner is mildly better (don't let things drift) — small decay per calendar day out.
+  const daysOut = Math.round((startOfLocalDay(startMs) - startOfLocalDay(now)) / DAY);
   score -= daysOut * 4;
   if (daysOut === 0) reasons.push('today');
+  else if (daysOut === 1) reasons.push('tomorrow');
 
   // 4) Earlier in the working day slightly preferred for momentum.
   score -= Math.max(0, (localMinutes(startMs) - av.workStartMin)) / 120;

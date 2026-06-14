@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 24 (doc concept map) ────────────────── */
+/* ─── LUCY web · premium · dashboard rev 25 (multi-page PDF) ─────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -284,8 +284,8 @@ nav{display:flex;flex-direction:column;gap:1px}
 .cap-toggle button.on{background:var(--primary);color:var(--on-primary)}
 .cap-text{background:var(--raised);border:1px solid var(--border);border-radius:14px;padding:16px;font-size:14px;line-height:1.62;white-space:pre-wrap;word-wrap:break-word;color:var(--text);min-height:80px;max-height:44vh;overflow-y:auto}
 .cap-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center}
-.dl-img{background:var(--sheet,#0c0a07);display:grid;place-items:center;min-height:260px;max-height:88vh;overflow:auto}
-.dl-img img{max-width:100%;max-height:88vh;object-fit:contain;display:block}
+.dl-img{background:var(--sheet,#0c0a07);display:grid;place-items:start center;min-height:260px;max-height:88vh;overflow:auto}
+.dl-img img{width:100%;height:auto;display:block}
 .dl-side{padding:24px;display:flex;flex-direction:column;border-left:1px solid var(--border)}
 .dl-bucket{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--primary-deep);margin-bottom:6px}
 [data-theme="dark"] .dl-bucket{color:var(--primary-glow)}
@@ -519,6 +519,17 @@ let _pdfjs=null;
 async function loadPdfJs(){if(_pdfjs)return _pdfjs;await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';_pdfjs=window.pdfjsLib;return _pdfjs;}
 /* Render a PDF's first page to a JPEG data URL — so it flows through the image vision pipeline. */
 async function pdfFirstPage(file,max,q){const lib=await loadPdfJs();const buf=await file.arrayBuffer();const pdf=await lib.getDocument({data:buf}).promise;const page=await pdf.getPage(1);let vp=page.getViewport({scale:1});const scale=Math.min(max/vp.width,max/vp.height)||1;vp=page.getViewport({scale:Math.max(scale,0.3)});const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);await page.render({canvasContext:ctx,viewport:vp}).promise;return c.toDataURL('image/jpeg',q);}
+/* Render ALL PDF pages and stack them into ONE tall scrollable JPEG (page 1 on top).
+   maxPages + per-page width keep total height under the browser canvas limit (~32767px). */
+async function pdfAllPages(file,max,q,maxPages){const lib=await loadPdfJs();const buf=await file.arrayBuffer();const pdf=await lib.getDocument({data:buf}).promise;
+  const n=Math.min(pdf.numPages,maxPages||12);const pages=[];let totalH=0,maxW=0;const GAP=14;
+  for(let i=1;i<=n;i++){const page=await pdf.getPage(i);let vp=page.getViewport({scale:1});const scale=Math.min(max/vp.width,max/vp.height)||1;vp=page.getViewport({scale:Math.max(scale,0.3)});
+    const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);await page.render({canvasContext:ctx,viewport:vp}).promise;
+    pages.push(c);totalH+=c.height+GAP;maxW=Math.max(maxW,c.width);}
+  if(pages.length<=1)return pages.length?pages[0].toDataURL('image/jpeg',q):'';
+  const out=document.createElement('canvas');out.width=maxW;out.height=totalH;const o=out.getContext('2d');o.fillStyle='#e7e7ee';o.fillRect(0,0,out.width,out.height);
+  let y=0;for(const c of pages){o.drawImage(c,Math.round((maxW-c.width)/2),y);y+=c.height+GAP;}
+  return out.toDataURL('image/jpeg',q);}
 /* Content hash of the ORIGINAL file bytes (crypto.subtle is unavailable over http LAN,
    so a JS hash: length + two FNV-1a passes — collision-safe at personal scale). */
 async function fileHash(file){const b=new Uint8Array(await file.arrayBuffer());let h1=0x811c9dc5,h2=0x52dce729;
@@ -530,7 +541,7 @@ async function uploadOne(file){const isPdf=file.type==='application/pdf'||/\.pdf
   let full,thumb,hash;
   try{
     hash=await fileHash(file);
-    if(isPdf){full=await pdfFirstPage(file,1400,0.78);thumb=await downscaleSrc(full,260,0.6);}
+    if(isPdf){full=await pdfAllPages(file,1200,0.78,12);thumb=await pdfFirstPage(file,260,0.6);}
     else{full=await downscale(file,1280,0.72);thumb=await downscale(file,260,0.6);}
   }catch(e){return {ok:false,error:'unreadable'};}
   try{const r=await api('/api/upload',{method:'POST',body:JSON.stringify({image:full,thumb,name:file.name,hash})});

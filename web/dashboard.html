@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 25 (multi-page PDF) ─────────────────── */
+/* ─── LUCY web · premium · dashboard rev 26 (doc download) ───────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -642,11 +642,18 @@ async function openDoc(id){const v=VAULT.find(x=>x.id===id);if(!v)return;const m
     <div class="dl-desc">${esc(v.description||'No description yet.')}</div>
     ${v.keywords?`<div style="margin-top:10px">${v.keywords.split(',').map(k=>k.trim()).filter(Boolean).slice(0,12).map(k=>`<span class="kw">${esc(k)}</span>`).join('')}</div>`:''}
     <div class="dl-date">${fmt(v.created_at)}${v.gallery_saved?' · also in Photos':''}</div>
+    <button class="btn sm" onclick="downloadDoc(${id})" style="margin-top:4px">⬇ Download</button>
     <div class="dl-row"><select id="dlBucket" class="dl-select">${opts.map(b=>`<option ${b===(v.bucket||'Other')?'selected':''}>${esc(b)}</option>`).join('')}</select><button class="btn sm" onclick="refile(${id})">Re-file</button></div>
     <button class="btn ghost sm" onclick="addCustomBucket(${id})">＋ Custom bucket</button>
     <div class="grow"></div><button class="btn ghost sm dl-del" onclick="deleteDoc(${id})">Delete document</button></div></div>`;
   try{const r=await api('/api/vault/item/'+id);$('dlImg').innerHTML=(r&&r.dataUrl)?`<img src="${r.dataUrl}" alt=""/>`:empty('🗂','Image unavailable','');}
   catch(e){$('dlImg').innerHTML=empty('🗂','Image ships via OTA','');}}
+async function downloadDoc(id){const v=VAULT.find(x=>x.id===id);toast('Preparing download…');
+  try{const r=await api('/api/vault/item/'+id);const url=r&&r.dataUrl;if(!url){toast('Image not available');return;}
+    const ext=(url.slice(5,url.indexOf(';'))||'image/jpeg').split('/')[1]||'jpg';
+    const a=document.createElement('a');a.href=url;a.download=(((v&&v.title)||'document').replace(/[^a-z0-9]+/gi,'_').replace(/^_+|_+$/g,'')||'document')+'.'+ext;
+    document.body.appendChild(a);a.click();a.remove();toast('Downloaded ✓');}
+  catch(e){toast('Download failed');}}
 function closeModal(){$('modal').classList.remove('on');}
 /* ─── Capture detail: full Summary ⇄ Raw idea, with copy ─── */
 let capCur=null, capView='summary', capEditing=false;

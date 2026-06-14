@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 36 (calendar color categories) ────────── */
+/* ─── LUCY web · premium · dashboard rev 37 (calendar 2-column) ────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -277,6 +277,11 @@ nav{display:flex;flex-direction:column;gap:1px}
 @media(max-width:640px){.wqgrid{grid-template-columns:repeat(2,1fr)}}
 .wqbtn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;border-radius:12px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s}
 .wqbtn:hover{border-color:var(--primary);color:var(--primary-deep)}
+/* Calendar two-column: timetable centered, controls on the right rail */
+.cal-2col{display:flex;gap:22px;align-items:flex-start}
+.cal-main{flex:1;min-width:0}
+.cal-side{width:340px;flex:none}
+@media(max-width:900px){.cal-2col{flex-direction:column}.cal-side{width:100%}}
 [data-theme="dark"] .vchip.on{color:var(--primary-glow)}
 .vchip .vn{opacity:.6;font-size:11px}
 .vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
@@ -736,7 +741,10 @@ function renderSchedule(){const w=$('calWrap');if(!w)return;
     return `<div style="margin-bottom:14px"><div style="font-weight:600;margin:6px 0;color:var(--muted)">${dayLabel(k)}</div>
       ${all.map(o=>o.habit?habitRow(o.b):blockRow(o.b,cset.has(o.b.title))).join('')}</div>`;}).join('');
   const legend=`<div style="display:flex;flex-wrap:wrap;gap:12px;margin:2px 0 12px">${CAL_CATS.map(([n,c])=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)"><span style="width:10px;height:10px;border-radius:3px;background:${c}"></span>${n}</span>`).join('')}</div>`;
-  w.innerHTML=avCard+habitsCard+finder+unschedCard+fixedCard+conf+`<div><b>Your timetable</b>${legend}<div style="margin-top:2px">${timeline||empty('◷','Nothing scheduled','Use “Find time” or “Plan my day”.')}</div></div>`;}
+  // Two-column: timetable centered (main), control cards on the right rail (clean, like the mockup).
+  const center=conf+`<div><b>Your timetable</b>${legend}<div style="margin-top:2px">${timeline||empty('◷','Nothing scheduled','Use “Find time” or “Plan my day”.')}</div></div>`;
+  const rail=finder+unschedCard+fixedCard+habitsCard+avCard;
+  w.innerHTML=`<div class="cal-2col"><div class="cal-main">${center}</div><div class="cal-side">${rail}</div></div>`;}
 function habitRow(b){return `<div class="card" style="padding:10px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;opacity:.78;border-style:dashed">
     <div style="min-width:130px;color:var(--muted);font-size:13px">${clock(b.start)} – ${clock(b.end)}</div>
     <div style="flex:1"><div style="font-weight:500">${esc(b.title)}</div><div style="margin-top:3px"><span class="kw" style="opacity:.7">✦ habit</span></div></div></div>`;}

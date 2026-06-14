@@ -27,9 +27,9 @@ export function nonWorkingBlocks(av: AvailabilityProfile, fromMs: number, toMs: 
       out.push(mk('Sleep', atLocalMinutes(day, av.sleepStartMin), atLocalMinutes(day, av.sleepEndMin), 'sleep'));
     }
 
-    // Before work-start and after work-end are off-limits for scheduling task-blocks.
-    out.push(mk('Before work', atLocalMinutes(day, 0), atLocalMinutes(day, av.workStartMin), 'protected'));
-    out.push(mk('After work', atLocalMinutes(day, av.workEndMin), atLocalMinutes(day, 24 * 60), 'protected'));
+    // NOTE: we no longer hard-block before/after work hours — work hours are a SOFT per-task
+    // window (see scheduler), so personal/explicitly-timed tasks (e.g. "gym after 6:30pm") can use
+    // the evening. Only sleep + protected windows are truly off-limits.
 
     // Protected windows (lunch, gym, etc).
     for (const w of av.protectedWindows) {

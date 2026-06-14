@@ -36,6 +36,25 @@ export function parseDuration(text: string): number | null {
   return null;
 }
 
+/** Parse explicit time floors/ceilings: "after 6:30pm", "from 9", "before 9am", "by noon". */
+export function detectTimeConstraints(text: string): { earliestMin: number | null; latestMin: number | null } {
+  const eveningCtx = /\b(evening|night|tonight|pm)\b/i.test(text);
+  const toMin = (h: number, m: number, mer: string | undefined): number => {
+    let hh = h;
+    if (mer) { const pm = /pm/i.test(mer); if (pm && hh < 12) hh += 12; if (!pm && hh === 12) hh = 0; }
+    else if (hh <= 7 && eveningCtx) hh += 12; // "after 6:30" said in an evening context → 18:30
+    return Math.min(23 * 60 + 59, hh * 60 + m);
+  };
+  let earliestMin: number | null = null;
+  let latestMin: number | null = null;
+  const after = /\b(?:after|from|past|starting(?:\s+at)?|post|no earlier than)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i.exec(text);
+  if (after) earliestMin = toMin(Number(after[1]), Number(after[2] || 0), after[3]);
+  const before = /\b(?:before|by|until|till|no later than)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i.exec(text);
+  if (before) latestMin = toMin(Number(before[1]), Number(before[2] || 0), before[3]);
+  if (/\bby noon\b/i.test(text)) latestMin = 12 * 60;
+  return { earliestMin, latestMin };
+}
+
 function detectWindow(text: string): TimeWindow {
   if (/\b(morning|am\b|early)\b/i.test(text)) return 'morning';
   if (/\b(afternoon|midday|lunch)\b/i.test(text)) return 'afternoon';
@@ -108,6 +127,7 @@ export function classifyTask(text: string, opts?: { durationMin?: number; deadli
     ?? parseDuration(lower)
     ?? (energy === 'deep' ? 60 : isVoice ? 30 : isPassive ? 30 : energy === 'shallow' ? 20 : 30);
 
+  const { earliestMin, latestMin } = detectTimeConstraints(lower);
   return {
     title: t,
     durationMin,
@@ -116,6 +136,8 @@ export function classifyTask(text: string, opts?: { durationMin?: number; deadli
     location: resources.location ?? null,
     timeWindow: detectWindow(lower),
     deadline: opts?.deadline ?? parseDeadline(lower),
+    earliestMin,
+    latestMin,
     splittable: isDeep && durationMin >= 90,
     confidence,
   };

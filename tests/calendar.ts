@@ -70,6 +70,15 @@ const pslots = findSlots({ meta: passiveTask, hardBlocks: hard, resourceBlocks: 
 ok('passive task gets slots', pslots.length > 0);
 ok('passive never inside sleep/off-hours', !pslots.some((s) => hard.some((h) => overlaps(s.start, s.end, h.start, h.end))));
 
+// ── explicit "after 6:30pm" time constraint (the reported bug) ───────────────────
+const gymTask = classifyTask('gym every evening for 1 hr after 6:30 pm');
+ok('parses "after 6:30 pm" → 18:30', gymTask.earliestMin === 18 * 60 + 30);
+const gymSlots = findSlots({ meta: { ...gymTask, durationMin: 60 }, hardBlocks: hard, resourceBlocks: [], availability: AV, now });
+ok('gym got slots even though after work hours', gymSlots.length > 0);
+ok('all gym slots start at/after 6:30pm', gymSlots.every((s) => { const lm = new Date(s.start).getHours() * 60 + new Date(s.start).getMinutes(); return lm >= 18 * 60 + 30; }));
+const before = classifyTask('finish report before 11am');
+ok('parses "before 11am" → 11:00', before.latestMin === 11 * 60);
+
 // ── validatePlan catches a manual clash ─────────────────────────────────────────
 const clash: Block = { title: 'Clash', start: meeting.start + 15 * MIN, end: meeting.end + 15 * MIN, resources: focus, source: 'scheduled' };
 ok('validatePlan flags overlapping focus blocks', validatePlan([meeting, clash]).length === 1);

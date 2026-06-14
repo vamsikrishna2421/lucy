@@ -50,6 +50,15 @@ export function findSlots(input: FindSlotsInput): SlotSuggestion[] {
     if (Number.isFinite(due)) to = Math.min(to, due);
   }
 
+  // Allowed time-of-day window. Work hours bound WORK tasks; personal/evening/explicitly-timed
+  // tasks may use the awake-but-after-work window (up to sleep). Explicit "after/before" tighten it.
+  const nightEnd = av.sleepStartMin > av.sleepEndMin ? av.sleepStartMin : 22 * 60;
+  const personal = meta.earliestMin != null || meta.latestMin != null || meta.timeWindow === 'evening' || meta.energy === 'passive';
+  let winStart = personal ? av.sleepEndMin : av.workStartMin;
+  let winEnd = personal ? nightEnd : av.workEndMin;
+  if (meta.earliestMin != null) winStart = Math.max(winStart, meta.earliestMin);
+  if (meta.latestMin != null) winEnd = Math.min(winEnd, meta.latestMin + Math.max(5, meta.durationMin));
+
   // Start search at the next STEP boundary after lead.
   let from = Math.ceil(lead / (STEP_MIN * MIN)) * (STEP_MIN * MIN);
 
@@ -57,12 +66,13 @@ export function findSlots(input: FindSlotsInput): SlotSuggestion[] {
   for (let s = from; s + durMs <= to; s += STEP_MIN * MIN) {
     const e = s + durMs;
 
-    // Must be within working hours and respect the task's time window.
+    // Respect the per-task time window (work hours or awake window) + explicit constraints.
     const lm = localMinutes(s);
     const lmEnd = localMinutes(e - 1);
-    if (lm < av.workStartMin || lmEnd >= av.workEndMin) continue;
+    if (lm < winStart || lmEnd >= winEnd) continue;
     if (startOfLocalDay(s) !== startOfLocalDay(e - 1)) continue; // no midnight spanning
     if (!inWindow(s, meta.timeWindow ?? null, av)) continue;
+    if (meta.latestMin != null && lm > meta.latestMin) continue; // start must be before the ceiling
 
     // Hard blocks: never overlap.
     if (hardBlocks.some((b) => overlaps(s, e, b.start, b.end))) continue;

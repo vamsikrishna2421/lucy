@@ -30,6 +30,20 @@ export interface VaultItem {
   mime: string;
   gallery_saved: number;
   source: string;
+  orig_path?: string | null;
+  orig_mime?: string | null;
+}
+
+/** Map a mime/filename to a file extension for the stored original. */
+function extFor(mime: string | null | undefined, name?: string | null): string {
+  const m = (mime || '').toLowerCase();
+  if (m === 'application/pdf') return 'pdf';
+  if (m === 'image/png') return 'png';
+  if (m === 'image/jpeg' || m === 'image/jpg') return 'jpg';
+  if (m === 'image/heic') return 'heic';
+  if (m === 'image/webp') return 'webp';
+  const ext = (name || '').split('.').pop();
+  return ext && ext.length <= 5 ? ext.toLowerCase() : 'bin';
 }
 
 const VAULT_SYSTEM = `You are LUCY, filing a document into the user's personal vault.
@@ -146,6 +160,7 @@ export async function saveImageToVault(
   thumbDataUrl: string | null,
   saveToGallery: boolean,
   hash?: string | null,
+  original?: { base64: string; mime: string } | null,
 ): Promise<VaultSaveResult> {
   const db0 = await getDatabase();
 
@@ -172,6 +187,19 @@ export async function saveImageToVault(
   try { await writeAsStringAsync(path, base64, { encoding: EncodingType.Base64 }); }
   catch { return { item: null }; }
 
+  // Persist the ORIGINAL file (e.g. the real PDF, or full-res image) so it can be viewed in full
+  // and downloaded in its native format. Stored as a filename only (same container-safe scheme).
+  let origFileName: string | null = null;
+  let origMime: string | null = null;
+  if (original?.base64) {
+    try {
+      const oext = extFor(original.mime, originalName);
+      origFileName = `orig-${Date.now()}.${oext}`;
+      await writeAsStringAsync(`${VAULT_DIR}${origFileName}`, original.base64, { encoding: EncodingType.Base64 });
+      origMime = original.mime || null;
+    } catch { origFileName = null; origMime = null; }
+  }
+
   // Optionally copy into the device photo gallery (best-effort; needs permission once).
   let gallerySaved = 0;
   if (saveToGallery) {
@@ -184,9 +212,9 @@ export async function saveImageToVault(
 
   const db = await getDatabase();
   const res = await db.runAsync(
-    `INSERT INTO vault_items (title, description, bucket, keywords, hash, file_path, thumb, mime, gallery_saved, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'image/jpeg', ?, 'upload')`,
-    meta.title, meta.description, meta.bucket, meta.keywords, hash ?? null, fileName, thumbDataUrl ?? null, gallerySaved,
+    `INSERT INTO vault_items (title, description, bucket, keywords, hash, file_path, thumb, mime, gallery_saved, source, orig_path, orig_mime)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'image/jpeg', ?, 'upload', ?, ?)`,
+    meta.title, meta.description, meta.bucket, meta.keywords, hash ?? null, fileName, thumbDataUrl ?? null, gallerySaved, origFileName, origMime,
   );
 
   // NOTE: vault documents are NOT enqueued as captures — the vault item IS the memory.
@@ -214,6 +242,27 @@ export async function getVaultImage(db: SQLiteDatabase, id: number): Promise<str
   return row.thumb || null;
 }
 
+/** Reads the ORIGINAL file (e.g. the real PDF) as a data URL + mime + suggested filename, for
+ *  download / full-fidelity viewing. Falls back to the rasterized preview image if no original. */
+export async function getVaultOriginal(
+  db: SQLiteDatabase,
+  id: number,
+): Promise<{ dataUrl: string; mime: string; name: string } | null> {
+  const row = await db.getFirstAsync<VaultItem>('SELECT title, orig_path, orig_mime, file_path, mime FROM vault_items WHERE id = ?', id);
+  if (!row) return null;
+  const safeTitle = (row.title || 'document').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'document';
+  if (row.orig_path) {
+    const b64 = await readVaultBase64(row.orig_path);
+    if (b64) {
+      const mime = row.orig_mime || 'application/octet-stream';
+      return { dataUrl: `data:${mime};base64,${b64}`, mime, name: `${safeTitle}.${extFor(mime, row.orig_path)}` };
+    }
+  }
+  // No original retained (e.g. uploaded before this existed) — fall back to the preview image.
+  const img = await getVaultImage(db, id);
+  return img ? { dataUrl: img, mime: 'image/jpeg', name: `${safeTitle}.jpg` } : null;
+}
+
 /** Re-runs classification on an already-stored document (dynamic buckets + keywords). Used by
  *  "Re-organize" to fix items filed under the old fixed taxonomy. Reads the stored image. */
 export async function reclassifyVaultItem(db: SQLiteDatabase, id: number): Promise<boolean> {
@@ -235,9 +284,9 @@ export async function refileVaultItem(db: SQLiteDatabase, id: number, bucket: st
 }
 
 export async function deleteVaultItem(db: SQLiteDatabase, id: number): Promise<void> {
-  const row = await db.getFirstAsync<VaultItem>('SELECT file_path FROM vault_items WHERE id = ?', id);
-  if (row?.file_path) {
-    for (const p of vaultPathCandidates(row.file_path)) deleteAsync(p, { idempotent: true }).catch(() => {});
+  const row = await db.getFirstAsync<VaultItem>('SELECT file_path, orig_path FROM vault_items WHERE id = ?', id);
+  for (const stored of [row?.file_path, row?.orig_path]) {
+    if (stored) for (const p of vaultPathCandidates(stored)) deleteAsync(p, { idempotent: true }).catch(() => {});
   }
   await db.runAsync('DELETE FROM vault_items WHERE id = ?', id);
 }

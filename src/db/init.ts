@@ -295,7 +295,9 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       thumb TEXT,
       mime TEXT DEFAULT 'image/jpeg',
       gallery_saved INTEGER DEFAULT 0,
-      source TEXT DEFAULT 'upload'
+      source TEXT DEFAULT 'upload',
+      orig_path TEXT,
+      orig_mime TEXT
     );
 
     CREATE TABLE IF NOT EXISTS music_captures (
@@ -636,5 +638,7 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     const vc = new Set(vaultCols.map((c) => c.name));
     if (!vc.has('keywords')) await db.execAsync('ALTER TABLE vault_items ADD COLUMN keywords TEXT;');
     if (!vc.has('hash')) await db.execAsync('ALTER TABLE vault_items ADD COLUMN hash TEXT;');
+    if (!vc.has('orig_path')) await db.execAsync('ALTER TABLE vault_items ADD COLUMN orig_path TEXT;');
+    if (!vc.has('orig_mime')) await db.execAsync('ALTER TABLE vault_items ADD COLUMN orig_mime TEXT;');
   }
 }

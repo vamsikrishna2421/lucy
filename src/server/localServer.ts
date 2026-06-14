@@ -233,12 +233,17 @@ async function route(req: ParsedRequest): Promise<string> {
       const thumb = typeof payload.thumb === 'string' ? payload.thumb : null;
       const hash = typeof payload.hash === 'string' ? payload.hash : null;
       const saveToGallery = payload.gallery !== false; // default: also save to Photos
+      // The ORIGINAL file (e.g. real PDF) for full-fidelity view + native-format download.
+      const origRaw = typeof payload.orig === 'string' ? payload.orig : '';
+      const origB64 = origRaw.includes(',') ? origRaw.slice(origRaw.indexOf(',') + 1) : origRaw;
+      const origMime = typeof payload.origMime === 'string' ? payload.origMime : 'application/octet-stream';
+      const original = origB64 ? { base64: origB64, mime: origMime } : null;
       try {
         const fs = await import('expo-file-system/legacy');
         const path = `${fs.cacheDirectory}lucy-upload-${Date.now()}.jpg`;
         await fs.writeAsStringAsync(path, b64, { encoding: fs.EncodingType.Base64 });
         const { saveImageToVault } = await import('../processing/documentVault');
-        const r = await saveImageToVault(path, name, thumb, saveToGallery, hash);
+        const r = await saveImageToVault(path, name, thumb, saveToGallery, hash, original);
         if (r.duplicate) return json(200, { ok: true, duplicate: true, existing: r.existing });
         const item = r.item;
         return json(200, { ok: !!item, id: item?.id, title: item?.title, bucket: item?.bucket, description: item?.description });
@@ -265,6 +270,13 @@ async function route(req: ParsedRequest): Promise<string> {
       const { getVaultImage } = await import('../processing/documentVault');
       const dataUrl = id ? await getVaultImage(db, id) : null;
       return dataUrl ? json(200, { ok: true, dataUrl }) : json(404, { error: 'Not found' });
+    }
+    // Original file (real PDF / full-res image) for download in its native format.
+    if (req.method === 'GET' && req.path.startsWith('/api/vault/orig/')) {
+      const id = Number(req.path.split('/').pop());
+      const { getVaultOriginal } = await import('../processing/documentVault');
+      const r = id ? await getVaultOriginal(db, id) : null;
+      return r ? json(200, { ok: true, dataUrl: r.dataUrl, mime: r.mime, name: r.name }) : json(404, { error: 'Not found' });
     }
     if (req.method === 'POST' && req.path === '/api/vault/refile') {
       const id = Number(payload.id); const bucket = String(payload.bucket ?? '');

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 23 (payslip synonyms) ───────────────── */
+/* ─── LUCY web · premium · dashboard rev 24 (doc concept map) ────────────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -564,10 +564,16 @@ function vLibrary(){return `<div class="greet"><h1 style="font-size:24px">Docume
 /* Synonyms so "payslips"/"salary", "usa"/"america", etc. all match. */
 const SYN=[['payslip','payslips','salary','salaries','salaryslip','wage','wages','paystub','paystubs','paycheck','paychecks','payroll','payrolls','earnings','earning','remuneration','compensation','stub','stubs'],
   ['usa','us','america','american','united states','u.s','u.s.a'],['india','indian','bharat','ind'],
-  ['uk','united kingdom','britain','british','england'],['id','identity','identification','card','cards'],
-  ['certificate','certificates','cert','certification'],['invoice','invoices','bill','bills','receipt','receipts'],
-  ['statement','statements','bankstatement','bank statement'],['visa','visas'],['passport','passports'],
-  ['tax','taxes','taxation','w2','1099','itr'],['insurance','policy','policies'],['offer','offerletter','offer letter']];
+  ['uk','united kingdom','britain','british','england'],
+  ['id','identity','identification','card','cards','license','licence','permit','aadhaar','aadhar','ssn','pan','dl'],
+  ['certificate','certificates','cert','certification','degree','diploma','transcript','transcripts','marksheet','marksheets'],
+  ['invoice','invoices','bill','bills','receipt','receipts'],
+  ['statement','statements','bankstatement','bank statement'],
+  ['visa','visas','i-20','i20','immigration','ead','opt','sevis'],['passport','passports'],
+  ['tax','taxes','taxation','w2','w-2','1099','1040','itr','return','returns','tds','form16'],
+  ['insurance','policy','policies'],
+  ['offer','offerletter','employment','appointment','contract'],
+  ['vaakruthi','vaakkruthi','vaakruth'],['nokia']];
 /* Filler words that just mean "documents" or are noise — ignored so "usa docs" === "usa". */
 const STOP=new Set(['doc','docs','document','documents','file','files','my','all','the','a','an','of','for','in','on','show','find','get','me','please','related','about','any','some']);
 /* Negation words: everything after them (or a "-term") is EXCLUDED. */

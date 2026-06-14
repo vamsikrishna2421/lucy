@@ -231,8 +231,11 @@ async function answerWithLLM(question: string, history: AskTurn[] = []): Promise
   try {
     const { findSimilarCaptures } = await import('./vectorSearch');
     const similar = await findSimilarCaptures(db, question, 8, 0.1);
+    // Include auto-private captures (e.g. password notes) — the Privacy Shield below tokenizes
+    // their secrets before any cloud call, so names/topics in them are recallable WITHOUT the
+    // secret leaking. Only EXCLUDE captures the user explicitly marked private.
     relevantCaptures = similar
-      .filter((s) => s.capture.privacy_level !== 'private' && s.capture.raw_transcript?.trim())
+      .filter((s) => !s.capture.user_marked_private && s.capture.raw_transcript?.trim())
       .map((s) => s.capture);
   } catch { /* fall through */ }
 
@@ -240,7 +243,7 @@ async function answerWithLLM(question: string, history: AskTurn[] = []): Promise
     const recent = await listRecentCaptures(db, 20);
     const seen = new Set(relevantCaptures.map((c) => c.id));
     for (const c of recent) {
-      if (!seen.has(c.id) && c.privacy_level !== 'private' && c.raw_transcript?.trim()) {
+      if (!seen.has(c.id) && !c.user_marked_private && c.raw_transcript?.trim()) {
         relevantCaptures.push(c);
       }
     }

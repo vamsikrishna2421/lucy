@@ -135,6 +135,9 @@ export default function App() {
     void (async () => {
       try {
         const db = await getDatabase();
+        // Hydrate the saved AI model preference into memory so extraction routes to the
+        // user's chosen provider (Claude/OpenAI) — without this it defaults to OpenAI.
+        await import('./src/ai/modelPreference').then(({ loadPreferredModel }) => loadPreferredModel(db)).catch(() => {});
         await initializeDeviceModelSelection();
         void autoRestoreDeviceModel();
         await resetInterruptedCaptures(db);

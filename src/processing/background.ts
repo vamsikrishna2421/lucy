@@ -33,6 +33,9 @@ export interface BackgroundProcessingState {
 if (!TaskManager.isTaskDefined(BACKGROUND_PROCESSING_TASK)) {
   TaskManager.defineTask(BACKGROUND_PROCESSING_TASK, async () => {
     const db = await getDatabase();
+    // Hydrate the model preference (headless tasks don't run App startup) so extraction
+    // routes to the user's chosen provider (e.g. Claude) instead of the OpenAI default.
+    await import('../ai/modelPreference').then(({ loadPreferredModel }) => loadPreferredModel(db)).catch(() => {});
     try {
       // Keep background runs bounded; local inference may already take substantial time.
       const processed = await processQueue(undefined, 1);

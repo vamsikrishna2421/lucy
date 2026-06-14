@@ -324,7 +324,16 @@ async function answerWithLLM(question: string, history: AskTurn[] = []): Promise
       const contacts = (await db.getAllAsync<{ name: string }>('SELECT name FROM people')).map((r) => r.name);
       const { detectNamesOnDevice } = await import('./deviceNer');
       const llmNames = await detectNamesOnDevice(input);
-      const { redacted, map } = shieldText(input, [...contacts, ...llmNames]);
+      // Trust each capture's ALREADY-detected secrets (stored protected_values): re-detection
+      // can miss a password (e.g. "password X" with no is/:/=), so feed the known values in
+      // explicitly to GUARANTEE they're tokenized before the cloud call. Critical now that
+      // auto-private (password) captures are included in the Ask context.
+      const knownSecrets: string[] = [];
+      for (const c of contextCaptures) {
+        if (!c.protected_values) continue;
+        try { (JSON.parse(c.protected_values) as Array<{ value: string }>).forEach((p) => { if (p?.value) knownSecrets.push(p.value); }); } catch { /* ignore */ }
+      }
+      const { redacted, map } = shieldText(input, [...contacts, ...llmNames, ...knownSecrets]);
       const shieldedSystem = systemPrompt + (map.length ? PLACEHOLDER_NOTE : '');
       llmResponse = restoreText(await promptAI(shieldedSystem, redacted, openAIKey), map);
     } else {

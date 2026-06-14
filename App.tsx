@@ -50,6 +50,28 @@ export default function App() {
     setDashRequestKey((k) => k + 1);
     setScreen('dashboard');
   }, []);
+
+  // The screen the user is on, for the context-aware voice button.
+  const currentVoiceContext = useCallback((): string => {
+    if (screen === 'capture') return 'tasks';
+    if (screen === 'settings') return 'settings';
+    switch (dashCurrentView) {
+      case 'Brain': return 'workspace';
+      case 'Ask Lucy': return 'ask';
+      case 'Health': return 'health';
+      case 'Focus Now': return 'tasks';
+      default: return 'timeline';
+    }
+  }, [screen, dashCurrentView]);
+
+  // Where a voice command says to go next.
+  const applyVoiceNav = useCallback((section: string) => {
+    const s = (section || '').toLowerCase();
+    if (['calendar', 'documents', 'resources', 'projects', 'brain', 'people', 'glossary', 'galaxy', 'money', 'health'].includes(s)) goToDashView('Brain');
+    else if (s === 'ask') goToDashView('Ask Lucy');
+    else if (s === 'tasks') setScreen('capture');
+    else goToDashView('Timeline');
+  }, [goToDashView]);
   const [refreshToken, setRefreshToken] = useState(0);
   const [ready, setReady] = useState(false);
   const [startupError, setStartupError] = useState('');
@@ -475,16 +497,29 @@ export default function App() {
       const text = passiveListener.getAccumulatedTranscript().trim();
       passiveListener.clearTranscript();
       if (text) {
-        await enqueueTranscript(text, 'voice', false);
-        setRefreshToken((v) => v + 1);
-        void drainQueue();
+        // Context-aware single mic: route the utterance through LUCY's command brain, biased by the
+        // screen you're on. It schedules / captures / adds / navigates — whatever you asked for.
+        try {
+          const ctx = currentVoiceContext();
+          const { runVoiceCommand } = await import('./src/voice/commandRouter');
+          const r = await runVoiceCommand(text, undefined, ctx);
+          if (r?.speak) Alert.alert('LUCY', r.speak);
+          if (r?.navigate) applyVoiceNav(r.navigate);
+          setRefreshToken((v) => v + 1);
+          void drainQueue();
+        } catch {
+          // Fall back to plain capture if the command brain is unavailable.
+          await enqueueTranscript(text, 'voice', false);
+          setRefreshToken((v) => v + 1);
+          void drainQueue();
+        }
       } else {
         Alert.alert('Nothing captured', 'I didn\'t catch any speech — hold the mic and speak for a couple of seconds, then release.');
       }
     } catch { /* non-critical */ } finally {
       setVoiceStatus('idle');
     }
-  }, [drainQueue]);
+  }, [drainQueue, currentVoiceContext, applyVoiceNav]);
 
   const onVoicePressIn = useCallback(() => {
     if (voiceRecording.current) {

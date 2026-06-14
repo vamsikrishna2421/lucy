@@ -371,6 +371,15 @@ async function route(req: ParsedRequest): Promise<string> {
       return json(200, { ok: true, items: rows });
     }
 
+    // ─── Voice command ("Hey Lucy, …") ────────────────────────────────────────
+    if (req.method === 'POST' && req.path === '/api/voice') {
+      const text = String(payload.text ?? '').trim();
+      if (!text) return json(400, { error: 'Empty command' });
+      const { runVoiceCommand } = await import('../voice/commandRouter');
+      const r = await runVoiceCommand(text, db, typeof payload.context === 'string' ? payload.context : undefined);
+      return json(200, r);
+    }
+
     // ─── Workspace home (live-tile dashboard summary) ─────────────────────────
     if (req.method === 'GET' && req.path === '/api/workspace') {
       const now = Date.now();

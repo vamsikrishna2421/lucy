@@ -23,6 +23,7 @@ import { GalaxyView } from './Galaxy';
 import { DocumentsTab } from '../components/DocumentsTab';
 import { ScheduleTab } from '../components/ScheduleTab';
 import { ProjectsTab } from '../components/ProjectsTab';
+import { WorkspaceHome } from '../components/WorkspaceHome';
 import { AskScreen } from './Ask';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -44,11 +45,11 @@ import {
 } from '../processing/stalenessEngine';
 
 type ViewMode = 'Focus Now' | 'Timeline' | 'Ask Lucy' | 'Health' | 'Brain';
-type LibraryTab = 'Galaxy' | 'Documents' | 'Calendar' | 'Resources' | 'Projects' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
+type LibraryTab = 'Home' | 'Galaxy' | 'Documents' | 'Calendar' | 'Resources' | 'Projects' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
 
-// Display names for the Workspace tabs (internal keys kept stable).
+// Display names (internal keys kept stable).
 const TAB_LABEL: Record<LibraryTab, string> = {
-  Calendar: 'Calendar', Documents: 'Documents', Resources: 'Online resources', Galaxy: 'Glossary',
+  Home: 'Workspace', Calendar: 'Calendar', Documents: 'Documents', Resources: 'Online resources', Galaxy: 'Glossary',
   Meetings: 'Meetings', Listen: 'Listen data', Projects: 'Projects', Ideas: 'Ideas', Expenses: 'Expenses',
   People: 'People', Todos: 'Todos',
 };
@@ -177,7 +178,7 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
   initialAskQuestion?: string;
 }) {
   const [view, setView] = useState<ViewMode>('Timeline');
-  const [tab, setTab] = useState<LibraryTab>('Calendar');
+  const [tab, setTab] = useState<LibraryTab>('Home');
   const [userName, setUserName] = useState('');
 
   // Allow the parent (bottom nav) to push a view in (e.g. Brain, Ask Lucy).
@@ -1807,22 +1808,30 @@ function LibraryView({
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   };
 
-  // Workspace order (user-specified), then memory/overflow views so nothing is orphaned.
-  const tabs: LibraryTab[] = ['Calendar', 'Documents', 'Resources', 'Galaxy', 'Meetings', 'Listen', 'Projects', 'Ideas', 'Expenses', 'People', 'Todos'];
-
-  // Galaxy + Documents + Calendar are full-screen browsers; render them without the inner ScrollView.
-  if (tab === 'Galaxy' || tab === 'Documents' || tab === 'Calendar') {
+  // Workspace HOME = Lumia live-tile command center (no tab-heavy layout).
+  if (tab === 'Home') {
     return (
       <View style={styles.library}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs}>
-          {tabs.map((item) => (
-            <TouchableOpacity key={item} style={[styles.tab, item === tab && styles.activeTab]} onPress={() => setTab(item)}>
-              <Text style={[styles.tabText, item === tab && styles.activeText]}>{TAB_LABEL[item] ?? item}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <WorkspaceHome onOpen={(t) => setTab(t as LibraryTab)} onPlanDay={() => setTab('Calendar')} />
+      </View>
+    );
+  }
+
+  // A section view: a single "← Workspace" back bar, then the section (no horizontal tab strip).
+  const backBar = (
+    <TouchableOpacity style={styles.wsBack} onPress={() => setTab('Home')}>
+      <Text style={styles.wsBackText}>‹ Workspace</Text>
+      <Text style={styles.wsBackTitle}>{TAB_LABEL[tab] ?? tab}</Text>
+    </TouchableOpacity>
+  );
+
+  // Galaxy + Documents + Calendar + Projects are full-screen browsers (no inner ScrollView).
+  if (tab === 'Galaxy' || tab === 'Documents' || tab === 'Calendar' || tab === 'Projects') {
+    return (
+      <View style={styles.library}>
+        {backBar}
         <View style={{ flex: 1 }}>
-          {tab === 'Galaxy' ? <GalaxyView /> : tab === 'Documents' ? <DocumentsTab /> : <ScheduleTab />}
+          {tab === 'Galaxy' ? <GalaxyView /> : tab === 'Documents' ? <DocumentsTab /> : tab === 'Calendar' ? <ScheduleTab /> : <ProjectsTab />}
         </View>
       </View>
     );
@@ -1830,19 +1839,12 @@ function LibraryView({
 
   return (
     <View style={styles.library}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs}>
-        {tabs.map((item) => (
-          <TouchableOpacity key={item} style={[styles.tab, item === tab && styles.activeTab]} onPress={() => setTab(item)}>
-            <Text style={[styles.tabText, item === tab && styles.activeText]}>{item}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {backBar}
       <ScrollView style={styles.content}>
         {tab === 'Todos' && todos.map((item) => <Card key={item.id} title={item.task} detail={`${item.category} / ${item.urgency} / ${item.status}`} privacy={item.privacy_level} onDelete={() => void deleteTodo(item.id)} />)}
         {tab === 'Ideas' && ideas.map((item) => <Card key={item.id} title={item.title} detail={item.description} privacy={item.privacy_level} onDelete={() => void deleteIdea(item.id)} />)}
         {tab === 'Expenses' && expenses.map((item) => <Card key={item.id} title={`${item.amount ?? '-'} - ${item.description}`} detail={item.category} privacy={item.privacy_level} onDelete={() => void deleteExpense(item.id)} />)}
         {tab === 'People' && <PeopleTab />}
-        {tab === 'Projects' && <ProjectsTab />}
         {tab === 'Resources' && <ResourcesTab />}
         {tab === 'Meetings' && <MeetingsTab />}
         {tab === 'Listen' && <ListenTab />}
@@ -2407,6 +2409,9 @@ const styles = StyleSheet.create({
   empty: { color: LUCY_COLORS.textMuted, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, padding: 16, marginBottom: 17 },
   pendingHint: { color: LUCY_COLORS.textMuted, fontSize: 13, marginBottom: 17, paddingHorizontal: 3 },
   library: { flex: 1 },
+  wsBack: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 4, marginBottom: 8 },
+  wsBackText: { color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '700' },
+  wsBackTitle: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '700' },
   tabs: { flexGrow: 0, marginBottom: 15 },
   tab: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 20, marginRight: 7, backgroundColor: LUCY_COLORS.surfaceRaised },
   activeTab: { backgroundColor: LUCY_COLORS.primary },

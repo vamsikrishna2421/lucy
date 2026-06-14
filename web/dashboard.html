@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 37 (calendar 2-column) ────────── */
+/* ─── LUCY web · premium · dashboard rev 38 (calendar views: agenda/day/week/month + drag) ────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -278,9 +278,11 @@ nav{display:flex;flex-direction:column;gap:1px}
 .wqbtn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;border-radius:12px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s}
 .wqbtn:hover{border-color:var(--primary);color:var(--primary-deep)}
 /* Calendar two-column: timetable centered, controls on the right rail */
-.cal-2col{display:flex;gap:22px;align-items:flex-start}
+.cal-2col{display:flex;gap:22px;align-items:flex-start;max-width:100%}
 .cal-main{flex:1;min-width:0}
-.cal-side{width:340px;flex:none}
+.cal-side{width:330px;flex:none;min-width:0}
+.cal-side .card{box-sizing:border-box;max-width:100%;overflow:hidden}
+.cal-side input,.cal-side select,.cal-main input{box-sizing:border-box;max-width:100%}
 @media(max-width:900px){.cal-2col{flex-direction:column}.cal-side{width:100%}}
 [data-theme="dark"] .vchip.on{color:var(--primary-glow)}
 .vchip .vn{opacity:.6;font-size:11px}
@@ -661,7 +663,7 @@ async function handleFile(file){return handleFiles(file?[file]:[]);}
 /* ─── Library / Document Vault ─── */
 let VAULT=[],VBUCKET='All';
 /* ─── CALENDAR (intelligent timetable) ─── */
-let SCHED=null, CALSUG=null, PLAN=null;
+let SCHED=null, CALSUG=null, PLAN=null, CAL_VIEW='agenda', CAL_REF=dayKey(Date.now()), CSET=new Set();
 /* Category → color (the mockup's color legend). */
 const CAL_CATS=[['Health','#22C55E',/walk|gym|run|workout|yoga|exercise|meditat/],['Meals','#F5C451',/lunch|dinner|breakfast|meal|coffee|brunch/],['Meetings','#FF8C42',/call|meeting|standup|stand-up|sync|interview|1:1|brief/],['Errands','#A78BFA',/errand|buy|pick ?up|drop ?off|store|grocery|bank|clinic|@/],['Focus','#4DA3FF',/focus|deep|write|code|study|design|review|plan|research|report/]];
 function catColor(b){const s=((b&&b.title||'')+' '+(b&&b.resourceLabel||'')).toLowerCase();for(const[,c,re]of CAL_CATS)if(re.test(s))return c;return'#8AA4FF';}
@@ -673,7 +675,7 @@ function dayLabel(ms){const t=dayKey(Date.now()),d=dayKey(ms);if(d===t)return'To
 function vCalendar(){return `<div class="greet"><h1 style="font-size:24px">Calendar</h1><div class="grow"></div></div>
   <div class="subtle-line">LUCY keeps its own calendar on your device — no Google/Apple Calendar needed. It finds conflict-free time and never double-books work that can't run in parallel.</div>
   <div id="calWrap"><div class="empty"><div class="big">◌</div>Loading your schedule…</div></div>`;}
-async function loadSchedule(){try{SCHED=await api('/api/schedule?days=3');}catch(e){SCHED=null;}if(curView()==='calendar')renderSchedule();}
+async function loadSchedule(){try{SCHED=await api('/api/schedule?days=42');}catch(e){SCHED=null;}if(curView()==='calendar')renderSchedule();}
 function renderSchedule(){const w=$('calWrap');if(!w)return;
   if(!SCHED||!SCHED.ok){w.innerHTML=empty('◷','Calendar needs the latest update','Relaunch LUCY so the scheduler ships, then reopen this page.');return;}
   const av=SCHED.availability||{};
@@ -693,7 +695,7 @@ function renderSchedule(){const w=$('calWrap');if(!w)return;
   const finder=`<div class="card" style="padding:16px;margin-bottom:16px">
     <b>Find time for something</b>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-      <input id="calTask" placeholder="e.g. write the design doc, call the dentist, gym" style="flex:1;min-width:200px;padding:10px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text)" onkeydown="if(event.key==='Enter')suggestTime()"/>
+      <input id="calTask" placeholder="e.g. write the doc, call dentist, gym" style="flex:1 1 100%;min-width:0;padding:10px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text)" onkeydown="if(event.key==='Enter')suggestTime()"/>
       <input id="calDur" type="number" placeholder="min" style="width:80px;padding:10px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text)"/>
       <button class="btn" onclick="suggestTime()">Suggest</button>
     </div>
@@ -728,23 +730,63 @@ function renderSchedule(){const w=$('calWrap');if(!w)return;
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><b>Daily habits</b><span class="kw">work: ${wdays.map(d=>DOW[d]).join(' ')}</span></div>
     <div class="subtle-line" style="margin-bottom:10px">Healthy-habit windows LUCY keeps free and schedules around. Weekends stay work-free.</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px">${habitWins.map(h=>`<span class="kw">${esc(h.label)} · ${hm(h.startMin)}–${hm(h.endMin)}${h.days&&h.days.length<7?' ('+h.days.map(d=>DOW[d]).join('')+')':''}</span>`).join('')||'<span class="subtle-line">None</span>'}</div></div>`;
-  // Timeline: show the next 3 days, each with its scheduled blocks + suggested habit blocks merged.
-  const cset=new Set();(SCHED.conflicts||[]).forEach(c=>{cset.add(c.a);cset.add(c.b);});
-  const blocks=(SCHED.blocks||[]).slice();
-  const days=[0,1,2].map(i=>dayKey(Date.now())+i*86400000);
-  const timeline=days.map(k=>{
-    const dow=new Date(k).getDay();
-    const real=blocks.filter(b=>dayKey(b.start)===k).map(b=>({b,habit:false}));
-    const habs=habitWins.filter(h=>!h.days||h.days.includes(dow)).map(h=>({b:{title:h.label,start:k+h.startMin*60000,end:k+h.endMin*60000,resourceLabel:'habit',source:'habit'},habit:true}));
-    const all=real.concat(habs).sort((x,y)=>x.b.start-y.b.start);
-    if(!all.length)return '';
-    return `<div style="margin-bottom:14px"><div style="font-weight:600;margin:6px 0;color:var(--muted)">${dayLabel(k)}</div>
-      ${all.map(o=>o.habit?habitRow(o.b):blockRow(o.b,cset.has(o.b.title))).join('')}</div>`;}).join('');
+  CSET=new Set();(SCHED.conflicts||[]).forEach(c=>{CSET.add(c.a);CSET.add(c.b);});
   const legend=`<div style="display:flex;flex-wrap:wrap;gap:12px;margin:2px 0 12px">${CAL_CATS.map(([n,c])=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)"><span style="width:10px;height:10px;border-radius:3px;background:${c}"></span>${n}</span>`).join('')}</div>`;
-  // Two-column: timetable centered (main), control cards on the right rail (clean, like the mockup).
-  const center=conf+`<div><b>Your timetable</b>${legend}<div style="margin-top:2px">${timeline||empty('◷','Nothing scheduled','Use “Find time” or “Plan my day”.')}</div></div>`;
+  const viewBar=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <div style="display:flex;gap:6px">${[['agenda','Agenda'],['day','Day'],['week','Week'],['month','📅 Month']].map(([v,l])=>`<button class="vchip ${CAL_VIEW===v?'on':''}" onclick="setCalView('${v}')">${l}</button>`).join('')}</div>
+    <div style="flex:1"></div>
+    <button class="vchip" onclick="calNav(-1)">‹</button><button class="vchip" onclick="calToday()">Today</button><button class="vchip" onclick="calNav(1)">›</button>
+    <span style="color:var(--muted);font-size:13px;margin-left:4px">${calRangeLabel()}</span></div>`;
+  const body=CAL_VIEW==='month'?renderMonth():CAL_VIEW==='week'?renderGrid(weekDays()):CAL_VIEW==='day'?renderGrid([CAL_REF]):renderAgenda();
+  const center=conf+myDayCard()+`<div><b>Your timetable</b></div>`+viewBar+legend+`<div>${body}</div>`;
   const rail=finder+unschedCard+fixedCard+habitsCard+avCard;
   w.innerHTML=`<div class="cal-2col"><div class="cal-main">${center}</div><div class="cal-side">${rail}</div></div>`;}
+/* blocks (real + suggested habits) for a given day, time-sorted */
+function blocksForDay(k){const dow=new Date(k).getDay();const habitWins=(SCHED.availability&&SCHED.availability.protectedWindows)||[];
+  const real=(SCHED.blocks||[]).filter(b=>dayKey(b.start)===k).map(b=>({b,habit:false}));
+  const habs=habitWins.filter(h=>!h.days||h.days.includes(dow)).map(h=>({b:{title:h.label,start:k+h.startMin*60000,end:k+h.endMin*60000,resourceLabel:'habit',source:'habit'},habit:true}));
+  return real.concat(habs).sort((x,y)=>x.b.start-y.b.start);}
+function localMin(ms){const d=new Date(ms);return d.getHours()*60+d.getMinutes();}
+function setCalView(v){CAL_VIEW=v;renderSchedule();}
+function calToday(){CAL_REF=dayKey(Date.now());renderSchedule();}
+function calNav(dir){if(CAL_VIEW==='month'){const d=new Date(CAL_REF);d.setMonth(d.getMonth()+dir);CAL_REF=dayKey(d.getTime());}else{CAL_REF=CAL_REF+dir*(CAL_VIEW==='week'?7:1)*86400000;}renderSchedule();}
+function weekDays(){const dow=new Date(CAL_REF).getDay();const start=CAL_REF-dow*86400000;return [0,1,2,3,4,5,6].map(i=>start+i*86400000);}
+function calRangeLabel(){const d=new Date(CAL_REF);if(CAL_VIEW==='month')return d.toLocaleDateString(undefined,{month:'long',year:'numeric'});if(CAL_VIEW==='week'){const w=weekDays();return new Date(w[0]).toLocaleDateString(undefined,{month:'short',day:'numeric'})+' – '+new Date(w[6]).toLocaleDateString(undefined,{month:'short',day:'numeric'});}if(CAL_VIEW==='day')return dayLabel(CAL_REF);return 'Next 7 days';}
+function renderAgenda(){const days=[0,1,2,3,4,5,6].map(i=>dayKey(Date.now())+i*86400000);
+  const out=days.map(k=>{const all=blocksForDay(k);if(!all.length)return'';
+    return `<div style="margin-bottom:14px"><div style="font-weight:600;margin:6px 0;color:var(--muted)">${dayLabel(k)}</div>${all.map(o=>o.habit?habitRow(o.b):blockRow(o.b,CSET.has(o.b.title))).join('')}</div>`;}).join('');
+  return out||empty('◷','Nothing scheduled','Use “Find time” or “Plan my day”.');}
+function renderGrid(daysArr){const startMin=6*60,endMin=24*60,PX=0.8,H=(endMin-startMin)*PX;const hrs=[];for(let h=6;h<24;h++)hrs.push(h);
+  const labels=`<div style="width:42px;flex:none;position:relative;height:${H}px">${hrs.map(h=>`<div style="position:absolute;top:${(h*60-startMin)*PX}px;font-size:10px;color:var(--faint)">${(h%12)||12}${h<12?'a':'p'}</div>`).join('')}</div>`;
+  const multi=daysArr.length>1;
+  const cols=daysArr.map(k=>{const all=blocksForDay(k);
+    const lines=hrs.map(h=>`<div style="position:absolute;top:${(h*60-startMin)*PX}px;left:0;right:0;height:1px;background:var(--border);opacity:.5"></div>`).join('');
+    const evs=all.map(o=>{const b=o.b;const top=(localMin(b.start)-startMin)*PX;const ht=Math.max(16,((b.end-b.start)/60000)*PX);const c=o.habit?'#8a8a8a':catColor(b);
+      return `<div ${o.habit?'':`draggable="true" ondragstart="dragStart(event,${b.id})"`} style="position:absolute;top:${Math.max(0,top)}px;left:2px;right:2px;height:${ht}px;background:${c}28;border-left:3px solid ${c};border-radius:7px;padding:2px 5px;overflow:hidden;font-size:11px;${o.habit?'opacity:.6;border-style:dashed':'cursor:grab'}">
+        <div style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.title)}</div>${ht>30?`<div style="color:var(--muted)">${clock(b.start)}</div>`:''}</div>`;}).join('');
+    const hd=multi?`<div style="text-align:center;font-size:11px;color:${dayKey(k)===dayKey(Date.now())?'var(--primary)':'var(--muted)'};padding:3px 0;font-weight:600">${new Date(k).toLocaleDateString(undefined,{weekday:'short'})} ${new Date(k).getDate()}</div>`:'';
+    return `<div style="flex:1;min-width:${multi?'88px':'auto'}"><div>${hd}</div><div ondragover="event.preventDefault()" ondrop="dropAt(event,${k})" style="position:relative;height:${H}px;border-left:1px solid var(--border)">${lines}${evs}</div></div>`;}).join('');
+  return `<div style="display:flex;gap:0;overflow-x:auto;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--card)"><div>${multi?'<div style="height:24px"></div>':''}${labels}</div>${cols}</div>`;}
+function renderMonth(){const ref=new Date(CAL_REF),y=ref.getFullYear(),m=ref.getMonth();const startDow=new Date(y,m,1).getDay();const dim=new Date(y,m+1,0).getDate();
+  const cells=[];for(let i=0;i<startDow;i++)cells.push(null);for(let d=1;d<=dim;d++)cells.push(new Date(y,m,d,12).getTime());while(cells.length%7)cells.push(null);
+  const dows=['S','M','T','W','T','F','S'];
+  const head=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:5px">${dows.map(d=>`<div style="text-align:center;font-size:11px;color:var(--muted)">${d}</div>`).join('')}</div>`;
+  const grid=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px">${cells.map(k=>{if(!k)return'<div></div>';const dk=dayKey(k);const all=blocksForDay(dk);const isT=dk===dayKey(Date.now());
+    const cnt=all.filter(o=>!o.habit).length; // important scheduled tasks that day
+    const badge=cnt>0?`<span style="background:var(--primary);color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px">${cnt}</span>`:'';
+    const dots=all.slice(0,5).map(o=>`<span style="width:6px;height:6px;border-radius:50%;background:${o.habit?'#8a8a8a':catColor(o.b)};display:inline-block;margin:1px"></span>`).join('');
+    return `<div onclick="CAL_REF=${dk};setCalView('day')" style="min-height:74px;border:1px solid ${isT?'var(--primary)':'var(--border)'};border-radius:10px;padding:6px;cursor:pointer;background:var(--card)"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;font-weight:${isT?'700':'500'};color:${isT?'var(--primary)':'var(--text)'}">${new Date(k).getDate()}</span>${badge}</div><div style="margin-top:3px;line-height:1">${dots}</div></div>`;}).join('')}</div>`;
+  return head+grid;}
+function myDayCard(){const today=dayKey(Date.now());const list=blocksForDay(today).filter(o=>!o.habit).map(o=>o.b);
+  const fMin=list.filter(b=>/focus|deep|write|code|study|design|review|plan|research/.test(((b.title||'')+(b.resourceLabel||'')).toLowerCase())).reduce((a,b)=>a+(b.end-b.start)/60000,0);
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px;display:flex;gap:22px">
+    <div><div style="font-size:22px;font-weight:800;color:var(--primary)">${list.length}</div><div class="subtle-line">events today</div></div>
+    <div><div style="font-size:22px;font-weight:800;color:var(--primary)">${(fMin/60).toFixed(1)}h</div><div class="subtle-line">focus time</div></div>
+    <div><div style="font-size:22px;font-weight:800;color:var(--primary)">${(SCHED.unscheduled||[]).length}</div><div class="subtle-line">to schedule</div></div></div>`;}
+let DRAG_ID=null;
+function dragStart(e,id){DRAG_ID=id;try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text','x');}catch(x){}}
+function dropAt(e,dk){e.preventDefault();if(!DRAG_ID)return;const rect=e.currentTarget.getBoundingClientRect();const y=e.clientY-rect.top;const startMin=6*60,PX=0.8;let min=startMin+Math.round((y/PX)/15)*15;min=Math.max(0,Math.min(23*60+45,min));moveBlock(DRAG_ID,dk+min*60000);DRAG_ID=null;}
+async function moveBlock(id,startMs){toast('Moving…');try{const r=await api('/api/schedule/move',{method:'POST',body:JSON.stringify({id,startMs})});toast(r&&r.ok?(r.conflict?'Moved — but it now overlaps something':'Moved ✓'):'Could not move');}catch(e){toast('Move failed');}await loadSchedule();}
 function habitRow(b){return `<div class="card" style="padding:10px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;opacity:.78;border-style:dashed">
     <div style="min-width:130px;color:var(--muted);font-size:13px">${clock(b.start)} – ${clock(b.end)}</div>
     <div style="flex:1"><div style="font-weight:500">${esc(b.title)}</div><div style="margin-top:3px"><span class="kw" style="opacity:.7">✦ habit</span></div></div></div>`;}

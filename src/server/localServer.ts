@@ -478,7 +478,7 @@ async function route(req: ParsedRequest): Promise<string> {
       return json(200, r);
     }
     if (req.method === 'GET' && req.path === '/api/schedule') {
-      const days = Math.max(1, Math.min(14, Number(req.query.days) || 2));
+      const days = Math.max(1, Math.min(45, Number(req.query.days) || 2));
       const { getPlan, describeResources, unscheduledPendingTodos } = await import('../scheduling');
       const { getAvailability } = await import('../scheduling/availability');
       const now = Date.now();
@@ -496,6 +496,11 @@ async function route(req: ParsedRequest): Promise<string> {
         conflicts: plan.conflicts.map((c) => ({ a: c.a.title, b: c.b.title, reason: c.reason })),
         unscheduled: unscheduled.slice(0, 12),
       });
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/move') {
+      const { moveScheduledBlockTo } = await import('../scheduling');
+      const r = await moveScheduledBlockTo(db, Number(payload.id), Number(payload.startMs));
+      return json(r.ok ? 200 : 400, r);
     }
     if (req.method === 'DELETE' && req.path.startsWith('/api/schedule/')) {
       const id = Number(req.path.split('/').pop());

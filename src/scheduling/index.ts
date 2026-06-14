@@ -124,6 +124,23 @@ export async function addFixedBlock(
   return commitBlock(db, { title: input.title, startMs: input.startMs, endMs: input.endMs, resources, energy: 'fixed', location: input.location ?? null }, { force: true });
 }
 
+/** Move a committed block to a new start (drag-to-reschedule). Keeps duration; reports if the new
+ *  time overlaps something it can't run beside (still moves — the user chose it; surfaced in the plan). */
+export async function moveScheduledBlockTo(db: SQLiteDatabase, id: number, startMs: number): Promise<{ ok: boolean; conflict?: { a: string; b: string } | null }> {
+  const row = await getScheduledBlock(db, id);
+  if (!row || !Number.isFinite(startMs)) return { ok: false };
+  const dur = row.end_at - row.start_at;
+  const endMs = startMs + dur;
+  const av = await getAvailability(db);
+  const { resourceBlocks } = await buildBusy(db, startMs - DAY, endMs + DAY, av);
+  const cand: Block = { title: row.title, start: startMs, end: endMs, resources: rowToBlock(row).resources, source: 'scheduled' };
+  const others = resourceBlocks.filter((b) => b.id !== id);
+  const conflicts = validatePlan([...others, cand]);
+  const mine = conflicts.find((c) => c.a === cand || c.b === cand);
+  await db.runAsync('UPDATE scheduled_blocks SET start_at = ?, end_at = ? WHERE id = ?', startMs, endMs, id);
+  return { ok: true, conflict: mine ? { a: mine.a.title, b: mine.b.title } : null };
+}
+
 export async function cancelBlock(db: SQLiteDatabase, id: number): Promise<boolean> {
   const row = await getScheduledBlock(db, id);
   if (!row) return false;

@@ -1,7 +1,15 @@
-// executorch is imported LAZILY + GUARDED — a static import crashes the whole app at startup
-// if the native module (org.pytorch.executorch.Module) isn't loadable. Types are erased, so
-// `import type` is safe; runtime values come through guarded require() accessors below.
-import type { LLMModule, Message } from 'react-native-executorch';
+// NO import (not even `import type`) from 'react-native-executorch': type-only imports can
+// survive bundling and leave a bare top-level require() that runs at app startup and crashes
+// when the native module isn't loadable (org.pytorch.executorch.Module). Local types below;
+// every runtime value goes through the guarded lazy require() accessors (et()/resourceFetcher()).
+type Message = { role: 'system' | 'user' | 'assistant'; content: string };
+type LLMModule = {
+  configure: (opts: unknown) => void;
+  generate: (messages: Message[]) => Promise<string>;
+  interrupt: () => void;
+  delete: () => void;
+  [key: string]: unknown;
+};
 import { jsonrepair } from 'jsonrepair';
 import { config } from '../config';
 import { getDatabase } from '../db';

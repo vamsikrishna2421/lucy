@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 34 (Workspace live tiles) ────────── */
+/* ─── LUCY web · premium · dashboard rev 35 (habits + weekdays) ────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -712,16 +712,30 @@ function renderSchedule(){const w=$('calWrap');if(!w)return;
   const conf=(SCHED.conflicts&&SCHED.conflicts.length)?`<div class="card" style="padding:14px;margin-bottom:16px;border-color:var(--error,#e2574c)">
     <b style="color:var(--error,#e2574c)">⚠ ${SCHED.conflicts.length} conflict${SCHED.conflicts.length>1?'s':''}</b>
     ${SCHED.conflicts.map(c=>`<div class="subtle-line" style="margin-top:6px">“${esc(c.a)}” overlaps “${esc(c.b)}” — can't run in parallel.</div>`).join('')}</div>`:'';
-  // Timeline grouped by day
-  const blocks=(SCHED.blocks||[]).slice().sort((a,b)=>a.start-b.start);
-  let timeline='';
-  if(!blocks.length){timeline=empty('◷','Nothing scheduled','Use “Find time” above to let LUCY place your next task.');}
-  else{const cset=new Set();(SCHED.conflicts||[]).forEach(c=>{cset.add(c.a);cset.add(c.b);});
-    const byDay={};blocks.forEach(b=>{(byDay[dayKey(b.start)]=byDay[dayKey(b.start)]||[]).push(b);});
-    timeline=Object.keys(byDay).sort((a,b)=>a-b).map(k=>`<div style="margin-bottom:14px">
-      <div style="font-weight:600;margin:6px 0;color:var(--muted)">${dayLabel(+k)}</div>
-      ${byDay[k].map(b=>blockRow(b,cset.has(b.title))).join('')}</div>`).join('');}
-  w.innerHTML=avCard+finder+unschedCard+fixedCard+conf+`<div><b>Your timetable</b><div style="margin-top:10px">${timeline}</div></div>`;}
+  // Daily habits card (suggested healthy-habit windows + which days are workdays)
+  const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const wdays=(av.workDays||[1,2,3,4,5]);
+  const habitWins=(av.protectedWindows||[]);
+  const habitsCard=`<div class="card" style="padding:16px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><b>Daily habits</b><span class="kw">work: ${wdays.map(d=>DOW[d]).join(' ')}</span></div>
+    <div class="subtle-line" style="margin-bottom:10px">Healthy-habit windows LUCY keeps free and schedules around. Weekends stay work-free.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">${habitWins.map(h=>`<span class="kw">${esc(h.label)} · ${hm(h.startMin)}–${hm(h.endMin)}${h.days&&h.days.length<7?' ('+h.days.map(d=>DOW[d]).join('')+')':''}</span>`).join('')||'<span class="subtle-line">None</span>'}</div></div>`;
+  // Timeline: show the next 3 days, each with its scheduled blocks + suggested habit blocks merged.
+  const cset=new Set();(SCHED.conflicts||[]).forEach(c=>{cset.add(c.a);cset.add(c.b);});
+  const blocks=(SCHED.blocks||[]).slice();
+  const days=[0,1,2].map(i=>dayKey(Date.now())+i*86400000);
+  const timeline=days.map(k=>{
+    const dow=new Date(k).getDay();
+    const real=blocks.filter(b=>dayKey(b.start)===k).map(b=>({b,habit:false}));
+    const habs=habitWins.filter(h=>!h.days||h.days.includes(dow)).map(h=>({b:{title:h.label,start:k+h.startMin*60000,end:k+h.endMin*60000,resourceLabel:'habit',source:'habit'},habit:true}));
+    const all=real.concat(habs).sort((x,y)=>x.b.start-y.b.start);
+    if(!all.length)return '';
+    return `<div style="margin-bottom:14px"><div style="font-weight:600;margin:6px 0;color:var(--muted)">${dayLabel(k)}</div>
+      ${all.map(o=>o.habit?habitRow(o.b):blockRow(o.b,cset.has(o.b.title))).join('')}</div>`;}).join('');
+  w.innerHTML=avCard+habitsCard+finder+unschedCard+fixedCard+conf+`<div><b>Your timetable</b><div style="margin-top:10px">${timeline||empty('◷','Nothing scheduled','Use “Find time” or “Plan my day”.')}</div></div>`;}
+function habitRow(b){return `<div class="card" style="padding:10px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;opacity:.78;border-style:dashed">
+    <div style="min-width:130px;color:var(--muted);font-size:13px">${clock(b.start)} – ${clock(b.end)}</div>
+    <div style="flex:1"><div style="font-weight:500">${esc(b.title)}</div><div style="margin-top:3px"><span class="kw" style="opacity:.7">✦ habit</span></div></div></div>`;}
 async function suggestTodo(id){const area=$('planArea');if(area)area.innerHTML='<div class="subtle-line">Finding time…</div>';
   let r;try{r=await api('/api/schedule/suggest',{method:'POST',body:JSON.stringify({todoId:id})});}catch(e){if(area)area.innerHTML='<div class="subtle-line">Could not reach LUCY.</div>';return;}
   if(!r||!r.ok||!r.suggestions||!r.suggestions.length){if(area)area.innerHTML='<div class="subtle-line">No conflict-free slot found for that task in your free time.</div>';return;}

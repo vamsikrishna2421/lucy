@@ -16,8 +16,14 @@ const DEFAULTS: AvailabilityProfile = {
   sleepEndMin: 7 * 60 + 30,
   bufferMin: 10,
   maxFocusMinPerDay: 4 * 60,
+  workDays: [1, 2, 3, 4, 5], // Mon–Fri; weekends open
+  // Suggested healthy-habit windows (everyone starts with these; the user can edit/remove). Sleep
+  // and work hours live in their own fields; these are the daily-rhythm habits LUCY protects + nudges.
   protectedWindows: [
+    { label: 'Morning walk', startMin: 7 * 60, endMin: 7 * 60 + 30 },
     { label: 'Lunch', startMin: 12 * 60 + 30, endMin: 13 * 60 + 30 },
+    { label: 'Gym', startMin: 18 * 60, endMin: 19 * 60, days: [1, 2, 3, 4, 5] },
+    { label: 'Dinner', startMin: 19 * 60 + 30, endMin: 20 * 60 + 30 },
   ],
   peakWindows: [
     { label: 'Morning focus', startMin: 9 * 60, endMin: 11 * 60 + 30 },
@@ -67,7 +73,15 @@ export async function inferAvailability(db: SQLiteDatabase): Promise<Availabilit
 export async function getAvailability(db: SQLiteDatabase): Promise<AvailabilityProfile> {
   const raw = await getSetting(db, AVAILABILITY_SETTING);
   if (raw) {
-    try { return { ...DEFAULTS, ...(JSON.parse(raw) as AvailabilityProfile) }; } catch { /* fall through */ }
+    try {
+      const s = JSON.parse(raw) as Partial<AvailabilityProfile>;
+      const merged: AvailabilityProfile = { ...DEFAULTS, ...s };
+      // Backfill fields added after the profile was saved (workdays + healthy-habit windows), so
+      // existing users get the new defaults instead of an empty/old set.
+      if (!Array.isArray(s.workDays) || !s.workDays.length) merged.workDays = DEFAULTS.workDays;
+      if (!Array.isArray(s.protectedWindows) || s.protectedWindows.length <= 1) merged.protectedWindows = DEFAULTS.protectedWindows;
+      return merged;
+    } catch { /* fall through */ }
   }
   return inferAvailability(db);
 }

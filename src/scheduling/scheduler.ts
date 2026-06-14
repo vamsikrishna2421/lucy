@@ -6,7 +6,7 @@
  * - resourceBlocks: calendar events + committed task-blocks — overlap allowed iff canCoexist.
  */
 import type { AvailabilityProfile, Block, SchedTaskMeta, SlotSuggestion, TimeWindow } from './types';
-import { MIN, localMinutes, overlaps, startOfLocalDay, DAY, HOUR } from './time';
+import { MIN, localMinutes, localDow, overlaps, startOfLocalDay, DAY, HOUR } from './time';
 import { canCoexist } from './resources';
 import { scoreSlot } from './scorer';
 
@@ -50,14 +50,11 @@ export function findSlots(input: FindSlotsInput): SlotSuggestion[] {
     if (Number.isFinite(due)) to = Math.min(to, due);
   }
 
-  // Allowed time-of-day window. Work hours bound WORK tasks; personal/evening/explicitly-timed
-  // tasks may use the awake-but-after-work window (up to sleep). Explicit "after/before" tighten it.
+  // Allowed time-of-day window. Work hours bound WORK tasks on WORKDAYS; personal/evening/
+  // explicitly-timed/passive tasks (and ANY task on a non-workday/weekend) may use the awake window.
   const nightEnd = av.sleepStartMin > av.sleepEndMin ? av.sleepStartMin : 22 * 60;
   const personal = meta.earliestMin != null || meta.latestMin != null || meta.timeWindow === 'evening' || meta.energy === 'passive';
-  let winStart = personal ? av.sleepEndMin : av.workStartMin;
-  let winEnd = personal ? nightEnd : av.workEndMin;
-  if (meta.earliestMin != null) winStart = Math.max(winStart, meta.earliestMin);
-  if (meta.latestMin != null) winEnd = Math.min(winEnd, meta.latestMin + Math.max(5, meta.durationMin));
+  const workDays = av.workDays && av.workDays.length ? av.workDays : [1, 2, 3, 4, 5];
 
   // Start search at the next STEP boundary after lead.
   let from = Math.ceil(lead / (STEP_MIN * MIN)) * (STEP_MIN * MIN);
@@ -66,7 +63,13 @@ export function findSlots(input: FindSlotsInput): SlotSuggestion[] {
   for (let s = from; s + durMs <= to; s += STEP_MIN * MIN) {
     const e = s + durMs;
 
-    // Respect the per-task time window (work hours or awake window) + explicit constraints.
+    // Per-day window: weekends + personal tasks use the awake window; workdays bound work tasks.
+    const isWorkday = workDays.includes(localDow(s));
+    let winStart = (personal || !isWorkday) ? av.sleepEndMin : av.workStartMin;
+    let winEnd = (personal || !isWorkday) ? nightEnd : av.workEndMin;
+    if (meta.earliestMin != null) winStart = Math.max(winStart, meta.earliestMin);
+    if (meta.latestMin != null) winEnd = Math.min(winEnd, meta.latestMin + Math.max(5, meta.durationMin));
+
     const lm = localMinutes(s);
     const lmEnd = localMinutes(e - 1);
     if (lm < winStart || lmEnd >= winEnd) continue;

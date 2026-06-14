@@ -14,7 +14,7 @@ function ok(name: string, cond: boolean) { if (cond) { pass++; } else { fail++; 
 
 const AV: AvailabilityProfile = {
   workStartMin: 9 * 60, workEndMin: 18 * 60, sleepStartMin: 23 * 60 + 30, sleepEndMin: 7 * 60 + 30,
-  bufferMin: 10, maxFocusMinPerDay: 240,
+  bufferMin: 10, maxFocusMinPerDay: 240, workDays: [1, 2, 3, 4, 5],
   protectedWindows: [{ label: 'Lunch', startMin: 12 * 60 + 30, endMin: 13 * 60 + 30 }],
   peakWindows: [{ label: 'AM', startMin: 9 * 60, endMin: 11 * 60 + 30 }],
   inferred: true, confirmedAt: null,

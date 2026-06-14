@@ -188,20 +188,52 @@ async function answerFromMemoryMap(question: string): Promise<LucyAnswer> {
     evidenceCount: connection.evidence_count,
     confidence: connection.confidence,
   }));
-  const summary = `I remember ${sources.length} relevant thought${sources.length === 1 ? '' : 's'} and ${memoryConnections.length} connection${memoryConnections.length === 1 ? '' : 's'} for ${subject}.`;
-  await insertQuestionSignal(db, question, 'memory_map_lookup', summary, 'Prioritize entity-based memory retrieval with supporting thoughts.');
+  const countSummary = `I remember ${sources.length} relevant thought${sources.length === 1 ? '' : 's'} and ${memoryConnections.length} connection${memoryConnections.length === 1 ? '' : 's'} for ${subject}.`;
+
+  // Synthesize a real answer from the gathered evidence instead of just counting. Falls back
+  // to the count if the LLM is unavailable. Secrets in the evidence are tokenized first.
+  let message = countSummary;
+  const evidenceText = [
+    ...sources.map((s) => `- ${s.title}${s.summary ? `: ${s.summary}` : ''}`),
+    ...(memoryConnections.length ? ['Connections:', ...memoryConnections.map((c) => `- ${c.statement}`)] : []),
+  ].join('\n');
+  if (evidenceText.trim()) {
+    try {
+      const sys = `You are LUCY, the user's second brain. In 2-4 natural sentences, tell the user what you actually know about "${subject}" from the memory below. Be specific with concrete facts. Do NOT count items or mention IDs — just answer naturally. If it's sparse, say so briefly.`;
+      const { available, openAIKey } = await resolveRemoteAvailability();
+      if (available) {
+        const contacts = (await db.getAllAsync<{ name: string }>('SELECT name FROM people')).map((r) => r.name);
+        const { detectNamesOnDevice } = await import('./deviceNer');
+        const llmNames = await detectNamesOnDevice(evidenceText);
+        const srcIds = sources.map((s) => s.captureId).filter(Boolean);
+        const knownSecrets: string[] = [];
+        if (srcIds.length) {
+          const pv = await db.getAllAsync<{ protected_values: string | null }>(
+            `SELECT protected_values FROM captures WHERE id IN (${srcIds.map(() => '?').join(',')})`, ...srcIds,
+          );
+          pv.forEach((r) => { if (r.protected_values) { try { (JSON.parse(r.protected_values) as Array<{ value: string }>).forEach((p) => { if (p?.value) knownSecrets.push(p.value); }); } catch { /* ignore */ } } });
+        }
+        const { redacted, map } = shieldText(evidenceText, [...contacts, ...llmNames, ...knownSecrets]);
+        message = restoreText(await promptAI(sys + (map.length ? PLACEHOLDER_NOTE : ''), redacted, openAIKey), map);
+      } else {
+        message = await promptDevice(`${sys}\n${evidenceText}\n/no_think`);
+      }
+    } catch { /* keep the count fallback */ }
+  }
+
+  await insertQuestionSignal(db, question, 'memory_map_lookup', message, 'Prioritize entity-based memory retrieval with supporting thoughts.');
   await organizeMemory(db, 'question');
   return {
     supported: true,
     answerKind: 'memory',
     title: `${subject} in memory`,
-    message: summary,
+    message,
     tasks: [],
     deadlines: [],
     memorySubject: subject,
     connections: memoryConnections,
     sources,
-    recordedSignal: 'Answered locally from connected memory.',
+    recordedSignal: 'Answered from connected memory.',
   };
 }
 

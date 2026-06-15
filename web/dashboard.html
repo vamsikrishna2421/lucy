@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 40 (rail fix deploy + recurring) ────────── */
+/* ─── LUCY web · premium · dashboard rev 41 (calendar 40/60 + chat agent) ────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -277,16 +277,19 @@ nav{display:flex;flex-direction:column;gap:1px}
 @media(max-width:640px){.wqgrid{grid-template-columns:repeat(2,1fr)}}
 .wqbtn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;border-radius:12px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s}
 .wqbtn:hover{border-color:var(--primary);color:var(--primary-deep)}
-/* Calendar two-column: timetable centered, controls on the right rail */
+/* Calendar two-column: event-setup + chat LEFT (60%), the calendar RIGHT (~40%) */
 .cal-2col{display:flex;gap:22px;align-items:flex-start;width:100%;max-width:100%;overflow:hidden}
-.cal-main{flex:1 1 0;min-width:0;overflow:hidden}
-.cal-side{flex:0 0 300px;width:300px;min-width:0}
-.cal-side .card{box-sizing:border-box;max-width:100%;overflow:hidden}
-.cal-side input,.cal-side select,.cal-main input{box-sizing:border-box;max-width:100%}
+.cal-left{flex:1 1 0;min-width:0;overflow:hidden}
+.cal-right{flex:0 0 41%;min-width:0;overflow:hidden}
+.cal-2col .card{box-sizing:border-box;max-width:100%;overflow:hidden}
+.cal-2col input,.cal-2col select{box-sizing:border-box;max-width:100%}
 .ut-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)}
 .ut-row .ut-task{flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere}
 .ut-row .btn{flex:none}
-@media(max-width:900px){.cal-2col{flex-direction:column}.cal-side{flex:none;width:100%}}
+.schat-msg{padding:8px 11px;border-radius:12px;margin-bottom:7px;font-size:13px;max-width:92%;word-break:break-word;line-height:1.4}
+.schat-u{background:var(--primary-soft);color:var(--primary-deep);margin-left:auto}
+.schat-l{background:var(--card);border:1px solid var(--border);color:var(--text)}
+@media(max-width:900px){.cal-2col{flex-direction:column}.cal-right{flex:none;width:100%;order:-1}}
 [data-theme="dark"] .vchip.on{color:var(--primary-glow)}
 .vchip .vn{opacity:.6;font-size:11px}
 .vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
@@ -741,9 +744,23 @@ function renderSchedule(){const w=$('calWrap');if(!w)return;
     <button class="vchip" onclick="calNav(-1)">‹</button><button class="vchip" onclick="calToday()">Today</button><button class="vchip" onclick="calNav(1)">›</button>
     <span style="color:var(--muted);font-size:13px;margin-left:4px">${calRangeLabel()}</span></div>`;
   const body=CAL_VIEW==='month'?renderMonth():CAL_VIEW==='week'?renderGrid(weekDays()):CAL_VIEW==='day'?renderGrid([CAL_REF]):renderAgenda();
-  const center=conf+myDayCard()+`<div><b>Your timetable</b></div>`+viewBar+legend+`<div>${body}</div>`;
-  const rail=finder+unschedCard+fixedCard+habitsCard+avCard;
-  w.innerHTML=`<div class="cal-2col"><div class="cal-main">${center}</div><div class="cal-side">${rail}</div></div>`;}
+  const calendarCol=myDayCard()+`<div><b>Your timetable</b></div>`+viewBar+legend+`<div>${body}</div>`;
+  const chatCard=`<div class="card" style="padding:16px;margin-bottom:16px">
+    <b>Schedule with Lucy</b>
+    <div class="subtle-line" style="margin-top:2px">Chat to plan — e.g. "fit a 30-min walk after work" or "move my gym earlier".</div>
+    <div id="schat" style="margin-top:10px;max-height:230px;overflow:auto;display:flex;flex-direction:column"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <input id="schatIn" placeholder="Tell Lucy what to schedule…" style="flex:1;min-width:0;padding:10px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text)" onkeydown="if(event.key==='Enter')schatSend()"/>
+      <button class="btn" onclick="schatSend()">Send</button></div></div>`;
+  const setupCol=chatCard+conf+finder+unschedCard+fixedCard+habitsCard+avCard;
+  w.innerHTML=`<div class="cal-2col"><div class="cal-left">${setupCol}</div><div class="cal-right">${calendarCol}</div></div>`;
+  renderSchat();}
+let SCHAT=[];
+function renderSchat(){const el=$('schat');if(!el)return;el.innerHTML=SCHAT.length?SCHAT.map(m=>`<div class="schat-msg ${m.role==='user'?'schat-u':'schat-l'}">${esc(m.text)}</div>`).join(''):'<div class="subtle-line">Ask me to schedule, move, or plan anything.</div>';el.scrollTop=el.scrollHeight;}
+async function schatSend(){const i=$('schatIn');const t=(i&&i.value||'').trim();if(!t)return;i.value='';SCHAT.push({role:'user',text:t});SCHAT.push({role:'lucy',text:'…'});renderSchat();
+  let r;try{r=await api('/api/voice',{method:'POST',body:JSON.stringify({text:t,context:'calendar'})});}catch(e){r=null;}
+  SCHAT.pop();SCHAT.push({role:'lucy',text:(r&&r.speak)||'I could not reach LUCY just now.'});renderSchat();
+  await loadSchedule();}
 /* blocks (real + suggested habits) for a given day, time-sorted */
 function blocksForDay(k){const dow=new Date(k).getDay();const habitWins=(SCHED.availability&&SCHED.availability.protectedWindows)||[];
   const real=(SCHED.blocks||[]).filter(b=>dayKey(b.start)===k).map(b=>({b,habit:false}));

@@ -20,6 +20,23 @@ export { canCoexist, describeResources } from './resources';
 export { classifyTask } from './classify';
 export { suggestRearrangement, type RearrangeProposal } from './rearrange';
 
+// ── Persistent vibration nudge for a committed block (dynamic import keeps the pure engine — and the
+//    `npx tsx tests/calendar.ts` run — free of the expo-notifications native module). ──
+async function nagForBlock(blockId: number, title: string, startMs: number): Promise<void> {
+  try {
+    const { scheduleNag } = await import('../processing/persistentReminders');
+    await scheduleNag({ key: `blk-${blockId}`, title: 'now —', body: title, fireAtMs: startMs, data: { kind: 'calendar-block', blockId } });
+  } catch { /* notifications unavailable (test/node env or permission denied) */ }
+}
+async function cancelBlockNag(blockId: number): Promise<void> {
+  try { const { cancelNag } = await import('../processing/persistentReminders'); await cancelNag(`blk-${blockId}`); } catch { /* ignore */ }
+}
+/** Re-point a block's nag burst at its current start (after an edit changes the time/title). */
+export async function rescheduleBlockNag(db: SQLiteDatabase, id: number): Promise<void> {
+  const row = await getScheduledBlock(db, id);
+  if (row) await nagForBlock(id, row.title, row.start_at);
+}
+
 /** Apply a rearrangement proposal: move the displaced blocks, then place the new task. */
 export async function applyRearrangement(
   db: SQLiteDatabase,
@@ -123,6 +140,7 @@ export async function commitBlock(db: SQLiteDatabase, input: CommitInput, opts?:
     todoId: input.todoId ?? null, title: input.title, startMs: input.startMs, endMs: input.endMs,
     resources, energy: input.energy ?? null, location: resources.location ?? null, status: 'committed',
   });
+  await nagForBlock(blockId, input.title, input.startMs);
   return { ok: true, blockId };
 }
 
@@ -153,7 +171,8 @@ export async function commitSeries(
       "SELECT id FROM scheduled_blocks WHERE status='committed' AND title=? AND start_at<? AND end_at>?", input.title, e, s,
     );
     if (dupe) continue;
-    await createScheduledBlock(db, { todoId: input.todoId ?? null, title: input.title, startMs: s, endMs: e, resources, energy: input.energy ?? null, location: resources.location ?? null, status: 'committed' });
+    const id = await createScheduledBlock(db, { todoId: input.todoId ?? null, title: input.title, startMs: s, endMs: e, resources, energy: input.energy ?? null, location: resources.location ?? null, status: 'committed' });
+    await nagForBlock(id, input.title, s);
     count++;
   }
   return { count };
@@ -184,6 +203,7 @@ export async function moveScheduledBlockTo(db: SQLiteDatabase, id: number, start
   const conflicts = validatePlan([...others, cand]);
   const mine = conflicts.find((c) => c.a === cand || c.b === cand);
   await db.runAsync('UPDATE scheduled_blocks SET start_at = ?, end_at = ? WHERE id = ?', startMs, endMs, id);
+  await nagForBlock(id, row.title, startMs); // reschedule the buzz to the new time
   return { ok: true, conflict: mine ? { a: mine.a.title, b: mine.b.title } : null };
 }
 
@@ -191,6 +211,7 @@ export async function cancelBlock(db: SQLiteDatabase, id: number): Promise<boole
   const row = await getScheduledBlock(db, id);
   if (!row) return false;
   await deleteScheduledBlock(db, id);
+  await cancelBlockNag(id); // silence any pending buzzes for this block
   return true;
 }
 

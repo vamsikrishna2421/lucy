@@ -387,6 +387,7 @@ async function route(req: ParsedRequest): Promise<string> {
       if (!id) return json(400, { error: 'Missing id' });
       const { archiveReminder } = await import('../db/reminders');
       const done = await archiveReminder(db, id, 'removed from Workspace');
+      if (done) { const { cancelNag } = await import('../processing/persistentReminders'); await cancelNag(`rem-${id}`); }
       return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such reminder' }) });
     }
 
@@ -564,6 +565,7 @@ async function route(req: ParsedRequest): Promise<string> {
         startMs: payload.startMs != null ? Number(payload.startMs) : undefined,
         endMs: payload.endMs != null ? Number(payload.endMs) : undefined,
       });
+      if (done) { const { rescheduleBlockNag } = await import('../scheduling'); await rescheduleBlockNag(db, id); }
       return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such event' }) });
     }
     if (req.method === 'POST' && req.path === '/api/schedule/move') {

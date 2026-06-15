@@ -315,7 +315,7 @@ async function persistExtraction(
 
   for (const row of reminderRows) {
     try {
-      const notificationId = await scheduleCapturedReminder(row.reminder, extraction.privacy_level, capture.raw_transcript);
+      const notificationId = await scheduleCapturedReminder(row.id, row.reminder, extraction.privacy_level, capture.raw_transcript);
       if (notificationId) {
         await markReminderScheduled(db, row.id, notificationId);
       }

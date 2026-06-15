@@ -491,6 +491,10 @@ export default function App() {
     const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
       const req = response.notification.request;
       const data = req.content.data as Record<string, unknown> | undefined;
+      // Tapping any buzz of a persistent reminder/event silences the rest of its burst.
+      void import('./src/processing/persistentReminders')
+        .then(({ acknowledgeNagFromResponse }) => acknowledgeNagFromResponse(data))
+        .catch(() => {});
       void import('./src/processing/notifications')
         .then(({ logDeliveredNotification }) => logDeliveredNotification(req))
         .then(() => getDatabase())

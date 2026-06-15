@@ -374,6 +374,13 @@ async function route(req: ParsedRequest): Promise<string> {
       return json(200, { ok: true, items: rows });
     }
 
+    // ─── Reminders ─────────────────────────────────────────────────────────────
+    if (req.method === 'DELETE' && req.path.startsWith('/api/reminder/')) {
+      const id = Number(req.path.split('/').pop());
+      if (id) { const { archiveReminder } = await import('../db/reminders'); await archiveReminder(db, id, 'removed from Workspace'); }
+      return json(200, { ok: true });
+    }
+
     // ─── Guide / manual (What is LUCY? · Features · Detailed manual) ───────────
     if (req.method === 'GET' && req.path === '/api/guide') {
       const { manualSections } = await import('../voice/appManual');
@@ -410,6 +417,11 @@ async function route(req: ParsedRequest): Promise<string> {
           documents: { count: docs?.n ?? 0, status: `${docs?.b ?? 0} categories` },
           resources: { count: res?.n ?? 0, status: (res?.n ?? 0) ? 'links saved' : 'Add your first link' },
           projects: { count: proj?.n ?? 0, status: (proj?.n ?? 0) ? `${proj?.n} active` : 'Start a project' },
+          reminders: await (async () => {
+            const rr = await db.getAllAsync<{ remind_at: string | null }>("SELECT remind_at FROM reminders WHERE status = 'pending'");
+            const next = rr.map((r) => r.remind_at).filter(Boolean).map((s) => Date.parse(s as string)).filter((n) => Number.isFinite(n) && n >= now).sort((a, b) => a - b)[0];
+            return { count: rr.length, status: next ? `Next: ${t(next)}` : (rr.length ? 'no time set' : 'All clear') };
+          })(),
           bookmarks: { count: 0, status: 'Coming soon' },
           suggested: { count: uns.length, status: uns.length ? `${uns.length} task${uns.length === 1 ? '' : 's'} need a time` : 'All caught up' },
         },

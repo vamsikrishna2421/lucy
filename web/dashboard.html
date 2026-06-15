@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 44 (animated Lucy expressions) ────────── */
+/* ─── LUCY web · premium · dashboard rev 45 (Reminders in Workspace) ────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -459,15 +459,15 @@ async function guideAsk(){const i=$('gAsk');const t=(i&&i.value||'').trim();if(!
 /* Workspace = a Lumia live-tile command center. Home shows colorful tiles; a tile opens its section. */
 const WS_TILES=[
   ['calendar','📅','Calendar','#FF8C42'],
+  ['reminders','⏰','Reminders','#38BDF8'],
   ['library','📄','Documents','#4DA3FF'],
   ['links','🌐','Resources','#34D399'],
   ['projects','📂','Projects','#A78BFA'],
-  ['bookmarks','🔖','Bookmarks','#FB7185'],
   ['suggested','✦','Lucy Suggested','#F5C451'],
 ];
 function vProductivity(){
   if(PROD_TAB!=='home'){
-    const body=PROD_TAB==='library'?vLibrary():PROD_TAB==='links'?vLinks():PROD_TAB==='projects'?vProjects():vCalendar();
+    const body=PROD_TAB==='library'?vLibrary():PROD_TAB==='links'?vLinks():PROD_TAB==='projects'?vProjects():PROD_TAB==='reminders'?vReminders():vCalendar();
     return `<button class="btn ghost sm" onclick="setProdTab('home')" style="margin-bottom:12px">← Workspace</button>${body}`;}
   return `<div class="date">Workspace</div><div class="greet"><h1 style="font-size:25px">Command center</h1></div>
     <div class="subtle-line">Everything you manage, at a glance.</div>
@@ -506,6 +506,16 @@ async function loadProjects(){let r=null;try{r=await api('/api/projects');}catch
 async function newProject(){const name=prompt('Project name:');if(!name||!name.trim())return;const description=prompt('Short description (optional):')||'';
   await api('/api/projects',{method:'POST',body:JSON.stringify({name:name.trim(),description})});toast('Project created ✓');await loadProjects();}
 async function delProject(id){if(!confirm('Delete this project?'))return;await api('/api/projects/'+id,{method:'DELETE'});toast('Deleted');await loadProjects();}
+/* ─── REMINDERS (Workspace → Reminders) ─── */
+function vReminders(){const rem=((DATA&&DATA.reminders)||[]).filter(r=>r.status==='pending').sort((a,b)=>{const ta=a.remind_at?new Date(a.remind_at).getTime():Infinity,tb=b.remind_at?new Date(b.remind_at).getTime():Infinity;return ta-tb;});
+  let body;
+  if(!rem.length)body=empty('⏰','No reminders yet','Reminders you set — or that LUCY extracts from your notes — show up here.');
+  else body=rem.map(r=>{const ms=r.remind_at?new Date(r.remind_at).getTime():null;const at=ms?(dayLabel(ms)+' · '+clock(ms)):'No time set';const u=(r.urgency||'medium');const col=u==='high'?'#FB7185':u==='low'?'#8AA4FF':'#38BDF8';
+    return `<div class="card" style="padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;border-left:4px solid ${col}">
+      <div style="flex:1;min-width:0"><div style="font-weight:500;word-break:break-word">${esc(r.text||'Reminder')}</div><div class="subtle-line" style="margin-top:3px">⏰ ${esc(at)}${u==='high'?' · high priority':''}</div></div>
+      <button class="btn ghost sm" onclick="delReminder(${r.id})">✕</button></div>`;}).join('');
+  return `<div class="greet"><h1 style="font-size:24px">Reminders</h1></div><div class="subtle-line">Everything LUCY is reminding you about.</div><div style="margin-top:14px">${body}</div>`;}
+async function delReminder(id){await api('/api/reminder/'+id,{method:'DELETE'});toast('Reminder removed ✓');await load(true);if(curView()==='reminders')draw();}
 async function loadLinks(){let r=null;try{r=await api('/api/resources');}catch(e){}const w=$('linksWrap');if(!w)return;
   const items=(r&&r.items)||[];
   if(!items.length){w.innerHTML=empty('🔗','No links yet','Add links & resources from the LUCY app — they will show here.');return;}

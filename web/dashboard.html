@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 43 (edit event) ────────── */
+/* ─── LUCY web · premium · dashboard rev 44 (animated Lucy expressions) ────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -127,6 +127,21 @@ nav{display:flex;flex-direction:column;gap:1px}
 /* sad (mouse left): both eyes droop downward + a little frown, held ~2s */
 .orb.sad .eye .closed{border-radius:24px 24px 0 0;border-top:3px solid var(--eye);border-bottom:0;top:8px}
 .orb.sad .mouth{opacity:1}
+/* ── rich expressions (setOrbMood) ── */
+.orb.think .eye .closed{opacity:0}.orb.think .eye .open{opacity:1;transform:scale(.85) translateY(-2px)}
+.orb.think{animation:orbBob 1.2s ease-in-out infinite}
+@keyframes orbBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.orb.listen .eye .closed{opacity:0}.orb.listen .eye .open{opacity:1;transform:scale(1.15)}
+.orb.listen{animation:orbListen 1s ease-in-out infinite}
+@keyframes orbListen{0%,100%{box-shadow:0 0 0 0 rgba(255,140,66,.45)}50%{box-shadow:0 0 0 16px rgba(255,140,66,0)}}
+.orb.happy .eye .closed{opacity:1;border-radius:0 0 24px 24px;border-top:3px solid var(--eye);border-bottom:0;top:6px}
+.orb.happy .mouth{opacity:1;border-top:0;border-bottom:3px solid var(--eye);border-radius:0 0 22px 22px}
+.orb.celebrate .eye .closed{opacity:1;border-radius:0 0 24px 24px;border-top:3px solid var(--eye);border-bottom:0;top:6px}
+.orb.celebrate .mouth{opacity:1;border-top:0;border-bottom:3px solid var(--eye);border-radius:0 0 22px 22px}
+.orb.celebrate{animation:orbBounce .5s ease 2}
+@keyframes orbBounce{0%,100%{transform:translateY(0)}30%{transform:translateY(-12px)}60%{transform:translateY(-3px)}}
+.orb.confused .eye.left .closed{opacity:0}.orb.confused .eye.left .open{opacity:1}
+.orb.confused .mouth{opacity:1;transform:translateX(-50%) rotate(14deg)}
 .spark-dot{position:absolute;border-radius:50%;background:var(--primary-glow);opacity:.7;animation:twinkle 3s infinite}
 @keyframes twinkle{0%,100%{opacity:.2;transform:scale(.7)}50%{opacity:.9;transform:scale(1.1)}}
 
@@ -371,7 +386,14 @@ nav{display:flex;flex-direction:column;gap:1px}
 let DATA=null, ROUTE='home', CHAT=[], busy=false;
 const $=id=>document.getElementById(id);
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);}
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);
+  // LUCY reacts: ✓ → happy, errors → confused.
+  if(/✓|done|saved|scheduled|added|captured/i.test(m))setOrbMood('happy',1800);
+  else if(/could not|fail|unreach|not allowed|no (free|conflict|matches)|error/i.test(m))setOrbMood('confused',1800);}
+let _orbMoodT=null;const ORB_MOODS=['peek','sad','think','listen','happy','celebrate','confused'];
+function setOrbMood(m,hold){const o=$('orb');if(!o)return;ORB_MOODS.forEach(x=>o.classList.remove(x));if(m)o.classList.add(m);
+  const c=$('orbCloud');if(c){const txt={think:'thinking…',listen:'listening…',happy:'nice!',celebrate:'woohoo!',confused:'hmm?'}[m];if(txt)c.textContent=txt;}
+  if(_orbMoodT)clearTimeout(_orbMoodT);if(hold)_orbMoodT=setTimeout(()=>{o.classList.remove(m);},hold);}
 function toggleSide(o){$('side').classList.toggle('open',o);$('scrim').classList.toggle('on',o);}
 async function api(path,opts={}){opts.headers=Object.assign({'Content-Type':'application/json'},opts.headers||{});const r=await fetch(path,opts);const ct=r.headers.get('content-type')||'';return ct.includes('json')?r.json():r.text();}
 function clock(d){if(!d)return'';const t=new Date((d+'').replace(' ','T')+((d+'').includes('Z')?'':'Z'));if(isNaN(t))return'';return t.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});}
@@ -431,9 +453,9 @@ async function loadGuideContent(){let r=null;try{r=await api('/api/guide');}catc
   const secs=(r&&r.sections)||[];
   if(!secs.length){w.innerHTML=empty('❔','Guide ships via update','Relaunch LUCY so the in-app manual loads.');return;}
   w.innerHTML=secs.map((s,i)=>`<div class="card" style="padding:16px;margin-bottom:14px"><b style="font-size:16px">${esc(s.title)}</b><div style="margin-top:8px;color:var(--muted);font-size:13.5px;line-height:1.6">${mdLite(s.body)}</div></div>`).join('');}
-async function guideAsk(){const i=$('gAsk');const t=(i&&i.value||'').trim();if(!t)return;const a=$('gAns');if(a)a.innerHTML='<div class="subtle-line">Looking it up…</div>';
+async function guideAsk(){const i=$('gAsk');const t=(i&&i.value||'').trim();if(!t)return;const a=$('gAns');if(a)a.innerHTML='<div class="subtle-line">Looking it up…</div>';setOrbMood('think');
   let r;try{r=await api('/api/voice',{method:'POST',body:JSON.stringify({text:t,context:'guide'})});}catch(e){r=null;}
-  if(a)a.innerHTML=`<div class="card" style="padding:12px 14px;background:var(--card)">${esc((r&&r.speak)||'Could not reach LUCY.')}</div>`;}
+  if(a)a.innerHTML=`<div class="card" style="padding:12px 14px;background:var(--card)">${esc((r&&r.speak)||'Could not reach LUCY.')}</div>`;setOrbMood(r&&r.speak?'happy':'confused',1800);}
 /* Workspace = a Lumia live-tile command center. Home shows colorful tiles; a tile opens its section. */
 const WS_TILES=[
   ['calendar','📅','Calendar','#FF8C42'],
@@ -774,9 +796,9 @@ function renderSchedule(){const w=$('calWrap');if(!w)return;
   renderSchat();}
 let SCHAT=[];
 function renderSchat(){const el=$('schat');if(!el)return;el.innerHTML=SCHAT.length?SCHAT.map(m=>`<div class="schat-msg ${m.role==='user'?'schat-u':'schat-l'}">${esc(m.text)}</div>`).join(''):'<div class="subtle-line">Ask me to schedule, move, or plan anything.</div>';el.scrollTop=el.scrollHeight;}
-async function schatSend(){const i=$('schatIn');const t=(i&&i.value||'').trim();if(!t)return;i.value='';SCHAT.push({role:'user',text:t});SCHAT.push({role:'lucy',text:'…'});renderSchat();
+async function schatSend(){const i=$('schatIn');const t=(i&&i.value||'').trim();if(!t)return;i.value='';SCHAT.push({role:'user',text:t});SCHAT.push({role:'lucy',text:'…'});renderSchat();setOrbMood('think');
   let r;try{r=await api('/api/voice',{method:'POST',body:JSON.stringify({text:t,context:'calendar'})});}catch(e){r=null;}
-  SCHAT.pop();SCHAT.push({role:'lucy',text:(r&&r.speak)||'I could not reach LUCY just now.'});renderSchat();
+  SCHAT.pop();SCHAT.push({role:'lucy',text:(r&&r.speak)||'I could not reach LUCY just now.'});renderSchat();setOrbMood(r&&r.ok!==false?'happy':'confused',1800);
   await loadSchedule();}
 /* blocks (real + suggested habits) for a given day, time-sorted */
 function blocksForDay(k){const dow=new Date(k).getDay();const habitWins=(SCHED.availability&&SCHED.availability.protectedWindows)||[];

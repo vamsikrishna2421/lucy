@@ -34,6 +34,8 @@ import { SettingsScreen } from './src/screens/Settings';
 import { LucyWrapped } from './src/components/LucyWrapped';
 import { ConnectorsScreen } from './src/screens/Connectors';
 import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
+import ConversationModal from './src/components/ConversationModal';
+import { wakeWord } from './src/voice/wakeWord';
 
 // Capture non-React JS errors (async/timers/native callbacks) to dev_log from first load.
 installGlobalErrorLogger();
@@ -88,6 +90,8 @@ export default function App() {
   const [shareToast, setShareToast] = useState<string | null>(null);
   const shareToastAnim = useRef(new Animated.Value(0)).current;
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const [convoOpen, setConvoOpen] = useState(false);
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
   const [processingActive, setProcessingActive] = useState(false);
   const voiceRecording = useRef(false);
   const voicePressStart = useRef(0);
@@ -579,6 +583,36 @@ export default function App() {
     // Quick tap (<500ms) → stay in recording; the next tap will stop it.
   }, [finishVoiceCapture]);
 
+  // "Hey Lucy" wake word → open the conversation loop (hands-free). Trailing words spoken in the
+  // same breath are ignored for now; the conversation greets and listens fresh.
+  const onWake = useCallback((_trailing: string | null) => { setConvoOpen(true); }, []);
+
+  // Persist + apply the wake-word toggle (also called from Settings).
+  const setWakeWordPreference = useCallback(async (on: boolean) => {
+    setWakeWordEnabled(on);
+    try { const db = await getDatabase(); await setSetting(db, 'wake_word_enabled', on ? '1' : '0'); } catch { /* non-critical */ }
+  }, []);
+
+  // Load the saved wake-word preference once the app is ready.
+  useEffect(() => {
+    if (!ready) return;
+    void (async () => {
+      try { const db = await getDatabase(); setWakeWordEnabled((await getSetting(db, 'wake_word_enabled')) === '1'); } catch { /* default off */ }
+    })();
+  }, [ready]);
+
+  // Run the wake-word listener while enabled + foreground; stop it otherwise (battery/iOS suspends
+  // recognition in the background anyway). It yields the mic to Listen mode / conversations on its own.
+  useEffect(() => {
+    if (!ready || !wakeWordEnabled) { wakeWord.disable(); return undefined; }
+    void wakeWord.enable(onWake);
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') void wakeWord.enable(onWake);
+      else wakeWord.disable();
+    });
+    return () => { sub.remove(); wakeWord.disable(); };
+  }, [ready, wakeWordEnabled, onWake]);
+
   // When LUCY applies task reorganizations from the Ask chat, refresh the Tasks board.
   useEffect(() => {
     let cancelled = false;
@@ -708,6 +742,8 @@ export default function App() {
                   onChangeBackground={setBackgroundPreference}
                   onReprocessAll={reprocessAllMemories}
                   onOpenWrapped={() => setWrappedVisible(true)}
+                  wakeWordEnabled={wakeWordEnabled}
+                  onChangeWakeWord={setWakeWordPreference}
                 />
               </View>
             </>
@@ -781,6 +817,14 @@ export default function App() {
             <Text style={[styles.bottomTabLabel, a && styles.bottomTabLabelActive]}>Settings</Text></>); })()}
           </TouchableOpacity>
         </View>
+        {/* Conversation FAB — hands-free spoken chat with LUCY (also triggered by "Hey Lucy"). */}
+        <TouchableOpacity
+          style={styles.convoFab}
+          activeOpacity={0.85}
+          onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setConvoOpen(true); }}
+        >
+          <Ionicons name="chatbubbles" size={22} color={LUCY_COLORS.white} />
+        </TouchableOpacity>
       </SafeAreaView>
       <NotificationDetailModal
         payload={notificationDetail}
@@ -797,6 +841,12 @@ export default function App() {
           // Refresh badge after user reads/dismisses
           void getDatabase().then((db) => getTotalUnreadCount(db)).then(setUnreadNotifCount).catch(() => {});
         }}
+      />
+      <ConversationModal
+        visible={convoOpen}
+        context={currentVoiceContext()}
+        onNavigate={applyVoiceNav}
+        onClose={() => setConvoOpen(false)}
       />
       <Onboarding visible={onboardingVisible} onComplete={async () => {
         setOnboardingVisible(false);
@@ -819,6 +869,11 @@ export default function App() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: LUCY_COLORS.background },
+  convoFab: {
+    position: 'absolute', right: 16, bottom: 92, width: 52, height: 52, borderRadius: 26,
+    backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center',
+    shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 7,
+  },
   brand: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.borderSoft },
   brandRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', minHeight: 82 },
   logoWrap: { position: 'relative', alignSelf: 'flex-start', marginTop: 8, paddingLeft: 2 },

@@ -26,6 +26,8 @@ interface SettingsScreenProps {
   onChangeBackground: (enabled: boolean) => Promise<boolean>;
   onReprocessAll: () => Promise<number>;
   onOpenWrapped?: () => void;
+  wakeWordEnabled: boolean;
+  onChangeWakeWord: (enabled: boolean) => Promise<void>;
 }
 
 type SettingsPanel = 'intelligence' | 'remote' | 'background' | 'organization' | 'queue' | 'privacy' | 'profile' | 'connectors' | null;
@@ -54,7 +56,7 @@ function findModel(id: string): ModelOption | undefined {
   return ALL_MODELS.find((m) => m.id === id);
 }
 
-export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll, onOpenWrapped }: SettingsScreenProps) {
+export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll, onOpenWrapped, wakeWordEnabled, onChangeWakeWord }: SettingsScreenProps) {
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
   const [devLogVisible, setDevLogVisible] = useState(false);
   const [checkInSchedulerVisible, setCheckInSchedulerVisible] = useState(false);
@@ -549,6 +551,16 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           badge={backgroundEnabled ? 'On' : 'Off'}
           active={backgroundEnabled}
           onInfo={() => setActivePanel('background')}
+        />
+        <SettingsRow
+          title="Hey Lucy wake word"
+          value={wakeWordEnabled
+            ? 'Listening for “Hey Lucy” while the app is open'
+            : 'Off — say “Hey Lucy” hands-free (uses more battery)'}
+          badge={wakeWordEnabled ? 'On' : 'Off'}
+          active={wakeWordEnabled}
+          actionLabel={wakeWordEnabled ? 'Turn off' : 'Turn on'}
+          onAction={() => void onChangeWakeWord(!wakeWordEnabled)}
         />
         <SettingsRow
           title="Re-organize now"

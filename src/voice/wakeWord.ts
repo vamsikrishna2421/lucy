@@ -37,7 +37,9 @@ class WakeWordListener {
     if (this.enabled) return true;
     try {
       const perm = await ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync();
-      if (!perm.granted || !ExpoSpeechRecognitionModule.isRecognitionAvailable() || !ExpoSpeechRecognitionModule.supportsOnDeviceRecognition()) {
+      // Match conversation.ts gate — don't require supportsOnDeviceRecognition() because that API
+      // can return false even on devices where requiresOnDeviceRecognition:true works fine.
+      if (!perm.granted || !ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
         return false;
       }
     } catch { return false; }
@@ -49,8 +51,10 @@ class WakeWordListener {
     try {
       const supported = await ExpoSpeechRecognitionModule.getSupportedLocales({});
       const installed = (supported?.installedLocales ?? []) as string[];
-      if (installed.length > 0 && !installed.includes(this.locale)) {
-        console.warn(`[WakeWord] Locale ${this.locale} not installed on-device; falling back to en-US`);
+      // Fall back to en-US when the profile locale isn't installed, OR when the
+      // list is empty (device didn't enumerate — safer to use the universal default).
+      if (!installed.includes(this.locale)) {
+        console.warn(`[WakeWord] Locale ${this.locale} not in installedLocales; falling back to en-US`);
         this.locale = 'en-US';
       }
     } catch { /* not critical */ }

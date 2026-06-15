@@ -69,6 +69,17 @@ export async function setBlockLocked(db: SQLiteDatabase, id: number, locked: boo
   await db.runAsync('UPDATE scheduled_blocks SET locked = ? WHERE id = ?', locked ? 1 : 0, id);
 }
 
+/** Edit an event's title and/or start/end (used by the calendar edit sheet). */
+export async function updateScheduledBlock(
+  db: SQLiteDatabase, id: number, fields: { title?: string; startMs?: number; endMs?: number },
+): Promise<void> {
+  if (typeof fields.title === 'string' && fields.title.trim()) await db.runAsync('UPDATE scheduled_blocks SET title = ? WHERE id = ?', fields.title.trim(), id);
+  const s = fields.startMs; const e = fields.endMs;
+  if (Number.isFinite(s) && Number.isFinite(e) && (e as number) > (s as number)) {
+    await db.runAsync('UPDATE scheduled_blocks SET start_at = ?, end_at = ? WHERE id = ?', s as number, e as number, id);
+  }
+}
+
 export async function deleteScheduledBlock(db: SQLiteDatabase, id: number): Promise<void> {
   await db.runAsync('DELETE FROM scheduled_blocks WHERE id = ?', id);
 }

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 42 (Guide + rearrange UI) ────────── */
+/* ─── LUCY web · premium · dashboard rev 43 (edit event) ────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -799,7 +799,7 @@ function renderGrid(daysArr){const startMin=6*60,endMin=24*60,PX=0.8,H=(endMin-s
   const cols=daysArr.map(k=>{const all=blocksForDay(k);
     const lines=hrs.map(h=>`<div style="position:absolute;top:${(h*60-startMin)*PX}px;left:0;right:0;height:1px;background:var(--border);opacity:.5"></div>`).join('');
     const evs=all.map(o=>{const b=o.b;const top=(localMin(b.start)-startMin)*PX;const ht=Math.max(16,((b.end-b.start)/60000)*PX);const c=o.habit?'#8a8a8a':catColor(b);
-      return `<div ${o.habit?'':`draggable="true" ondragstart="dragStart(event,${b.id})"`} style="position:absolute;top:${Math.max(0,top)}px;left:2px;right:2px;height:${ht}px;background:${c}28;border-left:3px solid ${c};border-radius:7px;padding:2px 5px;overflow:hidden;font-size:11px;${o.habit?'opacity:.6;border-style:dashed':'cursor:grab'}">
+      return `<div ${o.habit?'':`draggable="true" ondragstart="dragStart(event,${b.id})" onclick="openEditEvent(${b.id})"`} style="position:absolute;top:${Math.max(0,top)}px;left:2px;right:2px;height:${ht}px;background:${c}28;border-left:3px solid ${c};border-radius:7px;padding:2px 5px;overflow:hidden;font-size:11px;${o.habit?'opacity:.6;border-style:dashed':'cursor:pointer'}">
         <div style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.title)}</div>${ht>30?`<div style="color:var(--muted)">${clock(b.start)}</div>`:''}</div>`;}).join('');
     const hd=multi?`<div style="text-align:center;font-size:11px;color:${dayKey(k)===dayKey(Date.now())?'var(--primary)':'var(--muted)'};padding:3px 0;font-weight:600">${new Date(k).toLocaleDateString(undefined,{weekday:'short'})} ${new Date(k).getDate()}</div>`:'';
     return `<div style="flex:1;min-width:${multi?'88px':'auto'}"><div>${hd}</div><div ondragover="event.preventDefault()" ondrop="dropAt(event,${k})" style="position:relative;height:${H}px;border-left:1px solid var(--border)">${lines}${evs}</div></div>`;}).join('');
@@ -856,7 +856,23 @@ function blockRow(b,conflicted){const isLucy=b.source==='scheduled';const tag=is
     <div style="flex:1"><div style="font-weight:500">${esc(b.title||'Untitled')}${conflicted?' <span style="color:var(--error,#e2574c);font-size:12px">⚠ conflict</span>':''}</div>
       <div style="margin-top:3px"><span class="kw">${esc(b.resourceLabel||'')}</span> <span class="kw" style="opacity:.7">${tag}</span></div></div>
     ${conflicted&&isLucy&&b.id?`<button class="btn ghost sm" onclick="rescheduleBlock(${b.id},'${esc((b.title||'').replace(/'/g,''))}')">Reschedule</button>`:''}
+    ${isLucy&&b.id?`<button class="btn ghost sm" onclick="openEditEvent(${b.id})">✎</button>`:''}
     ${isLucy&&b.id?`<button class="btn ghost sm" onclick="cancelSched(${b.id})">✕</button>`:''}</div>`;}
+function openEditEvent(id){const b=(SCHED.blocks||[]).find(x=>x.id===id);if(!b){toast('Open the event from the agenda');return;}
+  const d=new Date(b.start-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const m=$('modal');m.classList.add('on');
+  $('modalBody').innerHTML=`<div style="padding:18px"><h3 style="margin:0 0 12px">Edit event</h3>
+    <label style="font-size:12px;color:var(--muted)">Title<input id="evT" value="${esc(b.title||'')}" style="width:100%;margin:4px 0 12px;padding:10px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text)"/></label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <label style="font-size:12px;color:var(--muted)">Date<input id="evD" type="date" value="${d}" style="display:block;margin-top:4px;padding:9px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text)"/></label>
+      <label style="font-size:12px;color:var(--muted)">Start<input id="evS" type="time" value="${hm(localMin(b.start))}" style="display:block;margin-top:4px;padding:9px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text)"/></label>
+      <label style="font-size:12px;color:var(--muted)">End<input id="evE" type="time" value="${hm(localMin(b.end))}" style="display:block;margin-top:4px;padding:9px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text)"/></label>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px"><button class="btn" onclick="saveEvent(${id})">Save</button><button class="btn ghost" onclick="closeModal()">Cancel</button><div style="flex:1"></div><button class="btn ghost sm dl-del" onclick="cancelSched(${id});closeModal()">Delete</button></div></div>`;}
+async function saveEvent(id){const title=($('evT').value||'').trim();const d=$('evD').value,s=$('evS').value,e=$('evE').value;
+  const startMs=new Date(d+'T'+s).getTime(),endMs=new Date(d+'T'+e).getTime();
+  if(!(endMs>startMs)){toast('End must be after start');return;}
+  toast('Saving…');try{await api('/api/schedule/update',{method:'POST',body:JSON.stringify({id,title,startMs,endMs})});toast('Saved ✓');}catch(e){toast('Save failed');}closeModal();await loadSchedule();}
 let REARR=null;
 async function offerRearrange(task,dur){const el=$('calSug');el.innerHTML='<div class="subtle-line">No free slot — checking if I can make room…</div>';
   let r;try{r=await api('/api/schedule/rearrange',{method:'POST',body:JSON.stringify({task,durationMin:dur>0?dur:undefined})});}catch(e){r=null;}

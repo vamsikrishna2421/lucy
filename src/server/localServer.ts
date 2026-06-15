@@ -532,6 +532,17 @@ async function route(req: ParsedRequest): Promise<string> {
       }, moves);
       return json(200, r);
     }
+    if (req.method === 'POST' && req.path === '/api/schedule/update') {
+      const id = Number(payload.id);
+      if (!id) return json(400, { error: 'Missing id' });
+      const { updateScheduledBlock } = await import('../db/schedule');
+      await updateScheduledBlock(db, id, {
+        title: typeof payload.title === 'string' ? payload.title : undefined,
+        startMs: payload.startMs != null ? Number(payload.startMs) : undefined,
+        endMs: payload.endMs != null ? Number(payload.endMs) : undefined,
+      });
+      return json(200, { ok: true });
+    }
     if (req.method === 'POST' && req.path === '/api/schedule/move') {
       const { moveScheduledBlockTo } = await import('../scheduling');
       const r = await moveScheduledBlockTo(db, Number(payload.id), Number(payload.startMs));

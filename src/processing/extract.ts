@@ -233,7 +233,7 @@ async function persistExtraction(
       await insertPlace(db, capture.id, place, extraction.privacy_level);
     }
     for (const reminder of extraction.reminders) {
-      const isDupe = await reminderAlreadyExists(db, reminder.text);
+      const isDupe = await reminderAlreadyExists(db, reminder.text, reminder.time);
       if (isDupe) continue;
       const id = await insertReminder(db, capture.id, reminder, extraction.privacy_level);
       reminderRows.push({ id, reminder });

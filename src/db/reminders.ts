@@ -13,24 +13,22 @@ export interface ReminderRow extends ExtractedReminder {
   archive_reason?: string | null;
 }
 
-/** Returns true if a pending reminder with very similar text already exists */
-export async function reminderAlreadyExists(db: SQLiteDatabase, text: string): Promise<boolean> {
-  const normalise = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+/**
+ * True only if the SAME reminder (same text AND same time) is already pending. A reminder with the
+ * same text but a different time is NOT a duplicate — that's how "remind me on the 5th, 15th, 25th"
+ * legitimately produces three reminders. (The old text-only 65%-overlap check wrongly collapsed
+ * multi-date reminders into one and false-matched unrelated reminders, so extracted reminders
+ * silently never persisted.)
+ */
+export async function reminderAlreadyExists(db: SQLiteDatabase, text: string, time?: string | null): Promise<boolean> {
+  const normalise = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
   const needle = normalise(text);
-  const existing = await db.getAllAsync<{ text: string }>(
-    "SELECT text FROM reminders WHERE status = 'pending' ORDER BY id DESC LIMIT 40",
+  if (!needle) return false;
+  const want = time ?? null;
+  const existing = await db.getAllAsync<{ text: string; remind_at: string | null }>(
+    "SELECT text, remind_at FROM reminders WHERE status = 'pending' ORDER BY id DESC LIMIT 80",
   );
-  for (const row of existing) {
-    const haystack = normalise(row.text);
-    if (haystack === needle) return true;
-    // word-overlap ≥ 65 %
-    const needleWords = new Set(needle.split(/\s+/).filter(Boolean));
-    const haystackWords = haystack.split(/\s+/).filter(Boolean);
-    if (needleWords.size === 0) continue;
-    const overlap = haystackWords.filter((w) => needleWords.has(w)).length;
-    if (overlap / needleWords.size >= 0.65) return true;
-  }
-  return false;
+  return existing.some((row) => normalise(row.text) === needle && (row.remind_at ?? null) === want);
 }
 
 export async function insertReminder(

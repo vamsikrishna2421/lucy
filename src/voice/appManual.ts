@@ -86,6 +86,24 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
 - **How:** add a task (type it, or say "add a task to …"), set urgency/category, then **complete** or
   **delete** it. Open todos can be auto-scheduled by the Calendar's "Plan my day".
 
+## 4a. Reminders
+
+- **What it does:** Scheduled reminders that fire as **notifications** at a set date and time. Unlike
+  calendar blocks they do not occupy a slot — they just interrupt you at the right moment.
+  LUCY nags you every 3 minutes for up to 30 minutes until you acknowledge the reminder.
+- **Where:** Phone — **Workspace → Reminders** tile. Website — **Reminders** section.
+- **How:** capture a reminder ("remind me to call the dentist on Friday at 10am"), or add one directly
+  in the Reminders tile. Tap the notification to acknowledge and stop the nag.
+- Reminders can also be managed (view / delete / mark done) from the Reminders list.
+
+## 4b. Focus Now — what to do right now
+
+- **What it does:** A "right now" view of today's highest-priority items: urgent tasks, reminders
+  due soon, and Lucy's suggestions for what to focus on.
+- **Where:** Phone — **Home → Focus Now** (second tab after Timeline).
+- **How:** open it when you want LUCY to tell you what matters most right now. It combines urgency,
+  due dates, and learned patterns.
+
 ## 5. Workspace — the command center
 
 - **What it does:** A top-level tile that gathers your productivity surfaces in one place.
@@ -173,6 +191,38 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
   - **Memory export / import:** export your memory to a file and import it on a new device — used for
     **switching devices**.
 
+## 9a. Settings — full list of what's in Settings
+
+Settings is behind the **gear icon** in the header (top-right). Key sections:
+
+- **Laptop access (local network):** toggle to start the LAN web server; shows the URL + PIN.
+- **LUCY Wrapped:** your quarterly story — captures, tasks, people, mood summary. Tap **View**.
+- **Export as JSON:** exports all your memories, tasks, expenses as a structured data file.
+- **Export as Markdown:** exports your memory in human-readable Markdown you can use anywhere.
+- **Import memory:** restore from a previously exported JSON file (e.g. when switching devices).
+- **Check for updates:** fetches the latest LUCY improvements over-the-air and restarts.
+- **Delete all memories (Danger zone):** permanently erases everything LUCY knows.
+- **AI call log (Developer):** at the very bottom — shows the last 100 AI requests, responses, and
+  errors. Tap any row to expand. Useful for debugging unexpected answers.
+- **Hey Lucy wake word:** toggle to enable the foreground "Hey Lucy" voice trigger.
+- **Remote Intelligence:** add your OpenAI or Claude API key; choose your AI model.
+
+## 9b. LUCY Wrapped
+
+- **What it does:** A quarterly summary of your life in LUCY — top captures, tasks completed, people
+  you mentioned, mood trends, and highlights from the past 3 months.
+- **Where:** Phone — **Settings → LUCY Wrapped → View**.
+- Refreshes each quarter; gives you a "year in review" style look at your memory.
+
+## 9c. Passive Listening (Listen mode)
+
+- **What it does:** Keeps the mic open in the background and transcribes ambient speech on-device.
+  Useful for capturing meeting audio, thoughts while walking, or any voice without tapping anything.
+- **Where:** Phone — **Listen** pill in the header (top of the Home screen). Tap to start/stop.
+- Audio is transcribed on-device and **deleted immediately** — never stored, never uploaded.
+- An orange indicator shows on screen while active (iOS visual consent signal).
+- Transcribed text is batched and captured automatically.
+
 ## 10. Voice control — one context-aware mic
 
 - **What it does:** The single **center mic** is a universal command bar. Speak any command and LUCY
@@ -190,6 +240,38 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
   - "Start a project called kitchen remodel."
   - "Open my calendar." / "Show me my documents."
   - "How much did I spend on coffee this week?"
+
+## 10a. Talk to Lucy — full conversational voice mode
+
+- **What it does:** A hands-free multi-turn spoken conversation with LUCY (like ChatGPT voice mode).
+  LUCY listens, thinks, and speaks replies aloud. You can ask questions, give commands, and have
+  back-and-forth without touching the phone.
+- **Where:** Phone — the **chat-bubbles FAB** (floating button, bottom-right corner of any screen).
+  Tap it to open the "Talk to Lucy" modal.
+- **How:** the modal opens, LUCY says "I'm listening — what's up?", then it's a continuous loop:
+  you speak → she replies aloud → she listens again. A pulsing orb shows the current state
+  (Listening / Thinking / Speaking). Say **"stop listening"**, **"that's all"**, or **"goodbye"**
+  to end, or tap **End conversation**.
+- The transcript of the conversation appears in the modal so you can read what was said.
+
+## 10b. Hey Lucy — foreground wake word
+
+- **What it does:** While the app is open, LUCY listens for the phrase **"Hey Lucy"** in the
+  foreground and automatically opens the conversation loop when she hears it — hands-free.
+- **Where / how to enable:** Phone — **Settings → Hey Lucy wake word** toggle. Off by default
+  (continuous recognition has a battery cost). Turn it on; from then on say "Hey Lucy" while the
+  app is in the foreground and she wakes up.
+- You can say a command right after the trigger ("Hey Lucy, schedule a gym session at 7am") and
+  she'll handle it without the full conversation modal.
+- On iOS, this is foreground-only (Apple restricts always-on custom wake words to Siri). Android
+  may be more permissive. Keep the app open for it to work.
+
+## 10c. Hey Siri shortcut
+
+- **What it does:** Opens LUCY via Siri voice command.
+- **How:** say **"Hey Siri, open Lucy"** and iOS will launch the app via the lucy:// deep-link.
+  This is a Siri shortcut, not a custom Siri integration — Siri opens the app; LUCY takes over
+  from there.
 
 ## 11. Developer tools — AI call log
 
@@ -231,9 +313,18 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
 - **"How do I use LUCY on my laptop?"** → Open http://<phone-ip>:8088 on the same WiFi.
 - **"Is my data private?"** → Yes: on-device transcription, privacy shield before any remote call,
   and an optional fully on-device LLM.
-- **"How do I move to a new phone?"** → About You → Memory export, then import on the new device.
+- **"How do I move to a new phone?"** → Settings → Export as JSON, then import on the new device.
 - **"Where are the AI/LLM logs?"** → Settings → scroll to the bottom → DEVELOPER → "AI call log".
 - **"Where do I see what LUCY sent to the AI?"** → Settings → AI call log (bottom of Settings).
+- **"How do I talk to Lucy hands-free?"** → Tap the chat-bubbles FAB (bottom-right); or say "Hey Lucy" if the wake word is enabled in Settings.
+- **"How do I enable Hey Lucy?"** → Settings → Hey Lucy wake word → toggle on.
+- **"Where are my reminders?"** → Workspace → Reminders tile.
+- **"What should I do right now?"** → Home → Focus Now tab.
+- **"What is LUCY Wrapped?"** → Settings → LUCY Wrapped → View — your quarterly life summary.
+- **"How do I export my data?"** → Settings → Export as JSON (structured) or Export as Markdown (readable).
+- **"How do I start listening in a meeting?"** → Tap the "Listen" pill in the Home screen header.
+- **"Can I use Siri to open LUCY?"** → Yes — say "Hey Siri, open Lucy".
+- **"How do I end a conversation with Lucy?"** → Say "stop listening", "that's all", or "goodbye", or tap End conversation.
 `;
 
 export function manualSections(): Array<{ title: string; body: string }> {

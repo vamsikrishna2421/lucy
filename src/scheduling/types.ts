@@ -28,6 +28,7 @@ export interface SchedTaskMeta {
   deadline?: string | null; // ISO
   earliestMin?: number | null; // earliest start time-of-day (mins from midnight) — "after 6:30pm"
   latestMin?: number | null;   // latest start time-of-day — "before 9am"
+  recurrence?: 'daily' | 'weekdays' | 'weekly' | null; // "every day", "every weekday", "every week"
   splittable?: boolean;
   confidence?: number;      // 0-1 classification confidence (low ⇒ treated conservatively)
 }

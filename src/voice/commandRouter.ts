@@ -98,22 +98,32 @@ export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, cont
       const title = (cmd.title || 'Untitled').trim();
       const { classifyTask } = await import('../scheduling/classify');
       const meta = classifyTask(title, { durationMin: cmd.durationMin ?? undefined });
+      const rec = meta.recurrence; // "every day" etc.
+      const recLabel = rec === 'weekdays' ? 'every weekday' : rec === 'weekly' ? 'weekly' : 'every day';
       const explicit = computeStart(cmd.day ?? null, cmd.time ?? null, now);
-      const { commitBlock, suggestForText } = await import('../scheduling');
+      const { commitBlock, commitSeries, suggestForText } = await import('../scheduling');
+      const dur = Math.max(5, meta.durationMin) * 60_000;
       if (explicit) {
-        const endMs = explicit + Math.max(5, meta.durationMin) * 60_000;
+        const endMs = explicit + dur;
+        if (rec) {
+          const { count } = await commitSeries(db, { title, startMs: explicit, endMs, resources: meta.resources, energy: meta.energy, location: meta.location }, rec);
+          const at = new Date(explicit).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+          return { ok: true, intent: 'schedule', speak: cmd.speak || `Done — "${title}" ${recLabel} at ${at} (${count} added).`, navigate: 'calendar' };
+        }
         const r = await commitBlock(db, { title, startMs: explicit, endMs, resources: meta.resources, energy: meta.energy, location: meta.location }, { force: true });
         const when = new Date(explicit).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
-        const speak = r.conflict
-          ? `Added "${title}" at ${when} — heads up, it overlaps something else.`
-          : (cmd.speak || `Done — "${title}" is on your calendar at ${when}.`);
-        return { ok: true, intent: 'schedule', speak, navigate: 'calendar', data: { blockId: r.blockId } };
+        return { ok: true, intent: 'schedule', speak: r.conflict ? `Added "${title}" at ${when} — heads up, it overlaps something else.` : (cmd.speak || `Done — "${title}" is on your calendar at ${when}.`), navigate: 'calendar', data: { blockId: r.blockId } };
       }
       const sug = await suggestForText(db, title);
       if (!sug.suggestions.length) return { ok: false, intent: 'schedule', speak: `I couldn't find a free slot for "${title}".`, navigate: 'calendar' };
       const top = sug.suggestions[0];
-      const r = await commitBlock(db, { title, startMs: top.start, endMs: top.end, resources: sug.meta.resources, energy: sug.meta.energy, location: sug.meta.location });
       const when = new Date(top.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+      if (rec) {
+        const { count } = await commitSeries(db, { title, startMs: top.start, endMs: top.end, resources: sug.meta.resources, energy: sug.meta.energy, location: sug.meta.location }, rec);
+        const at = new Date(top.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        return { ok: true, intent: 'schedule', speak: cmd.speak || `Scheduled "${title}" ${recLabel} at ${at} (${count} added).`, navigate: 'calendar' };
+      }
+      const r = await commitBlock(db, { title, startMs: top.start, endMs: top.end, resources: sug.meta.resources, energy: sug.meta.energy, location: sug.meta.location });
       return { ok: r.ok, intent: 'schedule', speak: cmd.speak || `Scheduled "${title}" for ${when}.`, navigate: 'calendar', data: { blockId: r.blockId } };
     }
     case 'capture': {

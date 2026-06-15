@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 39 (rail overflow fix) ────────── */
+/* ─── LUCY web · premium · dashboard rev 40 (rail fix deploy + recurring) ────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -284,7 +284,7 @@ nav{display:flex;flex-direction:column;gap:1px}
 .cal-side .card{box-sizing:border-box;max-width:100%;overflow:hidden}
 .cal-side input,.cal-side select,.cal-main input{box-sizing:border-box;max-width:100%}
 .ut-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)}
-.ut-row .ut-task{flex:1;min-width:0;word-break:break-word}
+.ut-row .ut-task{flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere}
 .ut-row .btn{flex:none}
 @media(max-width:900px){.cal-2col{flex-direction:column}.cal-side{flex:none;width:100%}}
 [data-theme="dark"] .vchip.on{color:var(--primary-glow)}
@@ -835,6 +835,9 @@ async function suggestTime(){const task=($('calTask').value||'').trim();if(!task
         <div class="subtle-line" style="margin-top:3px">${esc((s.reasons||[]).join(', '))}</div></div>
       <button class="btn sm" onclick="acceptSlot(${i})">Add</button></div>`).join('');}
 async function acceptSlot(i){if(!CALSUG||!CALSUG.suggestions[i])return;const s=CALSUG.suggestions[i],m=CALSUG.meta;
+  if(m.recurrence){toast('Adding '+m.recurrence+'…');
+    let r;try{r=await api('/api/schedule/commit-series',{method:'POST',body:JSON.stringify({title:m.title,startMs:s.start,endMs:s.end,resources:m.resources,energy:m.energy,location:m.location,recurrence:m.recurrence,todoId:CALSUG.todoId||null})});}catch(e){toast('Could not add');return;}
+    if(r&&r.ok){toast('Added '+(r.count||0)+' times ✓');CALSUG=null;if($('calTask'))$('calTask').value='';if($('calDur'))$('calDur').value='';await loadSchedule();}else toast('Could not add');return;}
   toast('Adding to your calendar…');
   let r;try{r=await api('/api/schedule/commit',{method:'POST',body:JSON.stringify({title:m.title,startMs:s.start,endMs:s.end,resources:m.resources,energy:m.energy,location:m.location,todoId:CALSUG.todoId||null})});}catch(e){toast('Could not add');return;}
   if(r&&r.ok){toast('Scheduled ✓');CALSUG=null;$('calTask').value='';$('calDur').value='';await loadSchedule();}

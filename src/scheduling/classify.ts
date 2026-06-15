@@ -55,6 +55,14 @@ export function detectTimeConstraints(text: string): { earliestMin: number | nul
   return { earliestMin, latestMin };
 }
 
+/** Detect a recurrence intent ("every day", "every weekday", "weekly", "each morning"). */
+export function detectRecurrence(text: string): 'daily' | 'weekdays' | 'weekly' | null {
+  if (/\b(every weekday|on weekdays|each weekday)\b/i.test(text)) return 'weekdays';
+  if (/\b(every week|weekly|each week)\b/i.test(text)) return 'weekly';
+  if (/\b(every ?day|everyday|daily|each day|every morning|every evening|every night)\b/i.test(text)) return 'daily';
+  return null;
+}
+
 function detectWindow(text: string): TimeWindow {
   if (/\b(morning|am\b|early)\b/i.test(text)) return 'morning';
   if (/\b(afternoon|midday|lunch)\b/i.test(text)) return 'afternoon';
@@ -138,6 +146,7 @@ export function classifyTask(text: string, opts?: { durationMin?: number; deadli
     deadline: opts?.deadline ?? parseDeadline(lower),
     earliestMin,
     latestMin,
+    recurrence: detectRecurrence(lower),
     splittable: isDeep && durationMin >= 90,
     confidence,
   };

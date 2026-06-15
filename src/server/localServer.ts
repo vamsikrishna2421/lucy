@@ -462,6 +462,16 @@ async function route(req: ParsedRequest): Promise<string> {
       });
       return json(r.ok ? 200 : 409, r);
     }
+    if (req.method === 'POST' && req.path === '/api/schedule/commit-series') {
+      const { commitSeries } = await import('../scheduling');
+      const rec = ['daily', 'weekdays', 'weekly'].includes(String(payload.recurrence)) ? String(payload.recurrence) as 'daily' | 'weekdays' | 'weekly' : 'daily';
+      const r = await commitSeries(db, {
+        title: String(payload.title ?? 'Task'), startMs: Number(payload.startMs), endMs: Number(payload.endMs),
+        resources: payload.resources as undefined, energy: typeof payload.energy === 'string' ? payload.energy : null,
+        location: typeof payload.location === 'string' ? payload.location : null, todoId: payload.todoId ? Number(payload.todoId) : null,
+      }, rec);
+      return json(200, { ok: true, ...r });
+    }
     if (req.method === 'POST' && req.path === '/api/schedule/plan-day') {
       const { autoPlanDay } = await import('../scheduling');
       const r = await autoPlanDay(db, { horizonDays: Number(payload.horizonDays) || 2 });

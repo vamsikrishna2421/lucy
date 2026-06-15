@@ -113,6 +113,39 @@ export async function commitBlock(db: SQLiteDatabase, input: CommitInput, opts?:
   return { ok: true, blockId };
 }
 
+/**
+ * Commit a RECURRING series ("every day gym at 6:30") — creates occurrences over the next
+ * `horizonDays` matching the pattern, force-added (the user asked for the routine), de-duped so
+ * re-running doesn't double-book. Returns how many were created.
+ */
+export async function commitSeries(
+  db: SQLiteDatabase,
+  input: CommitInput,
+  recurrence: 'daily' | 'weekdays' | 'weekly',
+  horizonDays = 28,
+): Promise<{ count: number }> {
+  const resources = normalizeResources(input.resources ?? { axes: ['focus', 'self'], location: input.location ?? null });
+  const todStart = input.startMs - startOfLocalDay(input.startMs);
+  const dur = input.endMs - input.startMs;
+  const dow0 = new Date(input.startMs).getDay();
+  let count = 0;
+  for (let i = 0; i < horizonDays; i++) {
+    const day = startOfLocalDay(input.startMs) + i * DAY;
+    const dow = new Date(day).getDay();
+    if (recurrence === 'weekdays' && (dow === 0 || dow === 6)) continue;
+    if (recurrence === 'weekly' && dow !== dow0) continue;
+    const s = day + todStart; const e = s + dur;
+    if (s < Date.now() - 60_000) continue;
+    const dupe = await db.getFirstAsync<{ id: number }>(
+      "SELECT id FROM scheduled_blocks WHERE status='committed' AND title=? AND start_at<? AND end_at>?", input.title, e, s,
+    );
+    if (dupe) continue;
+    await createScheduledBlock(db, { todoId: input.todoId ?? null, title: input.title, startMs: s, endMs: e, resources, energy: input.energy ?? null, location: resources.location ?? null, status: 'committed' });
+    count++;
+  }
+  return { count };
+}
+
 /** Add a fixed commitment (a meeting/appointment the user has) to LUCY's calendar. Always added
  *  (force) so it's ground truth; any resulting conflict is surfaced in the plan for re-slotting. */
 export async function addFixedBlock(

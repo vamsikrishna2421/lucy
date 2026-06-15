@@ -281,8 +281,8 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
       <View style={styles.homeHero}>
         <View style={styles.homeHeroGlow} />
         <Text style={styles.todayDate}>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
-        <Text style={styles.title}>{greetingForHour(new Date().getHours())}{userName ? `, ${userName}` : ''}</Text>
-        <Text style={styles.subtitle}>
+        <Text style={styles.title} numberOfLines={1}>{greetingForHour(new Date().getHours())}{userName ? `, ${userName}` : ''}</Text>
+        <Text style={styles.subtitle} numberOfLines={2}>
           {pendingTodos.length
             ? `Lucy is holding ${pendingTodos.length} open task${pendingTodos.length === 1 ? '' : 's'} for you.`
             : captures.length
@@ -2336,23 +2336,23 @@ function Card({ title, detail, privacy, onDelete }: { title: string; detail: str
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  homeHero: { position: 'relative', overflow: 'hidden', backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.borderSoft, borderRadius: 24, padding: 18, marginTop: 10, marginBottom: 12 },
-  homeHeroGlow: { position: 'absolute', right: -70, top: -80, width: 190, height: 190, borderRadius: 95, backgroundColor: 'rgba(255,140,66,0.12)' },
-  title: { fontSize: 27, letterSpacing: -0.4, fontWeight: '900', color: LUCY_COLORS.textDark, lineHeight: 33 },
-  subtitle: { color: LUCY_COLORS.textMuted, fontSize: 13.5, marginTop: 7, lineHeight: 20, maxWidth: 330 },
-  signalRow: { flexDirection: 'row', gap: 8, marginTop: 16 },
-  signalCard: { flex: 1, minHeight: 74, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 16, padding: 10, justifyContent: 'space-between' },
-  signalDot: { width: 7, height: 7, borderRadius: 4 },
-  signalValue: { color: LUCY_COLORS.textDark, fontSize: 22, fontWeight: '900', lineHeight: 25 },
-  signalLabel: { color: LUCY_COLORS.textSubtle, fontSize: 10.5, fontWeight: '700' },
-  viewNav: { flexDirection: 'row', padding: 4, borderRadius: 18, backgroundColor: LUCY_COLORS.surfaceSheet, borderWidth: 1, borderColor: LUCY_COLORS.borderSoft, marginBottom: 14 },
-  viewTab: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 14 },
+  homeHero: { position: 'relative', overflow: 'hidden', backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.borderSoft, borderRadius: 20, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 10, marginTop: 6, marginBottom: 8 },
+  homeHeroGlow: { position: 'absolute', right: -74, top: -92, width: 170, height: 170, borderRadius: 85, backgroundColor: 'rgba(255,140,66,0.10)' },
+  title: { fontSize: 22, letterSpacing: -0.2, fontWeight: '900', color: LUCY_COLORS.textDark, lineHeight: 26 },
+  subtitle: { color: LUCY_COLORS.textMuted, fontSize: 12.5, marginTop: 3, lineHeight: 17, maxWidth: 330 },
+  signalRow: { flexDirection: 'row', gap: 6, marginTop: 9 },
+  signalCard: { flex: 1, minHeight: 52, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 13, paddingHorizontal: 8, paddingVertical: 7, justifyContent: 'space-between' },
+  signalDot: { width: 6, height: 6, borderRadius: 3 },
+  signalValue: { color: LUCY_COLORS.textDark, fontSize: 18, fontWeight: '900', lineHeight: 21 },
+  signalLabel: { color: LUCY_COLORS.textSubtle, fontSize: 9.5, fontWeight: '700' },
+  viewNav: { flexDirection: 'row', padding: 3, borderRadius: 16, backgroundColor: LUCY_COLORS.surfaceSheet, borderWidth: 1, borderColor: LUCY_COLORS.borderSoft, marginBottom: 8 },
+  viewTab: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 13 },
   activeView: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border },
   viewText: { color: LUCY_COLORS.textMuted, fontWeight: '700', fontSize: 12 },
   activeViewText: { color: LUCY_COLORS.primaryGlow },
   content: { flex: 1 },
   tonight: { backgroundColor: LUCY_COLORS.surface, borderColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderRadius: 24, padding: 19, marginBottom: 16 },
-  todayDate: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '800', letterSpacing: 1, marginBottom: 7, textTransform: 'uppercase' },
+  todayDate: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '800', letterSpacing: 0.8, marginBottom: 3, textTransform: 'uppercase' },
   eyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
   tonightTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '700', marginTop: 9 },
   tonightDetail: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 7 },

@@ -1484,9 +1484,8 @@ function TimelineView({
                   }}
                   activeOpacity={0.8}
                 >
-                  {/* Time + spine */}
+                  {/* Spine */}
                   <View style={styles.tlLeft}>
-                    <Text style={styles.tlTime}>{timeStr}</Text>
                     <View style={styles.tlSpineWrap}>
                       <View style={[styles.tlDot, { backgroundColor: moodColor, shadowColor: moodColor }]} />
                       {!isLast ? <View style={styles.tlLine} /> : null}
@@ -1509,6 +1508,8 @@ function TimelineView({
                         const nt = noteTypeLabel(rawNoteType as import('../types/extraction').NoteType | undefined);
                         return (
                           <View style={styles.tlCardHeaderRow}>
+                            <Text style={styles.tlTimeChip}>{timeStr}</Text>
+
                             {/* Source glyph + label */}
                             <Text style={[styles.tlSourceBadge, { color: src.color }]}>
                               {src.glyph} {src.label}
@@ -1546,6 +1547,14 @@ function TimelineView({
 
                             {/* Privacy indicator — far right of header */}
                             <PrivacyBadge level={item.privacy_level} />
+
+                            <TouchableOpacity
+                              style={styles.tlMenuBtn}
+                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              onPress={() => setMenuTarget(item)}
+                            >
+                              <Text style={styles.tlMenuBtnText}>⋯</Text>
+                            </TouchableOpacity>
                           </View>
                         );
                       })()}
@@ -1556,9 +1565,9 @@ function TimelineView({
                           let pv: ProtectedValueLite[] = [];
                           try { pv = item.protected_values ? JSON.parse(item.protected_values) as ProtectedValueLite[] : []; } catch { /* ignore */ }
                           return pv.length > 0 ? (
-                            <ShieldedText style={styles.tlTitle} text={item.extracted_title} protectedValues={pv} numberOfLines={isExpanded ? undefined : 2} />
+                            <ShieldedText style={styles.tlTitle} text={item.extracted_title} protectedValues={pv} numberOfLines={isExpanded ? undefined : 1} />
                           ) : (
-                            <Text style={styles.tlTitle} numberOfLines={isExpanded ? undefined : 2}>
+                            <Text style={styles.tlTitle} numberOfLines={isExpanded ? undefined : 1}>
                               {protectedPreview(item.extracted_title)}
                             </Text>
                           );
@@ -1579,30 +1588,22 @@ function TimelineView({
                         const summaryText = getCardSummaryText(item, extraction);
                         if (!summaryText) return null;
 
-                        // Collapsed: show ~3 lines of summary (numberOfLines clips the rest).
-                        // Expanded: show full text.
+                        // Collapsed: show a compact preview. Expanded: show full text.
                         // We always show the summary; chips only appear after expansion.
                         let pv: ProtectedValueLite[] = [];
                         try { pv = item.protected_values ? JSON.parse(item.protected_values) as ProtectedValueLite[] : []; } catch { /* ignore */ }
                         return (
                           <View style={{ marginTop: 5 }}>
                             {pv.length > 0 ? (
-                              <ShieldedText style={styles.tlSummaryText} text={summaryText} protectedValues={pv} numberOfLines={isExpanded ? undefined : 3} />
+                              <ShieldedText style={styles.tlSummaryText} text={summaryText} protectedValues={pv} numberOfLines={isExpanded ? undefined : 2} />
                             ) : (
                               <Text
                                 style={styles.tlSummaryText}
-                                numberOfLines={isExpanded ? undefined : 3}
+                                numberOfLines={isExpanded ? undefined : 2}
                               >
                                 {summaryText}
                               </Text>
                             )}
-                            {/* Expand/collapse affordance */}
-                            {!isExpanded ? (
-                              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 }}>
-                                <View style={{ height: 1, flex: 1, backgroundColor: 'rgba(255,140,66,0.15)' }} />
-                                <Text style={{ color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', opacity: 0.7 }}>show more  ›</Text>
-                              </View>
-                            ) : null}
                           </View>
                         );
                       })()}
@@ -1620,26 +1621,14 @@ function TimelineView({
                       {/* ── LLM-detected action banner ── */}
                       {llmActions[item.id] ? (
                         <TouchableOpacity
-                          style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 10, paddingVertical: 7, paddingHorizontal: 10 }}
+                          style={styles.tlActionBanner}
                           onPress={() => setPendingAction(llmActions[item.id])}
                         >
-                          <Text style={{ color: LUCY_COLORS.primary, fontSize: 10, fontWeight: '800', letterSpacing: 0.8 }}>LUCY CAN DO THIS</Text>
-                          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 12, fontWeight: '700', flex: 1 }} numberOfLines={1}>{llmActions[item.id].displayText}</Text>
-                          <Text style={{ color: LUCY_COLORS.primary, fontSize: 13, fontWeight: '800' }}>›</Text>
+                          <Text style={styles.tlActionLabel}>CAN DO</Text>
+                          <Text style={styles.tlActionText} numberOfLines={1}>{llmActions[item.id].displayText}</Text>
+                          <Text style={styles.tlActionChevron}>›</Text>
                         </TouchableOpacity>
                       ) : null}
-
-                      {/* ── Footer: spacer + three-dot menu only ── */}
-                      <View style={styles.tlCardFooter}>
-                        <View style={{ flex: 1 }} />
-                        <TouchableOpacity
-                          style={styles.tlMenuBtn}
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          onPress={() => setMenuTarget(item)}
-                        >
-                          <Text style={styles.tlMenuBtnText}>⋯</Text>
-                        </TouchableOpacity>
-                      </View>
 
                     </View>
                   </View>
@@ -2357,56 +2346,50 @@ const styles = StyleSheet.create({
   tonightTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '700', marginTop: 9 },
   tonightDetail: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 7 },
   // Timeline
-  tlDateHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 16 },
-  tlDateLabel: { color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', flexShrink: 0 },
+  tlDateHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 13, marginBottom: 8 },
+  tlDateLabel: { color: LUCY_COLORS.primary, fontSize: 10.5, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase', flexShrink: 0 },
   tlDateLine: { flex: 1, height: 1, backgroundColor: LUCY_COLORS.divider },
-  tlRow: { flexDirection: 'row', gap: 0, marginBottom: 6, alignItems: 'flex-start' },
-  tlLeft: { width: 68, alignItems: 'flex-end', paddingRight: 12, paddingTop: 12 },
-  tlTime: { color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '600', marginBottom: 6 },
+  tlRow: { flexDirection: 'row', gap: 0, marginBottom: 5, alignItems: 'stretch' },
+  tlLeft: { width: 18, alignItems: 'center', paddingTop: 14 },
   tlSpineWrap: { alignItems: 'center', flex: 1 },
-  tlDot: { width: 10, height: 10, borderRadius: 5, shadowOpacity: 0.5, shadowRadius: 4, elevation: 3 },
-  tlLine: { width: 1.5, backgroundColor: LUCY_COLORS.divider, flex: 1, minHeight: 40 },
-  tlCard: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, borderTopColor: LUCY_COLORS.primaryLine, marginBottom: 0, flexDirection: 'row', overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.20, shadowRadius: 7, elevation: 3 },
+  tlDot: { width: 7, height: 7, borderRadius: 4, shadowOpacity: 0.45, shadowRadius: 3, elevation: 2 },
+  tlLine: { width: 1, backgroundColor: LUCY_COLORS.divider, flex: 1, minHeight: 36 },
+  tlCard: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, borderTopColor: LUCY_COLORS.primaryLine, marginBottom: 0, flexDirection: 'row', overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.16, shadowRadius: 5, elevation: 2 },
   tlCardExpanded: { borderColor: 'rgba(255,140,66,0.32)' },
-  tlAccent: { width: 3, borderRadius: 0 },
-  tlCardContent: { flex: 1, paddingTop: 12, paddingBottom: 12, paddingHorizontal: 13, gap: 0 },
+  tlAccent: { width: 2, borderRadius: 0 },
+  tlCardContent: { flex: 1, paddingTop: 8, paddingBottom: 9, paddingHorizontal: 10, gap: 0 },
 
   // Header row: source badge + type pill + privacy dot
-  tlCardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 5 },
-  tlSourceBadge: { fontSize: 10, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase' },
+  tlCardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  tlTimeChip: { color: LUCY_COLORS.textSubtle, fontSize: 10.5, fontWeight: '800', minWidth: 45 },
+  tlSourceBadge: { fontSize: 9.5, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' },
   tlTypePill: {
     borderRadius: 5,
     borderWidth: 1,
     borderColor: 'rgba(255,140,66,0.28)',
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
     paddingVertical: 1,
   },
-  tlTypePillText: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
-  tlShieldPillText: { fontSize: 13, marginRight: 6 },
+  tlTypePillText: { fontSize: 9.5, fontWeight: '800', letterSpacing: 1.05 },
+  tlShieldPillText: { fontSize: 12, marginRight: 3 },
 
   // Card body
-  tlTitle: { color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700', lineHeight: 20, marginBottom: 0 },
+  tlTitle: { color: LUCY_COLORS.textDark, fontSize: 13.5, fontWeight: '700', lineHeight: 18, marginBottom: 0 },
 
   // Summary text — the main readable body
   tlSummaryText: {
     color: LUCY_COLORS.textMuted,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12.5,
+    lineHeight: 17,
     fontWeight: '400',
   },
-  // "tap to expand" nudge — appears below the truncated summary
-  tlExpandHint: {
-    color: LUCY_COLORS.textSubtle,
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 3,
-    letterSpacing: 0.2,
-  },
-
   tlSnippet: { color: LUCY_COLORS.textMuted, fontSize: 12, lineHeight: 18 },
   tlKeyPoints: { marginTop: 8, gap: 3 },
   tlKeyPoint: { color: LUCY_COLORS.textDark, fontSize: 12, lineHeight: 18 },
-  tlCardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 6 },
+  tlActionBanner: { marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 9, paddingVertical: 6, paddingHorizontal: 8 },
+  tlActionLabel: { color: LUCY_COLORS.primary, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
+  tlActionText: { color: LUCY_COLORS.textDark, fontSize: 11.5, fontWeight: '700', flex: 1 },
+  tlActionChevron: { color: LUCY_COLORS.primary, fontSize: 12, fontWeight: '900' },
   otdCard: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: 'rgba(255,140,66,0.2)', borderRadius: 20, padding: 16, marginBottom: 14 },
   otdLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, color: LUCY_COLORS.primaryGlow, textTransform: 'uppercase', marginBottom: 6 },
   otdTitle: { fontSize: 15, fontWeight: '700', color: LUCY_COLORS.textDark, lineHeight: 22, marginBottom: 4 },

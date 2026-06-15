@@ -69,15 +69,22 @@ export async function setBlockLocked(db: SQLiteDatabase, id: number, locked: boo
   await db.runAsync('UPDATE scheduled_blocks SET locked = ? WHERE id = ?', locked ? 1 : 0, id);
 }
 
-/** Edit an event's title and/or start/end (used by the calendar edit sheet). */
+/** Edit an event's title and/or start/end (used by the calendar edit sheet). Returns true if the
+ *  block existed and at least one field was written (for honest API responses). */
 export async function updateScheduledBlock(
   db: SQLiteDatabase, id: number, fields: { title?: string; startMs?: number; endMs?: number },
-): Promise<void> {
-  if (typeof fields.title === 'string' && fields.title.trim()) await db.runAsync('UPDATE scheduled_blocks SET title = ? WHERE id = ?', fields.title.trim(), id);
+): Promise<boolean> {
+  let changed = false;
+  if (typeof fields.title === 'string' && fields.title.trim()) {
+    const r = await db.runAsync('UPDATE scheduled_blocks SET title = ? WHERE id = ?', fields.title.trim(), id);
+    changed = changed || r.changes > 0;
+  }
   const s = fields.startMs; const e = fields.endMs;
   if (Number.isFinite(s) && Number.isFinite(e) && (e as number) > (s as number)) {
-    await db.runAsync('UPDATE scheduled_blocks SET start_at = ?, end_at = ? WHERE id = ?', s as number, e as number, id);
+    const r = await db.runAsync('UPDATE scheduled_blocks SET start_at = ?, end_at = ? WHERE id = ?', s as number, e as number, id);
+    changed = changed || r.changes > 0;
   }
+  return changed;
 }
 
 export async function deleteScheduledBlock(db: SQLiteDatabase, id: number): Promise<void> {

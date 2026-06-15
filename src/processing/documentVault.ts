@@ -56,6 +56,13 @@ Be generous and specific with keywords — they power search. Return JSON only.`
 
 const VAULT_DIR = `${documentDirectory}docvault/`;
 
+/** A collision-proof filename. Date.now() alone collides when two uploads land in the same
+ *  millisecond (e.g. a multi-file share or rapid backfill), silently overwriting an earlier
+ *  doc's bytes — the root cause of "lost" vault images. A random suffix makes each unique. */
+function uniqueName(prefix: string, ext: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+}
+
 /** Last path segment of a stored file_path (handles old absolute paths and `/`+`\` separators). */
 function vaultBasename(stored: string): string {
   const cleaned = stored.replace(/[/\\]+$/, '');
@@ -176,7 +183,7 @@ export async function saveImageToVault(
       if (original?.base64 && !existing.orig_path) {
         try {
           await ensureVaultDir();
-          const ofn = `orig-${Date.now()}.${extFor(original.mime, originalName)}`;
+          const ofn = uniqueName('orig', extFor(original.mime, originalName));
           await writeAsStringAsync(`${VAULT_DIR}${ofn}`, original.base64, { encoding: EncodingType.Base64 });
           await db0.runAsync('UPDATE vault_items SET orig_path = ?, orig_mime = ? WHERE id = ?', ofn, original.mime || null, existing.id);
         } catch { /* keep the dup as-is if the write fails */ }
@@ -196,7 +203,7 @@ export async function saveImageToVault(
   // Persist the full image into the private vault dir. Store only the FILENAME in the DB (not the
   // absolute path) so it survives iOS container-UUID changes across rebuilds.
   await ensureVaultDir();
-  const fileName = `doc-${Date.now()}.jpg`;
+  const fileName = uniqueName('doc', 'jpg');
   const path = `${VAULT_DIR}${fileName}`;
   try { await writeAsStringAsync(path, base64, { encoding: EncodingType.Base64 }); }
   catch { return { item: null }; }
@@ -207,8 +214,7 @@ export async function saveImageToVault(
   let origMime: string | null = null;
   if (original?.base64) {
     try {
-      const oext = extFor(original.mime, originalName);
-      origFileName = `orig-${Date.now()}.${oext}`;
+      origFileName = uniqueName('orig', extFor(original.mime, originalName));
       await writeAsStringAsync(`${VAULT_DIR}${origFileName}`, original.base64, { encoding: EncodingType.Base64 });
       origMime = original.mime || null;
     } catch { origFileName = null; origMime = null; }
@@ -297,10 +303,12 @@ export async function refileVaultItem(db: SQLiteDatabase, id: number, bucket: st
   await db.runAsync('UPDATE vault_items SET bucket = ? WHERE id = ?', bucket.trim() || 'Other', id);
 }
 
-export async function deleteVaultItem(db: SQLiteDatabase, id: number): Promise<void> {
+export async function deleteVaultItem(db: SQLiteDatabase, id: number): Promise<boolean> {
   const row = await db.getFirstAsync<VaultItem>('SELECT file_path, orig_path FROM vault_items WHERE id = ?', id);
-  for (const stored of [row?.file_path, row?.orig_path]) {
+  if (!row) return false;
+  for (const stored of [row.file_path, row.orig_path]) {
     if (stored) for (const p of vaultPathCandidates(stored)) deleteAsync(p, { idempotent: true }).catch(() => {});
   }
-  await db.runAsync('DELETE FROM vault_items WHERE id = ?', id);
+  const res = await db.runAsync('DELETE FROM vault_items WHERE id = ?', id);
+  return res.changes > 0;
 }

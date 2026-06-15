@@ -118,8 +118,9 @@ export async function getInjectableLearnedFacts(db: SQLiteDatabase, limit = 12):
   return rows.map((r) => r.statement);
 }
 
-export async function deleteLearnedFact(db: SQLiteDatabase, id: number): Promise<void> {
-  await db.runAsync('DELETE FROM learned_facts WHERE id = ?', id);
+export async function deleteLearnedFact(db: SQLiteDatabase, id: number): Promise<boolean> {
+  const res = await db.runAsync('DELETE FROM learned_facts WHERE id = ?', id);
+  return res.changes > 0;
 }
 
 const CONF_RANK: Record<LearnedConfidence, number> = { confirmed: 0, supported: 1, emerging: 2 };

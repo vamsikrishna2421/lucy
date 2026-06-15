@@ -321,7 +321,8 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
     try {
       const db = await getDatabase();
       const { buildMemoryExport } = await import('../processing/memoryExport');
-      const exportData = await buildMemoryExport(db);
+      // Full backup → keep archived/soft-deleted rows so a restore is lossless.
+      const exportData = await buildMemoryExport(db, { includeArchived: true });
       const json = JSON.stringify(exportData, null, 2);
       // Write to a temp file and share. SDK 56: cacheDirectory/writeAsStringAsync
       // live in expo-file-system/legacy — the bare module returns undefined.

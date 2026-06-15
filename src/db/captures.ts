@@ -249,7 +249,12 @@ export async function resetCaptureForReprocess(db: SQLiteDatabase, id: number): 
  * captures, then soft-archives the capture itself (kept for audit, hidden everywhere).
  * Callers should run organizeMemory() afterwards to rebuild the knowledge projection.
  */
-export async function deleteCaptureCompletely(db: SQLiteDatabase, id: number, reason = 'deleted by user'): Promise<void> {
+export async function deleteCaptureCompletely(db: SQLiteDatabase, id: number, reason = 'deleted by user'): Promise<boolean> {
+  // Don't claim success for an id that isn't a live capture (honest API responses).
+  const exists = await db.getFirstAsync<{ id: number }>(
+    'SELECT id FROM captures WHERE id = ? AND archived_at IS NULL', id,
+  );
+  if (!exists) return false;
   const children = await db.getAllAsync<{ id: number }>(
     'SELECT id FROM captures WHERE parent_capture_id = ?', id,
   );
@@ -272,6 +277,7 @@ export async function deleteCaptureCompletely(db: SQLiteDatabase, id: number, re
       reason, id,
     );
   });
+  return true;
 }
 
 export async function resetInterruptedCaptures(db: SQLiteDatabase): Promise<void> {

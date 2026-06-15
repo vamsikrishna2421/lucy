@@ -34,28 +34,40 @@ export function normalizeCategory(description: string, category: string | null |
   return cat || 'other';
 }
 
+/** Parse a money string to a positive number, or null. Number('') is 0, so an amount with no
+ *  digits (or "$0") must NOT be stored as a real 0 — that's the source of junk amount=0 rows. */
+export function parseAmount(raw: string | null | undefined): number | null {
+  const cleaned = String(raw ?? '').replace(/[^0-9.-]/g, '');
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export async function insertExpense(
   db: SQLiteDatabase,
   captureId: number,
   expense: ExtractedExpense,
   privacy: PrivacyLevel,
 ): Promise<void> {
-  const parsed = Number(expense.amount.replace(/[^0-9.-]/g, ''));
   await db.runAsync(
     'INSERT INTO expenses (capture_id, amount, description, category, privacy_level) VALUES (?, ?, ?, ?, ?)',
     captureId,
-    Number.isFinite(parsed) ? parsed : null,
+    parseAmount(expense.amount),
     expense.description,
     normalizeCategory(expense.description, expense.category),
     privacy,
   );
 }
 
-/** Re-categorizes existing expenses still sitting in a generic "other" bucket. Returns count fixed. */
+/** Re-categorizes existing expenses still sitting in a generic "other" bucket AND nulls out junk
+ *  amount=0 rows (a real expense is never 0; a 0 means the amount was never parsed). Returns count fixed. */
 export async function recategorizeExpenses(db: SQLiteDatabase): Promise<number> {
   const rows = await db.getAllAsync<ExpenseRow>('SELECT * FROM expenses');
   let fixed = 0;
   for (const r of rows) {
+    if (r.amount != null && r.amount <= 0) {
+      await db.runAsync('UPDATE expenses SET amount = NULL WHERE id = ?', r.id); fixed++;
+    }
     const cat = (r.category || '').trim().toLowerCase();
     if (cat && !GENERIC_CATS.has(cat)) continue;
     const next = normalizeCategory(r.description, r.category);

@@ -21,8 +21,9 @@ export async function createProject(db: SQLiteDatabase, name: string, descriptio
   return res.lastInsertRowId;
 }
 
-export async function deleteProject(db: SQLiteDatabase, id: number): Promise<void> {
-  await db.runAsync('DELETE FROM projects WHERE id = ?', id);
+export async function deleteProject(db: SQLiteDatabase, id: number): Promise<boolean> {
+  const res = await db.runAsync('DELETE FROM projects WHERE id = ?', id);
+  return res.changes > 0;
 }
 
 export async function updateProject(db: SQLiteDatabase, id: number, fields: { name?: string; description?: string | null }): Promise<void> {

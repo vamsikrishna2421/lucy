@@ -114,21 +114,24 @@ export async function findPendingPaymentTodo(
   );
 }
 
-export async function deleteTodo(db: SQLiteDatabase, id: number): Promise<void> {
-  await db.runAsync('DELETE FROM todos WHERE id = ?', id);
+export async function deleteTodo(db: SQLiteDatabase, id: number): Promise<boolean> {
+  const res = await db.runAsync('DELETE FROM todos WHERE id = ?', id);
+  return res.changes > 0;
 }
 
-export async function markTodoCompleted(db: SQLiteDatabase, id: number): Promise<void> {
-  await db.runAsync('UPDATE todos SET status = ? WHERE id = ?', 'completed', id);
+export async function markTodoCompleted(db: SQLiteDatabase, id: number): Promise<boolean> {
+  const res = await db.runAsync('UPDATE todos SET status = ? WHERE id = ?', 'completed', id);
+  return res.changes > 0;
 }
 
-export async function archiveTodo(db: SQLiteDatabase, id: number, reason: string): Promise<void> {
-  await db.runAsync(
-    'UPDATE todos SET status = ?, archived_at = CURRENT_TIMESTAMP, archive_reason = ? WHERE id = ?',
+export async function archiveTodo(db: SQLiteDatabase, id: number, reason: string): Promise<boolean> {
+  const res = await db.runAsync(
+    "UPDATE todos SET status = ?, archived_at = CURRENT_TIMESTAMP, archive_reason = ? WHERE id = ? AND status != 'archived'",
     'archived',
     reason,
     id,
   );
+  return res.changes > 0;
 }
 
 // ─── Interactive reorganization helpers (used by LUCY's Ask-chat actions) ──────────

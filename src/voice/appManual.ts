@@ -191,7 +191,17 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
   - "Open my calendar." / "Show me my documents."
   - "How much did I spend on coffee this week?"
 
-## 11. Privacy & AI provider
+## 11. Developer tools — AI call log
+
+- **What it does:** Shows every AI call LUCY has made — the call type (EXTRACTION, ASK, REFLECTION,
+  etc.), which model was used, how long it took, and the full prompt + response. Useful for debugging
+  unexpected answers or checking what LUCY actually sent to the LLM.
+- **Where:** Phone — **Settings** (scroll to the very bottom, under the "DEVELOPER" section) → tap
+  **"AI call log"** → opens the **Dev Log** screen.
+- The last 100 calls are shown. Tap any row to expand and read the full request + response.
+- **Clear** button wipes the log; **Done** closes the screen.
+
+## 12. Privacy & AI provider
 
 - **On-device transcription:** all voice is transcribed **on the device** — audio is never uploaded.
 - **Privacy shield:** before anything is sent to a **remote** LLM, sensitive items (passwords and
@@ -222,6 +232,8 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
 - **"Is my data private?"** → Yes: on-device transcription, privacy shield before any remote call,
   and an optional fully on-device LLM.
 - **"How do I move to a new phone?"** → About You → Memory export, then import on the new device.
+- **"Where are the AI/LLM logs?"** → Settings → scroll to the bottom → DEVELOPER → "AI call log".
+- **"Where do I see what LUCY sent to the AI?"** → Settings → AI call log (bottom of Settings).
 `;
 
 export function manualSections(): Array<{ title: string; body: string }> {

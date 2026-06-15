@@ -292,7 +292,11 @@ export async function scheduleCapturedReminder(
   // they stacked in the notification tray creating spam.
   // Now: a single stableId that gets cancelled-and-replaced on each re-schedule,
   // so only ONE card ever lives in the system tray per reminder.
-  const stableId = `rem-${reminder.text.replace(/[^a-z0-9]/gi, '').slice(0, 16)}-${deadlineMs % 100000}`;
+  // Use the FULL deadline (minute granularity) so same-text reminders on DIFFERENT dates get
+  // DISTINCT ids. (Was `deadlineMs % 100000`, which collides for same-time reminders on different
+  // days — they differ by exact multiples of 86,400,000 ms, divisible by 100,000 — so 3 dated
+  // reminders shared one notification and only the last actually scheduled.)
+  const stableId = `rem-${reminder.text.replace(/[^a-z0-9]/gi, '').slice(0, 16)}-${Math.floor(deadlineMs / 60000)}`;
 
   // Cancel any previous push card for this reminder (prevents stacking)
   await Notifications.cancelScheduledNotificationAsync(stableId).catch(() => {});

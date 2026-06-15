@@ -69,6 +69,14 @@ class ConversationManager {
       const { getUserProfile, getOnDeviceSpeechLocale } = await import('../db/userProfile');
       this.locale = getOnDeviceSpeechLocale(await getUserProfile(await getDatabase()));
     } catch { /* default en-US */ }
+    try {
+      const supported = await ExpoSpeechRecognitionModule.getSupportedLocales({});
+      const installed = (supported?.installedLocales ?? []) as string[];
+      if (installed.length > 0 && !installed.includes(this.locale)) {
+        console.warn(`[Convo] Locale ${this.locale} not installed on-device; falling back to en-US`);
+        this.locale = 'en-US';
+      }
+    } catch { /* not critical */ }
 
     this.configureListeners();
     await speak("I'm listening — what's up?");

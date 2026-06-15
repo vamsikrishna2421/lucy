@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 47 (Codex calendar redesign) */
+/* LUCY web - premium - dashboard rev 48 (Codex face expressions) */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -109,7 +109,13 @@ nav{display:flex;flex-direction:column;gap:1px}
   background:radial-gradient(circle at 38% 30%,var(--orb-a),var(--orb-b) 42%,var(--orb-c) 78%,var(--orb-d));
   box-shadow:0 0 80px 14px var(--glow), inset -8px -12px 34px rgba(0,0,0,.38), inset 10px 12px 28px rgba(255,225,190,.45);
   animation:breathe 5s ease-in-out infinite;transition:transform .25s}
+.orb::before{content:"";position:absolute;inset:-12px;border:1px dashed rgba(255,160,90,.28);border-radius:50%;opacity:0;animation:orbOrbit 6s linear infinite;transition:.25s}
+.orb::after{content:"";position:absolute;top:26px;left:30px;width:38px;height:20px;border-radius:50%;background:rgba(255,245,225,.34);filter:blur(.3px);transform:rotate(-24deg)}
+@keyframes orbOrbit{to{transform:rotate(360deg)}}
 @keyframes breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-7px) scale(1.025)}}
+.orb.morning{--orb-a:#FFF0C4;--orb-b:#FFB86A;--orb-c:#D96722;--orb-d:#552411}
+.orb.evening{--orb-a:#FFD0A8;--orb-b:#F47B45;--orb-c:#933018;--orb-d:#35100A}
+.orb.night{--orb-a:#D8AA73;--orb-b:#9E642F;--orb-c:#5B321B;--orb-d:#1B0E09;animation:breathe 7s ease-in-out infinite}
 /* eyes: a closed sleepy arc layered with an open pupil; states cross-fade between them */
 .orb .eye{position:absolute;top:58px;width:24px;height:22px}
 .orb .eye.left{left:36px}.orb .eye.right{right:36px}
@@ -132,8 +138,18 @@ nav{display:flex;flex-direction:column;gap:1px}
 .orb.think{animation:orbBob 1.2s ease-in-out infinite}
 @keyframes orbBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 .orb.listen .eye .closed{opacity:0}.orb.listen .eye .open{opacity:1;transform:scale(1.15)}
-.orb.listen{animation:orbListen 1s ease-in-out infinite}
+.orb.listen{animation:orbListen 1s ease-in-out infinite}.orb.listen::before{opacity:1;animation-duration:1.4s}
 @keyframes orbListen{0%,100%{box-shadow:0 0 0 0 rgba(255,140,66,.45)}50%{box-shadow:0 0 0 16px rgba(255,140,66,0)}}
+.orb.organize .eye .closed{opacity:1;top:9px;width:25px;border-radius:4px;transform:rotate(-8deg)}
+.orb.organize .eye.right .closed{transform:rotate(8deg)}
+.orb.organize .eye .open{opacity:0}.orb.organize .mouth{opacity:1;width:18px;height:3px;border:0;background:var(--eye);border-radius:3px;bottom:42px}
+.orb.organize::before{opacity:1;animation-duration:2.2s}
+.orb.save .eye .closed{opacity:1;border-radius:0 0 24px 24px;border-top:3px solid var(--eye);border-bottom:0;top:6px}
+.orb.save .mouth{opacity:1;border-top:0;border-bottom:3px solid var(--eye);border-radius:0 0 22px 22px}
+.orb.read .eye .closed{opacity:1;top:7px;width:25px;border-radius:8px}
+.orb.read .eye .open{opacity:0}.orb.read .mouth{opacity:1;width:14px;height:2px;border:0;background:var(--eye);border-radius:2px;bottom:42px;opacity:.75}
+.orb.rest .eye .closed,.orb.night .eye .closed{border-radius:24px 24px 0 0;border-top:3px solid var(--eye);border-bottom:0;top:8px}
+.orb.rest .eye .open,.orb.night .eye .open{opacity:0}.orb.rest .mouth,.orb.night .mouth{opacity:1;width:10px;height:2px;border:0;background:var(--eye);border-radius:2px;bottom:42px}
 .orb.happy .eye .closed{opacity:1;border-radius:0 0 24px 24px;border-top:3px solid var(--eye);border-bottom:0;top:6px}
 .orb.happy .mouth{opacity:1;border-top:0;border-bottom:3px solid var(--eye);border-radius:0 0 22px 22px}
 .orb.celebrate .eye .closed{opacity:1;border-radius:0 0 24px 24px;border-top:3px solid var(--eye);border-bottom:0;top:6px}
@@ -469,6 +485,14 @@ let _orbMoodT=null;const ORB_MOODS=['peek','sad','think','listen','happy','celeb
 function setOrbMood(m,hold){const o=$('orb');if(!o)return;ORB_MOODS.forEach(x=>o.classList.remove(x));if(m)o.classList.add(m);
   const c=$('orbCloud');if(c){const txt={think:'thinking…',listen:'listening…',happy:'nice!',celebrate:'woohoo!',confused:'hmm?'}[m];if(txt)c.textContent=txt;}
   if(_orbMoodT)clearTimeout(_orbMoodT);if(hold)_orbMoodT=setTimeout(()=>{o.classList.remove(m);},hold);}
+const ORB_MOODS_V2=['peek','sad','think','listen','organize','save','read','rest','happy','celebrate','confused'];
+function orbPhase(){const h=new Date().getHours();return h>=22||h<6?'night':h<11?'morning':h>=18?'evening':'day';}
+function applyOrbAmbient(){const o=$('orb');if(!o)return;['morning','evening','night'].forEach(x=>o.classList.remove(x));const p=orbPhase();if(p!=='day')o.classList.add(p);
+  const c=$('orbCloud');if(c&&!_orbMoodT)c.textContent=p==='night'?'resting':p==='morning'?'morning':'Lucy';}
+setOrbMood=function(m,hold){const o=$('orb');if(!o)return;ORB_MOODS_V2.forEach(x=>o.classList.remove(x));if(m)o.classList.add(m);
+  const c=$('orbCloud');if(c){const txt={think:'thinking...',listen:'listening...',organize:'organizing',save:'saved',read:'reading',rest:'resting',happy:'nice',celebrate:'woohoo',confused:'hmm?'}[m];if(txt)c.textContent=txt;}
+  if(_orbMoodT)clearTimeout(_orbMoodT);if(hold)_orbMoodT=setTimeout(()=>{o.classList.remove(m);_orbMoodT=null;applyOrbAmbient();},hold);};
+const _lucyToastBase=toast;toast=function(m){_lucyToastBase(m);if(/✓|done|saved|scheduled|added|captured/i.test(m))setOrbMood('save',1600);};
 function toggleSide(o){$('side').classList.toggle('open',o);$('scrim').classList.toggle('on',o);}
 async function api(path,opts={}){opts.headers=Object.assign({'Content-Type':'application/json'},opts.headers||{});const r=await fetch(path,opts);const ct=r.headers.get('content-type')||'';return ct.includes('json')?r.json():r.text();}
 function clock(d){if(!d)return'';const t=new Date((d+'').replace(' ','T')+((d+'').includes('Z')?'':'Z'));if(isNaN(t))return'';return t.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});}
@@ -499,9 +523,10 @@ function renderNav(){$('nav').innerHTML=NAV.map(([k,ic,label])=>{
 function go(k){ROUTE=k;toggleSide(false);renderNav();draw();}
 
 async function load(silent){
+  if(!silent)setOrbMood('read');
   try{DATA=await api('/api/memory');}catch(e){if(!DATA)$('scrollarea').innerHTML='<div class="empty"><div class="big">⚠</div>Cannot reach LUCY. Keep the app open on your phone.</div>';return;}
   const nm=(DATA.profile&&DATA.profile.name)||'';$('pname').textContent=nm||'You';$('pavatar').textContent=(nm||'Y')[0].toUpperCase();
-  renderNav();if(!silent)draw();
+  renderNav();if(!silent){setOrbMood('organize',900);draw();}
 }
 function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offsetWidth;v.classList.add('fade');
   if(!DATA){v.innerHTML='';return;}
@@ -720,17 +745,20 @@ function empty(ic,t,s){return `<div class="empty"><div class="big">${ic}</div><d
 function autoGrow(t){t.style.height='auto';t.style.height=Math.min(t.scrollHeight,120)+'px';}
 function afterAsk(){const s=$('stream');if(s)s.scrollTop=s.scrollHeight;const q=$('q');if(q)q.focus();}
 function quick(t){$('q').value=t;sendAsk();}
-async function sendAsk(){const q=$('q');if(!q)return;const text=q.value.trim();if(!text||busy)return;q.value='';autoGrow(q);CHAT.push({role:'user',content:text});busy=true;draw();
+async function sendAsk(){const q=$('q');if(!q)return;const text=q.value.trim();if(!text||busy)return;q.value='';autoGrow(q);CHAT.push({role:'user',content:text});busy=true;draw();setOrbMood('think');
   const s=$('stream');s.insertAdjacentHTML('beforeend','<div class="typing"><i></i><i></i><i></i></div>');s.scrollTop=s.scrollHeight;
-  try{const hist=CHAT.slice(0,-1).map(m=>({role:m.role,content:m.content}));const r=await api('/api/ask',{method:'POST',body:JSON.stringify({question:text,history:hist})});CHAT.push({role:'lucy',content:r.reply||'…',sources:r.sources||[]});}
-  catch(e){CHAT.push({role:'lucy',content:'I could not reach the phone just now. Keep LUCY open and try again.'});}busy=false;draw();}
+  let ok=true;try{const hist=CHAT.slice(0,-1).map(m=>({role:m.role,content:m.content}));const r=await api('/api/ask',{method:'POST',body:JSON.stringify({question:text,history:hist})});CHAT.push({role:'lucy',content:r.reply||'…',sources:r.sources||[]});}
+  catch(e){ok=false;CHAT.push({role:'lucy',content:'I could not reach the phone just now. Keep LUCY open and try again.'});setOrbMood('confused',1800);}busy=false;if(ok)setOrbMood('save',900);draw();}
 
-async function addCapture(){const v=$('cap').value.trim();if(!v)return;$('cap').value='';toast('Captured ✓');await api('/api/capture',{method:'POST',body:JSON.stringify({text:v})});setTimeout(()=>load(),1600);}
+async function addCapture(){const v=$('cap').value.trim();if(!v)return;$('cap').value='';setOrbMood('save',900);toast('Captured ✓');await api('/api/capture',{method:'POST',body:JSON.stringify({text:v})});setOrbMood('organize',1600);setTimeout(()=>load(),1600);}
 /* Lucy orb moods: hover → peeks awake; leave → disappointed for 2s → back to sleep. */
 let orbTimer=null;
 function orbPeek(){const o=$('orb');if(!o)return;clearTimeout(orbTimer);o.classList.remove('sad');o.classList.add('peek');const c=$('orbCloud');if(c)c.textContent='oh, hi!';}
 function orbLeave(){const o=$('orb');if(!o)return;o.classList.remove('peek');o.classList.add('sad');const c=$('orbCloud');if(c)c.textContent='aww…';
   clearTimeout(orbTimer);orbTimer=setTimeout(()=>{o.classList.remove('sad');const cc=$('orbCloud');if(cc)cc.textContent='Lucy';},2000);}
+orbPeek=function(){const o=$('orb');if(!o)return;clearTimeout(orbTimer);ORB_MOODS_V2.forEach(x=>o.classList.remove(x));o.classList.add('peek');const c=$('orbCloud');if(c)c.textContent='oh, hi';};
+orbLeave=function(){const o=$('orb');if(!o)return;o.classList.remove('peek');o.classList.add(orbPhase()==='night'?'rest':'sad');const c=$('orbCloud');if(c)c.textContent=orbPhase()==='night'?'still here':'see you';
+  clearTimeout(orbTimer);orbTimer=setTimeout(()=>{o.classList.remove('sad','rest');applyOrbAmbient();},1800);};
 function pickFile(){$('fileInput').click();}
 /* Downscale to keep the base64 payload small over the LAN socket (max 1280px, JPEG q.72). */
 function downscale(file,max=1280,q=0.72){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{let w=img.width,h=img.height;if(w>max||h>max){const s=max/Math.max(w,h);w=Math.round(w*s);h=Math.round(h*s);}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);res(c.toDataURL('image/jpeg',q));URL.revokeObjectURL(img.src);};img.onerror=rej;img.src=URL.createObjectURL(file);});}
@@ -776,7 +804,7 @@ async function uploadOne(file){const isPdf=file.type==='application/pdf'||/\.pdf
     return r&&r.ok?{ok:true,title:r.title,bucket:r.bucket}:{ok:false,error:(r&&r.error)||'needs update'};}
   catch(e){return {ok:false,error:'unreachable'};}}
 /* Upload one or many files sequentially, with progress. */
-async function handleFiles(fileList){const files=Array.from(fileList||[]);if(!files.length)return;
+async function handleFiles(fileList){const files=Array.from(fileList||[]);if(!files.length)return;setOrbMood('read');
   PROD_TAB='library';if(ROUTE!=='productivity')go('productivity');
   let ok=0,dup=0,fail=0;
   for(let i=0;i<files.length;i++){
@@ -788,7 +816,7 @@ async function handleFiles(fileList){const files=Array.from(fileList||[]);if(!fi
     if(curView()==='library')await loadVault();
   }
   if(files.length>1)toast(`Filed ${ok}${dup?` · ${dup} duplicate${dup===1?'':'s'} skipped`:''}${fail?` · ${fail} failed`:''} ✓`);
-  setTimeout(()=>load(true),1500);}
+  setOrbMood(fail?'confused':'organize',1600);setTimeout(()=>load(true),1500);}
 async function handleFile(file){return handleFiles(file?[file]:[]);}
 /* ─── Library / Document Vault ─── */
 let VAULT=[],VBUCKET='All';
@@ -1204,6 +1232,7 @@ async function saveAbout(){const v=$('aboutbox').value;await api('/api/profile',
 async function sendFeedback(){const i=$('fb');const v=i.value.trim();if(!v)return;i.value='';await api('/api/feedback',{method:'POST',body:JSON.stringify({text:v})});toast('LUCY learned it ✓');await load();}
 async function reflect(){const b=$('reflectBtn');if(b){b.textContent='Reflecting…';b.disabled=true;}try{const r=await api('/api/reflect',{method:'POST',body:'{}'});toast('Learned '+(r.learned||0)+' things');}catch(e){toast('Reflection failed');}await load();}
 
+applyOrbAmbient();setInterval(applyOrbAmbient,60000);
 renderNav();load();
 setInterval(()=>{if(ROUTE!=='ask'&&!busy)load(true);},20000);
 </script>

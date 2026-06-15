@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 45 (Reminders in Workspace) ────────── */
+/* LUCY web - premium - dashboard rev 47 (Codex calendar redesign) */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -96,9 +96,9 @@ nav{display:flex;flex-direction:column;gap:1px}
 @media(max-width:1180px){.layout{grid-template-columns:1fr}.rail{display:none}}
 .date{color:var(--subtle);font-size:13px;font-weight:600;margin:8px 0 6px}
 .greet{display:flex;align-items:center;gap:12px;margin:0 0 4px}
-.greet h1{margin:0;font-size:30px;font-weight:760;letter-spacing:-.4px}
+.greet h1{margin:0;font-size:31px;font-weight:820;letter-spacing:0}
 .wave{color:var(--primary);font-size:20px}
-.subtle-line{color:var(--subtle);font-size:14.5px;margin-bottom:18px}
+.subtle-line{color:var(--muted);font-size:14.5px;margin-bottom:18px;max-width:720px}
 .maincol{position:relative}
 .side-orb{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:0 0 6px}
 .side-orb .orb-scale{transform:scale(.58);transform-origin:center;margin:-32px 0 -26px}
@@ -148,7 +148,7 @@ nav{display:flex;flex-direction:column;gap:1px}
 /* quick actions */
 .qa{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:26px}
 @media(max-width:640px){.qa{grid-template-columns:repeat(2,1fr)}}
-.qa-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:15px 16px;display:flex;
+.qa-card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:18px;padding:16px;display:flex;
   align-items:center;gap:12px;box-shadow:var(--shadow-sm);transition:.18s;text-align:left}
 .qa-card:hover{transform:translateY(-2px);border-color:var(--primary);box-shadow:var(--shadow)}
 .qa-ic{width:38px;height:38px;border-radius:11px;flex:0 0 38px;display:grid;place-items:center;font-size:17px;
@@ -181,7 +181,7 @@ nav{display:flex;flex-direction:column;gap:1px}
 
 /* ─── Right rail ─── */
 .rail{display:flex;flex-direction:column;gap:18px;position:sticky;top:0}
-.panel{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:18px;box-shadow:var(--shadow-sm)}
+.panel{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--shadow-sm)}
 .panel h3{margin:0 0 14px;font-size:14px;font-weight:700;display:flex;align-items:center}
 .panel h3 .dots{margin-left:auto;color:var(--faint);cursor:pointer}
 .focus-card{background:var(--primary-soft);border-radius:13px;padding:13px;display:flex;gap:11px;align-items:flex-start}
@@ -212,7 +212,7 @@ nav{display:flex;flex-direction:column;gap:1px}
 .stat{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow-sm)}
 .stat .n{font-size:28px;font-weight:760;line-height:1}.stat .l{color:var(--subtle);font-size:12.5px;margin-top:6px}
 .col{display:flex;flex-direction:column;gap:10px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start;box-shadow:var(--shadow-sm);transition:.15s}
+.card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-top-color:color-mix(in srgb,var(--primary) 32%,var(--border));border-radius:18px;padding:15px 16px;display:flex;gap:12px;align-items:flex-start;box-shadow:var(--shadow-sm);transition:.15s}
 .card:hover{border-color:var(--elevated)}
 .card .ttl{font-weight:600;font-size:14.5px}.card .sub{color:var(--subtle);font-size:13px;margin-top:3px}
 .card .when{color:var(--faint);font-size:11.5px;white-space:nowrap;margin-left:auto}
@@ -221,7 +221,7 @@ nav{display:flex;flex-direction:column;gap:1px}
 .pill.confirmed{background:rgba(74,222,128,.12);color:#4ADE80}.pill.supported{background:rgba(96,165,250,.12);color:#60A5FA}.pill.emerging{background:var(--raised);color:var(--subtle)}
 .ico-btn{background:var(--raised);border:1px solid var(--border);color:var(--subtle);border-radius:9px;width:30px;height:30px;display:grid;place-items:center;font-size:14px;transition:.15s;flex:0 0 30px}
 .ico-btn:hover{color:var(--text);border-color:var(--elevated)}.ico-btn.danger:hover{color:#FB7185;border-color:#FB7185}.ico-btn.good:hover{color:#4ADE80;border-color:#4ADE80}
-.empty{text-align:center;color:var(--faint);padding:50px 20px}.empty .big{font-size:32px;opacity:.5;margin-bottom:10px}
+.empty{text-align:center;color:var(--muted);padding:42px 22px;background:var(--card);border:1px solid var(--border);border-radius:20px}.empty .big{font-size:32px;opacity:.55;margin-bottom:10px}
 .cat{font-size:11px;color:var(--primary-deep);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-right:7px}
 [data-theme="dark"] .cat{color:var(--primary-glow)}
 .btn{background:linear-gradient(180deg,var(--primary-glow),var(--primary-deep));color:var(--on-primary);border:none;border-radius:30px;padding:11px 18px;font-weight:700;font-size:14px;box-shadow:var(--shadow-sm);transition:.15s;white-space:nowrap}
@@ -274,37 +274,112 @@ nav{display:flex;flex-direction:column;gap:1px}
 /* Workspace live tiles */
 .wtiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0}
 @media(max-width:760px){.wtiles{grid-template-columns:repeat(2,1fr)}}
-.wtile{text-align:left;border-radius:18px;padding:16px;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;transition:.15s;
+.wtile{text-align:left;border-radius:20px;padding:18px;min-height:138px;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;transition:.15s;
   background:linear-gradient(155deg,color-mix(in srgb,var(--tc) 24%,transparent),color-mix(in srgb,var(--tc) 9%,transparent));border:1px solid color-mix(in srgb,var(--tc) 45%,transparent)}
 .wtile:hover{transform:translateY(-2px);box-shadow:0 10px 26px color-mix(in srgb,var(--tc) 22%,transparent)}
 .wtile-top{display:flex;align-items:center;justify-content:space-between}
 .wtile-ic{font-size:22px}
-.wtile-count{font-size:30px;font-weight:800;color:var(--text);line-height:1;font-variant-numeric:tabular-nums}
-.wtile-name{font-weight:700;font-size:15px;color:var(--text);margin-top:10px}
-.wtile-status{font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wfull{width:100%;text-align:left;border-radius:16px;padding:16px;margin-bottom:14px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:.15s;
+.wtile-count{font-size:34px;font-weight:860;color:var(--text);line-height:1;font-variant-numeric:tabular-nums}
+.wtile-name{font-weight:760;font-size:15px;color:var(--text);margin-top:12px}
+.wtile-status{font-size:12px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wfull{width:100%;text-align:left;border-radius:20px;padding:17px;margin-bottom:14px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:.15s;
   background:linear-gradient(135deg,var(--primary-glow),var(--primary-deep));color:var(--on-primary);border:none}
 .wfull:hover{filter:brightness(1.06)}
 .wfull .subtle-line{color:rgba(255,255,255,.82)}
 .wfi{font-size:22px}.wchev{margin-left:auto;font-size:20px;opacity:.9}
-.wqa{background:var(--card);border:1px solid var(--border);color:var(--text);display:block}
+.wqa{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);color:var(--text);display:block;border-radius:18px}
 .wqgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 @media(max-width:640px){.wqgrid{grid-template-columns:repeat(2,1fr)}}
-.wqbtn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;border-radius:12px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s}
+.wqbtn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;border-radius:14px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:12.5px;font-weight:650;cursor:pointer;transition:.15s}
 .wqbtn:hover{border-color:var(--primary);color:var(--primary-deep)}
-/* Calendar two-column: event-setup + chat LEFT (60%), the calendar RIGHT (~40%) */
-.cal-2col{display:flex;gap:22px;align-items:flex-start;width:100%;max-width:100%;overflow:hidden}
-.cal-left{flex:1 1 0;min-width:0;overflow:hidden}
-.cal-right{flex:0 0 41%;min-width:0;overflow:hidden}
-.cal-2col .card{box-sizing:border-box;max-width:100%;overflow:hidden}
-.cal-2col input,.cal-2col select{box-sizing:border-box;max-width:100%}
-.ut-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)}
-.ut-row .ut-task{flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere}
+/* Calendar workspace */
+.cal-shell{display:flex;flex-direction:column;gap:18px}
+.cal-hero{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:24px;padding:22px;background:linear-gradient(140deg,color-mix(in srgb,var(--primary) 18%,var(--card)),var(--card2) 58%,var(--bg2));box-shadow:var(--shadow-sm)}
+.cal-hero::after{content:"";position:absolute;right:-80px;bottom:-110px;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle,var(--primary-soft),transparent 68%);opacity:.7;pointer-events:none}
+.cal-hero-top{position:relative;z-index:1;display:flex;align-items:flex-start;gap:16px}
+.cal-kicker{font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--primary-deep);margin-bottom:5px}
+[data-theme="dark"] .cal-kicker{color:var(--primary-glow)}
+.cal-hero-title{font-size:30px;line-height:1.05;font-weight:860;letter-spacing:0;margin:0}
+.cal-hero-sub{color:var(--muted);font-size:14px;margin-top:8px;max-width:760px}
+.cal-stats{position:relative;z-index:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:18px}
+.cal-stat{border:1px solid var(--border);background:rgba(255,255,255,.035);border-radius:16px;padding:12px 13px;min-width:0}
+.cal-stat .n{font-size:24px;font-weight:820;line-height:1;color:var(--text);font-variant-numeric:tabular-nums}
+.cal-stat .l{font-size:11.5px;color:var(--subtle);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-main{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:18px;align-items:start}
+.cal-left,.cal-right{min-width:0}
+.cal-action-stack{display:flex;flex-direction:column;gap:12px}
+.cal-card,.cal-board{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow-sm)}
+.cal-card{padding:16px;overflow:hidden}
+.cal-board{padding:18px;overflow:hidden}
+.cal-card-title{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:760;margin-bottom:6px}
+.cal-card-title .grow{flex:1}
+.cal-card-sub{color:var(--subtle);font-size:12.5px;line-height:1.45;margin-bottom:12px}
+.cal-input-row{display:flex;gap:8px;flex-wrap:wrap}
+.cal-input-row input,.cal-card input,.cal-card select{background:var(--bg2);border:1px solid var(--border);border-radius:12px;color:var(--text);padding:10px 11px;outline:none;font:inherit;min-width:0}
+.cal-input-row input:focus,.cal-card input:focus,.cal-card select:focus{border-color:var(--primary)}
+.cal-input-row .fill{flex:1 1 180px}
+.cal-input-row .short{width:84px}
+.cal-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.cal-field-grid label{font-size:11.5px;color:var(--muted)}
+.cal-field-grid input{width:100%;margin-top:5px}
+.cal-tags{display:flex;flex-wrap:wrap;gap:7px}
+.cal-tag{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--raised);color:var(--muted);border-radius:999px;padding:4px 9px;font-size:11.5px;font-weight:650}
+.cal-dot{width:8px;height:8px;border-radius:50%;background:var(--c,var(--primary));flex:0 0 8px}
+.cal-viewbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0}
+.cal-viewbar .grow{flex:1}
+.cal-range{font-size:13px;color:var(--muted);font-weight:650}
+.cal-board-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:6px}
+.cal-board-head h2{margin:0;font-size:19px;font-weight:820}
+.cal-board-head p{margin:3px 0 0;color:var(--subtle);font-size:12.5px}
+.cal-day-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:14px}
+.cal-day-chip{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:11px 12px}
+.cal-day-chip strong{display:block;font-size:21px;line-height:1;font-variant-numeric:tabular-nums}
+.cal-day-chip span{display:block;color:var(--subtle);font-size:11.5px;margin-top:5px}
+.ut-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--divider)}
+.ut-row:last-child{border-bottom:0}
+.ut-row .ut-task{flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;font-weight:600}
 .ut-row .btn{flex:none}
-.schat-msg{padding:8px 11px;border-radius:12px;margin-bottom:7px;font-size:13px;max-width:92%;word-break:break-word;line-height:1.4}
+.schat-box{margin-top:10px;max-height:220px;overflow:auto;display:flex;flex-direction:column}
+.schat-msg{padding:9px 12px;border-radius:14px;margin-bottom:7px;font-size:13px;max-width:92%;word-break:break-word;line-height:1.4}
 .schat-u{background:var(--primary-soft);color:var(--primary-deep);margin-left:auto}
-.schat-l{background:var(--card);border:1px solid var(--border);color:var(--text)}
-@media(max-width:900px){.cal-2col{flex-direction:column}.cal-right{flex:none;width:100%;order:-1}}
+.schat-l{background:var(--bg2);border:1px solid var(--border);color:var(--text)}
+.cal-day-group{margin-bottom:15px}
+.cal-day-label{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;margin:10px 0}
+.cal-day-label::after{content:"";height:1px;background:var(--divider);flex:1}
+.cal-event-row{display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-left:4px solid var(--ec,var(--primary));background:var(--bg2);border-radius:16px;padding:11px 13px;margin-bottom:8px}
+.cal-event-row.conflict{border-color:var(--error,#e2574c);border-left-color:var(--error,#e2574c)}
+.cal-event-row.habit{opacity:.78;border-style:dashed;border-left-color:var(--faint)}
+.cal-event-time{min-width:124px;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.cal-event-main{flex:1;min-width:0}
+.cal-event-title{font-weight:680;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-event-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.cal-grid-shell{display:flex;gap:0;overflow-x:auto;border:1px solid var(--border);border-radius:18px;padding:10px;background:var(--bg2)}
+.cal-time-labels{width:42px;flex:none;position:relative}
+.cal-time-label{position:absolute;font-size:10px;color:var(--faint)}
+.cal-grid-col{flex:1;min-width:88px}
+.cal-grid-day{height:24px;text-align:center;font-size:11px;color:var(--muted);font-weight:700}
+.cal-grid-day.today{color:var(--primary-deep)}
+[data-theme="dark"] .cal-grid-day.today{color:var(--primary-glow)}
+.cal-grid-track{position:relative;border-left:1px solid var(--border)}
+.cal-grid-line{position:absolute;left:0;right:0;height:1px;background:var(--border);opacity:.45}
+.cal-grid-event{position:absolute;left:3px;right:3px;border-left:3px solid var(--ec,var(--primary));background:color-mix(in srgb,var(--ec,var(--primary)) 18%,var(--card));border-radius:10px;padding:4px 6px;overflow:hidden;font-size:11px;cursor:pointer}
+.cal-grid-event.habit{cursor:default;opacity:.62;border-style:dashed}
+.cal-grid-event b{display:block;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-grid-event span{display:block;color:var(--muted);margin-top:1px}
+.cal-month-head,.cal-month-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}
+.cal-month-head{margin-bottom:7px}
+.cal-month-head div{text-align:center;font-size:11px;color:var(--muted);font-weight:800}
+.cal-month-cell{min-height:82px;border:1px solid var(--border);border-radius:14px;padding:8px;cursor:pointer;background:var(--bg2);transition:.15s}
+.cal-month-cell:hover{border-color:var(--primary)}
+.cal-month-cell.today{border-color:var(--primary);background:var(--primary-soft)}
+.cal-month-top{display:flex;align-items:center;justify-content:space-between}
+.cal-month-num{font-size:12px;font-weight:760;color:var(--text)}
+.cal-month-cell.today .cal-month-num{color:var(--primary-deep)}
+[data-theme="dark"] .cal-month-cell.today .cal-month-num{color:var(--primary-glow)}
+.cal-month-badge{background:var(--primary);color:var(--on-primary);border-radius:999px;font-size:10px;font-weight:800;padding:1px 6px}
+.cal-month-dots{margin-top:7px;line-height:1}
+@media(max-width:980px){.cal-main{grid-template-columns:1fr}.cal-right{order:-1}.cal-hero-title{font-size:26px}}
+@media(max-width:620px){.cal-stats,.cal-day-summary{grid-template-columns:1fr 1fr}.cal-main{gap:14px}.cal-hero{padding:18px}.cal-board{padding:14px}.cal-field-grid{grid-template-columns:1fr}.cal-event-row{align-items:flex-start;flex-direction:column}.cal-event-time{min-width:0}.cal-viewbar .grow{display:none}}
 [data-theme="dark"] .vchip.on{color:var(--primary-glow)}
 .vchip .vn{opacity:.6;font-size:11px}
 .vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
@@ -727,12 +802,63 @@ function toMin(s){const m=/^(\d{1,2}):(\d{2})$/.exec((s||'').trim());return m?(+
 function clock(ms){return new Date(ms).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});}
 function dayKey(ms){const d=new Date(ms);d.setHours(0,0,0,0);return d.getTime();}
 function dayLabel(ms){const t=dayKey(Date.now()),d=dayKey(ms);if(d===t)return'Today';if(d===t+86400000)return'Tomorrow';return new Date(ms).toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'});}
-function vCalendar(){return `<div class="greet"><h1 style="font-size:24px">Calendar</h1><div class="grow"></div></div>
-  <div class="subtle-line">LUCY keeps its own calendar on your device — no Google/Apple Calendar needed. It finds conflict-free time and never double-books work that can't run in parallel.</div>
-  <div id="calWrap"><div class="empty"><div class="big">◌</div>Loading your schedule…</div></div>`;}
+function vCalendar(){return `<div id="calWrap"><div class="empty"><div class="big">○</div>Loading your schedule...</div></div>`;}
 async function loadSchedule(){try{SCHED=await api('/api/schedule?days=42');}catch(e){SCHED=null;}if(curView()==='calendar')renderSchedule();}
 function renderSchedule(){const w=$('calWrap');if(!w)return;
   if(!SCHED||!SCHED.ok){w.innerHTML=empty('◷','Calendar needs the latest update','Relaunch LUCY so the scheduler ships, then reopen this page.');return;}
+  {
+  const av=SCHED.availability||{};
+  const today=dayKey(Date.now());
+  const todayList=blocksForDay(today).filter(o=>!o.habit).map(o=>o.b);
+  const focusMin=todayList.filter(b=>/focus|deep|write|code|study|design|review|plan|research/.test(((b.title||'')+' '+(b.resourceLabel||'')).toLowerCase())).reduce((a,b)=>a+(b.end-b.start)/60000,0);
+  const loose=(SCHED.unscheduled||[]).length;
+  const nextBlock=todayList.filter(b=>b.end>Date.now()).sort((a,b)=>a.start-b.start)[0];
+  const heroLine=nextBlock?`Next: ${esc(nextBlock.title||'Untitled')} at ${clock(nextBlock.start)}.`:(todayList.length?'The rest of today is open.':'Today is clear.');
+  const confirmBadge=av.confirmedAt?'':`<span class="cal-tag">inferred - please confirm</span>`;
+  const dstr=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const wdays=(av.workDays||[1,2,3,4,5]);
+  const habitWins=(av.protectedWindows||[]);
+  CSET=new Set();(SCHED.conflicts||[]).forEach(c=>{CSET.add(c.a);CSET.add(c.b);});
+  const hero=`<section class="cal-hero">
+    <div class="cal-hero-top"><div><div class="cal-kicker">Lucy calendar</div><h1 class="cal-hero-title">A calmer plan for today.</h1><div class="cal-hero-sub">${heroLine} Lucy keeps the day conflict-free on this device.</div></div><div class="grow"></div><button class="btn" onclick="planDay()">Plan my day</button></div>
+    <div class="cal-stats"><div class="cal-stat"><div class="n">${todayList.length}</div><div class="l">events today</div></div><div class="cal-stat"><div class="n">${(focusMin/60).toFixed(1)}h</div><div class="l">focus protected</div></div><div class="cal-stat"><div class="n">${loose}</div><div class="l">waiting to place</div></div></div>
+  </section>`;
+  const chatCard=`<section class="cal-card">
+    <div class="cal-card-title">Schedule with Lucy</div>
+    <div class="cal-card-sub">Ask for a move, a new block, or a full day plan.</div>
+    <div id="schat" class="schat-box"></div>
+    <div class="cal-input-row" style="margin-top:10px"><input id="schatIn" class="fill" placeholder="Tell Lucy what to schedule..." onkeydown="if(event.key==='Enter')schatSend()"/><button class="btn" onclick="schatSend()">Send</button></div>
+  </section>`;
+  const finder=`<section class="cal-card">
+    <div class="cal-card-title">Find time</div>
+    <div class="cal-card-sub">Lucy picks a slot that will not collide with the rest of your day.</div>
+    <div class="cal-input-row"><input id="calTask" class="fill" placeholder="write the doc, call dentist, gym" onkeydown="if(event.key==='Enter')suggestTime()"/><input id="calDur" class="short" type="number" placeholder="min"/><button class="btn" onclick="suggestTime()">Suggest</button></div>
+    <div id="calSug" style="margin-top:12px"></div>
+  </section>`;
+  const us=SCHED.unscheduled||[];
+  const unschedCard=`<section class="cal-card">
+    <div class="cal-card-title">Loose tasks ${us.length?`<span class="cal-tag">${us.length}</span>`:''}<span class="grow"></span><button class="btn sm" onclick="planDay()">Plan all</button></div>
+    ${us.length?`<div>${us.map(t=>`<div class="ut-row"><div class="ut-task">${esc(t.task)}</div><button class="btn ghost sm" onclick="suggestTodo(${t.id})">Find time</button></div>`).join('')}</div>`:`<div class="cal-card-sub">Nothing is waiting to be scheduled.</div>`}
+    <div id="planArea" style="margin-top:10px"></div>
+  </section>`;
+  const conf=(SCHED.conflicts&&SCHED.conflicts.length)?`<section class="cal-card" style="border-color:var(--error,#e2574c)"><div class="cal-card-title" style="color:var(--error,#e2574c)">${SCHED.conflicts.length} conflict${SCHED.conflicts.length>1?'s':''}</div>${SCHED.conflicts.map(c=>`<div class="cal-card-sub">"${esc(c.a)}" overlaps "${esc(c.b)}" and cannot run in parallel.</div>`).join('')}</section>`:'';
+  const fixedCard=`<section class="cal-card">
+    <div class="cal-card-title">Block busy time</div>
+    <div class="cal-card-sub">Add a meeting or appointment Lucy should schedule around.</div>
+    <div class="cal-input-row"><input id="fxTitle" class="fill" placeholder="Team meeting"/><input id="fxDate" type="date" value="${dstr}"/><input id="fxStart" type="time" value="14:00"/><input id="fxEnd" type="time" value="15:00"/><button class="btn" onclick="addFixed()">Block</button></div>
+  </section>`;
+  const habitsCard=`<section class="cal-card"><div class="cal-card-title">Habits <span class="cal-tag">work: ${wdays.map(d=>DOW[d]).join(' ')}</span></div><div class="cal-card-sub">Protected healthy windows Lucy keeps in mind.</div><div class="cal-tags">${habitWins.map(h=>`<span class="cal-tag">${esc(h.label)} ${hm(h.startMin)}-${hm(h.endMin)}</span>`).join('')||'<span class="cal-card-sub">None yet.</span>'}</div></section>`;
+  const avCard=`<section class="cal-card"><div class="cal-card-title">Availability ${confirmBadge}</div><div class="cal-field-grid">${avInput('Work start','avWS',av.workStartMin,540)}${avInput('Work end','avWE',av.workEndMin,1080)}${avInput('Sleep start','avSS',av.sleepStartMin,1410)}${avInput('Wake up','avSE',av.sleepEndMin,450)}<label>Buffer (min)<input id="avBuf" type="number" value="${av.bufferMin??10}"/></label></div><button class="btn sm" style="margin-top:12px" onclick="saveAvail()">Save availability</button></section>`;
+  const legend=`<div class="cal-tags">${CAL_CATS.map(([n,c])=>`<span class="cal-tag"><span class="cal-dot" style="--c:${c}"></span>${n}</span>`).join('')}</div>`;
+  const viewBar=`<div class="cal-viewbar"><div>${[['agenda','Agenda'],['day','Day'],['week','Week'],['month','Month']].map(([v,l])=>`<button class="vchip ${CAL_VIEW===v?'on':''}" onclick="setCalView('${v}')">${l}</button>`).join('')}</div><span class="grow"></span><button class="vchip" onclick="calNav(-1)">‹</button><button class="vchip" onclick="calToday()">Today</button><button class="vchip" onclick="calNav(1)">›</button><span class="cal-range">${calRangeLabel()}</span></div>`;
+  const body=CAL_VIEW==='month'?renderMonth():CAL_VIEW==='week'?renderGrid(weekDays()):CAL_VIEW==='day'?renderGrid([CAL_REF]):renderAgenda();
+  const calendarCol=`<section class="cal-board"><div class="cal-board-head"><div><h2>Your timetable</h2><p>Drag Lucy-scheduled blocks in day or week view to adjust them.</p></div></div>${myDayCard()}${viewBar}${legend}<div style="margin-top:12px">${body}</div></section>`;
+  const setupCol=`<div class="cal-action-stack">${chatCard}${conf}${finder}${unschedCard}${fixedCard}${habitsCard}${avCard}</div>`;
+  w.innerHTML=`<div class="cal-shell">${hero}<div class="cal-main"><div class="cal-left">${setupCol}</div><div class="cal-right">${calendarCol}</div></div></div>`;
+  renderSchat();
+  return;
+  }
   const av=SCHED.availability||{};
   const confirmBadge=av.confirmedAt?'':`<span class="kw" style="background:rgba(255,140,66,.16)">inferred — please confirm</span>`;
   // Availability card
@@ -823,42 +949,42 @@ function weekDays(){const dow=new Date(CAL_REF).getDay();const start=CAL_REF-dow
 function calRangeLabel(){const d=new Date(CAL_REF);if(CAL_VIEW==='month')return d.toLocaleDateString(undefined,{month:'long',year:'numeric'});if(CAL_VIEW==='week'){const w=weekDays();return new Date(w[0]).toLocaleDateString(undefined,{month:'short',day:'numeric'})+' – '+new Date(w[6]).toLocaleDateString(undefined,{month:'short',day:'numeric'});}if(CAL_VIEW==='day')return dayLabel(CAL_REF);return 'Next 7 days';}
 function renderAgenda(){const days=[0,1,2,3,4,5,6].map(i=>dayKey(Date.now())+i*86400000);
   const out=days.map(k=>{const all=blocksForDay(k);if(!all.length)return'';
-    return `<div style="margin-bottom:14px"><div style="font-weight:600;margin:6px 0;color:var(--muted)">${dayLabel(k)}</div>${all.map(o=>o.habit?habitRow(o.b):blockRow(o.b,CSET.has(o.b.title))).join('')}</div>`;}).join('');
-  return out||empty('◷','Nothing scheduled','Use “Find time” or “Plan my day”.');}
+    return `<div class="cal-day-group"><div class="cal-day-label">${dayLabel(k)}</div>${all.map(o=>o.habit?habitRow(o.b):blockRow(o.b,CSET.has(o.b.title))).join('')}</div>`;}).join('');
+  return out||empty('○','Nothing scheduled','Use Find time or Plan my day.');}
 function renderGrid(daysArr){const startMin=6*60,endMin=24*60,PX=0.8,H=(endMin-startMin)*PX;const hrs=[];for(let h=6;h<24;h++)hrs.push(h);
-  const labels=`<div style="width:42px;flex:none;position:relative;height:${H}px">${hrs.map(h=>`<div style="position:absolute;top:${(h*60-startMin)*PX}px;font-size:10px;color:var(--faint)">${(h%12)||12}${h<12?'a':'p'}</div>`).join('')}</div>`;
+  const labels=`<div class="cal-time-labels" style="height:${H}px">${hrs.map(h=>`<div class="cal-time-label" style="top:${(h*60-startMin)*PX}px">${(h%12)||12}${h<12?'a':'p'}</div>`).join('')}</div>`;
   const multi=daysArr.length>1;
   const cols=daysArr.map(k=>{const all=blocksForDay(k);
-    const lines=hrs.map(h=>`<div style="position:absolute;top:${(h*60-startMin)*PX}px;left:0;right:0;height:1px;background:var(--border);opacity:.5"></div>`).join('');
+    const lines=hrs.map(h=>`<div class="cal-grid-line" style="top:${(h*60-startMin)*PX}px"></div>`).join('');
     const evs=all.map(o=>{const b=o.b;const top=(localMin(b.start)-startMin)*PX;const ht=Math.max(16,((b.end-b.start)/60000)*PX);const c=o.habit?'#8a8a8a':catColor(b);
-      return `<div ${o.habit?'':`draggable="true" ondragstart="dragStart(event,${b.id})" onclick="openEditEvent(${b.id})"`} style="position:absolute;top:${Math.max(0,top)}px;left:2px;right:2px;height:${ht}px;background:${c}28;border-left:3px solid ${c};border-radius:7px;padding:2px 5px;overflow:hidden;font-size:11px;${o.habit?'opacity:.6;border-style:dashed':'cursor:pointer'}">
-        <div style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.title)}</div>${ht>30?`<div style="color:var(--muted)">${clock(b.start)}</div>`:''}</div>`;}).join('');
-    const hd=multi?`<div style="text-align:center;font-size:11px;color:${dayKey(k)===dayKey(Date.now())?'var(--primary)':'var(--muted)'};padding:3px 0;font-weight:600">${new Date(k).toLocaleDateString(undefined,{weekday:'short'})} ${new Date(k).getDate()}</div>`:'';
-    return `<div style="flex:1;min-width:${multi?'88px':'auto'}"><div>${hd}</div><div ondragover="event.preventDefault()" ondrop="dropAt(event,${k})" style="position:relative;height:${H}px;border-left:1px solid var(--border)">${lines}${evs}</div></div>`;}).join('');
-  return `<div style="display:flex;gap:0;overflow-x:auto;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--card)"><div>${multi?'<div style="height:24px"></div>':''}${labels}</div>${cols}</div>`;}
+      return `<div class="cal-grid-event ${o.habit?'habit':''}" ${o.habit?'':`draggable="true" ondragstart="dragStart(event,${b.id})" onclick="openEditEvent(${b.id})"`} style="--ec:${c};top:${Math.max(0,top)}px;height:${ht}px"><b>${esc(b.title)}</b>${ht>30?`<span>${clock(b.start)}</span>`:''}</div>`;}).join('');
+    const hd=multi?`<div class="cal-grid-day ${dayKey(k)===dayKey(Date.now())?'today':''}">${new Date(k).toLocaleDateString(undefined,{weekday:'short'})} ${new Date(k).getDate()}</div>`:'';
+    return `<div class="cal-grid-col"><div>${hd}</div><div class="cal-grid-track" ondragover="event.preventDefault()" ondrop="dropAt(event,${k})" style="height:${H}px">${lines}${evs}</div></div>`;}).join('');
+  return `<div class="cal-grid-shell"><div>${multi?'<div style="height:24px"></div>':''}${labels}</div>${cols}</div>`;}
 function renderMonth(){const ref=new Date(CAL_REF),y=ref.getFullYear(),m=ref.getMonth();const startDow=new Date(y,m,1).getDay();const dim=new Date(y,m+1,0).getDate();
   const cells=[];for(let i=0;i<startDow;i++)cells.push(null);for(let d=1;d<=dim;d++)cells.push(new Date(y,m,d,12).getTime());while(cells.length%7)cells.push(null);
   const dows=['S','M','T','W','T','F','S'];
-  const head=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:5px">${dows.map(d=>`<div style="text-align:center;font-size:11px;color:var(--muted)">${d}</div>`).join('')}</div>`;
-  const grid=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px">${cells.map(k=>{if(!k)return'<div></div>';const dk=dayKey(k);const all=blocksForDay(dk);const isT=dk===dayKey(Date.now());
+  const head=`<div class="cal-month-head">${dows.map(d=>`<div>${d}</div>`).join('')}</div>`;
+  const grid=`<div class="cal-month-grid">${cells.map(k=>{if(!k)return'<div></div>';const dk=dayKey(k);const all=blocksForDay(dk);const isT=dk===dayKey(Date.now());
     const cnt=all.filter(o=>!o.habit).length; // important scheduled tasks that day
-    const badge=cnt>0?`<span style="background:var(--primary);color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px">${cnt}</span>`:'';
-    const dots=all.slice(0,5).map(o=>`<span style="width:6px;height:6px;border-radius:50%;background:${o.habit?'#8a8a8a':catColor(o.b)};display:inline-block;margin:1px"></span>`).join('');
-    return `<div onclick="CAL_REF=${dk};setCalView('day')" style="min-height:74px;border:1px solid ${isT?'var(--primary)':'var(--border)'};border-radius:10px;padding:6px;cursor:pointer;background:var(--card)"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;font-weight:${isT?'700':'500'};color:${isT?'var(--primary)':'var(--text)'}">${new Date(k).getDate()}</span>${badge}</div><div style="margin-top:3px;line-height:1">${dots}</div></div>`;}).join('')}</div>`;
+    const badge=cnt>0?`<span class="cal-month-badge">${cnt}</span>`:'';
+    const dots=all.slice(0,5).map(o=>`<span class="cal-dot" style="--c:${o.habit?'#8a8a8a':catColor(o.b)}"></span>`).join('');
+    return `<div class="cal-month-cell ${isT?'today':''}" onclick="CAL_REF=${dk};setCalView('day')"><div class="cal-month-top"><span class="cal-month-num">${new Date(k).getDate()}</span>${badge}</div><div class="cal-month-dots">${dots}</div></div>`;}).join('')}</div>`;
   return head+grid;}
 function myDayCard(){const today=dayKey(Date.now());const list=blocksForDay(today).filter(o=>!o.habit).map(o=>o.b);
   const fMin=list.filter(b=>/focus|deep|write|code|study|design|review|plan|research/.test(((b.title||'')+(b.resourceLabel||'')).toLowerCase())).reduce((a,b)=>a+(b.end-b.start)/60000,0);
-  return `<div class="card" style="padding:14px 16px;margin-bottom:14px;display:flex;gap:22px">
-    <div><div style="font-size:22px;font-weight:800;color:var(--primary)">${list.length}</div><div class="subtle-line">events today</div></div>
-    <div><div style="font-size:22px;font-weight:800;color:var(--primary)">${(fMin/60).toFixed(1)}h</div><div class="subtle-line">focus time</div></div>
-    <div><div style="font-size:22px;font-weight:800;color:var(--primary)">${(SCHED.unscheduled||[]).length}</div><div class="subtle-line">to schedule</div></div></div>`;}
+  return `<div class="cal-day-summary">
+    <div class="cal-day-chip"><strong>${list.length}</strong><span>events today</span></div>
+    <div class="cal-day-chip"><strong>${(fMin/60).toFixed(1)}h</strong><span>focus time</span></div>
+    <div class="cal-day-chip"><strong>${(SCHED.unscheduled||[]).length}</strong><span>to schedule</span></div>
+  </div>`;}
 let DRAG_ID=null;
 function dragStart(e,id){DRAG_ID=id;try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text','x');}catch(x){}}
 function dropAt(e,dk){e.preventDefault();if(!DRAG_ID)return;const rect=e.currentTarget.getBoundingClientRect();const y=e.clientY-rect.top;const startMin=6*60,PX=0.8;let min=startMin+Math.round((y/PX)/15)*15;min=Math.max(0,Math.min(23*60+45,min));moveBlock(DRAG_ID,dk+min*60000);DRAG_ID=null;}
 async function moveBlock(id,startMs){toast('Moving…');try{const r=await api('/api/schedule/move',{method:'POST',body:JSON.stringify({id,startMs})});toast(r&&r.ok?(r.conflict?'Moved — but it now overlaps something':'Moved ✓'):'Could not move');}catch(e){toast('Move failed');}await loadSchedule();}
-function habitRow(b){return `<div class="card" style="padding:10px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;opacity:.78;border-style:dashed">
-    <div style="min-width:130px;color:var(--muted);font-size:13px">${clock(b.start)} – ${clock(b.end)}</div>
-    <div style="flex:1"><div style="font-weight:500">${esc(b.title)}</div><div style="margin-top:3px"><span class="kw" style="opacity:.7">✦ habit</span></div></div></div>`;}
+function habitRow(b){return `<div class="cal-event-row habit">
+    <div class="cal-event-time">${clock(b.start)} - ${clock(b.end)}</div>
+    <div class="cal-event-main"><div class="cal-event-title">${esc(b.title)}</div><div class="cal-event-meta"><span class="cal-tag">habit</span></div></div></div>`;}
 async function suggestTodo(id){const area=$('planArea');if(area)area.innerHTML='<div class="subtle-line">Finding time…</div>';
   let r;try{r=await api('/api/schedule/suggest',{method:'POST',body:JSON.stringify({todoId:id})});}catch(e){if(area)area.innerHTML='<div class="subtle-line">Could not reach LUCY.</div>';return;}
   if(!r||!r.ok||!r.suggestions||!r.suggestions.length){if(area)area.innerHTML='<div class="subtle-line">No conflict-free slot found for that task in your free time.</div>';return;}
@@ -881,15 +1007,15 @@ async function addFixed(){const title=($('fxTitle').value||'').trim()||'Busy';co
   const startMs=new Date(d+'T'+s).getTime(),endMs=new Date(d+'T'+e).getTime();
   if(!(endMs>startMs)){toast('End must be after start');return;}
   await api('/api/schedule/block',{method:'POST',body:JSON.stringify({title,startMs,endMs})});toast('Blocked ✓');$('fxTitle').value='';await loadSchedule();}
-function avInput(label,id,val,fallback){return `<label style="font-size:12px;color:var(--muted)">${label}<input id="${id}" type="time" value="${hm(val??fallback)}" style="width:100%;margin-top:4px;padding:6px;border-radius:9px;background:var(--card);border:1px solid var(--border);color:var(--text)"/></label>`;}
-function blockRow(b,conflicted){const isLucy=b.source==='scheduled';const tag=isLucy?'◷ LUCY':'📅 Calendar';
-  return `<div class="card" style="padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;border-left:4px solid ${catColor(b)}${conflicted?';border-color:var(--error,#e2574c)':''}">
-    <div style="min-width:130px;font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px">${clock(b.start)} – ${clock(b.end)}</div>
-    <div style="flex:1"><div style="font-weight:500">${esc(b.title||'Untitled')}${conflicted?' <span style="color:var(--error,#e2574c);font-size:12px">⚠ conflict</span>':''}</div>
-      <div style="margin-top:3px"><span class="kw">${esc(b.resourceLabel||'')}</span> <span class="kw" style="opacity:.7">${tag}</span></div></div>
+function avInput(label,id,val,fallback){return `<label>${label}<input id="${id}" type="time" value="${hm(val??fallback)}"/></label>`;}
+function blockRow(b,conflicted){const isLucy=b.source==='scheduled';const tag=isLucy?'Lucy':'Calendar';
+  return `<div class="cal-event-row ${conflicted?'conflict':''}" style="--ec:${catColor(b)}">
+    <div class="cal-event-time">${clock(b.start)} - ${clock(b.end)}</div>
+    <div class="cal-event-main"><div class="cal-event-title">${esc(b.title||'Untitled')}${conflicted?' <span style="color:var(--error,#e2574c);font-size:12px">conflict</span>':''}</div>
+      <div class="cal-event-meta"><span class="cal-tag">${esc(b.resourceLabel||'event')}</span><span class="cal-tag">${tag}</span></div></div>
     ${conflicted&&isLucy&&b.id?`<button class="btn ghost sm" onclick="rescheduleBlock(${b.id},'${esc((b.title||'').replace(/'/g,''))}')">Reschedule</button>`:''}
-    ${isLucy&&b.id?`<button class="btn ghost sm" onclick="openEditEvent(${b.id})">✎</button>`:''}
-    ${isLucy&&b.id?`<button class="btn ghost sm" onclick="cancelSched(${b.id})">✕</button>`:''}</div>`;}
+    ${isLucy&&b.id?`<button class="btn ghost sm" onclick="openEditEvent(${b.id})">Edit</button>`:''}
+    ${isLucy&&b.id?`<button class="btn ghost sm" onclick="cancelSched(${b.id})">Remove</button>`:''}</div>`;}
 function openEditEvent(id){const b=(SCHED.blocks||[]).find(x=>x.id===id);if(!b){toast('Open the event from the agenda');return;}
   const d=new Date(b.start-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
   const m=$('modal');m.classList.add('on');

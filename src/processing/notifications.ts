@@ -133,6 +133,9 @@ export async function initializeNotifications(): Promise<void> {
       vibrationPattern: [0],
       enableVibrate: false,
     });
+    // Max-importance channel for the persistent "nag" bursts (reminders + calendar events).
+    const { ensureAlarmChannel } = await import('./persistentReminders');
+    await ensureAlarmChannel();
   }
 }
 
@@ -265,64 +268,38 @@ export async function cancelProgressCheckIn(storedValue: string): Promise<void> 
   } catch { /* already cancelled or invalid */ }
 }
 
+/**
+ * Schedules a reminder as a PERSISTENT nag: a vibrating notification at the reminder time that keeps
+ * buzzing (every few minutes for ~30 min) until the user taps it. Keyed by the reminder ROW id so it
+ * can be reliably re-scheduled/cancelled (edit, delete) and so same-text reminders on different dates
+ * never collide. Returns the nag group key to store in reminders.notification_id.
+ */
 export async function scheduleCapturedReminder(
+  reminderId: number,
   reminder: ExtractedReminder,
   privacy: PrivacyLevel,
   originalInput: string,
 ): Promise<string | null> {
-  if (!reminder.time) {
-    return null;
-  }
+  if (!reminder.time) return null;
   const deadlineMs = new Date(reminder.time).getTime();
-  if (!Number.isFinite(deadlineMs)) {
-    return null;
-  }
-  if (!(await requestNotificationPermission())) {
-    return null;
-  }
+  if (!Number.isFinite(deadlineMs)) return null;
+  if (!(await requestNotificationPermission())) return null;
+
   const isSecret = containsCredentialSecret(`${originalInput}\n${reminder.text}`);
   const deadlineTime = new Date(deadlineMs).toLocaleTimeString(undefined, {
     hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
   });
-  const baseBody = isSecret ? 'Open LUCY to view a protected reminder.' : reminder.text;
-  const baseTitle = isSecret ? 'Protected reminder' : 'heads up —';
+  const title = isSecret ? 'Protected reminder' : 'heads up —';
+  const body = isSecret
+    ? 'Open LUCY to view a protected reminder.'
+    : `${reminder.text} · ${deadlineTime}`;
 
-  // ONE stable notification that updates as the deadline approaches.
-  // Previously scheduled 15min/10min/5min/at-time as 4 SEPARATE notifications —
-  // they stacked in the notification tray creating spam.
-  // Now: a single stableId that gets cancelled-and-replaced on each re-schedule,
-  // so only ONE card ever lives in the system tray per reminder.
-  // Use the FULL deadline (minute granularity) so same-text reminders on DIFFERENT dates get
-  // DISTINCT ids. (Was `deadlineMs % 100000`, which collides for same-time reminders on different
-  // days — they differ by exact multiples of 86,400,000 ms, divisible by 100,000 — so 3 dated
-  // reminders shared one notification and only the last actually scheduled.)
-  const stableId = `rem-${reminder.text.replace(/[^a-z0-9]/gi, '').slice(0, 16)}-${Math.floor(deadlineMs / 60000)}`;
-
-  // Cancel any previous push card for this reminder (prevents stacking)
-  await Notifications.cancelScheduledNotificationAsync(stableId).catch(() => {});
-  await Notifications.dismissNotificationAsync(stableId).catch(() => {});
-
-  // Schedule only the NEXT upcoming milestone
-  const milestones = [
-    { ms: 15 * 60 * 1000, label: '15 min' },
-    { ms:  5 * 60 * 1000, label:  '5 min' },
-    { ms:              0, label: '' },
-  ];
-
-  for (const { ms, label } of milestones) {
-    const fireAt = deadlineMs - ms;
-    if (fireAt <= Date.now() + 30_000) continue; // skip if <30s away
-    const title = label ? `${label} — ${deadlineTime}` : baseTitle;
-    const body  = isSecret ? baseBody : (ms === 0 ? `${baseBody} · ${deadlineTime}` : baseBody);
-    return Notifications.scheduleNotificationAsync({
-      identifier: stableId, // same id = updates, not stacks
-      content: {
-        title, body,
-        data: { kind: 'captured-reminder', privacy, text: isSecret ? null : reminder.text },
-        sound: ms === 0,
-      },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(fireAt), channelId: REMINDER_CHANNEL },
-    });
-  }
-  return null;
+  const { scheduleNag } = await import('./persistentReminders');
+  return scheduleNag({
+    key: `rem-${reminderId}`,
+    title,
+    body,
+    fireAtMs: deadlineMs,
+    data: { kind: 'captured-reminder', privacy, text: isSecret ? null : reminder.text },
+  });
 }

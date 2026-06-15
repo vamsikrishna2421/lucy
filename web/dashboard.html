@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 49 (Codex guide + section polish) */
+/* LUCY web - premium - dashboard rev 51 (voice fab + live redesign sync) */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -449,6 +449,25 @@ nav{display:flex;flex-direction:column;gap:1px}
 .modal-x{position:absolute;top:12px;right:12px;z-index:2;width:34px;height:34px;border-radius:50%;background:var(--card);border:1px solid var(--border);color:var(--muted);font-size:15px}
 .modal-x:hover{color:var(--text)}
 .modal-body{max-height:88vh;overflow:auto}
+.voice-fab{position:fixed;right:22px;bottom:22px;z-index:55;width:58px;height:58px;border-radius:50%;border:1px solid color-mix(in srgb,var(--primary) 42%,var(--border));background:linear-gradient(145deg,var(--primary),var(--primary-deep));color:var(--on-primary);box-shadow:0 16px 38px rgba(232,114,42,.34),var(--shadow-sm);display:grid;place-items:center;font-size:24px;cursor:pointer;transition:.18s}
+.voice-fab:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 20px 48px rgba(232,114,42,.42),var(--shadow)}
+.voice-fab.on{background:linear-gradient(145deg,var(--primary-glow),var(--primary));}
+.voice-fab-panel{position:fixed;right:22px;bottom:92px;z-index:54;width:min(380px,calc(100vw - 28px));background:color-mix(in srgb,var(--bg2) 92%,transparent);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow);backdrop-filter:blur(18px);padding:14px;display:none}
+.voice-fab-panel.on{display:block;animation:panelIn .18s ease-out}
+@keyframes panelIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+.voice-fab-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.voice-fab-orb{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 32% 24%,var(--primary-glow),var(--primary) 56%,var(--primary-deep));box-shadow:0 0 24px var(--glow);color:var(--on-primary);font-weight:900}
+.voice-fab-title{font-size:14px;font-weight:780;color:var(--text)}
+.voice-fab-sub{font-size:12px;color:var(--muted);line-height:1.35;margin-top:1px}
+.voice-fab-log{max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.voice-msg{padding:9px 11px;border-radius:14px;font-size:13px;line-height:1.38;max-width:92%}
+.voice-msg.user{align-self:flex-end;background:var(--primary-soft);color:var(--primary-deep)}
+[data-theme="dark"] .voice-msg.user{color:var(--primary-glow)}
+.voice-msg.lucy{align-self:flex-start;background:var(--card);border:1px solid var(--border);color:var(--text)}
+.voice-fab-input{display:flex;gap:8px;align-items:flex-end}
+.voice-fab-input textarea{flex:1;min-height:42px;max-height:100px;resize:none;background:var(--card);border:1px solid var(--border);border-radius:14px;color:var(--text);padding:11px 12px;font-family:inherit;font-size:13.5px;outline:none}
+.voice-fab-input textarea:focus{border-color:var(--primary)}
+@media(max-width:680px){.voice-fab{right:16px;bottom:18px}.voice-fab-panel{right:14px;bottom:88px}}
 .doc-detail{display:grid;grid-template-columns:1.4fr 1fr;max-height:88vh}
 @media(max-width:680px){.doc-detail{grid-template-columns:1fr}}
 .cap-detail{padding:24px 26px;max-width:680px}
@@ -506,10 +525,23 @@ nav{display:flex;flex-direction:column;gap:1px}
 </div>
 <div class="toast" id="toast"></div>
 <div class="modal" id="modal" onclick="if(event.target===this)closeModal()"><div class="modal-card"><button class="modal-x" onclick="closeModal()">✕</button><div class="modal-body" id="modalBody"></div></div></div>
+<section class="voice-fab-panel" id="voiceFabPanel" aria-live="polite">
+  <div class="voice-fab-head">
+    <div class="voice-fab-orb">L</div>
+    <div><div class="voice-fab-title">Talk to Lucy</div><div class="voice-fab-sub">Type the same thing you would say out loud.</div></div>
+    <span class="grow"></span><button class="ico-btn" onclick="go('ask');toggleVoiceFab(false)" title="Open Ask Lucy">↗</button>
+  </div>
+  <div class="voice-fab-log" id="voiceFabLog"></div>
+  <div class="voice-fab-input">
+    <textarea id="voiceFabInput" rows="1" placeholder="Schedule, remember, ask..." oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();voiceFabSend();}"></textarea>
+    <button class="btn" onclick="voiceFabSend()">Send</button>
+  </div>
+</section>
+<button class="voice-fab" id="voiceFabBtn" onclick="toggleVoiceFab()" title="Talk to Lucy">💬</button>
 <input type="file" id="fileInput" accept="image/*,application/pdf" multiple style="display:none" onchange="handleFiles(this.files);this.value='';"/>
 <input type="file" id="importInput" accept="application/json,.json" style="display:none" onchange="handleImport(this.files&&this.files[0]);this.value='';"/>
 <script>
-let DATA=null, ROUTE='home', CHAT=[], busy=false;
+let DATA=null, ROUTE='home', CHAT=[], busy=false, VOICEFAB=[];
 const $=id=>document.getElementById(id);
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);
@@ -530,8 +562,20 @@ setOrbMood=function(m,hold){const o=$('orb');if(!o)return;ORB_MOODS_V2.forEach(x
 const _lucyToastBase=toast;toast=function(m){_lucyToastBase(m);if(/✓|done|saved|scheduled|added|captured/i.test(m))setOrbMood('save',1600);};
 function toggleSide(o){$('side').classList.toggle('open',o);$('scrim').classList.toggle('on',o);}
 async function api(path,opts={}){opts.headers=Object.assign({'Content-Type':'application/json'},opts.headers||{});const r=await fetch(path,opts);const ct=r.headers.get('content-type')||'';return ct.includes('json')?r.json():r.text();}
-function clock(d){if(!d)return'';const t=new Date((d+'').replace(' ','T')+((d+'').includes('Z')?'':'Z'));if(isNaN(t))return'';return t.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});}
-function fmt(d){if(!d)return'';const t=new Date((d+'').replace(' ','T')+((d+'').includes('Z')?'':'Z'));if(isNaN(t))return'';const s=(Date.now()-t)/1000;if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';if(s<604800)return Math.floor(s/86400)+'d ago';return t.toLocaleDateString(undefined,{month:'short',day:'numeric'});}
+function toggleVoiceFab(force){const p=$('voiceFabPanel'),b=$('voiceFabBtn');if(!p||!b)return;const on=force==null?!p.classList.contains('on'):!!force;p.classList.toggle('on',on);b.classList.toggle('on',on);if(on){renderVoiceFab();setOrbMood('listen');setTimeout(()=>$('voiceFabInput')&&$('voiceFabInput').focus(),40);}else setOrbMood(null);}
+function renderVoiceFab(){const el=$('voiceFabLog');if(!el)return;el.innerHTML=VOICEFAB.length?VOICEFAB.map(m=>`<div class="voice-msg ${m.role==='user'?'user':'lucy'}">${esc(m.text)}</div>`).join(''):'<div class="subtle-line">Quick command bridge for the web companion. Voice itself lives in the phone app.</div>';el.scrollTop=el.scrollHeight;}
+function voiceNav(n){const map={capture:'home',home:'home',timeline:'timeline',ask:'ask',calendar:'productivity',tasks:'tasks',focus:'tasks',reminders:'reminders',documents:'library',vault:'library',resources:'links',links:'links',projects:'projects',brain:'brain',people:'people',health:'health',money:'money',about:'about',guide:'guide'};const k=map[String(n||'').toLowerCase()];if(k)go(k);}
+async function voiceFabSend(){const i=$('voiceFabInput');const t=(i&&i.value||'').trim();if(!t)return;i.value='';autoGrow(i);VOICEFAB.push({role:'user',text:t});VOICEFAB.push({role:'lucy',text:'Thinking...'});renderVoiceFab();setOrbMood('think');
+  let r;try{r=await api('/api/voice',{method:'POST',body:JSON.stringify({text:t,context:curView()})});}catch(e){r=null;}
+  VOICEFAB.pop();VOICEFAB.push({role:'lucy',text:(r&&r.speak)||'I could not reach Lucy just now. Keep the app open and try again.'});renderVoiceFab();setOrbMood(r&&r.ok!==false?'save':'confused',1600);
+  if(r&&r.navigate)voiceNav(r.navigate);if(r&&/scheduled|added|remembered|saved|moved|deleted|done/i.test(r.speak||''))setTimeout(()=>load(true),500);}
+/* ONE timestamp parser for the whole app. Accepts ms-epoch numbers (calendar blocks) AND DATETIME
+   strings from SQLite ("YYYY-MM-DD HH:MM:SS", stored UTC, no zone) or ISO strings. The old code had
+   two clashing clock() definitions + several places that parsed SQLite strings as LOCAL time — the
+   "mixed created_at formats" bug (times off by the UTC offset, or Invalid Date in Safari). */
+function parseTs(v){if(v==null||v==='')return NaN;if(typeof v==='number')return v;const s=(''+v).trim();if(/^\d{10,}$/.test(s))return +s;const hasTz=/[zZ]$|[+-]\d\d:?\d\d$/.test(s);return new Date(s.replace(' ','T')+(hasTz?'':'Z')).getTime();}
+function clock(v){const t=parseTs(v);if(isNaN(t))return'';return new Date(t).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});}
+function fmt(v){const t=parseTs(v);if(isNaN(t))return'';const s=(Date.now()-t)/1000;if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';if(s<604800)return Math.floor(s/86400)+'d ago';return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric'});}
 const pending=t=>(t.status!=='completed'&&!t.archived_at);
 function capText(c){return c.extracted_title||(c.raw_transcript||'').slice(0,80)||'Untitled';}
 /* Clean body: pull the Summary value from structured_text, skipping Title:/Type: labels
@@ -593,6 +637,9 @@ function vGuide(){return `<div class="page guide-page">
     <div class="section-card"><h3>What Lucy is</h3><p>A passive second brain that watches for useful structure in what you save.</p></div>
     <div class="section-card"><h3>Why it feels different</h3><p>It prioritizes memory, timing, and context instead of chat-first conversation.</p></div>
     <div class="section-card"><h3>How to get value</h3><p>Capture quickly, review the workspace, let Lucy schedule the open loops.</p></div>
+    <div class="section-card"><h3>Talk naturally</h3><p>The phone app can listen, think, speak back, and keep the conversation going until you end it.</p></div>
+    <div class="section-card"><h3>Hey Lucy</h3><p>The optional foreground wake word opens the conversation loop when the app is active.</p></div>
+    <div class="section-card"><h3>Reminder bursts</h3><p>Important reminders keep nudging for a short window until you acknowledge them.</p></div>
   </section>
   <div id="guideWrap"><div class="empty"><div class="big">○</div>Loading the manual...</div></div>
 </div>`;}
@@ -654,10 +701,10 @@ async function newProject(){const name=prompt('Project name:');if(!name||!name.t
   await api('/api/projects',{method:'POST',body:JSON.stringify({name:name.trim(),description})});toast('Project created ✓');await loadProjects();}
 async function delProject(id){if(!confirm('Delete this project?'))return;await api('/api/projects/'+id,{method:'DELETE'});toast('Deleted');await loadProjects();}
 /* ─── REMINDERS (Workspace → Reminders) ─── */
-function vReminders(){const rem=((DATA&&DATA.reminders)||[]).filter(r=>r.status==='pending').sort((a,b)=>{const ta=a.remind_at?new Date(a.remind_at).getTime():Infinity,tb=b.remind_at?new Date(b.remind_at).getTime():Infinity;return ta-tb;});
+function vReminders(){const rem=((DATA&&DATA.reminders)||[]).filter(r=>r.status==='pending').sort((a,b)=>{const ta=a.remind_at?parseTs(a.remind_at):Infinity,tb=b.remind_at?parseTs(b.remind_at):Infinity;return ta-tb;});
   let body;
   if(!rem.length)body=empty('⏰','No reminders yet','Reminders you set — or that LUCY extracts from your notes — show up here.');
-  else body=rem.map(r=>{const ms=r.remind_at?new Date(r.remind_at).getTime():null;const at=ms?(dayLabel(ms)+' · '+clock(ms)):'No time set';const u=(r.urgency||'medium');const col=u==='high'?'#FB7185':u==='low'?'#8AA4FF':'#38BDF8';
+  else body=rem.map(r=>{const ms=r.remind_at?parseTs(r.remind_at):null;const at=(ms&&!isNaN(ms))?(dayLabel(ms)+' · '+clock(ms)):'No time set';const u=(r.urgency||'medium');const col=u==='high'?'#FB7185':u==='low'?'#8AA4FF':'#38BDF8';
     return `<div class="card" style="padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;border-left:4px solid ${col}">
       <div style="flex:1;min-width:0"><div style="font-weight:500;word-break:break-word">${esc(r.text||'Reminder')}</div><div class="subtle-line" style="margin-top:3px">⏰ ${esc(at)}${u==='high'?' · high priority':''}</div></div>
       <button class="btn ghost sm" onclick="delReminder(${r.id})">✕</button></div>`;}).join('');
@@ -728,7 +775,7 @@ function computeHealth(){const m=(DATA.mood_entries||[]);const recent=m.slice(0,
   const label=s>=80?'Great':s>=60?'Good':s>=40?'Okay':'Low';
   const bars=[];const byDay={};const now=new Date();
   for(let i=6;i>=0;i--){const day=new Date(now);day.setDate(now.getDate()-i);const key=day.toDateString();byDay[key]=0;}
-  m.forEach(x=>{const k=new Date((x.created_at+'').replace(' ','T')).toDateString();if(k in byDay)byDay[k]+= (x.tone==='positive'?3:x.tone==='neutral'?2:1);});
+  m.forEach(x=>{const ts=parseTs(x.created_at);if(isNaN(ts))return;const k=new Date(ts).toDateString();if(k in byDay)byDay[k]+= (x.tone==='positive'?3:x.tone==='neutral'?2:1);});
   const vals=Object.values(byDay);const mx=Math.max(1,...vals);Object.values(byDay).forEach(v=>bars.push(Math.round(v/mx*100)));
   return {score:s,label,note:s>=60?'Keep going strong':'Be kind to yourself',bars};}
 function ring(score){const c=2*Math.PI*30;const off=c*(1-score/100);return `<div class="ring"><svg width="74" height="74"><circle cx="37" cy="37" r="30" fill="none" stroke="var(--divider)" stroke-width="7"/><circle cx="37" cy="37" r="30" fill="none" stroke="var(--primary)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg><div class="val">${score}</div></div>`;}
@@ -760,7 +807,7 @@ function vHealth(){const m=(DATA.mood_entries||[]);const h0=computeHealth();cons
   for(const[t,e]of Object.entries(tones))h+=`<button class="btn ghost" onclick="logMood('${t}')" style="font-size:20px">${e}<span style="font-size:12px;margin-left:6px">${t}</span></button>`;h+='</div>';
   if(m.length){h+=`<div class="sec"><h2>Recent</h2></div><div class="col">`+m.slice(0,20).map(x=>`<div class="card"><span style="font-size:20px">${tones[x.tone]||'😐'}</span><div style="flex:1"><span class="ttl">${esc(x.tone)}</span><div class="sub">energy: ${esc(x.energy||'medium')}</div></div><span class="when">${fmt(x.created_at)}</span></div>`).join('')+'</div>';}
   return h+'</div>';}
-function vMoney(){const ex=(DATA.expenses||[]);const now=new Date();const month=ex.filter(e=>{const t=new Date((e.created_at+'').replace(' ','T'));return t.getMonth()===now.getMonth()&&t.getFullYear()===now.getFullYear();});
+function vMoney(){const ex=(DATA.expenses||[]);const now=new Date();const month=ex.filter(e=>{const ts=parseTs(e.created_at);if(isNaN(ts))return false;const t=new Date(ts);return t.getMonth()===now.getMonth()&&t.getFullYear()===now.getFullYear();});
   const total=month.reduce((s,e)=>s+(+e.amount||0),0);const cats={};month.forEach(e=>{cats[e.category||'other']=(cats[e.category||'other']||0)+(+e.amount||0);});const catArr=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
   let h=`<div class="page"><section class="page-hero compact"><div class="page-kicker">Money</div><h1 class="page-title">Spending Lucy found in your notes.</h1><div class="page-sub">Receipts and expense mentions become a simple monthly view.</div><div class="hero-metrics">${heroMetric(total.toFixed(2),'this month')}${heroMetric(month.length,'payments')}${heroMetric(ex.length,'all time')}</div></section>`;
   if(catArr.length){h+=`<div class="sec"><h2>By category</h2></div><div class="col">`+catArr.map(([c,v])=>{const pct=total?Math.round(v/total*100):0;return `<div class="card" style="flex-direction:column;gap:6px"><div style="display:flex;width:100%"><span class="ttl">${esc(c)}</span><span class="when" style="margin-left:auto">${v.toFixed(2)} · ${pct}%</span></div><div style="height:6px;background:var(--raised);border-radius:6px;width:100%;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--primary)"></div></div></div>`;}).join('')+'</div>';}
@@ -876,7 +923,7 @@ const CAL_CATS=[['Health','#22C55E',/walk|gym|run|workout|yoga|exercise|meditat/
 function catColor(b){const s=((b&&b.title||'')+' '+(b&&b.resourceLabel||'')).toLowerCase();for(const[,c,re]of CAL_CATS)if(re.test(s))return c;return'#8AA4FF';}
 function hm(min){const h=Math.floor(min/60),m=min%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');}
 function toMin(s){const m=/^(\d{1,2}):(\d{2})$/.exec((s||'').trim());return m?(+m[1])*60+(+m[2]):null;}
-function clock(ms){return new Date(ms).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});}
+/* clock() is defined once near the top (parseTs-based) — handles both ms numbers and DATETIME strings. */
 function dayKey(ms){const d=new Date(ms);d.setHours(0,0,0,0);return d.getTime();}
 function dayLabel(ms){const t=dayKey(Date.now()),d=dayKey(ms);if(d===t)return'Today';if(d===t+86400000)return'Tomorrow';return new Date(ms).toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'});}
 function vCalendar(){return `<div id="calWrap"><div class="empty"><div class="big">○</div>Loading your schedule...</div></div>`;}
@@ -1180,7 +1227,13 @@ function parseQuery(q){const toks=q.toLowerCase().replace(/,/g,' ').split(/\s+/)
   }
   return {pos,neg};}
 /* Whole-word match so short tokens (us, id, ind) don't match inside "status"/"video". */
-function hit(hay,s){return new RegExp('\\b'+s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i').test(hay);}
+/* Bounded Levenshtein (early-out past tolerance) — for fuzzy name/OCR matching. */
+function levLE(a,b,max){const la=a.length,lb=b.length;if(Math.abs(la-lb)>max)return false;let prev=Array.from({length:lb+1},(_,i)=>i);for(let i=1;i<=la;i++){const cur=[i];let best=i;for(let j=1;j<=lb;j++){const cost=a[i-1]===b[j-1]?0:1;const v=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+cost);cur[j]=v;if(v<best)best=v;}if(best>max)return false;prev=cur;}return prev[lb]<=max;}
+function hit(hay,s){if(new RegExp('\\b'+s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i').test(hay))return true;
+  // Fuzzy fallback for longer tokens so OCR/spelling variants still match (e.g. "vaakruthi" vs
+  // "vakruthi"). Short tokens are left exact — fuzzing them yields too many false hits.
+  if(s.length<5)return false;const tol=s.length>=8?2:1;
+  return hay.split(/[^a-z0-9]+/).some(w=>w.length>=4&&levLE(w,s,tol));}
 function smartMatch(item,q){const hay=((item.title||'')+' '+(item.description||'')+' '+(item.bucket||'')+' '+(item.keywords||'')).toLowerCase();
   const {pos,neg}=parseQuery(q);
   if(neg.some(t=>expand(t).some(s=>hit(hay,s))))return false; // an excluded term is present
@@ -1279,7 +1332,7 @@ async function delFact(id){await api('/api/fact/'+id,{method:'DELETE'});toast('R
 async function logMood(tone){await api('/api/mood',{method:'POST',body:JSON.stringify({tone})});toast('Mood logged ♥');await load();}
 async function saveAbout(){const v=$('aboutbox').value;await api('/api/profile',{method:'POST',body:JSON.stringify({about:v})});toast('Saved ✓');await load(true);}
 async function sendFeedback(){const i=$('fb');const v=i.value.trim();if(!v)return;i.value='';await api('/api/feedback',{method:'POST',body:JSON.stringify({text:v})});toast('LUCY learned it ✓');await load();}
-async function reflect(){const b=$('reflectBtn');if(b){b.textContent='Reflecting…';b.disabled=true;}try{const r=await api('/api/reflect',{method:'POST',body:'{}'});toast('Learned '+(r.learned||0)+' things');}catch(e){toast('Reflection failed');}await load();}
+async function reflect(){const b=$('reflectBtn');if(b){b.textContent='Reflecting…';b.disabled=true;}try{const r=await api('/api/reflect',{method:'POST',body:'{}'});const n=(r&&r.learned)||0;toast(n>0?('Learned '+n+' new thing'+(n===1?'':'s')+' ✓'):'Nothing new to learn right now');}catch(e){toast('Reflection failed');}await load();}
 
 applyOrbAmbient();setInterval(applyOrbAmbient,60000);
 renderNav();load();

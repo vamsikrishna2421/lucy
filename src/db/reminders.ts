@@ -67,11 +67,13 @@ export async function listReminders(db: SQLiteDatabase): Promise<ReminderRow[]> 
   );
 }
 
-export async function archiveReminder(db: SQLiteDatabase, id: number, reason: string): Promise<void> {
-  await db.runAsync(
-    'UPDATE reminders SET status = ?, archived_at = CURRENT_TIMESTAMP, archive_reason = ? WHERE id = ?',
+/** Returns true only if a pending reminder with this id actually existed (for honest API responses). */
+export async function archiveReminder(db: SQLiteDatabase, id: number, reason: string): Promise<boolean> {
+  const res = await db.runAsync(
+    "UPDATE reminders SET status = ?, archived_at = CURRENT_TIMESTAMP, archive_reason = ? WHERE id = ? AND status != 'archived'",
     'archived',
     reason,
     id,
   );
+  return res.changes > 0;
 }

@@ -225,18 +225,20 @@ export async function organizeMemory(db: SQLiteDatabase, trigger: string): Promi
         privacyLevel: 'private' as const,
         observedAt: context.answered_at,
       })),
-    ...questionIntents.map((intent) => ({
-      key: `question-intent:${intent.intent}`,
-      type: 'requested_view',
-      title: intent.intent === 'today_pending_tasks_and_deadlines'
-        ? 'Useful view: today tasks and deadlines'
-        : 'Useful view requested',
-      detail: `Asked ${intent.count} time${intent.count === 1 ? '' : 's'}. LUCY can prioritize this view during future organization.`,
-      evidenceCount: intent.count,
-      confidence: confidenceFromEvidence(intent.count),
-      privacyLevel: 'private' as const,
-      observedAt: intent.last_asked_at,
-    })),
+    ...questionIntents
+      // Drop low-value boilerplate: a generic "Useful view requested" with no specific meaning is
+      // noise. Only surface a recognized, named view, and only once it's a real pattern (asked 2+).
+      .filter((intent) => intent.intent === 'today_pending_tasks_and_deadlines' && intent.count >= 2)
+      .map((intent) => ({
+        key: `question-intent:${intent.intent}`,
+        type: 'requested_view',
+        title: 'Useful view: today tasks and deadlines',
+        detail: `Asked ${intent.count} times. LUCY can prioritize this view during future organization.`,
+        evidenceCount: intent.count,
+        confidence: confidenceFromEvidence(intent.count),
+        privacyLevel: 'private' as const,
+        observedAt: intent.last_asked_at,
+      })),
   ];
   // Dedup by key (topic-keyed clarifications can collide) — keep the latest, avoid UNIQUE clashes.
   const uniqueInsights = Array.from(new Map(insights.map((i) => [i.key, i])).values());

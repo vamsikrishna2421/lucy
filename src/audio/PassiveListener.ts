@@ -7,6 +7,7 @@ import {
 import * as Crypto from 'expo-crypto';
 import { config } from '../config';
 import { enqueueTranscript } from '../processing/extract';
+import { acquireMic, releaseMic } from './micCoordinator';
 
 export type ListeningStatus = 'off' | 'starting' | 'listening' | 'stopping';
 
@@ -79,6 +80,8 @@ class PassiveListenerManager {
 
   async start(options?: { meetingMode?: boolean; quickCapture?: boolean }): Promise<void> {
     if (this.state.status !== 'off') return;
+    // Take the single recognizer so the wake-word listener yields while Listen mode runs.
+    acquireMic('listen');
     // quickCapture (hold-to-talk) behaves like a titleless meeting: accumulate only.
     this.meetingMode = (options?.meetingMode ?? false) || (options?.quickCapture ?? false);
     this.patch({ status: 'starting', wordsHeard: 0, sessionStartedAt: Date.now(), recordingSeconds: 0, quickCapture: options?.quickCapture ?? false });
@@ -92,6 +95,7 @@ class PassiveListenerManager {
       if (!perm.granted) {
         this.patch({ status: 'off', sessionStartedAt: null, noMicAccess: true });
         this.active = false;
+        releaseMic('listen');
         const { Alert } = await import('react-native');
         Alert.alert(
           'Microphone access needed',
@@ -257,6 +261,7 @@ class PassiveListenerManager {
     this.clearDeviceSpeechListeners();
     this.patch({ status: 'off', mode: 'none', sessionStartedAt: null });
     this.sessionId = null;
+    releaseMic('listen');
     const { Alert } = await import('react-native');
     Alert.alert('On-device transcription unavailable', message, [{ text: 'OK' }]);
   }
@@ -297,6 +302,7 @@ class PassiveListenerManager {
     try { await setAudioModeAsync({ allowsRecording: false }); } catch { /* non-fatal */ }
     this.sessionId = null;
     this.patch({ status: 'off', sessionStartedAt: null, quickCapture: false });
+    releaseMic('listen');
   }
 }
 

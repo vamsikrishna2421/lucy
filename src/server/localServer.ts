@@ -167,11 +167,12 @@ async function route(req: ParsedRequest): Promise<string> {
       }
       const id = Number(payload.id);
       if (!id) return json(400, { error: 'Missing id' });
-      if (action === 'complete') await todos.archiveTodo(db, id, 'completed from laptop');
-      else if (action === 'delete') await todos.deleteTodo(db, id);
-      else if (action === 'snooze') await db.runAsync("UPDATE todos SET urgency = 'low' WHERE id = ?", id);
+      let done = false;
+      if (action === 'complete') done = await todos.archiveTodo(db, id, 'completed from laptop');
+      else if (action === 'delete') done = await todos.deleteTodo(db, id);
+      else if (action === 'snooze') done = (await db.runAsync("UPDATE todos SET urgency = 'low' WHERE id = ?", id)).changes > 0;
       else return json(400, { error: 'Bad action' });
-      return json(200, { ok: true });
+      return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such task' }) });
     }
     // Ask Lucy — the full chat, from the laptop. Runs the same answer engine the app uses
     // (memory retrieval + shielded LLM), so answers are grounded in on-device memory.
@@ -287,8 +288,10 @@ async function route(req: ParsedRequest): Promise<string> {
     }
     if (req.method === 'DELETE' && req.path.startsWith('/api/vault/')) {
       const id = Number(req.path.split('/').pop());
-      if (id) { const { deleteVaultItem } = await import('../processing/documentVault'); await deleteVaultItem(db, id); }
-      return json(200, { ok: true });
+      if (!id) return json(400, { error: 'Missing id' });
+      const { deleteVaultItem } = await import('../processing/documentVault');
+      const done = await deleteVaultItem(db, id);
+      return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such document' }) });
     }
     // Edit the "about you" profile blurb from the laptop.
     if (req.method === 'POST' && req.path === '/api/profile') {
@@ -336,12 +339,14 @@ async function route(req: ParsedRequest): Promise<string> {
     }
     if (req.method === 'DELETE' && req.path.startsWith('/api/capture/')) {
       const id = Number(req.path.split('/').pop());
-      if (id) {
-        const { deleteCaptureCompletely, purgeCaptureDerivedData } = await import('../db/captures');
-        if (req.query.hard === '1') { await purgeCaptureDerivedData(db, id); await db.runAsync('DELETE FROM captures WHERE id = ?', id); }
-        else await deleteCaptureCompletely(db, id);
-      }
-      return json(200, { ok: true });
+      if (!id) return json(400, { error: 'Missing id' });
+      const { deleteCaptureCompletely, purgeCaptureDerivedData } = await import('../db/captures');
+      let done = false;
+      if (req.query.hard === '1') {
+        await purgeCaptureDerivedData(db, id);
+        done = (await db.runAsync('DELETE FROM captures WHERE id = ?', id)).changes > 0;
+      } else done = await deleteCaptureCompletely(db, id);
+      return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such capture' }) });
     }
     // One-shot data cleanup + graph rebuild (junk people, stale open loops). For maintenance.
     if (req.method === 'POST' && req.path === '/api/cleanup') {
@@ -362,8 +367,10 @@ async function route(req: ParsedRequest): Promise<string> {
     }
     if (req.method === 'DELETE' && req.path.startsWith('/api/fact/')) {
       const id = Number(req.path.split('/').pop());
-      if (id) { const { deleteLearnedFact } = await import('../db/learnedProfile'); await deleteLearnedFact(db, id); }
-      return json(200, { ok: true });
+      if (!id) return json(400, { error: 'Missing id' });
+      const { deleteLearnedFact } = await import('../db/learnedProfile');
+      const done = await deleteLearnedFact(db, id);
+      return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such fact' }) });
     }
 
     // ─── Resources / Links (Productivity → Links) ─────────────────────────────
@@ -377,8 +384,11 @@ async function route(req: ParsedRequest): Promise<string> {
     // ─── Reminders ─────────────────────────────────────────────────────────────
     if (req.method === 'DELETE' && req.path.startsWith('/api/reminder/')) {
       const id = Number(req.path.split('/').pop());
-      if (id) { const { archiveReminder } = await import('../db/reminders'); await archiveReminder(db, id, 'removed from Workspace'); }
-      return json(200, { ok: true });
+      if (!id) return json(400, { error: 'Missing id' });
+      const { archiveReminder } = await import('../db/reminders');
+      const done = await archiveReminder(db, id, 'removed from Workspace');
+      if (done) { const { cancelNag } = await import('../processing/persistentReminders'); await cancelNag(`rem-${id}`); }
+      return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such reminder' }) });
     }
 
     // ─── Guide / manual (What is LUCY? · Features · Detailed manual) ───────────
@@ -442,8 +452,10 @@ async function route(req: ParsedRequest): Promise<string> {
     }
     if (req.method === 'DELETE' && req.path.startsWith('/api/projects/')) {
       const id = Number(req.path.split('/').pop());
-      if (id) { const { deleteProject } = await import('../db/projects'); await deleteProject(db, id); }
-      return json(200, { ok: true });
+      if (!id) return json(400, { error: 'Missing id' });
+      const { deleteProject } = await import('../db/projects');
+      const done = await deleteProject(db, id);
+      return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such project' }) });
     }
 
     // ─── Intelligent Calendar ─────────────────────────────────────────────────
@@ -548,12 +560,13 @@ async function route(req: ParsedRequest): Promise<string> {
       const id = Number(payload.id);
       if (!id) return json(400, { error: 'Missing id' });
       const { updateScheduledBlock } = await import('../db/schedule');
-      await updateScheduledBlock(db, id, {
+      const done = await updateScheduledBlock(db, id, {
         title: typeof payload.title === 'string' ? payload.title : undefined,
         startMs: payload.startMs != null ? Number(payload.startMs) : undefined,
         endMs: payload.endMs != null ? Number(payload.endMs) : undefined,
       });
-      return json(200, { ok: true });
+      if (done) { const { rescheduleBlockNag } = await import('../scheduling'); await rescheduleBlockNag(db, id); }
+      return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such event' }) });
     }
     if (req.method === 'POST' && req.path === '/api/schedule/move') {
       const { moveScheduledBlockTo } = await import('../scheduling');

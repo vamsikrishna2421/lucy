@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/lucy-eye-icon.png",
     "userInterfaceStyle": "dark",
-    "runtimeVersion": "2",
+    "runtimeVersion": "1",
     "updates": {
       "url": "https://u.expo.dev/1a602e40-067f-4786-a9a6-26c6cc15bda6",
       "requestHeaders": { "expo-channel-name": "production" },

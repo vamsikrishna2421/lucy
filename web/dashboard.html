@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 50 (guide, sections, face overlay) */
+/* LUCY web - premium - dashboard rev 51 (voice fab + live redesign sync) */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -449,6 +449,25 @@ nav{display:flex;flex-direction:column;gap:1px}
 .modal-x{position:absolute;top:12px;right:12px;z-index:2;width:34px;height:34px;border-radius:50%;background:var(--card);border:1px solid var(--border);color:var(--muted);font-size:15px}
 .modal-x:hover{color:var(--text)}
 .modal-body{max-height:88vh;overflow:auto}
+.voice-fab{position:fixed;right:22px;bottom:22px;z-index:55;width:58px;height:58px;border-radius:50%;border:1px solid color-mix(in srgb,var(--primary) 42%,var(--border));background:linear-gradient(145deg,var(--primary),var(--primary-deep));color:var(--on-primary);box-shadow:0 16px 38px rgba(232,114,42,.34),var(--shadow-sm);display:grid;place-items:center;font-size:24px;cursor:pointer;transition:.18s}
+.voice-fab:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 20px 48px rgba(232,114,42,.42),var(--shadow)}
+.voice-fab.on{background:linear-gradient(145deg,var(--primary-glow),var(--primary));}
+.voice-fab-panel{position:fixed;right:22px;bottom:92px;z-index:54;width:min(380px,calc(100vw - 28px));background:color-mix(in srgb,var(--bg2) 92%,transparent);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow);backdrop-filter:blur(18px);padding:14px;display:none}
+.voice-fab-panel.on{display:block;animation:panelIn .18s ease-out}
+@keyframes panelIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+.voice-fab-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.voice-fab-orb{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 32% 24%,var(--primary-glow),var(--primary) 56%,var(--primary-deep));box-shadow:0 0 24px var(--glow);color:var(--on-primary);font-weight:900}
+.voice-fab-title{font-size:14px;font-weight:780;color:var(--text)}
+.voice-fab-sub{font-size:12px;color:var(--muted);line-height:1.35;margin-top:1px}
+.voice-fab-log{max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.voice-msg{padding:9px 11px;border-radius:14px;font-size:13px;line-height:1.38;max-width:92%}
+.voice-msg.user{align-self:flex-end;background:var(--primary-soft);color:var(--primary-deep)}
+[data-theme="dark"] .voice-msg.user{color:var(--primary-glow)}
+.voice-msg.lucy{align-self:flex-start;background:var(--card);border:1px solid var(--border);color:var(--text)}
+.voice-fab-input{display:flex;gap:8px;align-items:flex-end}
+.voice-fab-input textarea{flex:1;min-height:42px;max-height:100px;resize:none;background:var(--card);border:1px solid var(--border);border-radius:14px;color:var(--text);padding:11px 12px;font-family:inherit;font-size:13.5px;outline:none}
+.voice-fab-input textarea:focus{border-color:var(--primary)}
+@media(max-width:680px){.voice-fab{right:16px;bottom:18px}.voice-fab-panel{right:14px;bottom:88px}}
 .doc-detail{display:grid;grid-template-columns:1.4fr 1fr;max-height:88vh}
 @media(max-width:680px){.doc-detail{grid-template-columns:1fr}}
 .cap-detail{padding:24px 26px;max-width:680px}
@@ -506,10 +525,23 @@ nav{display:flex;flex-direction:column;gap:1px}
 </div>
 <div class="toast" id="toast"></div>
 <div class="modal" id="modal" onclick="if(event.target===this)closeModal()"><div class="modal-card"><button class="modal-x" onclick="closeModal()">✕</button><div class="modal-body" id="modalBody"></div></div></div>
+<section class="voice-fab-panel" id="voiceFabPanel" aria-live="polite">
+  <div class="voice-fab-head">
+    <div class="voice-fab-orb">L</div>
+    <div><div class="voice-fab-title">Talk to Lucy</div><div class="voice-fab-sub">Type the same thing you would say out loud.</div></div>
+    <span class="grow"></span><button class="ico-btn" onclick="go('ask');toggleVoiceFab(false)" title="Open Ask Lucy">↗</button>
+  </div>
+  <div class="voice-fab-log" id="voiceFabLog"></div>
+  <div class="voice-fab-input">
+    <textarea id="voiceFabInput" rows="1" placeholder="Schedule, remember, ask..." oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();voiceFabSend();}"></textarea>
+    <button class="btn" onclick="voiceFabSend()">Send</button>
+  </div>
+</section>
+<button class="voice-fab" id="voiceFabBtn" onclick="toggleVoiceFab()" title="Talk to Lucy">💬</button>
 <input type="file" id="fileInput" accept="image/*,application/pdf" multiple style="display:none" onchange="handleFiles(this.files);this.value='';"/>
 <input type="file" id="importInput" accept="application/json,.json" style="display:none" onchange="handleImport(this.files&&this.files[0]);this.value='';"/>
 <script>
-let DATA=null, ROUTE='home', CHAT=[], busy=false;
+let DATA=null, ROUTE='home', CHAT=[], busy=false, VOICEFAB=[];
 const $=id=>document.getElementById(id);
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);
@@ -530,6 +562,13 @@ setOrbMood=function(m,hold){const o=$('orb');if(!o)return;ORB_MOODS_V2.forEach(x
 const _lucyToastBase=toast;toast=function(m){_lucyToastBase(m);if(/✓|done|saved|scheduled|added|captured/i.test(m))setOrbMood('save',1600);};
 function toggleSide(o){$('side').classList.toggle('open',o);$('scrim').classList.toggle('on',o);}
 async function api(path,opts={}){opts.headers=Object.assign({'Content-Type':'application/json'},opts.headers||{});const r=await fetch(path,opts);const ct=r.headers.get('content-type')||'';return ct.includes('json')?r.json():r.text();}
+function toggleVoiceFab(force){const p=$('voiceFabPanel'),b=$('voiceFabBtn');if(!p||!b)return;const on=force==null?!p.classList.contains('on'):!!force;p.classList.toggle('on',on);b.classList.toggle('on',on);if(on){renderVoiceFab();setOrbMood('listen');setTimeout(()=>$('voiceFabInput')&&$('voiceFabInput').focus(),40);}else setOrbMood(null);}
+function renderVoiceFab(){const el=$('voiceFabLog');if(!el)return;el.innerHTML=VOICEFAB.length?VOICEFAB.map(m=>`<div class="voice-msg ${m.role==='user'?'user':'lucy'}">${esc(m.text)}</div>`).join(''):'<div class="subtle-line">Quick command bridge for the web companion. Voice itself lives in the phone app.</div>';el.scrollTop=el.scrollHeight;}
+function voiceNav(n){const map={capture:'home',home:'home',timeline:'timeline',ask:'ask',calendar:'productivity',tasks:'tasks',focus:'tasks',reminders:'reminders',documents:'library',vault:'library',resources:'links',links:'links',projects:'projects',brain:'brain',people:'people',health:'health',money:'money',about:'about',guide:'guide'};const k=map[String(n||'').toLowerCase()];if(k)go(k);}
+async function voiceFabSend(){const i=$('voiceFabInput');const t=(i&&i.value||'').trim();if(!t)return;i.value='';autoGrow(i);VOICEFAB.push({role:'user',text:t});VOICEFAB.push({role:'lucy',text:'Thinking...'});renderVoiceFab();setOrbMood('think');
+  let r;try{r=await api('/api/voice',{method:'POST',body:JSON.stringify({text:t,context:curView()})});}catch(e){r=null;}
+  VOICEFAB.pop();VOICEFAB.push({role:'lucy',text:(r&&r.speak)||'I could not reach Lucy just now. Keep the app open and try again.'});renderVoiceFab();setOrbMood(r&&r.ok!==false?'save':'confused',1600);
+  if(r&&r.navigate)voiceNav(r.navigate);if(r&&/scheduled|added|remembered|saved|moved|deleted|done/i.test(r.speak||''))setTimeout(()=>load(true),500);}
 /* ONE timestamp parser for the whole app. Accepts ms-epoch numbers (calendar blocks) AND DATETIME
    strings from SQLite ("YYYY-MM-DD HH:MM:SS", stored UTC, no zone) or ISO strings. The old code had
    two clashing clock() definitions + several places that parsed SQLite strings as LOCAL time — the
@@ -598,6 +637,9 @@ function vGuide(){return `<div class="page guide-page">
     <div class="section-card"><h3>What Lucy is</h3><p>A passive second brain that watches for useful structure in what you save.</p></div>
     <div class="section-card"><h3>Why it feels different</h3><p>It prioritizes memory, timing, and context instead of chat-first conversation.</p></div>
     <div class="section-card"><h3>How to get value</h3><p>Capture quickly, review the workspace, let Lucy schedule the open loops.</p></div>
+    <div class="section-card"><h3>Talk naturally</h3><p>The phone app can listen, think, speak back, and keep the conversation going until you end it.</p></div>
+    <div class="section-card"><h3>Hey Lucy</h3><p>The optional foreground wake word opens the conversation loop when the app is active.</p></div>
+    <div class="section-card"><h3>Reminder bursts</h3><p>Important reminders keep nudging for a short window until you acknowledge them.</p></div>
   </section>
   <div id="guideWrap"><div class="empty"><div class="big">○</div>Loading the manual...</div></div>
 </div>`;}

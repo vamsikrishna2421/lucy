@@ -87,6 +87,24 @@ async function interpret(text: string, context?: string): Promise<ParsedCommand>
   }
 }
 
+/** Is this a "how do I / where is / how to use the app" help question? */
+export function isHelpQuery(text: string): boolean {
+  return /\b(how (do|can) i|how to|where (is|are|do i|can i)|how does (lucy|the app|this) work|what can (you|lucy) do|help me (use|with)|i don.?t know (how|where)|guide me|show me how)\b/i.test(text);
+}
+
+/** Answer a help question from LUCY's built-in manual. */
+async function answerFromManual(question: string): Promise<string | null> {
+  try {
+    const { LUCY_MANUAL } = await import('./appManual');
+    const { resolveRemoteAvailability } = await import('../ai/provider');
+    const { promptAI } = await import('../ai/openai');
+    const { promptDevice } = await import('../ai/device');
+    const sys = `You are LUCY's in-app guide. Using ONLY the manual below, answer the user's question about how to use the app/website in 2-4 short sentences. Tell them exactly WHERE to tap/look. If it's not covered, say so briefly.\n\nMANUAL:\n${LUCY_MANUAL}`;
+    const { available, openAIKey } = await resolveRemoteAvailability();
+    return available ? await promptAI(sys, question, openAIKey) : await promptDevice(`${sys}\n\nQ: ${question}\n/no_think`);
+  } catch { return null; }
+}
+
 /** Interpret a spoken command and EXECUTE it. Returns what to say + where to navigate. */
 export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, context?: string): Promise<VoiceResult> {
   const db = dbArg ?? await getDatabase();
@@ -96,9 +114,10 @@ export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, cont
   switch (cmd.intent) {
     case 'schedule': {
       const title = (cmd.title || 'Untitled').trim();
-      const { classifyTask } = await import('../scheduling/classify');
+      const { classifyTask, detectRecurrence } = await import('../scheduling/classify');
       const meta = classifyTask(title, { durationMin: cmd.durationMin ?? undefined });
-      const rec = meta.recurrence; // "every day" etc.
+      // Recurrence is usually in the spoken command ("every day"), not the extracted title — read both.
+      const rec = meta.recurrence || detectRecurrence(text);
       const recLabel = rec === 'weekdays' ? 'every weekday' : rec === 'weekly' ? 'weekly' : 'every day';
       const explicit = computeStart(cmd.day ?? null, cmd.time ?? null, now);
       const { commitBlock, commitSeries, suggestForText } = await import('../scheduling');
@@ -164,6 +183,11 @@ export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, cont
       return { ok: true, intent: 'navigate', speak: cmd.speak || `Opening ${section}.`, navigate: section };
     }
     default: {
+      // Help / how-to questions about using the app → answer from the built-in manual.
+      if (isHelpQuery(text)) {
+        const speak = await answerFromManual((cmd.text || text).trim());
+        if (speak) return { ok: true, intent: 'ask', speak };
+      }
       const { askLucy } = await import('../processing/ask');
       const ans = await askLucy((cmd.text || text).trim());
       const reply = (ans.llmResponse || ans.message || '').trim() || 'I’m not sure about that one.';

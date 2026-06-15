@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 41 (calendar 40/60 + chat agent) ────────── */
+/* ─── LUCY web · premium · dashboard rev 42 (Guide + rearrange UI) ────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -392,7 +392,7 @@ function toggleTheme(){applyTheme(document.documentElement.getAttribute('data-th
 applyTheme((()=>{try{return localStorage.getItem('lucy-theme')||'dark';}catch(e){return'dark';}})());
 
 const NAV=[['home','◉','Home'],['timeline','≣','Timeline'],['ask','✦','Ask Lucy'],['tasks','◇','Tasks'],
-  ['productivity','▦','Workspace'],['brain','❋','Brain'],['people','◐','People'],['health','♥','Health'],['money','▦','Money'],['about','☻','About You']];
+  ['productivity','▦','Workspace'],['brain','❋','Brain'],['people','◐','People'],['health','♥','Health'],['money','▦','Money'],['about','☻','About You'],['guide','❔','Guide']];
 let PROD_TAB='home', WS=null;
 function curView(){return ROUTE==='productivity'?PROD_TAB:ROUTE;}
 function setProdTab(t){PROD_TAB=t;draw();}
@@ -408,7 +408,8 @@ async function load(silent){
 }
 function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offsetWidth;v.classList.add('fade');
   if(!DATA){v.innerHTML='';return;}
-  v.innerHTML=({home:vHome,timeline:vTimeline,ask:vAsk,tasks:vTasks,productivity:vProductivity,brain:vBrain,people:vPeople,health:vHealth,money:vMoney,about:vAbout}[ROUTE]||vHome)();
+  v.innerHTML=({home:vHome,timeline:vTimeline,ask:vAsk,tasks:vTasks,productivity:vProductivity,brain:vBrain,people:vPeople,health:vHealth,money:vMoney,about:vAbout,guide:vGuide}[ROUTE]||vHome)();
+  if(ROUTE==='guide')loadGuideContent();
   const view=curView();
   if(view==='home')loadWorkspace();
   if(view==='library')loadVault();
@@ -417,6 +418,22 @@ function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offset
   if(view==='projects')loadProjects();
   if(ROUTE==='about')loadGuard();
   if(ROUTE==='ask')afterAsk();}
+/* ─── GUIDE (What is LUCY? · Features · Manual + how-to help) ─── */
+function mdLite(s){return esc(s||'').replace(/^### (.*)$/gm,'<b>$1</b>').replace(/^## (.*)$/gm,'<b style="font-size:15px">$1</b>').replace(/^# (.*)$/gm,'<b style="font-size:17px">$1</b>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^- (.*)$/gm,'• $1').replace(/\n/g,'<br>');}
+function vGuide(){return `<div class="greet"><h1 style="font-size:24px">Guide</h1></div>
+  <div class="subtle-line">Everything LUCY can do, and how to use it.</div>
+  <div class="card" style="padding:16px;margin:14px 0">
+    <b>Ask how to use LUCY</b>
+    <div style="display:flex;gap:8px;margin-top:10px"><input id="gAsk" placeholder="e.g. how do I schedule something? where are my documents?" style="flex:1;min-width:0;padding:10px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text)" onkeydown="if(event.key==='Enter')guideAsk()"/><button class="btn" onclick="guideAsk()">Ask</button></div>
+    <div id="gAns" style="margin-top:10px"></div></div>
+  <div id="guideWrap"><div class="empty"><div class="big">◌</div>Loading…</div></div>`;}
+async function loadGuideContent(){let r=null;try{r=await api('/api/guide');}catch(e){}const w=$('guideWrap');if(!w)return;
+  const secs=(r&&r.sections)||[];
+  if(!secs.length){w.innerHTML=empty('❔','Guide ships via update','Relaunch LUCY so the in-app manual loads.');return;}
+  w.innerHTML=secs.map((s,i)=>`<div class="card" style="padding:16px;margin-bottom:14px"><b style="font-size:16px">${esc(s.title)}</b><div style="margin-top:8px;color:var(--muted);font-size:13.5px;line-height:1.6">${mdLite(s.body)}</div></div>`).join('');}
+async function guideAsk(){const i=$('gAsk');const t=(i&&i.value||'').trim();if(!t)return;const a=$('gAns');if(a)a.innerHTML='<div class="subtle-line">Looking it up…</div>';
+  let r;try{r=await api('/api/voice',{method:'POST',body:JSON.stringify({text:t,context:'guide'})});}catch(e){r=null;}
+  if(a)a.innerHTML=`<div class="card" style="padding:12px 14px;background:var(--card)">${esc((r&&r.speak)||'Could not reach LUCY.')}</div>`;}
 /* Workspace = a Lumia live-tile command center. Home shows colorful tiles; a tile opens its section. */
 const WS_TILES=[
   ['calendar','📅','Calendar','#FF8C42'],
@@ -840,11 +857,23 @@ function blockRow(b,conflicted){const isLucy=b.source==='scheduled';const tag=is
       <div style="margin-top:3px"><span class="kw">${esc(b.resourceLabel||'')}</span> <span class="kw" style="opacity:.7">${tag}</span></div></div>
     ${conflicted&&isLucy&&b.id?`<button class="btn ghost sm" onclick="rescheduleBlock(${b.id},'${esc((b.title||'').replace(/'/g,''))}')">Reschedule</button>`:''}
     ${isLucy&&b.id?`<button class="btn ghost sm" onclick="cancelSched(${b.id})">✕</button>`:''}</div>`;}
+let REARR=null;
+async function offerRearrange(task,dur){const el=$('calSug');el.innerHTML='<div class="subtle-line">No free slot — checking if I can make room…</div>';
+  let r;try{r=await api('/api/schedule/rearrange',{method:'POST',body:JSON.stringify({task,durationMin:dur>0?dur:undefined})});}catch(e){r=null;}
+  if(!r||!r.proposal||!r.proposal.moves||!r.proposal.moves.length){el.innerHTML='<div class="subtle-line">No free slot in the next week, and nothing movable to make room. Try a shorter duration or widen your hours.</div>';return;}
+  REARR={meta:r.meta,proposal:r.proposal};const p=r.proposal;
+  el.innerHTML=`<div class="card" style="padding:12px 14px"><b>Make room for “${esc(r.meta.title)}”?</b>
+    <div class="subtle-line" style="margin:6px 0">Place it ${dayLabel(p.place.start)} ${clock(p.place.start)}–${clock(p.place.end)} by moving:</div>
+    ${p.moves.map(m=>`<div class="subtle-line">• “${esc(m.title)}” → ${dayLabel(m.to)} ${clock(m.to)}</div>`).join('')}
+    <button class="btn sm" style="margin-top:10px" onclick="applyRearrange()">Apply</button></div>`;}
+async function applyRearrange(){if(!REARR)return;const m=REARR.meta,p=REARR.proposal;toast('Rearranging…');
+  try{const r=await api('/api/schedule/rearrange/apply',{method:'POST',body:JSON.stringify({title:m.title,startMs:p.place.start,endMs:p.place.end,resources:m.resources,energy:m.energy,location:m.location,moves:p.moves.map(x=>({blockId:x.blockId,to:x.to}))})});
+    toast(r&&r.ok?('Done — moved '+(r.moved||0)+' ✓'):'Could not rearrange');}catch(e){toast('Failed');}REARR=null;if($('calTask'))$('calTask').value='';await loadSchedule();}
 async function suggestTime(){const task=($('calTask').value||'').trim();if(!task){toast('Type what you want to schedule');return;}
   const dur=parseInt($('calDur').value,10);const body={task};if(dur>0)body.durationMin=dur;
   $('calSug').innerHTML='<div class="subtle-line">Finding the best conflict-free time…</div>';
   let r;try{r=await api('/api/schedule/suggest',{method:'POST',body:JSON.stringify(body)});}catch(e){$('calSug').innerHTML='<div class="subtle-line">Could not reach LUCY.</div>';return;}
-  if(!r||!r.ok||!r.suggestions||!r.suggestions.length){$('calSug').innerHTML=`<div class="subtle-line">No free, conflict-free slot in the next week within your hours. Try a shorter duration or widen your working hours.</div>`;CALSUG=null;return;}
+  if(!r||!r.ok||!r.suggestions||!r.suggestions.length){CALSUG=null;return offerRearrange(task,dur);}
   CALSUG=r;
   $('calSug').innerHTML=`<div class="subtle-line" style="margin-bottom:8px">For “${esc(r.meta.title)}” · ${r.meta.durationMin} min · ${esc(r.meta.resourceLabel||'')}</div>`+
     r.suggestions.map((s,i)=>`<div class="card" style="padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px">

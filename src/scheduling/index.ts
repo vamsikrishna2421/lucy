@@ -18,6 +18,19 @@ import {
 export * from './types';
 export { canCoexist, describeResources } from './resources';
 export { classifyTask } from './classify';
+export { suggestRearrangement, type RearrangeProposal } from './rearrange';
+
+/** Apply a rearrangement proposal: move the displaced blocks, then place the new task. */
+export async function applyRearrangement(
+  db: SQLiteDatabase,
+  input: CommitInput,
+  moves: Array<{ blockId: number; to: number }>,
+): Promise<{ ok: boolean; blockId?: number; moved: number }> {
+  let moved = 0;
+  for (const m of moves) { const r = await moveScheduledBlockTo(db, m.blockId, m.to); if (r.ok) moved++; }
+  const c = await commitBlock(db, input, { force: true });
+  return { ok: c.ok, blockId: c.blockId, moved };
+}
 
 /**
  * Build the busy timeline: hard (sleep/hours/protected) + resource (LUCY's own committed blocks).

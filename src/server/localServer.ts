@@ -374,6 +374,12 @@ async function route(req: ParsedRequest): Promise<string> {
       return json(200, { ok: true, items: rows });
     }
 
+    // ─── Guide / manual (What is LUCY? · Features · Detailed manual) ───────────
+    if (req.method === 'GET' && req.path === '/api/guide') {
+      const { manualSections } = await import('../voice/appManual');
+      return json(200, { ok: true, sections: manualSections() });
+    }
+
     // ─── Voice command ("Hey Lucy, …") ────────────────────────────────────────
     if (req.method === 'POST' && req.path === '/api/voice') {
       const text = String(payload.text ?? '').trim();
@@ -509,6 +515,22 @@ async function route(req: ParsedRequest): Promise<string> {
         conflicts: plan.conflicts.map((c) => ({ a: c.a.title, b: c.b.title, reason: c.reason })),
         unscheduled: unscheduled.slice(0, 12),
       });
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/rearrange') {
+      const { classifyTask, suggestRearrangement, describeResources } = await import('../scheduling');
+      const meta = classifyTask(String(payload.task ?? ''), { durationMin: payload.durationMin ? Number(payload.durationMin) : undefined });
+      const proposal = await suggestRearrangement(db, meta);
+      return json(200, { ok: true, proposal, meta: { ...meta, resourceLabel: describeResources(meta.resources) } });
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/rearrange/apply') {
+      const { applyRearrangement } = await import('../scheduling');
+      const moves = Array.isArray(payload.moves) ? payload.moves.map((m: { blockId: number; to: number }) => ({ blockId: Number(m.blockId), to: Number(m.to) })) : [];
+      const r = await applyRearrangement(db, {
+        title: String(payload.title ?? 'Task'), startMs: Number(payload.startMs), endMs: Number(payload.endMs),
+        resources: payload.resources as undefined, energy: typeof payload.energy === 'string' ? payload.energy : null,
+        location: typeof payload.location === 'string' ? payload.location : null, todoId: payload.todoId ? Number(payload.todoId) : null,
+      }, moves);
+      return json(200, r);
     }
     if (req.method === 'POST' && req.path === '/api/schedule/move') {
       const { moveScheduledBlockTo } = await import('../scheduling');

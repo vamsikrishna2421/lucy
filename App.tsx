@@ -600,7 +600,7 @@ export default function App() {
           <View style={styles.brandRow}>
             {/* Logo with star above the Y */}
             <View style={styles.logoWrap}>
-              <Text style={styles.brandName}>LUC<Text style={{ color: '#FF8C42' }}>Y</Text></Text>
+              <Text style={styles.brandName}>LUC<Text style={styles.brandNameAccent}>Y</Text></Text>
               <Text style={styles.logoStar}>✦</Text>
             </View>
             <View style={styles.headerActions}>
@@ -815,22 +815,23 @@ export default function App() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: LUCY_COLORS.background },
-  brand: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 2 },
-  brandRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  logoWrap: { position: 'relative', alignSelf: 'flex-start', marginTop: 6 },
-  logoStar: { position: 'absolute', top: -8, right: -14, color: '#FF8C42', fontSize: 14, fontWeight: '800', textShadowColor: 'rgba(255,139,61,0.7)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
+  brand: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.borderSoft },
+  brandRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', minHeight: 82 },
+  logoWrap: { position: 'relative', alignSelf: 'flex-start', marginTop: 8, paddingLeft: 2 },
+  logoStar: { position: 'absolute', top: -8, right: -14, color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '800', textShadowColor: 'rgba(255,139,61,0.7)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
   headerPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerFaceRow: { alignItems: 'flex-end', marginTop: 18 },
+  headerFaceRow: { alignItems: 'flex-end', marginTop: 14 },
   brandLogo: { height: 32, width: 160 },
-  brandName: { color: LUCY_COLORS.textDark, fontSize: 24, fontWeight: '800', letterSpacing: 1.3 },
+  brandName: { color: LUCY_COLORS.textDark, fontSize: 25, fontWeight: '900', letterSpacing: 1.2 },
+  brandNameAccent: { color: LUCY_COLORS.primary },
   headerActions: { flexDirection: 'column', alignItems: 'flex-end' },
   meetingPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', flexDirection: 'row', alignItems: 'center', gap: 5 },
   bellBtn: { position: 'relative', width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
   bellIcon: { fontSize: 22, color: LUCY_COLORS.textMuted },
   bellBadge: { position: 'absolute', top: 2, right: 2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: LUCY_COLORS.primary, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: LUCY_COLORS.background },
   bellBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
-  listenPill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  listenPillActive: { backgroundColor: '#1a0a00', borderColor: LUCY_COLORS.primary },
+  listenPill: { minHeight: 34, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 17, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  listenPillActive: { backgroundColor: LUCY_COLORS.primaryMist, borderColor: LUCY_COLORS.primaryLine },
   listenDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: LUCY_COLORS.textSubtle },
   listenDotActive: { backgroundColor: '#ef4444' },
   listenText: { color: LUCY_COLORS.textMuted, fontWeight: '700', fontSize: 12 },
@@ -841,21 +842,23 @@ const styles = StyleSheet.create({
   meetingHeaderPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', flexDirection: 'row', alignItems: 'center', gap: 5 },
   brainHeaderPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: LUCY_COLORS.primarySoft, flexDirection: 'row', alignItems: 'center' },
   brainHeaderText: { color: LUCY_COLORS.primary, fontWeight: '700', fontSize: 11 },
-  container: { flex: 1, paddingHorizontal: 20, paddingTop: 0 },
+  container: { flex: 1, paddingHorizontal: 16, paddingTop: 0 },
   bottomNav: {
     flexDirection: 'row',
-    backgroundColor: LUCY_COLORS.surface,
+    backgroundColor: LUCY_COLORS.surfaceSheet,
     borderTopWidth: 1,
-    borderTopColor: LUCY_COLORS.border,
-    paddingBottom: 4,
+    borderTopColor: LUCY_COLORS.borderSoft,
+    paddingTop: 4,
+    paddingBottom: 6,
+    paddingHorizontal: 4,
   },
-  bottomTab: { flex: 1, alignItems: 'center', paddingVertical: 10, gap: 3, position: 'relative' },
+  bottomTab: { flex: 1, alignItems: 'center', paddingVertical: 9, gap: 3, position: 'relative', borderRadius: 16 },
   voiceTabSlot: { flex: 1, alignItems: 'center', justifyContent: 'flex-start' },
   voiceButton: {
-    width: 58, height: 58, borderRadius: 29, backgroundColor: LUCY_COLORS.primary,
+    width: 60, height: 60, borderRadius: 30, backgroundColor: LUCY_COLORS.primary,
     alignItems: 'center', justifyContent: 'center', marginTop: -22,
-    shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 8,
-    borderWidth: 3, borderColor: LUCY_COLORS.surface,
+    shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.42, shadowRadius: 14, elevation: 8,
+    borderWidth: 4, borderColor: LUCY_COLORS.surfaceSheet,
   },
   voiceButtonRecording: { backgroundColor: '#ef4444', shadowColor: '#ef4444' },
   voiceButtonBusy: { backgroundColor: LUCY_COLORS.primaryGlow },
@@ -865,7 +868,7 @@ const styles = StyleSheet.create({
   micCradle: { width: 17, height: 9, borderBottomLeftRadius: 9, borderBottomRightRadius: 9, borderColor: '#fff', borderWidth: 2, borderTopWidth: 0, marginTop: -5 },
   micStem: { width: 2, height: 3, backgroundColor: '#fff', marginTop: 1 },
   voiceButtonLabel: { fontSize: 10, fontWeight: '700', color: LUCY_COLORS.textSubtle, marginTop: 2 },
-  tabActivePill: { position: 'absolute', top: 0, width: 28, height: 3, borderRadius: 2, backgroundColor: 'transparent' },
+  tabActivePill: { position: 'absolute', top: 0, width: 30, height: 3, borderRadius: 2, backgroundColor: 'transparent' },
   tabActivePillVisible: { backgroundColor: LUCY_COLORS.primary },
   bottomTabIcon: { fontSize: 20, color: LUCY_COLORS.textSubtle },
   bottomTabIconActive: { color: LUCY_COLORS.primary },

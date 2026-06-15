@@ -14,6 +14,7 @@ export const LUCY_COLORS = {
   primaryDeep:  '#E8722A',   // pressed state, 10% darker
   primarySoft:  '#3D1D08',   // subtle tinted backgrounds
   primaryMist:  '#2A1205',   // very subtle tint, almost invisible
+  primaryLine:  '#6F3515',   // warm outlines on active surfaces
 
   // ─── Surface depth (4 levels, each ~8% lighter) ──────────────────────────
   background:       '#0C0B09',   // deepest — screen background
@@ -21,6 +22,7 @@ export const LUCY_COLORS = {
   surfaceRaised:    '#1F1A14',   // elevated cards, input backgrounds
   surfaceElevated:  '#2A2219',   // tooltips, dropdowns, highest layer
   surfaceSheet:     '#131108',   // bottom sheet backgrounds (slightly cooler)
+  surfaceGlass:     '#211A13',   // translucent-feeling panels
 
   // ─── Text — warm cream hierarchy ─────────────────────────────────────────
   textDark:   '#F5EFE6',   // primary text — warm white
@@ -38,6 +40,11 @@ export const LUCY_COLORS = {
   warning:  '#F59E0B',
   error:    '#FB7185',
   info:     '#60A5FA',
+  violet:   '#A78BFA',
+  cyan:     '#4DA3FF',
+  teal:     '#34D399',
+  gold:     '#F5C451',
+  rose:     '#FB7185',
 
   white: '#FFFFFF',
 

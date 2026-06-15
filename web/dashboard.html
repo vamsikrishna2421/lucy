@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 49 (beta-test minors: unified time parsing, fuzzy vault search, honest reflect copy) */
+/* LUCY web - premium - dashboard rev 50 (guide, sections, face overlay) */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -308,6 +308,41 @@ nav{display:flex;flex-direction:column;gap:1px}
 @media(max-width:640px){.wqgrid{grid-template-columns:repeat(2,1fr)}}
 .wqbtn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;border-radius:14px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:12.5px;font-weight:650;cursor:pointer;transition:.15s}
 .wqbtn:hover{border-color:var(--primary);color:var(--primary-deep)}
+/* Dedicated section surfaces */
+.page{display:flex;flex-direction:column;gap:18px}
+.page-hero{border:1px solid var(--border);border-radius:24px;padding:22px;background:linear-gradient(145deg,color-mix(in srgb,var(--primary) 14%,var(--card)),var(--card2) 62%,var(--bg2));box-shadow:var(--shadow-sm)}
+.page-hero.compact{padding:18px 20px}
+.page-kicker{font-size:11px;font-weight:850;letter-spacing:.9px;text-transform:uppercase;color:var(--primary-deep);margin-bottom:5px}
+[data-theme="dark"] .page-kicker{color:var(--primary-glow)}
+.page-title{margin:0;font-size:30px;line-height:1.05;font-weight:860;letter-spacing:0}
+.page-sub{color:var(--muted);font-size:14px;margin-top:8px;max-width:760px}
+.hero-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:16px}
+.hero-metric{background:rgba(255,255,255,.035);border:1px solid var(--border);border-radius:15px;padding:12px}
+.hero-metric b{display:block;font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
+.hero-metric span{display:block;color:var(--subtle);font-size:11.5px;margin-top:5px}
+.section-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.section-card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:18px;padding:16px;box-shadow:var(--shadow-sm)}
+.section-card h3{margin:0 0 7px;font-size:15px}
+.section-card p{margin:0;color:var(--subtle);font-size:13px;line-height:1.5}
+.manual-layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:16px;align-items:start}
+.manual-toc{position:sticky;top:0;background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:18px;padding:14px;box-shadow:var(--shadow-sm)}
+.manual-toc b{display:block;margin-bottom:8px}
+.manual-toc a{display:block;color:var(--muted);text-decoration:none;border-radius:12px;padding:8px 9px;font-size:13px}
+.manual-toc a:hover{background:var(--raised);color:var(--text)}
+.chapter{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:20px;padding:18px;margin-bottom:12px;box-shadow:var(--shadow-sm)}
+.chapter h2{margin:0 0 8px;font-size:18px;letter-spacing:0;text-transform:none;color:var(--text);border:0;padding:0}
+.chapter-body{color:var(--muted);font-size:14px;line-height:1.68}
+.chapter-body b{color:var(--text)}
+.workflow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:16px}
+.flow-step{border:1px solid var(--border);background:var(--bg2);border-radius:16px;padding:13px}
+.flow-step .num{width:24px;height:24px;border-radius:12px;background:var(--primary-soft);color:var(--primary-deep);display:grid;place-items:center;font-weight:850;font-size:12px;margin-bottom:8px}
+[data-theme="dark"] .flow-step .num{color:var(--primary-glow)}
+.flow-step b{display:block;font-size:13.5px}.flow-step span{display:block;color:var(--subtle);font-size:12px;margin-top:4px}
+.list-surface{display:flex;flex-direction:column;gap:9px}
+.split-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.split-toolbar .grow{flex:1}
+@media(max-width:900px){.manual-layout{grid-template-columns:1fr}.manual-toc{position:static}.workflow{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.page-title{font-size:25px}.workflow{grid-template-columns:1fr}.page-hero{padding:18px}}
 /* Calendar workspace */
 .cal-shell{display:flex;flex-direction:column;gap:18px}
 .cal-hero{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:24px;padding:22px;background:linear-gradient(140deg,color-mix(in srgb,var(--primary) 18%,var(--card)),var(--card2) 58%,var(--bg2));box-shadow:var(--shadow-sm)}
@@ -547,17 +582,31 @@ function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offset
   if(ROUTE==='ask')afterAsk();}
 /* ─── GUIDE (What is LUCY? · Features · Manual + how-to help) ─── */
 function mdLite(s){return esc(s||'').replace(/^### (.*)$/gm,'<b>$1</b>').replace(/^## (.*)$/gm,'<b style="font-size:15px">$1</b>').replace(/^# (.*)$/gm,'<b style="font-size:17px">$1</b>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^- (.*)$/gm,'• $1').replace(/\n/g,'<br>');}
-function vGuide(){return `<div class="greet"><h1 style="font-size:24px">Guide</h1></div>
-  <div class="subtle-line">Everything LUCY can do, and how to use it.</div>
-  <div class="card" style="padding:16px;margin:14px 0">
-    <b>Ask how to use LUCY</b>
-    <div style="display:flex;gap:8px;margin-top:10px"><input id="gAsk" placeholder="e.g. how do I schedule something? where are my documents?" style="flex:1;min-width:0;padding:10px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text)" onkeydown="if(event.key==='Enter')guideAsk()"/><button class="btn" onclick="guideAsk()">Ask</button></div>
-    <div id="gAns" style="margin-top:10px"></div></div>
-  <div id="guideWrap"><div class="empty"><div class="big">◌</div>Loading…</div></div>`;}
+function vGuide(){return `<div class="page guide-page">
+  <section class="page-hero">
+    <div class="page-kicker">Guide</div>
+    <h1 class="page-title">How Lucy quietly works with you.</h1>
+    <div class="page-sub">A practical manual for the companion: what it notices, why it surfaces things, and how to use each workspace without turning Lucy into another inbox.</div>
+    <div class="workflow">
+      <div class="flow-step"><div class="num">1</div><b>Capture</b><span>Drop thoughts, tasks, receipts, links, or voice notes.</span></div>
+      <div class="flow-step"><div class="num">2</div><b>Organize</b><span>Lucy extracts memory, tasks, people, projects, and reminders.</span></div>
+      <div class="flow-step"><div class="num">3</div><b>Plan</b><span>Calendar and Focus turn loose intent into time.</span></div>
+      <div class="flow-step"><div class="num">4</div><b>Recall</b><span>Ask, browse, or review context when you need it.</span></div>
+    </div>
+  </section>
+  <section class="section-grid">
+    <div class="section-card"><h3>What Lucy is</h3><p>A passive second brain that watches for useful structure in what you save.</p></div>
+    <div class="section-card"><h3>Why it feels different</h3><p>It prioritizes memory, timing, and context instead of chat-first conversation.</p></div>
+    <div class="section-card"><h3>How to get value</h3><p>Capture quickly, review the workspace, let Lucy schedule the open loops.</p></div>
+  </section>
+  <div id="guideWrap"><div class="empty"><div class="big">○</div>Loading the manual...</div></div>
+</div>`;}
 async function loadGuideContent(){let r=null;try{r=await api('/api/guide');}catch(e){}const w=$('guideWrap');if(!w)return;
   const secs=(r&&r.sections)||[];
   if(!secs.length){w.innerHTML=empty('❔','Guide ships via update','Relaunch LUCY so the in-app manual loads.');return;}
-  w.innerHTML=secs.map((s,i)=>`<div class="card" style="padding:16px;margin-bottom:14px"><b style="font-size:16px">${esc(s.title)}</b><div style="margin-top:8px;color:var(--muted);font-size:13.5px;line-height:1.6">${mdLite(s.body)}</div></div>`).join('');}
+  const toc=secs.map((s,i)=>`<a href="#guide-${i}">${esc(s.title)}</a>`).join('');
+  const chapters=secs.map((s,i)=>`<article class="chapter" id="guide-${i}"><h2>${esc(s.title)}</h2><div class="chapter-body">${mdLite(s.body)}</div></article>`).join('');
+  w.innerHTML=`<div class="manual-layout"><aside class="manual-toc"><b>Manual</b>${toc}</aside><div>${chapters}</div></div>`;}
 async function guideAsk(){const i=$('gAsk');const t=(i&&i.value||'').trim();if(!t)return;const a=$('gAns');if(a)a.innerHTML='<div class="subtle-line">Looking it up…</div>';setOrbMood('think');
   let r;try{r=await api('/api/voice',{method:'POST',body:JSON.stringify({text:t,context:'guide'})});}catch(e){r=null;}
   if(a)a.innerHTML=`<div class="card" style="padding:12px 14px;background:var(--card)">${esc((r&&r.speak)||'Could not reach LUCY.')}</div>`;setOrbMood(r&&r.speak?'happy':'confused',1800);}
@@ -595,12 +644,10 @@ function renderTiles(){const g=$('wsTiles');if(!g)return;
 function openTile(k){if(k==='suggested'){setProdTab('calendar');setTimeout(planDay,250);return;}
   if(k==='bookmarks'){toast('Bookmarks coming soon');return;}
   setProdTab(k);}
-function vLinks(){return `<div class="greet"><h1 style="font-size:24px">Online resources</h1></div>
-  <div class="subtle-line">Your saved links & resources.</div>
-  <div id="linksWrap"><div class="empty"><div class="big">◌</div>Loading…</div></div>`;}
-function vProjects(){return `<div class="greet"><h1 style="font-size:24px">Projects</h1><div class="grow"></div><button class="btn" onclick="newProject()">＋ New project</button></div>
-  <div class="subtle-line">A dedicated space for each personal project.</div>
-  <div id="projWrap"><div class="empty"><div class="big">◌</div>Loading…</div></div>`;}
+function vLinks(){return `<div class="page"><section class="page-hero compact"><div class="page-kicker">Resources</div><h1 class="page-title">Links worth remembering.</h1><div class="page-sub">Articles, videos, places, and references Lucy can keep connected to your wider memory.</div></section>
+  <div id="linksWrap"><div class="empty"><div class="big">○</div>Loading...</div></div></div>`;}
+function vProjects(){return `<div class="page"><section class="page-hero compact"><div class="split-toolbar"><div><div class="page-kicker">Projects</div><h1 class="page-title">Dedicated spaces for bigger threads.</h1><div class="page-sub">Keep long-running goals, moves, paperwork, and creative work from disappearing into the timeline.</div></div><span class="grow"></span><button class="btn" onclick="newProject()">＋ New project</button></div></section>
+  <div id="projWrap"><div class="empty"><div class="big">○</div>Loading...</div></div></div>`;}
 async function loadProjects(){let r=null;try{r=await api('/api/projects');}catch(e){}const w=$('projWrap');if(!w)return;
   const items=(r&&r.items)||[];
   if(!items.length){w.innerHTML=empty('📂','No projects yet','Click ＋ New project to give a project its own space.');return;}
@@ -619,7 +666,7 @@ function vReminders(){const rem=((DATA&&DATA.reminders)||[]).filter(r=>r.status=
     return `<div class="card" style="padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;border-left:4px solid ${col}">
       <div style="flex:1;min-width:0"><div style="font-weight:500;word-break:break-word">${esc(r.text||'Reminder')}</div><div class="subtle-line" style="margin-top:3px">⏰ ${esc(at)}${u==='high'?' · high priority':''}</div></div>
       <button class="btn ghost sm" onclick="delReminder(${r.id})">✕</button></div>`;}).join('');
-  return `<div class="greet"><h1 style="font-size:24px">Reminders</h1></div><div class="subtle-line">Everything LUCY is reminding you about.</div><div style="margin-top:14px">${body}</div>`;}
+  return `<div class="page"><section class="page-hero compact"><div class="page-kicker">Reminders</div><h1 class="page-title">Things Lucy should bring back.</h1><div class="page-sub">A clean list of time-sensitive promises, return dates, errands, and nudges.</div><div class="hero-metrics">${heroMetric(rem.length,'pending')}</div></section><div>${body}</div></div>`;}
 async function delReminder(id){await api('/api/reminder/'+id,{method:'DELETE'});toast('Reminder removed ✓');await load(true);if(curView()==='reminders')draw();}
 async function loadLinks(){let r=null;try{r=await api('/api/resources');}catch(e){}const w=$('linksWrap');if(!w)return;
   const items=(r&&r.items)||[];
@@ -647,10 +694,10 @@ function vHome(){const d=DATA;const name=(d.profile&&d.profile.name)||'';const t
   </div>${railHtml()}</div>`;
   return h;}
 
-function vTimeline(){return `<div class="date">Your full memory stream</div>
-  <div class="greet"><h1 style="font-size:24px">Timeline</h1></div>
+function vTimeline(){const caps=(DATA.captures||[]);return `<div class="page">
+  <section class="page-hero compact"><div class="page-kicker">Timeline</div><h1 class="page-title">Everything Lucy caught.</h1><div class="page-sub">A chronological stream of thoughts, tasks, documents, meetings, and fragments you can revisit.</div><div class="hero-metrics">${heroMetric(caps.length,'memories')}${heroMetric(caps.filter(c=>(c.capture_kind||'')==='meeting').length,'meetings')}${heroMetric(caps.filter(c=>(capText(c)+' '+capBody(c)).toLowerCase().includes('project')).length,'project notes')}</div></section>
   <div class="composer"><input id="cap" placeholder="Capture a thought…" onkeydown="if(event.key==='Enter')addCapture()"/><button class="btn" onclick="addCapture()">Send</button></div>
-  ${timelineHtml((DATA.captures||[]).slice(0,80))}`;}
+  <div>${timelineHtml(caps.slice(0,80))}</div></div>`;}
 
 function timelineHtml(caps){if(!caps.length)return empty('◉','Nothing captured yet','Use the composer above to add your first thought.');
   return caps.map(c=>{const kind=(c.capture_kind||'thought');const body=capBody(c);
@@ -697,34 +744,35 @@ function focusCap(){go('home');setTimeout(()=>{const c=$('cap');if(c)c.focus();}
 
 /* ─── other sections ─── */
 function vTasks(){const tasks=DATA.todos.filter(pending);const groups={high:[],medium:[],low:[]};tasks.forEach(t=>{(groups[(t.urgency||'medium').toLowerCase()]||groups.medium).push(t);});
-  let h=`<div class="greet"><h1 style="font-size:24px">Focus Now</h1></div><div class="composer"><input id="ntask" placeholder="Add a task… (Enter)" onkeydown="if(event.key==='Enter')addTask()"/><button class="btn" onclick="addTask()">Add</button></div>`;
-  if(!tasks.length)return h+empty('◇','No open tasks','You are all caught up.');
-  for(const[g,label]of[['high','Urgent'],['medium','Soon'],['low','Whenever']]){if(!groups[g].length)continue;h+=`<div class="sec"><h2>${label}</h2></div><div class="col">`+groups[g].map(taskCard).join('')+'</div>';}return h;}
-function vAsk(){let h='<div id="chat"><div id="stream">';
+  let h=`<div class="page"><section class="page-hero compact"><div class="page-kicker">Focus</div><h1 class="page-title">The open loops that matter.</h1><div class="page-sub">A cleaner task board organized by urgency, ready to finish or schedule.</div><div class="hero-metrics">${heroMetric(tasks.length,'open tasks')}${heroMetric(groups.high.length,'urgent')}${heroMetric(groups.medium.length,'soon')}</div></section><div class="composer"><input id="ntask" placeholder="Add a task… (Enter)" onkeydown="if(event.key==='Enter')addTask()"/><button class="btn" onclick="addTask()">Add</button></div>`;
+  if(!tasks.length)return h+empty('◇','No open tasks','You are all caught up.')+'</div>';
+  for(const[g,label]of[['high','Urgent'],['medium','Soon'],['low','Whenever']]){if(!groups[g].length)continue;h+=`<div class="sec"><h2>${label}</h2></div><div class="col">`+groups[g].map(taskCard).join('')+'</div>';}return h+'</div>';}
+function vAsk(){let h='<div class="page"><section class="page-hero compact"><div class="page-kicker">Ask Lucy</div><h1 class="page-title">Ask your memory, not the internet.</h1><div class="page-sub">Use this when you want Lucy to connect your own notes, tasks, people, spending, and plans.</div></section><div id="chat"><div id="stream">';
   if(!CHAT.length)h+=`<div class="empty"><div class="big">✦</div>Ask LUCY anything about your memory.</div>`;else h+=CHAT.map(bubble).join('');
   h+='</div>';if(!CHAT.length)h+=`<div class="suggest"><button onclick="quick('What should I focus on today?')">Focus today?</button><button onclick="quick('How much did I spend this month?')">Spending?</button><button onclick="quick('What have I been thinking about lately?')">Recent themes?</button><button onclick="quick('Summarize what you know about me')">About me?</button></div>`;
-  h+=`<div id="askbar"><textarea id="q" rows="1" placeholder="Message LUCY…" oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAsk();}"></textarea><button class="btn" onclick="sendAsk()">Send</button></div></div>`;return h;}
+  h+=`<div id="askbar"><textarea id="q" rows="1" placeholder="Message LUCY…" oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAsk();}"></textarea><button class="btn" onclick="sendAsk()">Send</button></div></div></div>`;return h;}
 function vBrain(){const k=DATA.knowledge||{};const ents=(k.entities||[]).slice(0,40);const cons=(k.connections||[]).slice(0,30);
-  let h=`<div class="greet"><h1 style="font-size:24px">Brain</h1></div><div class="sec"><h2>Entities · ${(k.entities||[]).length}</h2></div>`;
+  let h=`<div class="page"><section class="page-hero compact"><div class="page-kicker">Brain</div><h1 class="page-title">Lucy’s private knowledge map.</h1><div class="page-sub">Entities and relationships extracted from your captures, kept on the device.</div><div class="hero-metrics">${heroMetric((k.entities||[]).length,'entities')}${heroMetric((k.connections||[]).length,'connections')}</div></section><div class="sec"><h2>Entities · ${(k.entities||[]).length}</h2></div>`;
   h+=ents.length?'<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">'+ents.map(e=>`<div class="card" style="flex-direction:column;gap:6px"><div style="display:flex;width:100%;align-items:center;gap:8px"><span class="ttl">${esc(e.name)}</span><span class="when">×${e.evidence_count||1}</span></div><span class="cat">${esc(e.entity_type||'')}</span></div>`).join('')+'</div>':empty('❋','No entities yet','LUCY builds this as you capture more.');
-  if(cons.length){h+=`<div class="sec"><h2>Connections · ${cons.length}</h2></div><div class="col">`+cons.map(c=>`<div class="card"><div style="flex:1"><span class="ttl">${esc(c.source_name||'?')}</span> <span style="color:var(--primary)">— ${esc(c.relation||'relates to')} →</span> <span class="ttl">${esc(c.target_name||'?')}</span>${c.explanation?`<div class="sub">${esc(c.explanation)}</div>`:''}</div><span class="pill ${esc(c.confidence||'emerging')}">${esc(c.confidence||'')}</span></div>`).join('')+'</div>';}return h;}
-function vPeople(){const ppl=(DATA.people||[]);if(!ppl.length)return `<div class="greet"><h1 style="font-size:24px">People</h1></div>`+empty('◐','No people yet','LUCY remembers people as you mention them.');
-  return `<div class="greet"><h1 style="font-size:24px">People</h1></div><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">`+ppl.map(p=>`<div class="card" style="flex-direction:column;gap:7px"><div style="display:flex;width:100%;align-items:center;gap:9px"><div class="avatar">${esc((p.name||'?')[0].toUpperCase())}</div><span class="ttl" style="font-size:15.5px">${esc(p.name)}</span></div>${p.context?`<div class="sub">${esc(p.context)}</div>`:''}<div class="when" style="margin:0">${p.last_mentioned?'Last mentioned '+fmt(p.last_mentioned):''}</div></div>`).join('')+'</div>';}
+  if(cons.length){h+=`<div class="sec"><h2>Connections · ${cons.length}</h2></div><div class="col">`+cons.map(c=>`<div class="card"><div style="flex:1"><span class="ttl">${esc(c.source_name||'?')}</span> <span style="color:var(--primary)">— ${esc(c.relation||'relates to')} →</span> <span class="ttl">${esc(c.target_name||'?')}</span>${c.explanation?`<div class="sub">${esc(c.explanation)}</div>`:''}</div><span class="pill ${esc(c.confidence||'emerging')}">${esc(c.confidence||'')}</span></div>`).join('')+'</div>';}return h+'</div>';}
+function vPeople(){const ppl=(DATA.people||[]);const hero=`<section class="page-hero compact"><div class="page-kicker">People</div><h1 class="page-title">The people Lucy notices.</h1><div class="page-sub">Names and relationship context gathered from your notes, calls, plans, and follow-ups.</div><div class="hero-metrics">${heroMetric(ppl.length,'people')}${heroMetric(ppl.filter(p=>p.last_mentioned).length,'with history')}</div></section>`;
+  if(!ppl.length)return `<div class="page">${hero}`+empty('◐','No people yet','LUCY remembers people as you mention them.')+'</div>';
+  return `<div class="page">${hero}<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">`+ppl.map(p=>`<div class="card" style="flex-direction:column;gap:7px"><div style="display:flex;width:100%;align-items:center;gap:9px"><div class="avatar">${esc((p.name||'?')[0].toUpperCase())}</div><span class="ttl" style="font-size:15.5px">${esc(p.name)}</span></div>${p.context?`<div class="sub">${esc(p.context)}</div>`:''}<div class="when" style="margin:0">${p.last_mentioned?'Last mentioned '+fmt(p.last_mentioned):''}</div></div>`).join('')+'</div></div>';}
 function vHealth(){const m=(DATA.mood_entries||[]);const h0=computeHealth();const tones={positive:'😊',excited:'🤩',calm:'😌',neutral:'😐',low:'😔',frustrated:'😤',stressed:'😰',negative:'😣'};
-  let h=`<div class="greet"><h1 style="font-size:24px">Health</h1></div>
+  let h=`<div class="page"><section class="page-hero compact"><div class="page-kicker">Health</div><h1 class="page-title">Mood and energy, in context.</h1><div class="page-sub">A lightweight check-in space for seeing patterns without turning wellbeing into a spreadsheet.</div><div class="hero-metrics">${heroMetric(h0.score,'score')}${heroMetric(m.length,'check-ins')}</div></section>
     <div class="panel" style="margin-bottom:16px"><div class="health">${ring(h0.score)}<div class="lbl"><div class="big">${h0.label} · ${h0.score}</div><div class="sm">${h0.note}</div></div>${barsHtml(h0.bars)}</div></div>
     <div class="sec"><h2>Log how you feel</h2></div><div class="card" style="gap:10px;flex-wrap:wrap">`;
   for(const[t,e]of Object.entries(tones))h+=`<button class="btn ghost" onclick="logMood('${t}')" style="font-size:20px">${e}<span style="font-size:12px;margin-left:6px">${t}</span></button>`;h+='</div>';
   if(m.length){h+=`<div class="sec"><h2>Recent</h2></div><div class="col">`+m.slice(0,20).map(x=>`<div class="card"><span style="font-size:20px">${tones[x.tone]||'😐'}</span><div style="flex:1"><span class="ttl">${esc(x.tone)}</span><div class="sub">energy: ${esc(x.energy||'medium')}</div></div><span class="when">${fmt(x.created_at)}</span></div>`).join('')+'</div>';}
-  return h;}
+  return h+'</div>';}
 function vMoney(){const ex=(DATA.expenses||[]);const now=new Date();const month=ex.filter(e=>{const ts=parseTs(e.created_at);if(isNaN(ts))return false;const t=new Date(ts);return t.getMonth()===now.getMonth()&&t.getFullYear()===now.getFullYear();});
   const total=month.reduce((s,e)=>s+(+e.amount||0),0);const cats={};month.forEach(e=>{cats[e.category||'other']=(cats[e.category||'other']||0)+(+e.amount||0);});const catArr=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
-  let h=`<div class="greet"><h1 style="font-size:24px">Money</h1></div><div class="grid stats">${stat(total.toFixed(2),'This month')}${stat(month.length,'Payments')}${stat(ex.length,'All-time')}</div>`;
+  let h=`<div class="page"><section class="page-hero compact"><div class="page-kicker">Money</div><h1 class="page-title">Spending Lucy found in your notes.</h1><div class="page-sub">Receipts and expense mentions become a simple monthly view.</div><div class="hero-metrics">${heroMetric(total.toFixed(2),'this month')}${heroMetric(month.length,'payments')}${heroMetric(ex.length,'all time')}</div></section>`;
   if(catArr.length){h+=`<div class="sec"><h2>By category</h2></div><div class="col">`+catArr.map(([c,v])=>{const pct=total?Math.round(v/total*100):0;return `<div class="card" style="flex-direction:column;gap:6px"><div style="display:flex;width:100%"><span class="ttl">${esc(c)}</span><span class="when" style="margin-left:auto">${v.toFixed(2)} · ${pct}%</span></div><div style="height:6px;background:var(--raised);border-radius:6px;width:100%;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--primary)"></div></div></div>`;}).join('')+'</div>';}
   h+=`<div class="sec"><h2>Recent payments</h2></div>`;h+=ex.length?'<div class="col">'+ex.slice(0,30).map(e=>`<div class="card"><div style="flex:1"><span class="ttl">${esc(e.description||e.category||'Payment')}</span><div class="sub">${esc(e.category||'')}</div></div><span class="ttl" style="color:var(--primary)">${(+e.amount||0).toFixed(2)}</span><span class="when">${fmt(e.created_at)}</span></div>`).join('')+'</div>':empty('▦','No expenses tracked','');
-  return h;}
+  return h+'</div>';}
 function vAbout(){const d=DATA;const facts=(d.learned_profile||[]);
-  let h=`<div class="greet"><h1 style="font-size:24px">About You</h1></div>
+  let h=`<div class="page"><section class="page-hero compact"><div class="page-kicker">About You</div><h1 class="page-title">Teach Lucy how to understand you.</h1><div class="page-sub">Your preferences, profile, learned facts, cost controls, and import tools live here.</div><div class="hero-metrics">${heroMetric(facts.length,'learned facts')}${heroMetric((d.profile&&d.profile.about)?'set':'empty','profile')}</div></section>
     <div class="sec"><h2>Who you are</h2><div class="grow"></div><button class="btn ghost sm" onclick="saveAbout()">Save</button></div>
     <textarea id="aboutbox" class="about-box" placeholder="Tell LUCY about yourself…">${esc((d.profile&&d.profile.about)||'')}</textarea>
     <div class="sec"><h2>Tell LUCY something</h2></div><div class="composer"><input id="fb" placeholder="e.g. I prefer short answers" onkeydown="if(event.key==='Enter')sendFeedback()"/><button class="btn" onclick="sendFeedback()">Teach</button></div>
@@ -732,7 +780,7 @@ function vAbout(){const d=DATA;const facts=(d.learned_profile||[]);
   h+=facts.length?'<div class="col">'+facts.map(f=>`<div class="card"><div style="flex:1"><span class="cat">${esc(f.category)}</span><span class="ttl" style="font-weight:500">${esc(f.statement)}</span></div><span class="pill ${esc(f.confidence)}">${esc(f.confidence)}</span><button class="ico-btn danger" onclick="delFact(${f.id})">✕</button></div>`).join('')+'</div>':empty('☻','Nothing learned yet','Capture a few notes, then "Reflect now".');
   h+=`<div class="sec"><h2>AI cost guard</h2></div><div class="subtle-line" style="margin-bottom:8px">A platform-wide hourly cap on remote AI calls. Pause it temporarily for bulk work — it re-enables automatically.</div><div class="guardbar"></div>`;
   h+=`<div class="sec"><h2>Backup &amp; restore</h2></div><div class="subtle-line" style="margin-bottom:8px">Import a memory export (JSON) — e.g. when switching devices. Document images aren't in the export; they stay on the original device.</div><button class="btn ghost sm" onclick="$('importInput').click()">⬆ Import memory (JSON)</button>`;
-  return h;}
+  return h+'</div>';}
 async function handleImport(file){if(!file)return;toast('Reading export…');let data;
   try{data=JSON.parse(await file.text());}catch(e){toast('Not valid JSON');return;}
   toast('Importing…');
@@ -742,6 +790,7 @@ async function handleImport(file){if(!file)return;toast('Reading export…');let
   catch(e){toast('Import needs the latest update');}}
 
 function stat(n,l){return `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;}
+function heroMetric(n,l){return `<div class="hero-metric"><b>${n}</b><span>${l}</span></div>`;}
 function taskCard(t){return `<div class="card"><div style="flex:1"><span class="ttl">${esc(t.task)}</span>${t.context?`<div class="sub">${esc(t.context)}</div>`:''}</div><span class="pill ${esc((t.urgency||'medium').toLowerCase())}">${esc(t.urgency||'')}</span><button class="ico-btn good" onclick="task(${t.id},'complete')">✓</button><button class="ico-btn danger" onclick="task(${t.id},'delete')">✕</button></div>`;}
 function bubble(m){if(m.role==='user')return `<div class="msg me">${esc(m.content)}</div>`;let s='';if(m.sources&&m.sources.length)s=`<div class="srcs"><b>From your memory:</b> ${m.sources.slice(0,4).map(x=>`<span class="chip">${esc(x.title||x.snippet||'note')}</span>`).join('')}</div>`;return `<div class="msg lucy">${esc(m.content)}${s}</div>`;}
 function greet(){const h=new Date().getHours();return h<12?'Good morning':h<18?'Good afternoon':'Good evening';}

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* ─── LUCY web · premium · dashboard rev 38 (calendar views: agenda/day/week/month + drag) ────────── */
+/* ─── LUCY web · premium · dashboard rev 39 (rail overflow fix) ────────── */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -278,12 +278,15 @@ nav{display:flex;flex-direction:column;gap:1px}
 .wqbtn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;border-radius:12px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s}
 .wqbtn:hover{border-color:var(--primary);color:var(--primary-deep)}
 /* Calendar two-column: timetable centered, controls on the right rail */
-.cal-2col{display:flex;gap:22px;align-items:flex-start;max-width:100%}
-.cal-main{flex:1;min-width:0}
-.cal-side{width:330px;flex:none;min-width:0}
+.cal-2col{display:flex;gap:22px;align-items:flex-start;width:100%;max-width:100%;overflow:hidden}
+.cal-main{flex:1 1 0;min-width:0;overflow:hidden}
+.cal-side{flex:0 0 300px;width:300px;min-width:0}
 .cal-side .card{box-sizing:border-box;max-width:100%;overflow:hidden}
 .cal-side input,.cal-side select,.cal-main input{box-sizing:border-box;max-width:100%}
-@media(max-width:900px){.cal-2col{flex-direction:column}.cal-side{width:100%}}
+.ut-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)}
+.ut-row .ut-task{flex:1;min-width:0;word-break:break-word}
+.ut-row .btn{flex:none}
+@media(max-width:900px){.cal-2col{flex-direction:column}.cal-side{flex:none;width:100%}}
 [data-theme="dark"] .vchip.on{color:var(--primary-glow)}
 .vchip .vn{opacity:.6;font-size:11px}
 .vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
@@ -716,7 +719,7 @@ function renderSchedule(){const w=$('calWrap');if(!w)return;
   const us=SCHED.unscheduled||[];
   const unschedCard=`<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:8px"><b>Unscheduled tasks</b>${us.length?`<span class="kw">${us.length}</span>`:''}<div class="grow"></div><button class="btn sm" onclick="planDay()">✦ Plan my day</button></div>
-    ${us.length?`<div style="margin-top:10px">${us.map(t=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)"><div style="flex:1">${esc(t.task)}</div><button class="btn ghost sm" onclick="suggestTodo(${t.id})">Find time</button></div>`).join('')}</div>`:`<div class="subtle-line" style="margin-top:6px">No pending tasks waiting to be scheduled.</div>`}
+    ${us.length?`<div style="margin-top:10px">${us.map(t=>`<div class="ut-row"><div class="ut-task">${esc(t.task)}</div><button class="btn ghost sm" onclick="suggestTodo(${t.id})">Find time</button></div>`).join('')}</div>`:`<div class="subtle-line" style="margin-top:6px">No pending tasks waiting to be scheduled.</div>`}
     <div id="planArea" style="margin-top:10px"></div></div>`;
   // Conflicts
   const conf=(SCHED.conflicts&&SCHED.conflicts.length)?`<div class="card" style="padding:14px;margin-bottom:16px;border-color:var(--error,#e2574c)">

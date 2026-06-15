@@ -349,13 +349,16 @@ async function route(req: ParsedRequest): Promise<string> {
       const { decayStaleOpenLoops } = await import('../db/openLoops');
       const { dedupLearnedFacts } = await import('../db/learnedProfile');
       const { recategorizeExpenses } = await import('../db/expenses');
+      const { cleanupJunkTodos, recategorizeAllTodos } = await import('../db/todos');
       const peopleRemoved = await cleanupJunkPeople(db);
       const loopsResolved = await decayStaleOpenLoops(db, Number(payload.loopDays) || 30);
       const factsMerged = await dedupLearnedFacts(db);
       const expensesFixed = await recategorizeExpenses(db);
+      const todosArchived = await cleanupJunkTodos(db);
+      const todosRecategorized = await recategorizeAllTodos(db);
       const { organizeMemory } = await import('../processing/organizer');
       await organizeMemory(db, 'manual');
-      return json(200, { ok: true, peopleRemoved, loopsResolved, factsMerged, expensesFixed });
+      return json(200, { ok: true, peopleRemoved, loopsResolved, factsMerged, expensesFixed, todosArchived, todosRecategorized });
     }
     if (req.method === 'DELETE' && req.path.startsWith('/api/fact/')) {
       const id = Number(req.path.split('/').pop());

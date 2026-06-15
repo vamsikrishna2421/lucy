@@ -13,17 +13,68 @@ export interface TodoRow extends ExtractedTask {
   list_name?: string | null;
 }
 
+// ── Task QA: meta/dev tasks must never enter the user's personal list ──
+// Building/designing LUCY itself, "add to backlog", list-merge, dedup-notes = not the user's todos.
+const META_TASK_RE = /\b(build|implement|design|prototype|wire up|ship|code|spec out)\b[^.]{0,40}\b(feature|wake word|voice trigger|ui\b|layout|spec\b|enforcement|intelligence layer|timetable feature|engine|endpoint|\bapi\b|backlog)\b/i;
+const META_TASK_RE2 = /\bto the lucy app\b|\blucy app backlog\b|\badd\b[^.]{0,30}\bbacklog\b|\bmerge\b[^.]{0,30}\blist\b|\bremove duplicate\b[^.]{0,30}(note|reminder)|\bfeature spec\b/i;
+export function looksLikeMetaTask(task: string): boolean {
+  const t = (task || '').toLowerCase();
+  return META_TASK_RE.test(t) || META_TASK_RE2.test(t);
+}
+
+const CAT_RULES: Array<[RegExp, string]> = [
+  [/\b(grocery|groceries|supermarket|milk|eggs|vegetables|patel brothers)\b/i, 'groceries'],
+  [/\b(buy|purchase|pick up|order|return|drop off|shop)\b/i, 'errand'],
+  [/\b(pay|bill|rent|invoice|insurance|bank|tax|transfer|refund)\b/i, 'finance'],
+  [/\b(gym|workout|run|walk|doctor|dentist|medicine|appointment|health)\b/i, 'health'],
+  [/\b(call|email|message|text|reply|meet|meeting|reach out|follow up)\b/i, 'work'],
+  [/\b(clean|fix|repair|laundry|cook|home|house|garden|move)\b/i, 'home'],
+  [/\b(learn|study|read|research|course|practice|look into)\b/i, 'learning'],
+];
+/** Infer a better category when the LLM left it generic. */
+export function categorizeTask(task: string, category: string | null | undefined): string {
+  const c = (category || '').trim().toLowerCase();
+  if (c && !['other', 'others', 'misc', 'general', 'uncategorized', ''].includes(c)) return c;
+  for (const [re, cat] of CAT_RULES) if (re.test(task || '')) return cat;
+  return c || 'other';
+}
+
+/** Archive meta/dev tasks that slipped into the user's pending list. Returns count archived. */
+export async function cleanupJunkTodos(db: SQLiteDatabase): Promise<number> {
+  const rows = await db.getAllAsync<{ id: number; task: string }>("SELECT id, task FROM todos WHERE status = 'pending' AND archived_at IS NULL");
+  let n = 0;
+  for (const r of rows) {
+    if (looksLikeMetaTask(r.task)) {
+      await db.runAsync("UPDATE todos SET status = 'archived', archived_at = CURRENT_TIMESTAMP, archive_reason = 'meta/dev task (QA)' WHERE id = ?", r.id);
+      n++;
+    }
+  }
+  return n;
+}
+
+/** Backfill better categories on existing pending todos sitting in a generic bucket. */
+export async function recategorizeAllTodos(db: SQLiteDatabase): Promise<number> {
+  const rows = await db.getAllAsync<{ id: number; task: string; category: string | null }>("SELECT id, task, category FROM todos WHERE status = 'pending' AND archived_at IS NULL");
+  let n = 0;
+  for (const r of rows) {
+    const next = categorizeTask(r.task, r.category);
+    if (next !== (r.category || '').toLowerCase()) { await db.runAsync('UPDATE todos SET category = ? WHERE id = ?', next, r.id); n++; }
+  }
+  return n;
+}
+
 export async function insertTodo(
   db: SQLiteDatabase,
   captureId: number,
   todo: ExtractedTask,
   privacy: PrivacyLevel,
 ): Promise<void> {
+  if (looksLikeMetaTask(todo.task)) return; // never create app-dev / meta tasks as user todos
   await db.runAsync(
     'INSERT INTO todos (capture_id, task, category, urgency, context, privacy_level) VALUES (?, ?, ?, ?, ?, ?)',
     captureId,
     todo.task,
-    todo.category,
+    categorizeTask(todo.task, todo.category),
     todo.urgency,
     todo.context,
     privacy,

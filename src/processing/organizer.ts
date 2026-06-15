@@ -269,5 +269,6 @@ export async function organizeMemory(db: SQLiteDatabase, trigger: string): Promi
     void import('../db/people').then(({ cleanupJunkPeople }) => cleanupJunkPeople(db)).catch(() => {});
     void import('../db/openLoops').then(({ decayStaleOpenLoops }) => decayStaleOpenLoops(db)).catch(() => {});
     void import('../db/learnedProfile').then(({ dedupLearnedFacts }) => dedupLearnedFacts(db)).catch(() => {});
+    void import('../db/todos').then(({ cleanupJunkTodos }) => cleanupJunkTodos(db)).catch(() => {});
   }
 }

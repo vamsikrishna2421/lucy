@@ -50,17 +50,19 @@ const NEXT_CONFIDENCE: Record<LearnedConfidence, LearnedConfidence> = {
  * Inserts a new learned fact or reinforces an existing one (by normalized statement):
  * bumps evidence_count, raises confidence one step, refreshes last_seen_at.
  * Feedback-sourced facts are stated directly by the user → start confirmed.
+ * Returns true ONLY when a genuinely new fact was inserted (so callers can report an honest
+ * "learned N new things" instead of counting reinforcements of facts already known).
  */
 export async function upsertLearnedFact(
   db: SQLiteDatabase,
   category: LearnedCategory,
   statement: string,
   source: LearnedSource = 'reflection',
-): Promise<void> {
+): Promise<boolean> {
   const text = statement.trim();
-  if (text.length < 4) return;
+  if (text.length < 4) return false;
   const normalized = normalizeStatement(text);
-  if (!normalized) return;
+  if (!normalized) return false;
 
   // Find a match: exact normalized first, else a fuzzy token-overlap match (the LLM
   // rephrases facts each run, so exact-only dedup would let near-duplicates pile up
@@ -84,13 +86,14 @@ export async function upsertLearnedFact(
        WHERE id = ?`,
       nextConf, text, normalized, category, existing.id,
     );
-    return;
+    return false; // reinforced an existing fact, not a new one
   }
   await db.runAsync(
     `INSERT INTO learned_facts (category, statement, normalized, confidence, evidence_count, source)
      VALUES (?, ?, ?, ?, 1, ?)`,
     category, text, normalized, source === 'feedback' ? 'confirmed' : 'emerging', source,
   );
+  return true;
 }
 
 /** Lists learned facts, strongest first (confirmed → supported → emerging, then recency). */

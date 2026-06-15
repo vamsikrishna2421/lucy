@@ -71,18 +71,20 @@ export async function reflectOnUser(db: SQLiteDatabase, force = false): Promise<
     let parsed: Array<{ category?: string; statement?: string }> = [];
     try { parsed = JSON.parse(raw.slice(start, end + 1)); } catch { parsed = []; }
 
-    let count = 0;
+    // Count only genuinely NEW facts — reinforcing a fact LUCY already knows isn't "learning
+    // something new", and reporting it as such was the misleading reflect:N label.
+    let learned = 0;
     for (const item of parsed.slice(0, 12)) {
       const statement = (item.statement ?? '').trim();
       if (!statement) continue;
       const category = (VALID.includes(item.category as LearnedCategory) ? item.category : 'trait') as LearnedCategory;
-      await upsertLearnedFact(db, category, statement, 'reflection');
-      count += 1;
+      const isNew = await upsertLearnedFact(db, category, statement, 'reflection');
+      if (isNew) learned += 1;
     }
 
     await decayStaleLearnedFacts(db);
     await setSetting(db, REFLECT_DATE_KEY, today);
-    return count;
+    return learned;
   } catch {
     return 0;
   }

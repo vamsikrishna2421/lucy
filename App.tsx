@@ -4,7 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { splashShownAt } from './src/splashTime';
 import { useIncomingShare } from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, AppState, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, AppState, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { passiveListener, type PassiveListenerState } from './src/audio/PassiveListener';
 import { SplashAnimation } from './src/components/SplashAnimation';
 import { ErrorBoundary, installGlobalErrorLogger } from './src/components/ErrorBoundary';
@@ -363,6 +363,32 @@ export default function App() {
         }
       } catch { /* non-critical */ }
     })(), 60 * 60 * 1000); // 1 hour
+    // Deep link: "Hey Siri → LUCY" (a Shortcut opens lucy://voice?text=... or lucy://capture?text=...).
+    // Routes dictated text through the command brain so you can drive LUCY hands-free via Siri.
+    const handleDeepLink = async (url: string | null) => {
+      if (!url || url.indexOf('lucy://') !== 0) return;
+      const mm = url.match(/^lucy:\/\/([^?]*)\??(.*)$/);
+      const kind = (mm && mm[1] ? mm[1] : 'voice').replace(/\/+$/, '');
+      const qs = (mm && mm[2]) || '';
+      const tm = qs.match(/(?:^|&)text=([^&]*)/);
+      const text = tm ? decodeURIComponent(tm[1].replace(/\+/g, ' ')) : '';
+      if (!text.trim()) return;
+      try {
+        if (kind === 'capture') {
+          await enqueueTranscript(text, Platform.OS === 'ios' ? 'ios' : 'android');
+          setRefreshToken((v) => v + 1); void drainQueue();
+        } else {
+          const { runVoiceCommand } = await import('./src/voice/commandRouter');
+          const r = await runVoiceCommand(text, undefined, 'siri');
+          if (r?.speak) Alert.alert('LUCY', r.speak);
+          if (r?.navigate) applyVoiceNav(r.navigate);
+          setRefreshToken((v) => v + 1);
+        }
+      } catch { /* ignore malformed links */ }
+    };
+    const linkSub = Linking.addEventListener('url', (e) => { void handleDeepLink(e.url); });
+    void Linking.getInitialURL().then(handleDeepLink).catch(() => {});
+
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         void drainQueue();
@@ -425,8 +451,9 @@ export default function App() {
       clearInterval(interval);
       clearInterval(lifeContextInterval);
       subscription.remove();
+      linkSub.remove();
     };
-  }, [drainQueue, ready]);
+  }, [drainQueue, ready, applyVoiceNav]);
 
   const reprocessAllMemories = useCallback(async (): Promise<number> => {
     const count = await queueFullMemoryReprocessing();

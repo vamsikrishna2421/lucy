@@ -81,6 +81,7 @@ export default function App() {
   const [notificationDetail, setNotificationDetail] = useState<NotificationDetailPayload | null>(null);
   const [passiveState, setPassiveState] = useState<PassiveListenerState>(passiveListener.getState());
   const [meetingVisible, setMeetingVisible] = useState(false);
+  const [meetingRecording, setMeetingRecording] = useState(false);
   const [notifCenterVisible, setNotifCenterVisible] = useState(false);
   const [wrappedVisible, setWrappedVisible] = useState(false);
   const [askInitialQuestion, setAskInitialQuestion] = useState<string | undefined>(undefined);
@@ -645,11 +646,17 @@ export default function App() {
               {/* Meeting + Listen pills on top */}
               <View style={styles.headerPillRow}>
                 <TouchableOpacity
-                  style={[styles.listenPill, meetingVisible && styles.listenPillActive]}
+                  style={[styles.listenPill, (meetingVisible || meetingRecording) && styles.listenPillActive]}
                   onPress={() => setMeetingVisible(true)}
                 >
-                  <MaterialCommunityIcons name="microphone" size={13} color={meetingVisible ? LUCY_COLORS.primary : LUCY_COLORS.textMuted} />
-                  <Text style={[styles.listenText, meetingVisible && styles.listenTextActive]}>Meeting</Text>
+                  <MaterialCommunityIcons
+                    name={meetingRecording ? 'record-circle' : 'microphone'}
+                    size={13}
+                    color={(meetingVisible || meetingRecording) ? LUCY_COLORS.primary : LUCY_COLORS.textMuted}
+                  />
+                  <Text style={[styles.listenText, (meetingVisible || meetingRecording) && styles.listenTextActive]}>
+                    {meetingRecording ? '● Rec' : 'Meeting'}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.listenPill, listenActive && styles.listenPillActive]} onPress={togglePassiveListening}>
                   <MaterialCommunityIcons name="ear-hearing" size={13} color={listenActive ? LUCY_COLORS.primary : LUCY_COLORS.textMuted} />
@@ -675,7 +682,7 @@ export default function App() {
                   celebrateKey={refreshToken}
                   status={
                     voiceStatus === 'transcribing' ? 'saving'
-                    : meetingVisible ? 'reading'
+                    : (meetingVisible || meetingRecording) ? 'reading'
                     : (voiceStatus === 'recording' || passiveState.status === 'listening') ? 'listening'
                     : processingActive ? 'organizing'
                     : (screen === 'dashboard' && dashCurrentView === 'Ask Lucy') ? 'thinking'
@@ -831,7 +838,12 @@ export default function App() {
         onDismiss={() => setNotificationDetail(null)}
       />
       <SplashAnimation fadeAnim={splashFade} visible={showSplash} />
-      <MeetingMode visible={meetingVisible} onClose={() => setMeetingVisible(false)} />
+      <MeetingMode
+        visible={meetingVisible}
+        onClose={() => setMeetingVisible(false)}
+        onRecordingStarted={() => { setMeetingRecording(true); setMeetingVisible(false); }}
+        onDone={() => setMeetingRecording(false)}
+      />
       <LucyWrapped visible={wrappedVisible} onClose={() => setWrappedVisible(false)} />
       <NotificationCenter
         visible={notifCenterVisible}

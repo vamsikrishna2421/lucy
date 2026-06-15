@@ -65,7 +65,14 @@ function formatDuration(ms: number): string {
   return `${s}s`;
 }
 
-export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export function MeetingMode({ visible, onClose, onRecordingStarted, onDone }: {
+  visible: boolean;
+  onClose: () => void;
+  /** Called when the mic starts — parent can hide the modal so the app is freely usable. */
+  onRecordingStarted?: () => void;
+  /** Called when the meeting fully ends (summary dismissed or meeting cancelled). */
+  onDone?: () => void;
+}) {
   const [phase, setPhase] = useState<MeetingPhase>('idle');
   const [meetingTitle, setMeetingTitle] = useState('');
   const [startedAt, setStartedAt] = useState<Date | null>(null);
@@ -189,6 +196,8 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
     setSavedToMemory(false);
     setPhase('recording');
     await passiveListener.start({ meetingMode: true });
+    // Let the parent hide the modal so the user can use the app freely while recording.
+    onRecordingStarted?.();
   };
 
   /**
@@ -245,6 +254,7 @@ export function MeetingMode({ visible, onClose }: { visible: boolean; onClose: (
     setSavedToMemory(false);
     savedRef.current = false;
     rawTranscriptRef.current = '';
+    onDone?.();
     onClose();
   };
 

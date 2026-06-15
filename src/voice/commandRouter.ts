@@ -92,16 +92,17 @@ export function isHelpQuery(text: string): boolean {
   return /\b(how (do|can) i|how to|where (is|are|do i|can i)|how does (lucy|the app|this) work|what can (you|lucy) do|help me (use|with)|i don.?t know (how|where)|guide me|show me how)\b/i.test(text);
 }
 
-/** Answer a help question from LUCY's built-in manual. */
+/** Answer a help question from LUCY's built-in manual. Returns null when not covered (caller falls through to askLucy). */
 async function answerFromManual(question: string): Promise<string | null> {
   try {
     const { LUCY_MANUAL } = await import('./appManual');
     const { resolveRemoteAvailability } = await import('../ai/provider');
     const { promptAI } = await import('../ai/openai');
     const { promptDevice } = await import('../ai/device');
-    const sys = `You are LUCY's in-app guide. Using ONLY the manual below, answer the user's question about how to use the app/website in 2-4 short sentences. Tell them exactly WHERE to tap/look. If it's not covered, say so briefly.\n\nMANUAL:\n${LUCY_MANUAL}`;
+    const sys = `You are LUCY, a personal AI assistant. A user asked how to do something in the app. Using ONLY the app knowledge below, answer in 1-3 short sentences, speaking as yourself in first person ("I", "you can", "tap…"). Tell them exactly WHERE to tap. If the answer is NOT in the knowledge below, reply with exactly the token: NOT_COVERED\n\nAPP KNOWLEDGE:\n${LUCY_MANUAL}`;
     const { available, openAIKey } = await resolveRemoteAvailability();
-    return available ? await promptAI(sys, question, openAIKey) : await promptDevice(`${sys}\n\nQ: ${question}\n/no_think`);
+    const raw = available ? await promptAI(sys, question, openAIKey) : await promptDevice(`${sys}\n\nQ: ${question}\n/no_think`);
+    return raw.includes('NOT_COVERED') ? null : raw.trim() || null;
   } catch { return null; }
 }
 

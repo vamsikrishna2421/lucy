@@ -60,6 +60,7 @@ export default function ConversationModal({ visible, context, onNavigate, onClos
 
   const close = (): void => { void conversation.end(); onClose(); };
 
+  const hasContent = snap.turns.length > 0 || !!snap.partial;
   const orbColor = snap.state === 'speaking' ? C.primaryGlow : snap.state === 'thinking' ? C.gold : C.primary;
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
   const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.55] });
@@ -74,12 +75,12 @@ export default function ConversationModal({ visible, context, onNavigate, onClos
           </TouchableOpacity>
         </View>
 
-        <View style={styles.orbWrap}>
-          <Animated.View style={[styles.orbGlow, { backgroundColor: orbColor, opacity: glowOpacity, transform: [{ scale }] }]} />
-          <Animated.View style={[styles.orb, { borderColor: orbColor, transform: [{ scale }] }]}>
+        <View style={[styles.orbWrap, hasContent && styles.orbWrapCompact]}>
+          <Animated.View style={[styles.orbGlow, hasContent && styles.orbGlowCompact, { backgroundColor: orbColor, opacity: glowOpacity, transform: [{ scale }] }]} />
+          <Animated.View style={[styles.orb, hasContent && styles.orbCompact, { borderColor: orbColor, transform: [{ scale }] }]}>
             <Ionicons
               name={snap.state === 'speaking' ? 'volume-high' : snap.state === 'thinking' ? 'sparkles' : 'mic'}
-              size={42}
+              size={hasContent ? 28 : 42}
               color={orbColor}
             />
           </Animated.View>
@@ -125,11 +126,14 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   title: { color: C.textDark, fontSize: 20, fontWeight: '700' },
   orbWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 28 },
+  orbWrapCompact: { paddingVertical: 8 },
   orbGlow: { position: 'absolute', width: 150, height: 150, borderRadius: 75, top: 28 },
+  orbGlowCompact: { width: 70, height: 70, borderRadius: 35, top: 4 },
   orb: {
     width: 116, height: 116, borderRadius: 58, borderWidth: 2,
     backgroundColor: C.surfaceRaised, alignItems: 'center', justifyContent: 'center',
   },
+  orbCompact: { width: 52, height: 52, borderRadius: 26 },
   stateLabel: { marginTop: 18, fontSize: 15, fontWeight: '600', letterSpacing: 0.3 },
   transcript: { flex: 1, marginTop: 4 },
   hint: { color: C.textSubtle, fontSize: 14, lineHeight: 21, textAlign: 'center', paddingHorizontal: 12, marginTop: 24 },

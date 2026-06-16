@@ -225,6 +225,8 @@ export function MeetingMode({ visible, onClose, onRecordingStarted, onSummaryRea
 
   const stopMeeting = async () => {
     setPhase('processing');
+    // Make sure the modal is visible so the user sees "Summarizing…" — call before the async work.
+    onSummaryReady?.();
     // Grab the accumulated transcript BEFORE stopping (stop flushes the buffer)
     const rawTranscript = passiveListener.getAccumulatedTranscript();
     rawTranscriptRef.current = rawTranscript;
@@ -337,8 +339,8 @@ export function MeetingMode({ visible, onClose, onRecordingStarted, onSummaryRea
           {/* PROCESSING phase */}
           {phase === 'processing' && (
             <View style={styles.processingWrap}>
-              <Text style={styles.processingTitle}>LUCY is summarizing...</Text>
-              <Text style={styles.processingSub}>Extracting decisions, action items, and follow-ups</Text>
+              <Text style={styles.processingTitle}>Summarizing your meeting…</Text>
+              <Text style={styles.processingSub}>Please wait — LUCY is extracting decisions, action items, and follow-ups</Text>
             </View>
           )}
 
@@ -395,7 +397,8 @@ export function MeetingMode({ visible, onClose, onRecordingStarted, onSummaryRea
                   </>
                 ) : (
                   <Text style={styles.noSummary}>
-                    Summary requires Remote Intelligence (Settings → Remote intelligence). The meeting has been saved to your captures.
+                    No speech was captured during this meeting. Make sure the mic is active (orange dot visible) and speak near the phone.
+                    The meeting has been saved to your memories.
                   </Text>
                 )}
                   {/* LUCY branding inside the captured card */}

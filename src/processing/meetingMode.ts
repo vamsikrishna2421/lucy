@@ -62,17 +62,19 @@ export async function generateMeetingSummary(
   title: string,
   db: SQLiteDatabase,
 ): Promise<MeetingSummary | null> {
-  if (!transcript.trim() || transcript.split(/\s+/).length < 20) return null;
-
   const [{ available, openAIKey }, profile] = await Promise.all([resolveRemoteAvailability(), getUserProfile(db)]);
   if (!available) return null;
+
+  // Always attempt if we have an AI key — even a short/empty transcript can produce a minimal summary.
+  // Pass a clear placeholder when nothing was captured so the AI at least returns the schema.
+  const effectiveTranscript = transcript.trim() || `Meeting titled "${title}" was recorded but no speech was captured.`;
 
   const userPrefix = buildUserContextPrefix(profile);
   // 16 000-char window covers ~30 min of speech; longer transcripts keep first+last halves.
   const MAX = 16000;
-  const clipped = transcript.length > MAX
-    ? transcript.slice(0, MAX / 2) + '\n...[middle section omitted for length]...\n' + transcript.slice(-MAX / 2)
-    : transcript;
+  const clipped = effectiveTranscript.length > MAX
+    ? effectiveTranscript.slice(0, MAX / 2) + '\n...[middle section omitted for length]...\n' + effectiveTranscript.slice(-MAX / 2)
+    : effectiveTranscript;
   const input = `Meeting title: ${title}\n\nTranscript:\n${clipped}`;
 
   try {

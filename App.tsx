@@ -842,7 +842,8 @@ export default function App() {
         visible={meetingVisible}
         onClose={() => setMeetingVisible(false)}
         onRecordingStarted={() => { setMeetingRecording(true); setMeetingVisible(false); }}
-        onDone={() => setMeetingRecording(false)}
+        onSummaryReady={() => setMeetingVisible(true)}
+        onDone={() => { setMeetingRecording(false); setMeetingVisible(false); }}
       />
       <LucyWrapped visible={wrappedVisible} onClose={() => setWrappedVisible(false)} />
       <NotificationCenter

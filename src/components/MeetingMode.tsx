@@ -65,11 +65,13 @@ function formatDuration(ms: number): string {
   return `${s}s`;
 }
 
-export function MeetingMode({ visible, onClose, onRecordingStarted, onDone }: {
+export function MeetingMode({ visible, onClose, onRecordingStarted, onSummaryReady, onDone }: {
   visible: boolean;
   onClose: () => void;
   /** Called when the mic starts — parent can hide the modal so the app is freely usable. */
   onRecordingStarted?: () => void;
+  /** Called when the summary is ready — parent should make the modal visible so user sees it. */
+  onSummaryReady?: () => void;
   /** Called when the meeting fully ends (summary dismissed or meeting cancelled). */
   onDone?: () => void;
 }) {
@@ -242,6 +244,10 @@ export function MeetingMode({ visible, onClose, onRecordingStarted, onDone }: {
     } catch { /* show empty summary */ }
 
     setPhase('summary');
+    // Ensure the modal is visible so the user sees the summary card even if they dismissed
+    // the sheet during background recording. Must be called before persistMeeting so the
+    // parent can show the modal before the async save completes.
+    onSummaryReady?.();
     // Save automatically and exactly once — no explicit button needed.
     await persistMeeting(gen, durationMs);
     setSavedToMemory(true);

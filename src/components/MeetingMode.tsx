@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
+  Dimensions,
   Easing,
   KeyboardAvoidingView,
   Modal,
@@ -15,6 +16,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+// Height available for the scrollable summary content:
+// sheet is 85% of screen; subtract vertical padding (68) + share row (62) + saved notice (44) + done btn (58) + gaps (28)
+const SUMMARY_SCROLL_H = Math.round(Dimensions.get('window').height * 0.85) - 260;
 import * as Clipboard from 'expo-clipboard';
 import { captureRef } from 'react-native-view-shot';
 import { LUCY_COLORS } from '../config/colors';
@@ -286,7 +291,7 @@ export function MeetingMode({ visible, onClose, onRecordingStarted, onSummaryRea
     <Modal transparent animationType="slide" visible={visible} onRequestClose={handleClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.kavWrap}>
       <Pressable style={styles.backdrop} onPress={phase === 'idle' ? handleClose : undefined}>
-        <Pressable style={[styles.sheet, phase === 'summary' && styles.sheetExpanded]}>
+        <Pressable style={styles.sheet}>
 
           {/* IDLE / NAMING phase */}
           {(phase === 'idle' || phase === 'naming') && (
@@ -349,8 +354,8 @@ export function MeetingMode({ visible, onClose, onRecordingStarted, onSummaryRea
 
           {/* SUMMARY phase */}
           {phase === 'summary' && (
-            <View style={styles.summaryPhaseWrap}>
-              <ScrollView style={styles.summaryScroll} showsVerticalScrollIndicator={true}>
+            <>
+              <ScrollView style={[styles.summaryScroll, { height: SUMMARY_SCROLL_H }]} showsVerticalScrollIndicator={true}>
                 {/* cardRef wraps the shareable card — title + summary + LUCY branding */}
                 <View ref={cardRef} collapsable={false} style={styles.shareCard}>
                 <Text style={styles.sheetTitle}>{meetingTitle || 'Meeting'}</Text>
@@ -427,7 +432,7 @@ export function MeetingMode({ visible, onClose, onRecordingStarted, onSummaryRea
               <TouchableOpacity style={styles.startBtn} onPress={handleClose}>
                 <Text style={styles.startBtnText}>Done</Text>
               </TouchableOpacity>
-            </View>
+            </>
           )}
         </Pressable>
       </Pressable>
@@ -472,7 +477,6 @@ const styles = StyleSheet.create({
     borderTopColor: LUCY_COLORS.border,
     maxHeight: '85%',
   },
-  sheetExpanded: { flex: 1 },
   sheetTitle: { color: LUCY_COLORS.textDark, fontSize: 22, fontWeight: '800', marginBottom: 8 },
   sheetSub: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21, marginBottom: 20 },
   titleInput: {
@@ -516,9 +520,8 @@ const styles = StyleSheet.create({
   processingTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '800', marginBottom: 8 },
   processingSub: { color: LUCY_COLORS.textMuted, fontSize: 14 },
   // Summary
-  summaryPhaseWrap: { flex: 1 },
   durationSmall: { color: LUCY_COLORS.textSubtle, fontSize: 13, marginBottom: 16 },
-  summaryScroll: { flex: 1, marginBottom: 16 },
+  summaryScroll: { marginBottom: 16 },
   shareCard: { backgroundColor: LUCY_COLORS.surface, borderRadius: 16, padding: 16 },
   cardBrand: { color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '800', letterSpacing: 0.5, marginTop: 18, textAlign: 'right' },
   shareRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },

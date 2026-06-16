@@ -1499,8 +1499,8 @@ function TimelineView({
                               {src.glyph} {src.label}
                             </Text>
 
-                            {/* Content-type pill — only once extraction loaded */}
-                            {nt ? (
+                            {/* Content-type pill — only once extraction loaded; suppress when it duplicates the source badge */}
+                            {nt && nt.label !== src.label ? (
                               <View style={[styles.tlTypePill, { borderColor: nt.color + '55' }]}>
                                 <Text style={[styles.tlTypePillText, { color: nt.color }]}>{nt.label}</Text>
                               </View>

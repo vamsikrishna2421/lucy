@@ -155,6 +155,14 @@ export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, cont
     case 'task': {
       const task = (cmd.title || cmd.text || '').trim();
       if (!task) return { ok: false, intent: 'task', speak: 'What task should I add?' };
+      // Lists (any comma-separated content) go through extraction so each item becomes a separate task.
+      // Simple single tasks (no commas) get a fast direct insert.
+      if (task.includes(',')) {
+        const { enqueueTranscript, processQueue } = await import('../processing/extract');
+        await enqueueTranscript(task, 'text');
+        void processQueue();
+        return { ok: true, intent: 'task', speak: `Got it — I'll split that into individual tasks.`, navigate: 'tasks' };
+      }
       await db.runAsync("INSERT INTO todos (task, category, urgency, context, status) VALUES (?, 'general', 'medium', '', 'pending')", task);
       return { ok: true, intent: 'task', speak: cmd.speak || `Added "${task}" to your tasks.`, navigate: 'tasks' };
     }

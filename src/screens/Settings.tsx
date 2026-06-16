@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { DevLogViewer } from '../components/DevLogViewer';
 import { shareAsync } from 'expo-sharing';
-import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import { Alert, Linking, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { clearDownloadedDeviceModels, getDeviceModelState, prepareDeviceModel, selectDeviceModel, subscribeToDeviceModel, type DeviceModelState } from '../ai/device';
 import { localModelOptions, type LocalModelId } from '../ai/modelCatalog';
 import { getRemoteAccessState, removeRemoteOpenAIKey, setRemoteEnabled, storeRemoteOpenAIKey, type RemoteAccessState } from '../ai/remoteAccess';
@@ -88,6 +89,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [claudeKey, setClaudeKey] = useState('');
   const [hasClaudeKey, setHasClaudeKey] = useState(false);
   const [savingClaudeKey, setSavingClaudeKey] = useState(false);
+  const [siriGuideVisible, setSiriGuideVisible] = useState(false);
 
 
   useEffect(() => {
@@ -688,6 +690,14 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           actionLabel="Import"
         />
         <SettingsSectionLabel label="App" />
+        {Platform.OS === 'ios' && (
+          <SettingsRow
+            title="Set up Siri Shortcut"
+            value={'Say "Hey Siri, [your phrase]" to send notes to LUCY hands-free'}
+            onAction={() => setSiriGuideVisible(true)}
+            actionLabel="Set up"
+          />
+        )}
         <SettingsRow
           title="Check for updates"
           value="Fetch the latest LUCY improvements and restart into them"
@@ -732,6 +742,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       </View>
 
       <DevLogViewer visible={devLogVisible} onClose={() => setDevLogVisible(false)} />
+      <SiriShortcutGuide visible={siriGuideVisible} onClose={() => setSiriGuideVisible(false)} />
       <CheckInScheduler
         visible={checkInSchedulerVisible}
         onClose={() => setCheckInSchedulerVisible(false)}
@@ -1057,6 +1068,90 @@ function panelTitle(panel: SettingsPanel): string {
     case 'privacy': return 'Privacy';
     default: return '';
   }
+}
+
+const SIRI_STEPS = [
+  { n: '1', title: 'Open Shortcuts', body: 'Tap the button below to open the iOS Shortcuts app.' },
+  { n: '2', title: 'Create a new shortcut', body: 'Tap + in the top right.' },
+  { n: '3', title: 'Add "Dictate Text" action', body: 'Search for "Dictate Text" and add it. This captures your voice.' },
+  { n: '4', title: 'Add "Open URLs" action', body: 'Search for "Open URLs". Paste the LUCY URL (copy below) into the URL field. Insert the "Dictated Text" variable inside it.' },
+  { n: '5', title: 'Name & add to Siri', body: 'Tap the shortcut name → rename it (e.g. "Send to Lucy") → tap Add to Siri → record your phrase.' },
+  { n: '6', title: 'Use it!', body: 'Say "Hey Siri, Send to Lucy" → dictate "Lucy, buy milk and eggs" → LUCY receives it.' },
+];
+
+const LUCY_VOICE_URL = 'lucy://voice?text=[Dictated Text]';
+const LUCY_CAPTURE_URL = 'lucy://capture?text=[Dictated Text]';
+
+function SiriShortcutGuide({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [copied, setCopied] = useState<'voice' | 'capture' | null>(null);
+
+  const copy = async (which: 'voice' | 'capture') => {
+    await Clipboard.setStringAsync(which === 'voice' ? LUCY_VOICE_URL : LUCY_CAPTURE_URL);
+    setCopied(which);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: LUCY_COLORS.background }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.border }}>
+          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700' }}>Set up Siri Shortcut</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Text style={{ color: LUCY_COLORS.primary, fontSize: 15, fontWeight: '600' }}>Done</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, lineHeight: 20, marginBottom: 20 }}>
+            Once set up, say your Siri phrase then speak to LUCY — e.g. "Lucy, buy milk and eggs" or "Lucy, schedule a meeting at 3pm". The word Lucy at the start is stripped automatically.
+          </Text>
+
+          {SIRI_STEPS.map((s) => (
+            <View key={s.n} style={{ flexDirection: 'row', marginBottom: 18 }}>
+              <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: LUCY_COLORS.primary + '22', alignItems: 'center', justifyContent: 'center', marginRight: 12, marginTop: 1 }}>
+                <Text style={{ color: LUCY_COLORS.primary, fontSize: 13, fontWeight: '700' }}>{s.n}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '600', marginBottom: 2 }}>{s.title}</Text>
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, lineHeight: 19 }}>{s.body}</Text>
+              </View>
+            </View>
+          ))}
+
+          <View style={{ backgroundColor: LUCY_COLORS.surface, borderRadius: 12, padding: 14, marginTop: 4, marginBottom: 16, borderWidth: 1, borderColor: LUCY_COLORS.border }}>
+            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>LUCY URLs to paste into Shortcuts</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: LUCY_COLORS.textDark, fontSize: 12, fontWeight: '600' }}>Smart (commands + notes)</Text>
+                <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>{LUCY_VOICE_URL}</Text>
+              </View>
+              <TouchableOpacity onPress={() => void copy('voice')} style={{ marginLeft: 10, backgroundColor: copied === 'voice' ? '#22C55E22' : LUCY_COLORS.surfaceRaised, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                <Text style={{ color: copied === 'voice' ? '#22C55E' : LUCY_COLORS.primary, fontSize: 12, fontWeight: '600' }}>{copied === 'voice' ? 'Copied!' : 'Copy'}</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: LUCY_COLORS.textDark, fontSize: 12, fontWeight: '600' }}>Direct capture (save verbatim)</Text>
+                <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>{LUCY_CAPTURE_URL}</Text>
+              </View>
+              <TouchableOpacity onPress={() => void copy('capture')} style={{ marginLeft: 10, backgroundColor: copied === 'capture' ? '#22C55E22' : LUCY_COLORS.surfaceRaised, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                <Text style={{ color: copied === 'capture' ? '#22C55E' : LUCY_COLORS.primary, fontSize: 12, fontWeight: '600' }}>{copied === 'capture' ? 'Copied!' : 'Copy'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => void Linking.openURL('shortcuts://')}
+            style={{ backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginBottom: 12 }}
+          >
+            <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>Open Shortcuts App →</Text>
+          </TouchableOpacity>
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, textAlign: 'center', lineHeight: 17 }}>
+            Replace [Dictated Text] in the URL with the Shortcuts variable by tapping inside the URL field and inserting the variable from the magic wand menu.
+          </Text>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
 }
 
 function SettingsSectionLabel({ label }: { label: string }) {

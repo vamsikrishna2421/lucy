@@ -376,8 +376,11 @@ export default function App() {
       const kind = (mm && mm[1] ? mm[1] : 'voice').replace(/\/+$/, '');
       const qs = (mm && mm[2]) || '';
       const tm = qs.match(/(?:^|&)text=([^&]*)/);
-      const text = tm ? decodeURIComponent(tm[1].replace(/\+/g, ' ')) : '';
-      if (!text.trim()) return;
+      const rawText = tm ? decodeURIComponent(tm[1].replace(/\+/g, ' ')) : '';
+      // Strip leading "Lucy" / "Hey Lucy" / "Tell Lucy to" prefix so a Siri Shortcut can
+      // pass the full dictated phrase (e.g. "Lucy buy milk and eggs") and the app cleans it.
+      const text = rawText.replace(/^\s*(?:hey\s+)?(?:hi\s+)?(?:ok\s+)?(?:tell\s+)?(?:ask\s+)?lucy[,!:.]*\s*(?:to\s+)?/i, '').trim();
+      if (!text) return;
       try {
         if (kind === 'capture') {
           await enqueueTranscript(text, Platform.OS === 'ios' ? 'ios' : 'android');

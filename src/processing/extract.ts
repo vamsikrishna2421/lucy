@@ -510,6 +510,14 @@ export async function processQueue(onChange?: () => void, maxCaptures = Number.P
         onChange?.();
         continue;
       }
+      // Meeting captures are already fully processed by the meeting engine.
+      // Skip AI extraction to avoid false FAILED status on the timeline.
+      if (capture.source === 'meeting') {
+        await markCaptureProcessed(db, capture.id);
+        processedCount += 1;
+        onChange?.();
+        continue;
+      }
       // Inject related past captures as context for richer extraction
       let transcriptWithContext = capture.raw_transcript;
       if (capture.privacy_level !== 'private') {

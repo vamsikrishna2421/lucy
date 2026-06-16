@@ -283,7 +283,7 @@ export function MeetingMode({ visible, onClose, onRecordingStarted, onSummaryRea
   return (
     <Modal transparent animationType="slide" visible={visible} onRequestClose={handleClose}>
       <Pressable style={styles.backdrop} onPress={phase === 'idle' ? handleClose : undefined}>
-        <Pressable style={styles.sheet}>
+        <Pressable style={[styles.sheet, phase === 'summary' && styles.sheetExpanded]}>
 
           {/* IDLE / NAMING phase */}
           {(phase === 'idle' || phase === 'naming') && (
@@ -346,8 +346,8 @@ export function MeetingMode({ visible, onClose, onRecordingStarted, onSummaryRea
 
           {/* SUMMARY phase */}
           {phase === 'summary' && (
-            <>
-              <ScrollView style={styles.summaryScroll} showsVerticalScrollIndicator={false}>
+            <View style={styles.summaryPhaseWrap}>
+              <ScrollView style={styles.summaryScroll} showsVerticalScrollIndicator={true}>
                 {/* cardRef wraps the shareable card — title + summary + LUCY branding */}
                 <View ref={cardRef} collapsable={false} style={styles.shareCard}>
                 <Text style={styles.sheetTitle}>{meetingTitle || 'Meeting'}</Text>
@@ -424,7 +424,7 @@ export function MeetingMode({ visible, onClose, onRecordingStarted, onSummaryRea
               <TouchableOpacity style={styles.startBtn} onPress={handleClose}>
                 <Text style={styles.startBtnText}>Done</Text>
               </TouchableOpacity>
-            </>
+            </View>
           )}
         </Pressable>
       </Pressable>
@@ -467,6 +467,7 @@ const styles = StyleSheet.create({
     borderTopColor: LUCY_COLORS.border,
     maxHeight: '85%',
   },
+  sheetExpanded: { flex: 1 },
   sheetTitle: { color: LUCY_COLORS.textDark, fontSize: 22, fontWeight: '800', marginBottom: 8 },
   sheetSub: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21, marginBottom: 20 },
   titleInput: {
@@ -510,8 +511,9 @@ const styles = StyleSheet.create({
   processingTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '800', marginBottom: 8 },
   processingSub: { color: LUCY_COLORS.textMuted, fontSize: 14 },
   // Summary
+  summaryPhaseWrap: { flex: 1 },
   durationSmall: { color: LUCY_COLORS.textSubtle, fontSize: 13, marginBottom: 16 },
-  summaryScroll: { maxHeight: 380, marginBottom: 16 },
+  summaryScroll: { flex: 1, marginBottom: 16 },
   shareCard: { backgroundColor: LUCY_COLORS.surface, borderRadius: 16, padding: 16 },
   cardBrand: { color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '800', letterSpacing: 0.5, marginTop: 18, textAlign: 'right' },
   shareRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },

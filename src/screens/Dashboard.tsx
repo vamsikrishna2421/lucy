@@ -1506,8 +1506,8 @@ function TimelineView({
                               </View>
                             ) : null}
 
-                            {/* Processing state — shown instead of type pill when pending */}
-                            {!nt && item.processed !== 1 ? (
+                            {/* Processing state — shown instead of type pill when pending; meetings skip extraction so always treated as done */}
+                            {!nt && item.processed !== 1 && item.source !== 'meeting' ? (
                               <View style={styles.tlTypePill}>
                                 {item.processed === -1 ? (
                                   <Text style={[styles.tlTypePillText, { color: '#F59E0B' }]}>FAILED</Text>
@@ -1556,6 +1556,11 @@ function TimelineView({
                             </Text>
                           );
                         })()
+                      ) : item.source === 'meeting' ? (
+                        // Meeting captures skip AI extraction — derive a title from the first line of raw_transcript.
+                        <Text style={styles.tlTitle} numberOfLines={isExpanded ? undefined : 1}>
+                          {(item.raw_transcript ?? '').split('\n')[0] || 'Meeting'}
+                        </Text>
                       ) : item.processed === -1 ? (
                         <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '600', lineHeight: 19 }}>
                           Couldn't organize — tap ⋯ to retry

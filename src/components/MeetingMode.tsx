@@ -3,7 +3,9 @@ import {
   Alert,
   Animated,
   Easing,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -282,6 +284,7 @@ export function MeetingMode({ visible, onClose, onRecordingStarted, onSummaryRea
 
   return (
     <Modal transparent animationType="slide" visible={visible} onRequestClose={handleClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.kavWrap}>
       <Pressable style={styles.backdrop} onPress={phase === 'idle' ? handleClose : undefined}>
         <Pressable style={[styles.sheet, phase === 'summary' && styles.sheetExpanded]}>
 
@@ -428,6 +431,7 @@ export function MeetingMode({ visible, onClose, onRecordingStarted, onSummaryRea
           )}
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -456,6 +460,7 @@ function SummarySection({ title, items }: { title: string; items: string[] }) {
 }
 
 const styles = StyleSheet.create({
+  kavWrap: { flex: 1 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: LUCY_COLORS.surface,

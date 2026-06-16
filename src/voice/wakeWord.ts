@@ -19,6 +19,8 @@ import { isMicBusy, onMicBusyChange } from '../audio/micCoordinator';
 // "hey lucy" + common mishearings; also "hi/ok lucy". Captures any trailing command in the same breath.
 const WAKE_RE = /\b(?:hey|hi|ok|okay|hey there)\s*,?\s*(?:lucy|lucie|loocy|loosey|lucid|lucky)\b[\s,.!?-]*(.*)/i;
 
+export type WakeWordStatus = 'disabled' | 'starting' | 'listening' | 'unavailable';
+
 class WakeWordListener {
   private enabled = false;
   private running = false;     // recognizer currently active
@@ -28,8 +30,22 @@ class WakeWordListener {
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private unsubMic: (() => void) | null = null;
   private cooldownUntil = 0;   // ignore detections briefly after firing (debounce)
+  private statusListeners = new Set<(s: WakeWordStatus) => void>();
+  private _status: WakeWordStatus = 'disabled';
 
+  private setStatus(s: WakeWordStatus): void {
+    if (this._status === s) return;
+    this._status = s;
+    for (const l of this.statusListeners) l(s);
+  }
+
+  get status(): WakeWordStatus { return this._status; }
   get isEnabled(): boolean { return this.enabled; }
+
+  onStatusChange(fn: (s: WakeWordStatus) => void): () => void {
+    this.statusListeners.add(fn);
+    return () => { this.statusListeners.delete(fn); };
+  }
 
   /** Turn the wake word on. `onWake` fires with any words spoken after "hey lucy" (or null). */
   async enable(onWake: (trailing: string | null) => void): Promise<boolean> {
@@ -60,6 +76,7 @@ class WakeWordListener {
     } catch { /* not critical */ }
 
     this.enabled = true;
+    this.setStatus('starting');
     // Pause while another owner (Listen / conversation) uses the mic; resume when free.
     this.unsubMic = onMicBusyChange((busy) => {
       if (!this.enabled) return;
@@ -75,6 +92,7 @@ class WakeWordListener {
     this.onWake = null;
     if (this.unsubMic) { this.unsubMic(); this.unsubMic = null; }
     this.pauseRecognition();
+    this.setStatus('disabled');
   }
 
   private scheduleStart(delay: number): void {
@@ -84,6 +102,7 @@ class WakeWordListener {
 
   private startRecognition(): void {
     if (!this.enabled || this.running || isMicBusy()) return;
+    this.setStatus('starting');
     this.configureListeners();
     try {
       ExpoSpeechRecognitionModule.start({
@@ -92,10 +111,15 @@ class WakeWordListener {
         continuous: true,
         requiresOnDeviceRecognition: true,
         addsPunctuation: false,
-        iosCategory: { category: 'playAndRecord', categoryOptions: ['defaultToSpeaker', 'allowBluetooth'], mode: 'measurement' },
+        // No iosCategory — let the system manage the audio session, same as the Capture voice button.
       });
       this.running = true;
-    } catch { this.running = false; this.scheduleStart(1500); }
+    } catch (e) {
+      console.warn('[WakeWord] start failed:', e);
+      this.running = false;
+      this.setStatus('unavailable');
+      this.scheduleStart(3000);
+    }
   }
 
   private pauseRecognition(): void {
@@ -109,6 +133,7 @@ class WakeWordListener {
     this.clearListeners();
     this.subs = [
       ExpoSpeechRecognitionModule.addListener('result', (e: ExpoSpeechRecognitionResultEvent) => {
+        this.setStatus('listening');
         const text = e.results[0]?.transcript ?? '';
         if (!text) return;
         const m = WAKE_RE.exec(text);
@@ -120,13 +145,18 @@ class WakeWordListener {
       }),
       ExpoSpeechRecognitionModule.addListener('error', (e: ExpoSpeechRecognitionErrorEvent) => {
         if (!this.enabled || e.error === 'aborted') return;
+        console.warn('[WakeWord] error:', e.error, e.message);
         // no-speech / transient: just restart after a beat.
         this.running = false;
+        this.setStatus('starting');
         this.scheduleStart(1200);
       }),
       ExpoSpeechRecognitionModule.addListener('end', () => {
         this.running = false;
-        if (this.enabled && !isMicBusy()) this.scheduleStart(300);
+        if (this.enabled && !isMicBusy()) {
+          this.setStatus('starting');
+          this.scheduleStart(300);
+        }
       }),
     ];
   }

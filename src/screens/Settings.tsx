@@ -13,6 +13,7 @@ import { getCaptureQueueSummary, type CaptureQueueSummary } from '../db/captures
 import { getLatestOrganizationRun, type OrganizationRunRow } from '../db/knowledge';
 import { getSetting, setSetting } from '../db/settings';
 import { getBackgroundProcessingState, type BackgroundProcessingState } from '../processing/background';
+import { wakeWord, type WakeWordStatus } from '../voice/wakeWord';
 import { runEnglishDeviceBenchmark, type BenchmarkResult } from '../processing/benchmark';
 import { organizeMemory } from '../processing/organizer';
 import { CheckInScheduler } from '../components/CheckInScheduler';
@@ -90,7 +91,9 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [hasClaudeKey, setHasClaudeKey] = useState(false);
   const [savingClaudeKey, setSavingClaudeKey] = useState(false);
   const [siriGuideVisible, setSiriGuideVisible] = useState(false);
+  const [wakeStatus, setWakeStatus] = useState<WakeWordStatus>(wakeWord.status);
 
+  useEffect(() => wakeWord.onStatusChange(setWakeStatus), []);
 
   useEffect(() => {
     void (async () => {
@@ -556,11 +559,14 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         />
         <SettingsRow
           title="Hey Lucy wake word"
-          value={wakeWordEnabled
-            ? 'Listening for “Hey Lucy” while the app is open'
-            : 'Off — say “Hey Lucy” hands-free (uses more battery)'}
-          badge={wakeWordEnabled ? 'On' : 'Off'}
-          active={wakeWordEnabled}
+          value={
+            !wakeWordEnabled ? 'Off — say “Hey Lucy” hands-free (uses more battery)'
+            : wakeStatus === 'listening' ? 'Active — say “Hey Lucy” anytime'
+            : wakeStatus === 'unavailable' ? 'Unavailable — speech recognition failed to start'
+            : 'Starting up…'
+          }
+          badge={wakeWordEnabled ? (wakeStatus === 'listening' ? 'Listening' : wakeStatus === 'unavailable' ? 'Error' : 'Starting') : 'Off'}
+          active={wakeWordEnabled && wakeStatus === 'listening'}
           actionLabel={wakeWordEnabled ? 'Turn off' : 'Turn on'}
           onAction={() => void onChangeWakeWord(!wakeWordEnabled)}
         />

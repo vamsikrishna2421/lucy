@@ -92,6 +92,7 @@ export default function App() {
   const shareToastAnim = useRef(new Animated.Value(0)).current;
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const [convoOpen, setConvoOpen] = useState(false);
+  const [convoInitial, setConvoInitial] = useState<string | null>(null);
   const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
   const [processingActive, setProcessingActive] = useState(false);
   const voiceRecording = useRef(false);
@@ -588,8 +589,12 @@ export default function App() {
   }, [finishVoiceCapture]);
 
   // "Hey Lucy" wake word → open the conversation loop (hands-free). Trailing words spoken in the
-  // same breath are ignored for now; the conversation greets and listens fresh.
-  const onWake = useCallback((_trailing: string | null) => { setConvoOpen(true); }, []);
+  // same breath (e.g. "Hey Lucy add milk to my list") are passed as initialText so the command
+  // is processed immediately without waiting for another utterance.
+  const onWake = useCallback((trailing: string | null) => {
+    setConvoInitial(trailing || null);
+    setConvoOpen(true);
+  }, []);
 
   // Persist + apply the wake-word toggle (also called from Settings).
   const setWakeWordPreference = useCallback(async (on: boolean) => {
@@ -862,7 +867,8 @@ export default function App() {
         visible={convoOpen}
         context={currentVoiceContext()}
         onNavigate={applyVoiceNav}
-        onClose={() => setConvoOpen(false)}
+        onClose={() => { setConvoOpen(false); setConvoInitial(null); }}
+        initialText={convoInitial ?? undefined}
       />
       <Onboarding visible={onboardingVisible} onComplete={async () => {
         setOnboardingVisible(false);

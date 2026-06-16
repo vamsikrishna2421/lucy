@@ -67,9 +67,10 @@ class WakeWordListener {
     try {
       const supported = await ExpoSpeechRecognitionModule.getSupportedLocales({});
       const installed = (supported?.installedLocales ?? []) as string[];
-      // Fall back to en-US when the profile locale isn't installed, OR when the
-      // list is empty (device didn't enumerate — safer to use the universal default).
-      if (!installed.includes(this.locale)) {
+      // Fall back to en-US when the profile locale isn't installed.
+      // If the list is empty the device couldn't enumerate locales (not that nothing is installed),
+      // so silently keep the current locale rather than warning or overriding unnecessarily.
+      if (installed.length > 0 && !installed.includes(this.locale)) {
         console.warn(`[WakeWord] Locale ${this.locale} not in installedLocales; falling back to en-US`);
         this.locale = 'en-US';
       }
@@ -109,7 +110,10 @@ class WakeWordListener {
         lang: this.locale,
         interimResults: true,    // detect the wake word fast, mid-utterance
         continuous: true,
-        requiresOnDeviceRecognition: true,
+        // requiresOnDeviceRecognition intentionally omitted: forcing on-device causes the recognizer
+        // to fail on devices where the on-device speech model isn't downloaded (iOS Settings →
+        // General → Keyboards → Dictation). Cloud speech is acceptable here — the wake word feature
+        // must work reliably, and the app is already in the foreground when listening.
         addsPunctuation: false,
         // No iosCategory — let the system manage the audio session, same as the Capture voice button.
       });
@@ -146,8 +150,13 @@ class WakeWordListener {
       ExpoSpeechRecognitionModule.addListener('error', (e: ExpoSpeechRecognitionErrorEvent) => {
         if (!this.enabled || e.error === 'aborted') return;
         console.warn('[WakeWord] error:', e.error, e.message);
-        // no-speech / transient: just restart after a beat.
         this.running = false;
+        // Fatal errors — retrying won't help; mark unavailable and stop.
+        if (e.error === 'language-not-supported' || e.error === 'not-allowed') {
+          this.setStatus('unavailable');
+          return;
+        }
+        // Transient errors (no-speech, network, audio-hardware, etc.): restart after a beat.
         this.setStatus('starting');
         this.scheduleStart(1200);
       }),

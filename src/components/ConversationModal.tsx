@@ -17,6 +17,7 @@ interface Props {
   context?: string;
   onNavigate?: (section: string) => void;
   onClose: () => void;
+  initialText?: string;
 }
 
 const STATE_LABEL: Record<ConvoSnapshot['state'], string> = {
@@ -26,7 +27,7 @@ const STATE_LABEL: Record<ConvoSnapshot['state'], string> = {
   speaking: 'Speaking…',
 };
 
-export default function ConversationModal({ visible, context, onNavigate, onClose }: Props): React.ReactElement {
+export default function ConversationModal({ visible, context, onNavigate, onClose, initialText }: Props): React.ReactElement {
   const [snap, setSnap] = useState<ConvoSnapshot>({ state: 'off', turns: [], partial: '', error: null });
   const pulse = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef<ScrollView>(null);
@@ -36,7 +37,7 @@ export default function ConversationModal({ visible, context, onNavigate, onClos
 
   // Start the loop on open, stop it on close.
   useEffect(() => {
-    if (visible) void conversation.start({ context, onNavigate });
+    if (visible) void conversation.start({ context, onNavigate, initialText });
     else void conversation.end();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);

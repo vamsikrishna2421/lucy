@@ -46,7 +46,7 @@ class ConversationManager {
   private set(state: ConvoState): void { this.state = state; this.emit(); }
   getState(): ConvoState { return this.state; }
 
-  async start(opts?: { context?: string; onNavigate?: (section: string) => void }): Promise<void> {
+  async start(opts?: { context?: string; onNavigate?: (section: string) => void; initialText?: string }): Promise<void> {
     if (this.state !== 'off') return;
     this.context = opts?.context;
     this.onNavigate = opts?.onNavigate ?? null;
@@ -79,9 +79,13 @@ class ConversationManager {
     } catch { /* not critical */ }
 
     this.configureListeners();
-    await speak("I'm listening — what's up?");
-    if (!this.active) return;
-    this.beginListening();
+    if (opts?.initialText) {
+      await this.handleUtterance(opts.initialText);
+    } else {
+      await speak("I'm listening — what's up?");
+      if (!this.active) return;
+      this.beginListening();
+    }
   }
 
   private configureListeners(): void {
@@ -175,10 +179,13 @@ class ConversationManager {
     this.active = false;
     try { ExpoSpeechRecognitionModule.abort(); } catch { /* ignore */ }
     this.clearListeners();
-    await stopSpeaking();
-    this.partial = '';
-    this.set('off');
-    releaseMic('conversation');
+    try {
+      await stopSpeaking();
+      this.partial = '';
+      this.set('off');
+    } finally {
+      releaseMic('conversation');
+    }
   }
 }
 

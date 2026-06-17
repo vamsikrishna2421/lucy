@@ -3,11 +3,11 @@
     "name": "LUCY",
     "slug": "lucy",
     "scheme": "lucy",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/lucy-eye-icon.png",
     "userInterfaceStyle": "dark",
-    "runtimeVersion": "2",
+    "runtimeVersion": "3",
     "updates": {
       "url": "https://u.expo.dev/1a602e40-067f-4786-a9a6-26c6cc15bda6",
       "requestHeaders": { "expo-channel-name": "production" },
@@ -39,7 +39,9 @@
         "NSMicrophoneUsageDescription": "LUCY listens in the background to capture your thoughts, ideas, and songs automatically.",
         "NSSpeechRecognitionUsageDescription": "LUCY uses on-device speech recognition to transcribe what you say during passive listening mode.",
         "NSPhotoLibraryUsageDescription": "LUCY may save audio recordings to your library when capturing memories.",
-        "NSCameraUsageDescription": "LUCY uses the camera to scan receipts so it can track your expenses automatically.",
+        "NSCameraUsageDescription": "LUCY uses the camera to scan receipts and food (meals & barcodes) so it can track expenses and calories automatically.",
+        "NSHealthShareUsageDescription": "LUCY reads your activity, sleep, and heart data so it can show your health analytics and gently guide you. This stays on your device.",
+        "NSHealthUpdateUsageDescription": "LUCY can save wellness data you log (like water or mindful minutes) back to Apple Health.",
         "NSCalendarsUsageDescription": "LUCY reads your calendar to send pre-meeting briefs and help you prepare — all data stays on your device.",
         "NSLocationWhenInUseUsageDescription": "LUCY uses your location to add context to your daily brief and answer location questions — never shared externally.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "LUCY records your city-level location (~1 mile precision) once per hour to build your personal travel timeline — never precise GPS, never shared externally.",
@@ -171,6 +173,7 @@
       ],
       "expo-notifications",
       "expo-background-task",
+      "@kingstinct/react-native-healthkit",
       [
         "expo-splash-screen",
         {

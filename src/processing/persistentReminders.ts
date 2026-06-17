@@ -2,8 +2,8 @@
  * Persistent "nag" reminders — a notification that keeps buzzing until the user acknowledges it.
  *
  * iOS cannot loop a single notification forever, so the realistic cross-platform approach is a
- * SCHEDULED BURST: the first vibrating notification fires at the target time, then one every few
- * minutes for a fixed window. The instant the user taps any of them (handled in App.tsx via
+ * SCHEDULED BURST: the first vibrating notification fires at the target time, then one every 30
+ * seconds for a fixed window. The instant the user taps any of them (handled in App.tsx via
  * acknowledgeNagFromResponse), the whole remaining burst is cancelled. Rescheduling a burst for the
  * same key first cancels the old one, so moving/editing an event doesn't leave stale buzzes.
  *
@@ -16,15 +16,17 @@ import { Platform } from 'react-native';
 
 export const ALARM_CHANNEL = 'lucy-alarm';
 
-// Gentle nag: a vibrating notification every 3 minutes for up to 30 minutes (≈10 buzzes), each one
-// stoppable by a single tap. (User-chosen cadence — see project_voice / backlog.)
-const NAG_INTERVAL_MS = 3 * 60 * 1000;
-const NAG_WINDOW_MS = 30 * 60 * 1000;
-const NAG_MAX = Math.floor(NAG_WINDOW_MS / NAG_INTERVAL_MS); // 10 occurrences
+// Alarm-grade nag: a vibrating, sounding notification every 30 SECONDS, re-ringing until the user
+// taps to dismiss. iOS hard-caps pending local notifications at 64 (shared across ALL reminders), so
+// an unbounded 30s loop isn't possible — we schedule an aggressive bounded burst (30s × ~14 ≈ 7 min)
+// per key. True until-tapped persistence + Dynamic Island needs a Live Activity (native build).
+const NAG_INTERVAL_MS = 30 * 1000;          // re-ring every 30 seconds
+const NAG_WINDOW_MS = 7 * 60 * 1000;        // for ~7 minutes
+const NAG_MAX = Math.floor(NAG_WINDOW_MS / NAG_INTERVAL_MS); // 14 occurrences/key (budget-safe vs iOS 64)
 
 // A firm, repeating vibration so it's felt without the Critical-Alerts entitlement (which iOS only
 // grants special apps). On a phone in silent-no-vibrate mode iOS still can't force a buzz — documented.
-const ALARM_VIBRATION = [0, 400, 250, 400, 250, 600];
+const ALARM_VIBRATION = [0, 500, 250, 500, 250, 700];
 
 export async function ensureAlarmChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
@@ -84,6 +86,9 @@ export async function scheduleNag(input: NagInput): Promise<string | null> {
           data: { ...(input.data ?? {}), nagGroup: input.key },
           sound: true,
           vibrate: ALARM_VIBRATION,
+          // iOS: break through Focus/Do-Not-Disturb. 'timeSensitive' is honored once the Time-Sensitive
+          // entitlement ships in a build; harmless (falls back to a normal alert) until then.
+          interruptionLevel: 'timeSensitive',
         } as Notifications.NotificationContentInput,
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DATE,

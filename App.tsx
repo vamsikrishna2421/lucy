@@ -927,7 +927,7 @@ export default function App() {
         onClose={() => { setConvoOpen(false); setConvoInitial(null); }}
         initialText={convoInitial ?? undefined}
       />
-      <Onboarding visible={onboardingVisible} onComplete={async () => {
+      <Onboarding visible={onboardingVisible} onComplete={async (startTour) => {
         setOnboardingVisible(false);
         const db = await getDatabase();
         await setSetting(db, 'onboarding_complete', 'true');
@@ -940,9 +940,9 @@ export default function App() {
             void drainQueue();
           }
         } catch { /* non-critical */ }
-        // First-run: offer a live, spoken guided tour where Lucy walks through the app and the
-        // user tries each feature alongside her (the conversation card is non-blocking).
-        startGuidedTour(true);
+        // The last onboarding screen lets the user choose; start the live tour only if they opted in.
+        // Otherwise it's always available later from Settings → "Guided tour with Lucy".
+        if (startTour) startGuidedTour(false);
       }} />
     </SafeAreaProvider>
    </ErrorBoundary>

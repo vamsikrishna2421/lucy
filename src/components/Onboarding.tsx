@@ -4,7 +4,9 @@ import { LUCY_COLORS } from '../config/colors';
 
 const { width: SW } = Dimensions.get('window');
 
-const SLIDES = [
+interface Slide { title: string; subtitle: string; body: string; accent: string; tour?: boolean }
+
+const SLIDES: Slide[] = [
   {
     title: 'Meet LUCY',
     subtitle: 'Your private second brain',
@@ -23,9 +25,16 @@ const SLIDES = [
     body: 'Tap Ask and type any question. "What did I work on this week?" "Who am I meeting tomorrow?" "What\'s my battery level?" LUCY knows.',
     accent: 'Everything stays on your device',
   },
+  {
+    title: 'Want a guided tour?',
+    subtitle: 'Learn by doing, with Lucy',
+    body: 'Lucy can walk you through the app out loud — you try each feature live as she explains. It only takes a couple of minutes.',
+    accent: 'You can stop anytime',
+    tour: true,
+  },
 ];
 
-export function Onboarding({ visible, onComplete }: { visible: boolean; onComplete: () => void }) {
+export function Onboarding({ visible, onComplete }: { visible: boolean; onComplete: (startTour: boolean) => void }) {
   const [page, setPage] = useState(0);
   const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -34,7 +43,7 @@ export function Onboarding({ visible, onComplete }: { visible: boolean; onComple
       Animated.timing(slideAnim, { toValue: -(page + 1) * SW, duration: 300, useNativeDriver: true }).start();
       setPage(page + 1);
     } else {
-      onComplete();
+      onComplete(false);
     }
   };
 
@@ -64,16 +73,29 @@ export function Onboarding({ visible, onComplete }: { visible: boolean; onComple
             ))}
           </View>
 
-          {/* Button */}
-          <TouchableOpacity style={styles.btn} onPress={goNext}>
-            <Text style={styles.btnText}>{page < SLIDES.length - 1 ? 'Next' : 'Start capturing'}</Text>
-          </TouchableOpacity>
-
-          {page < SLIDES.length - 1 ? (
-            <TouchableOpacity onPress={onComplete} style={styles.skip}>
-              <Text style={styles.skipText}>Skip</Text>
-            </TouchableOpacity>
-          ) : null}
+          {/* Buttons */}
+          {slide.tour ? (
+            <>
+              <TouchableOpacity style={styles.btn} onPress={() => onComplete(true)}>
+                <Text style={styles.btnText}>Start the tour</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => onComplete(false)} style={styles.skip}>
+                <Text style={styles.skipText}>Maybe later</Text>
+              </TouchableOpacity>
+              <Text style={styles.settingsNote}>
+                You can start it anytime from Settings → "Guided tour with Lucy".
+              </Text>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity style={styles.btn} onPress={goNext}>
+                <Text style={styles.btnText}>Next</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => onComplete(false)} style={styles.skip}>
+                <Text style={styles.skipText}>Skip</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
     </Modal>
@@ -105,4 +127,5 @@ const styles = StyleSheet.create({
   btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   skip: { alignItems: 'center', paddingVertical: 6 },
   skipText: { color: LUCY_COLORS.textSubtle, fontSize: 14 },
+  settingsNote: { color: LUCY_COLORS.textSubtle, fontSize: 12, textAlign: 'center', marginTop: 10, lineHeight: 17 },
 });

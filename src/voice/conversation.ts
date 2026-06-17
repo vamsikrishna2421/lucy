@@ -31,6 +31,7 @@ class ConversationManager {
   private active = false;
   private locale = 'en-US';
   private context: string | undefined;
+  private getContext: (() => string) | null = null;
   private onNavigate: ((section: string) => void) | null = null;
   private subs: Array<{ remove(): void }> = [];
   private listeners = new Set<(s: ConvoSnapshot) => void>();
@@ -46,9 +47,10 @@ class ConversationManager {
   private set(state: ConvoState): void { this.state = state; this.emit(); }
   getState(): ConvoState { return this.state; }
 
-  async start(opts?: { context?: string; onNavigate?: (section: string) => void; initialText?: string }): Promise<void> {
+  async start(opts?: { context?: string; getContext?: () => string; onNavigate?: (section: string) => void; initialText?: string }): Promise<void> {
     if (this.state !== 'off') return;
     this.context = opts?.context;
+    this.getContext = opts?.getContext ?? null;
     this.onNavigate = opts?.onNavigate ?? null;
     this.turns = []; this.partial = ''; this.error = null;
     this.active = true;
@@ -140,13 +142,18 @@ class ConversationManager {
     if (END_RE.test(text)) { this.turns.push({ role: 'user', text }); this.emit(); await this.speakAndEnd('Okay — talk soon.'); return; }
     // Pause recognition while thinking + speaking so LUCY doesn't hear herself.
     try { ExpoSpeechRecognitionModule.stop(); } catch { /* ignore */ }
+    // Capture prior turns as history (before pushing this utterance) so LUCY remembers a
+    // multi-step flow like a live demo walkthrough.
+    const history = this.turns.map((t) => ({ role: t.role, content: t.text }));
     this.turns.push({ role: 'user', text });
     this.set('thinking');
     let reply = '';
     let navigate: string | null = null;
     try {
       const { runVoiceCommand } = await import('./commandRouter');
-      const r = await runVoiceCommand(text, undefined, this.context);
+      // Read the CURRENT screen each turn (live) so LUCY is aware of where the user navigated.
+      const liveContext = this.getContext ? this.getContext() : this.context;
+      const r = await runVoiceCommand(text, undefined, liveContext, history);
       reply = (r.speak || '').trim() || "I'm not sure about that one.";
       navigate = r.navigate ?? null;
     } catch {

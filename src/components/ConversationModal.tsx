@@ -1,9 +1,10 @@
 /**
- * ConversationModal — in-place overlay that slides up from the bottom of the screen.
- * The home screen stays visible behind a translucent backdrop; Lucy's panel sits at the
- * bottom ~260px. Drives the conversation engine (src/voice/conversation.ts): on open it
- * starts the listen→think→speak loop; it renders the current state, Lucy's last reply,
- * the user's live partial, and an End button. Opened by the wake word or the Talk button.
+ * ConversationModal — a NON-BLOCKING floating card that slides up near the bottom of the screen.
+ * The container is pointerEvents="box-none" so the rest of the app stays fully usable while Lucy
+ * is active (e.g. navigating during a live demo) — only the card itself captures taps. Drives the
+ * conversation engine (src/voice/conversation.ts): on open it starts the listen→think→speak loop;
+ * it renders the current state, Lucy's last reply, the user's live partial, and an End button.
+ * Opened by the wake word or the Talk button.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -20,6 +21,7 @@ import { conversation, type ConvoSnapshot } from '../voice/conversation';
 interface Props {
   visible: boolean;
   context?: string;
+  getContext?: () => string;
   onNavigate?: (section: string) => void;
   onClose: () => void;
   initialText?: string;
@@ -28,6 +30,7 @@ interface Props {
 export default function ConversationModal({
   visible,
   context,
+  getContext,
   onNavigate,
   onClose,
   initialText,
@@ -50,7 +53,7 @@ export default function ConversationModal({
 
   // Start the conversation loop on open, stop it on close.
   useEffect(() => {
-    if (visible) void conversation.start({ context, onNavigate, initialText });
+    if (visible) void conversation.start({ context, getContext, onNavigate, initialText });
     else void conversation.end();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
@@ -103,12 +106,10 @@ export default function ConversationModal({
   if (!visible && snap.state === 'off') return null;
 
   return (
+    // box-none: touches pass straight through the empty area to the app behind, so the
+    // user can keep navigating during a live demo. Only the panel itself captures taps.
     <View style={styles.container} pointerEvents="box-none">
-      {/* Backdrop — absorbs taps above the panel but does NOT close Lucy
-          (she might still be speaking). */}
-      <Pressable style={styles.backdrop} />
-
-      {/* Sliding panel */}
+      {/* Floating panel — non-blocking, hovers above the bottom nav */}
       <Animated.View style={[styles.panel, { transform: [{ translateY: slideY }] }]}>
         {/* Amber glow line + glow strip at the very top of the panel */}
         <View style={styles.glowStrip} />
@@ -165,10 +166,8 @@ export default function ConversationModal({
   );
 }
 
-const PANEL_HEIGHT = 260;
-
 const styles = StyleSheet.create({
-  // Covers entire screen; positioned absolute so home screen is visible behind it.
+  // Covers entire screen; box-none so empty space passes touches through to the app.
   container: {
     position: 'absolute',
     top: 0,
@@ -179,28 +178,33 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
 
-  // Semi-transparent backdrop above the panel — does not dismiss Lucy.
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-
-  // Sliding bottom panel.
+  // Floating card pinned near the bottom but ABOVE the nav, so the app stays usable.
   panel: {
-    minHeight: PANEL_HEIGHT,
-    backgroundColor: 'rgba(12, 8, 18, 0.96)',
-    borderTopWidth: 1.5,
-    borderTopColor: 'rgba(255, 140, 0, 0.6)',
-    paddingBottom: 34, // iPhone safe-area bottom
+    backgroundColor: 'rgba(12, 8, 18, 0.97)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 140, 0, 0.55)',
+    borderRadius: 22,
+    marginHorizontal: 12,
+    marginBottom: 104, // clear the bottom nav / mic button
+    paddingBottom: 6,
     paddingHorizontal: 20,
+    paddingTop: 4,
+    shadowColor: '#FF8C00',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 18,
+    elevation: 12,
   },
 
-  // Thin warm glow strip immediately below the top border.
+  // Thin warm glow strip at the top of the card.
   glowStrip: {
-    height: 12,
+    height: 10,
     backgroundColor: 'rgba(255, 120, 0, 0.08)',
     marginHorizontal: -20,
+    marginTop: -4,
     marginBottom: 8,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
   },
 
   // Row that shows the current state indicator.
@@ -237,7 +241,6 @@ const styles = StyleSheet.create({
 
   // Lucy's last reply text area.
   lucyTextWrap: {
-    flex: 1,
     justifyContent: 'center',
     marginBottom: 8,
   },

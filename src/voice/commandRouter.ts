@@ -8,6 +8,7 @@
 import { jsonrepair } from 'jsonrepair';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getDatabase } from '../db';
+import type { AskTurn } from '../processing/ask';
 
 export type VoiceIntent = 'schedule' | 'capture' | 'task' | 'mood' | 'link' | 'project' | 'navigate' | 'ask';
 
@@ -107,7 +108,7 @@ async function answerFromManual(question: string): Promise<string | null> {
 }
 
 /** Interpret a spoken command and EXECUTE it. Returns what to say + where to navigate. */
-export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, context?: string): Promise<VoiceResult> {
+export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, context?: string, history?: AskTurn[]): Promise<VoiceResult> {
   const db = dbArg ?? await getDatabase();
   const cmd = await interpret(text, context);
   const now = Date.now();
@@ -192,13 +193,16 @@ export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, cont
       return { ok: true, intent: 'navigate', speak: cmd.speak || `Opening ${section}.`, navigate: section };
     }
     default: {
+      // Live demo / walkthrough / tour requests → use the rich conversational path (history +
+      // live screen aware) so LUCY can guide step by step, NOT the one-shot manual answer.
+      const isDemoRequest = /\b(demo|walk ?through|walk me through|tour|show me around|present(ation)?|guide me through)\b/i.test(text);
       // Help / how-to questions about using the app → answer from the built-in manual.
-      if (isHelpQuery(text)) {
+      if (!isDemoRequest && isHelpQuery(text)) {
         const speak = await answerFromManual((cmd.text || text).trim());
         if (speak) return { ok: true, intent: 'ask', speak };
       }
       const { askLucy } = await import('../processing/ask');
-      const ans = await askLucy((cmd.text || text).trim(), undefined, undefined, context);
+      const ans = await askLucy((cmd.text || text).trim(), undefined, history ?? [], context);
       const reply = (ans.llmResponse || ans.message || '').trim() || 'I’m not sure about that one.';
       return { ok: true, intent: 'ask', speak: reply, navigate: ans.answerKind === 'schedule' ? 'calendar' : null };
     }

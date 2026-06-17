@@ -16,9 +16,74 @@ import {
 } from 'expo-speech-recognition';
 import { isMicBusy, onMicBusyChange } from '../audio/micCoordinator';
 
-// "hey lucy" + common mishearings; prefix (hey/hi/ok/hello) is optional so bare "Lucy" also triggers.
-// Wider name set covers cloud-speech mishearings (Luce, Luci, Lousy, Losie, Lose, Luzy, etc.).
-const WAKE_RE = /\b(?:(?:hey|hi|ok|okay|hey there|hello|yo)\s*,?\s*)?(?:lucy|lucie|luce|luci|loocy|loosey|lousy|losie|lose|luzy|lucid|lucky)\b[\s,.!?-]*(.*)/i;
+// Fuzzy / phonetic wake-word matching. Cloud speech recognizers garble "Lucy" into all sorts of
+// near-pronunciations for accented speakers ("hey loosy", "a lucy", "lassi", "hey lucia", "lucky"…),
+// so instead of a fixed alternatives list we map each spoken word to a rough phonetic key and accept
+// anything that sounds close to "lucy" (phonetic key "lusi").
+
+/**
+ * Normalize a single word to a rough phonetic form so that accent variants / mishearings of the same
+ * name collapse together. Intentionally simple — good enough to cluster "lucy"-likes near "lusi".
+ */
+function phoneticKey(word: string): string {
+  let w = (word || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (!w) return '';
+  // ph -> f
+  w = w.replace(/ph/g, 'f');
+  // trailing ie / ey / y -> i  (lucie, lucey, lucy -> luci-ish)
+  w = w.replace(/(?:ie|ey|y)$/g, 'i');
+  // c/k/q soft before e/i/y -> s, otherwise hard -> k
+  let out = '';
+  for (let i = 0; i < w.length; i++) {
+    const ch = w[i];
+    if (ch === 'c' || ch === 'k' || ch === 'q') {
+      const next = w[i + 1];
+      out += (next === 'e' || next === 'i' || next === 'y') ? 's' : 'k';
+    } else if (ch === 'z') {
+      out += 's';
+    } else {
+      out += ch;
+    }
+  }
+  // collapse doubled letters -> single
+  out = out.replace(/(.)\1+/g, '$1');
+  return out;
+}
+
+/** Standard Levenshtein edit distance (small DP). */
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = new Array(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    const cur = new Array(n + 1);
+    cur[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
+const LUCY_KEY = phoneticKey('lucy'); // "lusi"
+
+/** True if a spoken word is a plausible "Lucy" — phonetically close, or an accent-y luc/loo/lus prefix. */
+function isLucyToken(word: string): boolean {
+  const raw = (word || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (!raw) return false;
+  if (levenshtein(phoneticKey(raw), LUCY_KEY) <= 1) return true;
+  if (raw.length >= 3 && raw.length <= 6 &&
+      (raw.startsWith('luc') || raw.startsWith('loo') || raw.startsWith('lus'))) return true;
+  return false;
+}
+
+// Optional leading filler words ("hey lucy", "ok lucy …") — not required.
+const FILLERS = new Set(['hey', 'hi', 'ok', 'okay', 'hello', 'yo', 'a', 'uh']);
 
 export type WakeWordStatus = 'disabled' | 'starting' | 'listening' | 'unavailable';
 
@@ -147,12 +212,27 @@ class WakeWordListener {
             console.log('[WakeWord] heard:', JSON.stringify(text));
             this.setStatus('listening');
           }
-          const m = WAKE_RE.exec(text);
-          if (!m) continue;
+          // Tokenize and find the first "Lucy"-like word near the start of the utterance.
+          const tokens = text.split(/[\s,.!?-]+/).filter(Boolean);
+          // Allow the match within the first 4 words (a leading filler like "hey"/"ok" is optional,
+          // not required). This keeps "hey lucy" / "lucy" / "ok lucy add milk" triggering while
+          // making a mid-sentence "...a lucy moment" far less likely to fire.
+          const searchLimit = Math.min(tokens.length, 4);
+          let matchIdx = -1;
+          for (let t = 0; t < searchLimit; t++) {
+            if (isLucyToken(tokens[t])) { matchIdx = t; break; }
+          }
+          if (matchIdx === -1) continue;
+          // Any tokens before the match must be fillers (avoids false positives from real words).
+          let onlyFillersBefore = true;
+          for (let t = 0; t < matchIdx; t++) {
+            if (!FILLERS.has(tokens[t].toLowerCase().replace(/[^a-z]/g, ''))) { onlyFillersBefore = false; break; }
+          }
+          if (!onlyFillersBefore) continue;
           if (Date.now() < this.cooldownUntil) return;
           this.cooldownUntil = Date.now() + 4000;
-          const trailing = (m[1] || '').trim();
-          console.log('[WakeWord] MATCHED text:', JSON.stringify(text), 'trailing:', trailing);
+          const trailing = tokens.slice(matchIdx + 1).join(' ').trim();
+          console.log('[WakeWord] MATCHED text:', JSON.stringify(text), 'token:', JSON.stringify(tokens[matchIdx]), 'trailing:', trailing);
           this.fire(trailing || null);
           return;
         }

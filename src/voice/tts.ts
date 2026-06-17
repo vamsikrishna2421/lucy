@@ -8,11 +8,62 @@ type SpeechModule = typeof import('expo-speech');
 let mod: SpeechModule | null = null;
 let loaded = false;
 
+let selectedVoiceId: string | null = null;
+let prefsLoaded = false;
+
 async function speech(): Promise<SpeechModule | null> {
   if (loaded) return mod;
   loaded = true;
   try { mod = await import('expo-speech'); } catch { mod = null; }
   return mod;
+}
+
+/** Load the persisted voice preference into the module cache. No-op on failure. */
+export async function loadVoicePrefs(): Promise<void> {
+  try {
+    const { getDatabase } = await import('../db');
+    const { getSetting } = await import('../db/settings');
+    const db = await getDatabase();
+    selectedVoiceId = (await getSetting(db, 'tts_voice_id')) || null;
+    prefsLoaded = true;
+  } catch { /* no-op: keep defaults */ }
+}
+
+/** Persist and cache the chosen voice. Pass null to fall back to the system default. */
+export async function setVoice(voiceId: string | null): Promise<void> {
+  selectedVoiceId = voiceId;
+  prefsLoaded = true;
+  try {
+    const { getDatabase } = await import('../db');
+    const { setSetting } = await import('../db/settings');
+    const db = await getDatabase();
+    await setSetting(db, 'tts_voice_id', voiceId ?? '');
+  } catch { /* no-op */ }
+}
+
+export function getSelectedVoiceId(): string | null {
+  return selectedVoiceId;
+}
+
+export interface TtsVoice { identifier: string; name: string; language: string; quality?: string }
+
+/** List the English voices available on this device, premium/enhanced first. */
+export async function listVoices(): Promise<TtsVoice[]> {
+  const S = await speech();
+  if (!S) return [];
+  try {
+    const raw = await S.getAvailableVoicesAsync();
+    const voices: TtsVoice[] = (raw ?? [])
+      .map((v) => ({ identifier: v.identifier, name: v.name, language: v.language, quality: v.quality as string | undefined }))
+      .filter((v) => v.language.toLowerCase().startsWith('en'));
+    const rank = (q?: string): number => {
+      const s = (q ?? '').toLowerCase();
+      if (s.includes('enhanced') || s.includes('premium')) return 0;
+      return 1;
+    };
+    voices.sort((a, b) => rank(a.quality) - rank(b.quality) || a.name.localeCompare(b.name));
+    return voices;
+  } catch { return []; }
 }
 
 /** Speak text aloud. Resolves when speech finishes (or immediately if TTS is unavailable). */
@@ -23,6 +74,7 @@ export async function speak(
   const S = await speech();
   const clean = (text || '').trim();
   if (!S || !clean) return;
+  if (!prefsLoaded) await loadVoicePrefs();
   return new Promise<void>((resolve) => {
     let settled = false;
     const done = (): void => { if (!settled) { settled = true; resolve(); } };
@@ -33,6 +85,7 @@ export async function speak(
         rate: opts?.rate ?? 1.0,
         pitch: opts?.pitch ?? 1.0,
         language: opts?.language,
+        voice: selectedVoiceId ?? undefined,
         onDone: done,
         onStopped: done,
         onError: done,

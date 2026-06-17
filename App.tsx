@@ -872,6 +872,7 @@ export default function App() {
       <ConversationModal
         visible={convoOpen}
         context={currentVoiceContext()}
+        getContext={currentVoiceContext}
         onNavigate={applyVoiceNav}
         onClose={() => { setConvoOpen(false); setConvoInitial(null); }}
         initialText={convoInitial ?? undefined}

@@ -14,6 +14,7 @@ import { getLatestOrganizationRun, type OrganizationRunRow } from '../db/knowled
 import { getSetting, setSetting } from '../db/settings';
 import { getBackgroundProcessingState, type BackgroundProcessingState } from '../processing/background';
 import { wakeWord, type WakeWordStatus } from '../voice/wakeWord';
+import { listVoices, setVoice, getSelectedVoiceId, loadVoicePrefs, speak, type TtsVoice } from '../voice/tts';
 import { runEnglishDeviceBenchmark, type BenchmarkResult } from '../processing/benchmark';
 import { organizeMemory } from '../processing/organizer';
 import { CheckInScheduler } from '../components/CheckInScheduler';
@@ -92,8 +93,21 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [savingClaudeKey, setSavingClaudeKey] = useState(false);
   const [siriGuideVisible, setSiriGuideVisible] = useState(false);
   const [wakeStatus, setWakeStatus] = useState<WakeWordStatus>(wakeWord.status);
+  const [voicePickerVisible, setVoicePickerVisible] = useState(false);
+  const [selectedVoiceName, setSelectedVoiceName] = useState('System default');
 
   useEffect(() => wakeWord.onStatusChange(setWakeStatus), []);
+
+  // Resolve the saved voice id to a friendly name for the row's value.
+  useEffect(() => {
+    void (async () => {
+      await loadVoicePrefs();
+      const id = getSelectedVoiceId();
+      if (!id) { setSelectedVoiceName('System default'); return; }
+      const voices = await listVoices();
+      setSelectedVoiceName(voices.find((v) => v.identifier === id)?.name ?? 'System default');
+    })();
+  }, [voicePickerVisible]);
 
   useEffect(() => {
     void (async () => {
@@ -571,6 +585,15 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           onAction={() => void onChangeWakeWord(!wakeWordEnabled)}
         />
         <SettingsRow
+          title="Lucy's voice"
+          value={selectedVoiceName === 'System default' ? 'System default — tap to pick a voice & preview' : selectedVoiceName}
+          badge={selectedVoiceName === 'System default' ? undefined : 'Custom'}
+          active={selectedVoiceName !== 'System default'}
+          actionLabel="Choose"
+          onAction={() => setVoicePickerVisible(true)}
+          onInfo={() => setVoicePickerVisible(true)}
+        />
+        <SettingsRow
           title="Re-organize now"
           value={runSummary}
           actionLabel={organizingNow ? 'Working...' : 'Run'}
@@ -749,6 +772,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
 
       <DevLogViewer visible={devLogVisible} onClose={() => setDevLogVisible(false)} />
       <SiriShortcutGuide visible={siriGuideVisible} onClose={() => setSiriGuideVisible(false)} />
+      <VoicePicker visible={voicePickerVisible} onClose={() => setVoicePickerVisible(false)} />
       <CheckInScheduler
         visible={checkInSchedulerVisible}
         onClose={() => setCheckInSchedulerVisible(false)}
@@ -1154,6 +1178,103 @@ function SiriShortcutGuide({ visible, onClose }: { visible: boolean; onClose: ()
           <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, textAlign: 'center', lineHeight: 17 }}>
             Replace [Dictated Text] in the URL with the Shortcuts variable by tapping inside the URL field and inserting the variable from the magic wand menu.
           </Text>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+function VoicePicker({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [voices, setVoices] = useState<TtsVoice[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    void (async () => {
+      setLoading(true);
+      try {
+        await loadVoicePrefs();
+        setSelectedId(getSelectedVoiceId());
+        setVoices(await listVoices());
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [visible]);
+
+  // Selecting a voice both applies it and previews it.
+  const pick = async (voiceId: string | null) => {
+    await setVoice(voiceId);
+    setSelectedId(voiceId);
+    void speak("Hi, I'm Lucy. This is how I sound.");
+  };
+
+  const isQuality = (q?: string): boolean => {
+    const s = (q ?? '').toLowerCase();
+    return s.includes('enhanced') || s.includes('premium');
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: LUCY_COLORS.background }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.border }}>
+          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700' }}>Lucy's voice</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Text style={{ color: LUCY_COLORS.primary, fontSize: 15, fontWeight: '600' }}>Done</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
+            Pick the voice Lucy speaks with. Tap any voice to hear a quick preview and select it.
+          </Text>
+
+          {/* System default option */}
+          <TouchableOpacity
+            onPress={() => void pick(null)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 14, backgroundColor: selectedId === null ? LUCY_COLORS.primarySoft : LUCY_COLORS.surface, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: selectedId === null ? LUCY_COLORS.primary : LUCY_COLORS.border }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700' }}>System default</Text>
+              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>Use your device's default voice</Text>
+            </View>
+            {selectedId === null ? <Text style={{ color: LUCY_COLORS.primaryGlow, fontSize: 15, fontWeight: '800' }}>✓</Text> : null}
+          </TouchableOpacity>
+
+          {loading ? (
+            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 8 }}>Loading voices…</Text>
+          ) : voices.length === 0 ? (
+            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 8 }}>No additional voices found on this device.</Text>
+          ) : (
+            voices.map((v) => {
+              const selected = selectedId === v.identifier;
+              return (
+                <View
+                  key={v.identifier}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 14, backgroundColor: selected ? LUCY_COLORS.primarySoft : LUCY_COLORS.surface, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: selected ? LUCY_COLORS.primary : LUCY_COLORS.border }}
+                >
+                  <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }} onPress={() => void pick(v.identifier)}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700' }}>{v.name}</Text>
+                      <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>{v.language}</Text>
+                    </View>
+                    {isQuality(v.quality) ? (
+                      <View style={{ backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: LUCY_COLORS.border }}>
+                        <Text style={{ color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 }}>Enhanced</Text>
+                      </View>
+                    ) : null}
+                    {selected ? <Text style={{ color: LUCY_COLORS.primaryGlow, fontSize: 15, fontWeight: '800' }}>✓</Text> : null}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => void pick(v.identifier)}
+                    style={{ backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: LUCY_COLORS.border }}
+                  >
+                    <Text style={{ color: LUCY_COLORS.primary, fontSize: 12, fontWeight: '700' }}>Preview</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })
+          )}
         </ScrollView>
       </View>
     </Modal>

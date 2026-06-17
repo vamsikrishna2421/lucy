@@ -12,14 +12,15 @@ function permissionAlert(what: string) {
 async function fromCamera(): Promise<string | null> {
   const { status } = await ImagePicker.requestCameraPermissionsAsync();
   if (status !== 'granted') { permissionAlert('Camera'); return null; }
-  const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: false });
+  // High quality — fine handwriting strokes need detail for the vision model to read accurately.
+  const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.9, allowsEditing: false });
   return r.canceled || !r.assets[0] ? null : r.assets[0].uri;
 }
 
 async function fromLibrary(): Promise<string | null> {
   const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (status !== 'granted') { permissionAlert('Photos'); return null; }
-  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: false });
+  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9, allowsEditing: false });
   return r.canceled || !r.assets[0] ? null : r.assets[0].uri;
 }
 
@@ -47,7 +48,7 @@ export async function snapImageToMemory(): Promise<boolean> {
     const { resolveRemoteAvailability } = await import('../ai/provider');
     const { available } = await resolveRemoteAvailability();
     if (!available) {
-      Alert.alert('OpenAI key needed', 'Reading images uses OpenAI vision. Add an OpenAI key in Settings → Remote intelligence, then try again.');
+      Alert.alert('Remote intelligence needed', 'Reading images uses a vision model (Claude or OpenAI). Add an API key in Settings → Remote intelligence, then try again.');
       return false;
     }
     const { processImageToMemory } = await import('./lucyLens');

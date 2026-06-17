@@ -2,9 +2,10 @@
  * LUCY Lens — visual memory extraction.
  *
  * Processes any image shared to LUCY (photo, screenshot, whiteboard, receipt,
- * menu, document) through:
- *   1. On-device Apple Vision OCR (text extraction, free, no key needed)
- *   2. Claude/OpenAI Vision for scene understanding when remote AI is available
+ * menu, document) with a remote vision model:
+ *   - Claude (Sonnet) when the user's remote model is Claude — best at handwriting.
+ *   - OpenAI gpt-4o at HIGH detail otherwise.
+ * There is NO on-device OCR here; reading an image needs remote intelligence enabled.
  *
  * Storage policy: ONLY the extracted memory text is stored. The original image
  * is NEVER saved — deleted immediately after extraction.
@@ -27,15 +28,24 @@ export interface LensResult {
 }
 
 const LENS_SYSTEM = `You are LUCY, extracting a memory from an image the user shared.
-Your job: describe what is in the image as a brief, searchable memory the user can query later.
+Your job: capture what is in the image as a searchable memory the user can query later.
 
-Rules:
-1. Extract ALL visible text verbatim (OCR). If it's a receipt, list items + total. If a whiteboard, capture all writing.
-2. For screenshots: describe what app/page it is and what the key information is.
-3. For photos: describe the scene, people (if any), location (if apparent), any text visible.
+CRITICAL — TRANSCRIPTION ACCURACY (this matters most):
+- Transcribe ALL visible text EXACTLY as written, letter for letter — including handwriting.
+- Do NOT autocorrect, normalize, expand, translate, or "fix" anything. Preserve unusual spellings,
+  acronyms, product names, and technical terms verbatim (e.g. write "AD groups" not "AB groups";
+  "Tidal" not "TID"; "bugs" not "bags"). Common words are often domain terms — never swap them.
+- If a word is genuinely unclear, give your single best LITERAL reading of the strokes; never
+  substitute a more familiar word, and never invent items that aren't written.
+- Preserve the original order and line breaks of any list.
+
+Then:
+1. Receipt → list items + total. Whiteboard/note → capture every line of writing.
+2. Screenshot → name the app/page and the key information.
+3. Photo → describe the scene, any people/location, and any visible text (verbatim).
 4. Identify the category: receipt | whiteboard | screenshot | document | photo | menu | other.
-5. Keep the memory text concise but complete. Use plain text, no markdown.
-6. Return JSON only: {"category":"receipt|whiteboard|screenshot|document|photo|menu|other","memory":"..."}`;
+5. Plain text, no markdown.
+Return JSON only: {"category":"receipt|whiteboard|screenshot|document|photo|menu|other","memory":"..."}`;
 
 /** Process an image URI → extract a memory text → enqueue as a capture → delete image. */
 export async function processImageToMemory(
@@ -54,29 +64,32 @@ export async function processImageToMemory(
   try {
     const db = await getDatabase();
     const { available, openAIKey } = await resolveRemoteAvailability();
-    const isOpenAI = !(await import('../ai/modelPreference').then((m) =>
-      m.getPreferredModel(require('../config').config.openAIModel)
-    )).startsWith('claude-');
+    const preferred = (await import('../ai/modelPreference')).getPreferredModel(require('../config').config.openAIModel);
+    const useClaude = preferred.startsWith('claude-');
+    // JPEG by default; PNG screenshots must be tagged correctly or the model rejects the bytes.
+    const mediaType = /\.png$/i.test(uri) || /\.png$/i.test(originalName ?? '') ? 'image/png' : 'image/jpeg';
 
     if (available && !await isAiCallCapReached(db)) {
-      // Use OpenAI vision (Claude vision is available via claude-3 models only)
-      // For now, use the OpenAI vision endpoint directly since it's the reliable path.
-      const apiKey = isOpenAI
-        ? openAIKey
-        : (await import('../ai/remoteAccess').then((m) => m.getRemoteOpenAIKey()));
-
-      if (apiKey) {
+      let content = '';
+      if (useClaude) {
+        // Claude (Sonnet) reads handwriting/whiteboards far better than gpt-4o-mini.
+        const { promptClaudeVision } = await import('../ai/claude');
+        content = await promptClaudeVision(`${LENS_SYSTEM}\n\nFilename hint: ${originalName ?? 'unknown'}`, base64, mediaType);
+        void recordAiCall(db);
+      } else if (openAIKey) {
+        // OpenAI path: use full gpt-4o (not mini) at HIGH detail — low detail downscales to ~512px
+        // and shreds handwriting. High detail keeps the strokes legible.
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          headers: { Authorization: `Bearer ${openAIKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            max_tokens: 500,
+            model: 'gpt-4o',
+            max_tokens: 700,
             messages: [{
               role: 'user',
               content: [
                 { type: 'text', text: `${LENS_SYSTEM}\n\nFilename hint: ${originalName ?? 'unknown'}` },
-                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}`, detail: 'low' } },
+                { type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}`, detail: 'high' } },
               ],
             }],
           }),
@@ -84,19 +97,19 @@ export async function processImageToMemory(
         void recordAiCall(db);
         if (response.ok) {
           const json = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-          const content = json.choices?.[0]?.message?.content ?? '';
-          const start = content.indexOf('{');
-          const end = content.lastIndexOf('}');
-          if (start !== -1 && end !== -1) {
-            const parsed = JSON.parse(content.slice(start, end + 1)) as { category?: string; memory?: string };
-            if (parsed.memory) {
-              result = {
-                memoryText: parsed.memory,
-                category: (parsed.category as LensCategory) ?? 'other',
-                confidence: 'high',
-              };
-            }
-          }
+          content = json.choices?.[0]?.message?.content ?? '';
+        }
+      }
+      const start = content.indexOf('{');
+      const end = content.lastIndexOf('}');
+      if (start !== -1 && end !== -1) {
+        const parsed = JSON.parse(content.slice(start, end + 1)) as { category?: string; memory?: string };
+        if (parsed.memory) {
+          result = {
+            memoryText: parsed.memory,
+            category: (parsed.category as LensCategory) ?? 'other',
+            confidence: 'high',
+          };
         }
       }
     }

@@ -2,7 +2,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 
 export type NotificationDetailPayload =
-  | { kind: 'guardian'; entityNames: string[]; evidenceCount: number }
+  | { kind: 'guardian'; entityNames: string[]; evidenceCount: number; message?: string }
   | { kind: 'digest'; openCount: number; followCount: number }
   | { kind: 'open-loop'; description: string }
   | { kind: 'captured-reminder'; text?: string | null }
@@ -14,12 +14,16 @@ export type NotificationDetailPayload =
 
 function buildExplanation(payload: NotificationDetailPayload): { headline: string; explanation: string } {
   if (payload.kind === 'guardian') {
-    const { entityNames, evidenceCount } = payload;
+    const { entityNames, message } = payload;
     const names = (entityNames ?? []).slice(0, 2).join(' and ');
     const overflow = (entityNames ?? []).length > 2 ? `, and ${entityNames.length - 2} more` : '';
+    // Prefer the actual actionable insight LUCY generated; only fall back to a neutral line.
+    if (message && message.trim()) {
+      return { headline: `something worth a look`, explanation: message.trim() };
+    }
     return {
-      headline: `you keep coming back to ${names}${overflow}`,
-      explanation: `You've brought ${names}${overflow} up across ${evidenceCount} different notes — that's not a coincidence. I connected those memories so they're all grouped together now instead of scattered around.`,
+      headline: names ? `a thought on ${names}${overflow}` : `a thought from me`,
+      explanation: `I noticed something in your recent notes worth keeping an eye on.`,
     };
   }
 

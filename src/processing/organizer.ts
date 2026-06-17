@@ -250,15 +250,15 @@ export async function organizeMemory(db: SQLiteDatabase, trigger: string): Promi
   );
   if (freshlyConfirmed.length > 0) {
     const entityNames = freshlyConfirmed.map((entity) => entity.name);
-    const names = entityNames.slice(0, 2).join(', ');
-    const extra = entityNames.length > 2 ? ` and ${entityNames.length - 2} more` : '';
-    try {
-      await sendGuardianNotification(
-        `you keep coming back to ${names}${extra} — I connected the dots`,
-        { entityNames, evidenceCount: 3 },
-      );
-    } catch {
-      // Non-critical.
+    // Don't notify just because a topic recurs ("you keep coming back to X — I connected the dots"
+    // is noise). Generate ONE genuinely useful, grounded, actionable insight — or stay silent.
+    const line = await actionableEntityInsight(db, entityNames);
+    if (line) {
+      try {
+        await sendGuardianNotification(line, { entityNames, evidenceCount: 3, kind: 'guardian', message: line });
+      } catch {
+        // Non-critical.
+      }
     }
   }
 
@@ -272,5 +272,46 @@ export async function organizeMemory(db: SQLiteDatabase, trigger: string): Promi
     void import('../db/openLoops').then(({ decayStaleOpenLoops }) => decayStaleOpenLoops(db)).catch(() => {});
     void import('../db/learnedProfile').then(({ dedupLearnedFacts }) => dedupLearnedFacts(db)).catch(() => {});
     void import('../db/todos').then(({ cleanupJunkTodos }) => cleanupJunkTodos(db)).catch(() => {});
+  }
+}
+
+/**
+ * Generate ONE genuinely useful, actionable insight about entities the user keeps referencing —
+ * grounded strictly in their recent notes. Returns null (LUCY stays silent) when remote AI is
+ * unavailable or there's nothing specific worth saying, so she never sends low-value
+ * "I connected the dots / you keep coming back to X" noise.
+ */
+async function actionableEntityInsight(db: SQLiteDatabase, entityNames: string[]): Promise<string | null> {
+  try {
+    const { resolveRemoteAvailability } = await import('../ai/provider');
+    const { available, openAIKey } = await resolveRemoteAvailability();
+    if (!available) return null; // no AI → better to say nothing than to send filler
+
+    const { listRecentCaptures } = await import('../db/captures');
+    const lower = entityNames.map((n) => n.toLowerCase());
+    const recent = (await listRecentCaptures(db, 30))
+      .filter((c) => c.privacy_level !== 'private' && c.raw_transcript)
+      .filter((c) => lower.some((n) => (c.raw_transcript || '').toLowerCase().includes(n)))
+      .slice(0, 8)
+      .map((c) => `- ${(c.raw_transcript || '').slice(0, 220)}`)
+      .join('\n');
+    if (!recent.trim()) return null; // nothing concrete to ground an insight in
+
+    const sys = `You are LUCY, a caring personal second brain. The user keeps referencing: ${entityNames.join(', ')}.
+From their recent notes below, write ONE genuinely useful, SPECIFIC, actionable insight or gentle nudge — something they might be missing, a next step to take, something to look after, or a risk worth flagging.
+HARD RULES:
+- Do NOT say you "connected the dots".
+- Do NOT say they "keep coming back to" / "come back to" something.
+- Do NOT merely restate that a topic recurs — that is useless.
+- Be concrete and grounded ONLY in the notes below; never invent facts.
+- First person ("I noticed…", "You might want to…"), warm, under 22 words.
+- If you have nothing genuinely specific and useful to say, reply with exactly: NONE`;
+
+    const { promptAI } = await import('../ai/openai');
+    const raw = (await promptAI(sys, recent, openAIKey)).trim();
+    if (!raw || /^none\b/i.test(raw) || raw.length < 8) return null;
+    return raw.replace(/^["']|["']$/g, '').slice(0, 180);
+  } catch {
+    return null;
   }
 }

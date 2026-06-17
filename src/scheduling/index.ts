@@ -57,6 +57,14 @@ export async function applyRearrangement(
 async function buildBusy(db: SQLiteDatabase, fromMs: number, toMs: number, av: Awaited<ReturnType<typeof getAvailability>>) {
   const schedRows = await listScheduledBlocks(db, fromMs, toMs, ['committed']);
   const resourceBlocks: Block[] = schedRows.map(rowToBlock);
+  // Merge the user's REAL device-calendar events (Google / Outlook-Teams / iCloud, synced to the phone)
+  // so LUCY schedules AROUND actual meetings and surfaces them. No-op unless calendar permission is
+  // granted (the user opts in via "Connect calendars"). Lazy import to avoid a heavy static cycle.
+  try {
+    const { calendarBusyBlocks } = await import('../processing/calendarConnector');
+    const events = await calendarBusyBlocks(fromMs, toMs);
+    if (events.length) resourceBlocks.push(...events);
+  } catch { /* device calendar is optional */ }
   const hardBlocks = nonWorkingBlocks(av, fromMs, toMs);
   return { resourceBlocks, hardBlocks };
 }
@@ -227,7 +235,10 @@ export async function getPlan(db: SQLiteDatabase, fromMs: number, toMs: number):
   const av = await getAvailability(db);
   const { resourceBlocks } = await buildBusy(db, fromMs, toMs, av);
   const blocks = resourceBlocks.filter((b) => b.end > fromMs && b.start < toMs).sort((a, b) => a.start - b.start);
-  return { from: fromMs, to: toMs, blocks, conflicts: validatePlan(blocks) };
+  // Two real device-calendar events overlapping is the user's own calendar, not a LUCY scheduling
+  // mistake — only surface conflicts that involve at least one LUCY-placed block.
+  const conflicts = validatePlan(blocks).filter((c) => !(c.a.source === 'calendar' && c.b.source === 'calendar'));
+  return { from: fromMs, to: toMs, blocks, conflicts };
 }
 
 /** Pending todos that don't yet have a committed scheduled block. */

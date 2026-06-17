@@ -11,6 +11,7 @@ import {
   unscheduledPendingTodos, describeResources, type DayProposal,
 } from '../scheduling';
 import { getAvailability } from '../scheduling/availability';
+import { hasCalendarPermission, requestCalendarPermission } from '../processing/calendarConnector';
 import type { AvailabilityProfile, Block, SlotSuggestion, TaskResources } from '../scheduling/types';
 
 function clock(ms: number): string { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
@@ -53,22 +54,40 @@ export function ScheduleTab() {
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<'agenda' | 'day' | 'week' | 'month'>('agenda');
   const [ref, setRef] = useState<number>(dayKey(Date.now()));
+  const [calPerm, setCalPerm] = useState<boolean | null>(null);
+  const [nowMs, setNowMs] = useState<number>(Date.now());
 
   const load = useCallback(async () => {
     const db = await getDatabase();
     const now = Date.now();
-    const [plan, a, us] = await Promise.all([
+    const [plan, a, us, perm] = await Promise.all([
       getPlan(db, now - 2 * 3600_000, now + 42 * 86400_000),
       getAvailability(db),
       unscheduledPendingTodos(db),
+      hasCalendarPermission(),
     ]);
     setBlocks(plan.blocks);
     setConflicts(plan.conflicts.map((c) => ({ a: c.a.title, b: c.b.title })));
     setAv(a);
     setUnsched(us.slice(0, 12));
+    setCalPerm(perm);
     setLoading(false);
   }, []);
   useEffect(() => { void load(); }, [load]);
+  // Keep the "now" line live (updates every minute) for the day/week grid.
+  useEffect(() => { const t = setInterval(() => setNowMs(Date.now()), 60_000); return () => clearInterval(t); }, []);
+
+  const connectCalendars = async () => {
+    const granted = await requestCalendarPermission();
+    setCalPerm(granted);
+    if (granted) { await load(); }
+    else {
+      Alert.alert(
+        'Connect Google / Teams / Outlook',
+        'To show those events here, add the account to your phone first:\n\niPhone: Settings → Calendar → Accounts → Add Account (Google or Outlook), then turn Calendars ON.\nAndroid: Settings → Accounts → add Google/Outlook with Calendar sync.\n\nThen allow LUCY calendar access when asked.',
+      );
+    }
+  };
 
   const doSuggest = async (text: string, todoId?: number) => {
     if (!text.trim() && !todoId) return;
@@ -140,7 +159,7 @@ export function ScheduleTab() {
   const HOURS: number[] = []; for (let h = 6; h < 24; h++) HOURS.push(h);
   const G_START = 6 * 60; const PXM = 0.7; const G_H = (24 * 60 - G_START) * PXM;
   const localMin = (ms: number) => { const d = new Date(ms); return d.getHours() * 60 + d.getMinutes(); };
-  type Item = { id?: number; title: string; start: number; end: number; resources: Block['resources']; habit: boolean };
+  type Item = { id?: number; title: string; start: number; end: number; resources: Block['resources']; habit: boolean; device?: boolean };
   const habitsFor = (k: number): Item[] => {
     const dow = new Date(k).getDay();
     return (av?.protectedWindows || []).filter((h) => !h.days || h.days.includes(dow)).map((h) => ({
@@ -149,7 +168,7 @@ export function ScheduleTab() {
   };
   const dayItems = (k: number): Item[] => blocks
     .filter((b) => dayKey(b.start) === k)
-    .map((b): Item => ({ id: b.id, title: b.title, start: b.start, end: b.end, resources: b.resources, habit: false }))
+    .map((b): Item => ({ id: b.id, title: b.title, start: b.start, end: b.end, resources: b.resources, habit: false, device: b.source === 'calendar' }))
     .concat(habitsFor(k))
     .sort((a, b) => a.start - b.start);
   const weekDays = (): number[] => {
@@ -171,8 +190,14 @@ export function ScheduleTab() {
     if (view === 'day') return dayLabel(ref);
     return 'Next 7 days';
   };
+  const DEVICE_COLOR = '#5B8CFF'; // connected Google/Teams/Outlook events
   const onBlockPress = (it: Item) => {
-    if (it.habit || !it.id) return;
+    if (it.habit) return;
+    if (it.device) {
+      Alert.alert(it.title, `${clock(it.start)} - ${clock(it.end)}\n\nFrom a calendar you connected (Google / Teams / Outlook). LUCY schedules around it but won't change it.`, [{ text: 'Close' }]);
+      return;
+    }
+    if (!it.id) return;
     Alert.alert(it.title, `${clock(it.start)} - ${clock(it.end)}`, [
       { text: 'Close', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => remove(it.id!) },
@@ -185,14 +210,20 @@ export function ScheduleTab() {
       {dayItems(k).map((it, i) => {
         const top = Math.max(0, (localMin(it.start) - G_START) * PXM);
         const ht = Math.max(18, ((it.end - it.start) / 60000) * PXM);
-        const c = it.habit ? '#8a8a8a' : catColor(it.title, describeResources(it.resources));
+        const c = it.habit ? '#8a8a8a' : it.device ? DEVICE_COLOR : catColor(it.title, describeResources(it.resources));
         return (
           <TouchableOpacity key={i} activeOpacity={0.82} onPress={() => onBlockPress(it)} style={[styles.gridEvent, { top, height: ht, backgroundColor: `${c}28`, borderLeftColor: c }, it.habit && styles.gridHabit]}>
-            <Text numberOfLines={1} style={styles.gridEventTitle}>{it.title}</Text>
+            <Text numberOfLines={1} style={styles.gridEventTitle}>{it.device ? '📅 ' : ''}{it.title}</Text>
             {ht > 28 ? <Text style={styles.gridEventTime}>{clock(it.start)}</Text> : null}
           </TouchableOpacity>
         );
       })}
+      {/* Live "now" line — only on today, within the visible grid hours. */}
+      {dayKey(k) === today && localMin(nowMs) >= G_START ? (
+        <View style={[styles.nowLine, { top: (localMin(nowMs) - G_START) * PXM }]} pointerEvents="none">
+          <View style={styles.nowDot} />
+        </View>
+      ) : null}
     </View>
   );
   const HourLabels = () => (
@@ -256,19 +287,19 @@ export function ScheduleTab() {
               <Text style={styles.dayH}>{dayLabel(k)}</Text>
               {items.map((b, i) => {
                 const conf = conflictTitles.has(b.title);
-                const c = b.habit ? '#8a8a8a' : catColor(b.title, describeResources(b.resources));
+                const c = b.habit ? '#8a8a8a' : b.device ? DEVICE_COLOR : catColor(b.title, describeResources(b.resources));
                 return (
-                  <View key={i} style={[styles.block, { borderLeftColor: c }, conf && styles.blockConflict, b.habit && styles.blockHabit]}>
+                  <TouchableOpacity key={i} activeOpacity={0.85} onPress={() => onBlockPress(b)} style={[styles.block, { borderLeftColor: c }, conf && styles.blockConflict, b.habit && styles.blockHabit]}>
                     <View style={styles.blockTimeWrap}>
                       <Text style={styles.blockTime}>{clock(b.start)}</Text>
                       <Text style={styles.blockTimeEnd}>{clock(b.end)}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.blockT}>{b.title}{conf ? ' conflict' : ''}</Text>
-                      <Text style={styles.rowD}>{b.habit ? 'Habit window' : `${describeResources(b.resources)} - Lucy`}</Text>
+                      <Text style={styles.blockT}>{b.device ? '📅 ' : ''}{b.title}{conf ? ' • conflict' : ''}</Text>
+                      <Text style={styles.rowD}>{b.habit ? 'Habit window' : b.device ? 'From your calendar' : `${describeResources(b.resources)} • Lucy`}</Text>
                     </View>
                     {b.id && !b.habit ? <TouchableOpacity onPress={() => remove(b.id!)}><Text style={styles.x}>Remove</Text></TouchableOpacity> : null}
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -302,6 +333,19 @@ export function ScheduleTab() {
       </View>
 
       {av ? <Text style={styles.avLine}>On-device calendar - work {hm(av.workStartMin)}-{hm(av.workEndMin)} - peak {av.peakWindows[0] ? `${hm(av.peakWindows[0].startMin)}-${hm(av.peakWindows[0].endMin)}` : '-'}</Text> : null}
+
+      {calPerm === false ? (
+        <TouchableOpacity style={styles.connectCard} onPress={connectCalendars} activeOpacity={0.85}>
+          <Text style={styles.connectIcon}>📅</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.connectTitle}>Connect Google, Teams & Outlook</Text>
+            <Text style={styles.connectSub}>Show your real meetings here and let Lucy schedule around them. Tap to connect.</Text>
+          </View>
+          <Text style={styles.connectChevron}>›</Text>
+        </TouchableOpacity>
+      ) : calPerm ? (
+        <View style={styles.syncedPill}><View style={styles.syncedDot} /><Text style={styles.syncedText}>Synced with your connected calendars</Text></View>
+      ) : null}
 
       <View style={styles.plannerCard}>
         <Text style={styles.panelEyebrow}>Schedule something</Text>
@@ -403,6 +447,16 @@ const styles = StyleSheet.create({
   heroPlan: { marginTop: 14, backgroundColor: LUCY_COLORS.primary, borderRadius: 16, paddingVertical: 13, alignItems: 'center' },
   heroPlanText: { color: LUCY_COLORS.white, fontSize: 15, fontWeight: '900' },
   avLine: { color: LUCY_COLORS.textMuted, fontSize: 12, marginBottom: 12, paddingHorizontal: 5 },
+  connectCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: '#5B8CFF55', borderRadius: 18, padding: 14, marginBottom: 12 },
+  connectIcon: { fontSize: 22 },
+  connectTitle: { color: LUCY_COLORS.textDark, fontWeight: '900', fontSize: 14.5 },
+  connectSub: { color: LUCY_COLORS.textMuted, fontSize: 12.5, lineHeight: 17, marginTop: 3 },
+  connectChevron: { color: '#5B8CFF', fontSize: 26, fontWeight: '300' },
+  syncedPill: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12, paddingHorizontal: 5 },
+  syncedDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#5B8CFF' },
+  syncedText: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '700' },
+  nowLine: { position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: '#FF4D4D' },
+  nowDot: { position: 'absolute', left: -4, top: -3, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF4D4D' },
   plannerCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 22, padding: 16, marginBottom: 12 },
   panelEyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 10.5, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   panelTitle: { color: LUCY_COLORS.textDark, fontSize: 18, fontWeight: '900', marginTop: 4, marginBottom: 12 },

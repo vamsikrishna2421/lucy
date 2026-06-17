@@ -1,7 +1,8 @@
 /**
- * Builds the "unavailable" blocks the scheduler must respect: sleep, out-of-working-hours, and
- * protected windows (meals/gym/etc). Pure + deterministic so the conflict invariant is testable.
- * Calendar events and committed scheduled-blocks are supplied by the caller (see index.ts).
+ * Builds the "unavailable" blocks the scheduler must respect: ONLY sleep is truly off-limits.
+ * Habit/protected windows (meals/gym/walk) are SUGGESTIONS, not reservations — that time stays free
+ * for scheduling until the user approves a suggestion (which commits a real block). Pure + deterministic
+ * so the conflict invariant is testable. Calendar events and committed blocks are supplied by the caller.
  */
 import type { AvailabilityProfile, Block } from './types';
 import { DAY, atLocalMinutes, startOfLocalDay } from './time';
@@ -17,8 +18,6 @@ export function nonWorkingBlocks(av: AvailabilityProfile, fromMs: number, toMs: 
   const out: Block[] = [];
   // Iterate each local day touched by the range (pad one day each side for wrap-around sleep).
   for (let day = startOfLocalDay(fromMs) - DAY; day <= toMs; day += DAY) {
-    const dow = new Date(day).getDay();
-
     // Sleep: [sleepStart, midnight) + [midnight, sleepEnd) when it wraps.
     if (av.sleepStartMin > av.sleepEndMin) {
       out.push(mk('Sleep', atLocalMinutes(day, av.sleepStartMin), atLocalMinutes(day, 24 * 60), 'sleep'));
@@ -27,16 +26,9 @@ export function nonWorkingBlocks(av: AvailabilityProfile, fromMs: number, toMs: 
       out.push(mk('Sleep', atLocalMinutes(day, av.sleepStartMin), atLocalMinutes(day, av.sleepEndMin), 'sleep'));
     }
 
-    // NOTE: we no longer hard-block before/after work hours — work hours are a SOFT per-task
-    // window (see scheduler), so personal/explicitly-timed tasks (e.g. "gym after 6:30pm") can use
-    // the evening. Only sleep + protected windows are truly off-limits.
-
-    // Protected windows (lunch, gym, etc).
-    for (const w of av.protectedWindows) {
-      if (windowAppliesOn(w, dow)) {
-        out.push(mk(w.label, atLocalMinutes(day, w.startMin), atLocalMinutes(day, w.endMin), 'protected'));
-      }
-    }
+    // NOTE: we no longer hard-block before/after work hours OR habit/protected windows. Work hours are
+    // a SOFT per-task window (see scheduler), and habit windows (lunch/gym/walk) are suggestions that
+    // keep their time FREE until the user approves them. Only sleep is truly off-limits.
   }
   // Clip to range.
   return out

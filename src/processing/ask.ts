@@ -279,7 +279,7 @@ function formatHistory(history: AskTurn[]): string {
   return `CONVERSATION SO FAR (use this to understand follow-ups like "yes", "do that", "the first one"):\n${lines.join('\n')}\n\n`;
 }
 
-async function answerWithLLM(question: string, history: AskTurn[] = []): Promise<LucyAnswer> {
+async function answerWithLLM(question: string, history: AskTurn[] = [], screenContext?: string): Promise<LucyAnswer> {
   const db = await getDatabase();
   const [profile, deviceCtx, calEvents] = await Promise.all([
     getUserProfile(db),
@@ -366,6 +366,7 @@ async function answerWithLLM(question: string, history: AskTurn[] = []): Promise
   const input = [
     formatHistory(history) || null,
     `DEVICE CONTEXT (live data — always accurate):\n${deviceInfo}`,
+    screenContext ? `CURRENT APP SCREEN: ${screenContext}` : null,
     calendarInfo ? calendarInfo : null,
     galaxyContext,
     healthContext,
@@ -484,6 +485,7 @@ export async function askLucy(
   question: string,
   captureCallback?: (text: string) => Promise<void>,
   history: AskTurn[] = [],
+  screenContext?: string,
 ): Promise<LucyAnswer> {
   const db = await getDatabase();
   const trimmed = question.trim();
@@ -493,7 +495,7 @@ export async function askLucy(
   // capture or matched against the standalone structured detectors.
   const isShortFollowUp = history.length > 0 && trimmed.split(/\s+/).length <= 6;
   if (isShortFollowUp) {
-    return answerWithLLM(trimmed, history);
+    return answerWithLLM(trimmed, history, screenContext);
   }
 
   // Interactive reorganization: LUCY proposes concrete task-list changes to approve.
@@ -545,7 +547,7 @@ export async function askLucy(
   }
   if (!recognizesTodayPlanQuestion(trimmed)) {
     // No structured pattern matched — use LLM to answer from memory context.
-    return answerWithLLM(trimmed, history);
+    return answerWithLLM(trimmed, history, screenContext);
   }
 
   const [allTasks, reminders] = await Promise.all([listPendingTodos(db), listReminders(db)]);

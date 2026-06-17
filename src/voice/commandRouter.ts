@@ -198,7 +198,7 @@ export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, cont
         if (speak) return { ok: true, intent: 'ask', speak };
       }
       const { askLucy } = await import('../processing/ask');
-      const ans = await askLucy((cmd.text || text).trim());
+      const ans = await askLucy((cmd.text || text).trim(), undefined, undefined, context);
       const reply = (ans.llmResponse || ans.message || '').trim() || 'I’m not sure about that one.';
       return { ok: true, intent: 'ask', speak: reply, navigate: ans.answerKind === 'schedule' ? 'calendar' : null };
     }

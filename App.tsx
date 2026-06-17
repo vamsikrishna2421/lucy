@@ -36,6 +36,7 @@ import { ConnectorsScreen } from './src/screens/Connectors';
 import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
 import ConversationModal from './src/components/ConversationModal';
 import { wakeWord } from './src/voice/wakeWord';
+import { conversation, type ConvoState } from './src/voice/conversation';
 
 // Capture non-React JS errors (async/timers/native callbacks) to dev_log from first load.
 installGlobalErrorLogger();
@@ -93,6 +94,8 @@ export default function App() {
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const [convoOpen, setConvoOpen] = useState(false);
   const [convoInitial, setConvoInitial] = useState<string | null>(null);
+  const [convoState, setConvoState] = useState<ConvoState>(conversation.getState());
+  useEffect(() => conversation.subscribe(() => setConvoState(conversation.getState())), []);
   const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
   const [processingActive, setProcessingActive] = useState(false);
   const voiceRecording = useRef(false);
@@ -692,6 +695,9 @@ export default function App() {
                     voiceStatus === 'transcribing' ? 'saving'
                     : (meetingVisible || meetingRecording) ? 'reading'
                     : (voiceStatus === 'recording' || passiveState.status === 'listening') ? 'listening'
+                    : convoOpen && convoState === 'speaking' ? 'speaking'
+                    : convoOpen && convoState === 'listening' ? 'listening'
+                    : convoOpen && convoState === 'thinking' ? 'thinking'
                     : processingActive ? 'organizing'
                     : (screen === 'dashboard' && dashCurrentView === 'Ask Lucy') ? 'thinking'
                     : 'idle'

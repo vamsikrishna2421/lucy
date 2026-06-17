@@ -4,8 +4,8 @@ import { LUCY_COLORS } from '../config/colors';
 
 type Mood = 'awake' | 'sleeping';
 type DayPhase = 'morning' | 'day' | 'evening' | 'night';
-type FaceExpression = 'calm' | 'peek' | 'sleeping' | 'listening' | 'organizing' | 'saving' | 'thinking' | 'reading';
-export type LucyStatus = 'idle' | 'organizing' | 'listening' | 'saving' | 'sleeping' | 'thinking' | 'reading';
+type FaceExpression = 'calm' | 'peek' | 'sleeping' | 'listening' | 'speaking' | 'organizing' | 'saving' | 'thinking' | 'reading';
+export type LucyStatus = 'idle' | 'organizing' | 'listening' | 'speaking' | 'saving' | 'sleeping' | 'thinking' | 'reading';
 
 function phaseForHour(hour: number): DayPhase {
   if (hour >= 22 || hour < 6) return 'night';
@@ -21,6 +21,7 @@ function moodForPhase(phase: DayPhase): Mood {
 const STATUS_META: Record<Exclude<LucyStatus, 'idle'>, { marker: string; label: string }> = {
   organizing: { marker: 'memory', label: 'Organizing' },
   listening: { marker: 'audio', label: 'Listening' },
+  speaking: { marker: 'voice', label: 'Speaking' },
   saving: { marker: 'saved', label: 'Saving' },
   sleeping: { marker: 'quiet', label: 'Resting' },
   thinking: { marker: 'ask', label: 'Thinking' },
@@ -99,6 +100,7 @@ export function AnimatedFace({
     if (peeked && effectiveStatus !== 'listening' && effectiveStatus !== 'organizing') return 'peek';
     if (effectiveStatus === 'sleeping') return 'sleeping';
     if (effectiveStatus === 'listening') return 'listening';
+    if (effectiveStatus === 'speaking') return 'speaking';
     if (effectiveStatus === 'organizing') return 'organizing';
     if (effectiveStatus === 'saving') return 'saving';
     if (effectiveStatus === 'thinking') return 'thinking';
@@ -133,7 +135,7 @@ export function AnimatedFace({
   }, [mood, shimmer]);
 
   useEffect(() => {
-    const duration = effectiveStatus === 'listening' ? 1300 : effectiveStatus === 'organizing' ? 2100 : 3600;
+    const duration = effectiveStatus === 'listening' ? 1300 : effectiveStatus === 'speaking' ? 1800 : effectiveStatus === 'organizing' ? 2100 : 3600;
     const loop = Animated.loop(Animated.timing(orbit, {
       toValue: 1,
       duration,
@@ -154,7 +156,7 @@ export function AnimatedFace({
   }, [cloudAnim, effectiveStatus]);
 
   useEffect(() => {
-    const duration = mood === 'sleeping' ? 2600 : 1700;
+    const duration = mood === 'sleeping' ? 2600 : effectiveStatus === 'speaking' ? 1800 : effectiveStatus === 'idle' ? 2400 : 1700;
     const breatheLoop = Animated.loop(Animated.sequence([
       Animated.timing(breathe, { toValue: 1, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       Animated.timing(breathe, { toValue: 0, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
@@ -166,7 +168,7 @@ export function AnimatedFace({
     breatheLoop.start();
     glowLoop.start();
     return () => { breatheLoop.stop(); glowLoop.stop(); };
-  }, [breathe, glow, mood]);
+  }, [breathe, glow, mood, effectiveStatus]);
 
   useEffect(() => {
     if (mood === 'sleeping') {
@@ -210,13 +212,17 @@ export function AnimatedFace({
   }, [celebrateKey, happy]);
 
   const scale = breathe.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.06] });
-  const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: mood === 'sleeping' ? [0.10, 0.22] : [0.25, 0.5] });
+  const glowOpacity = glow.interpolate({
+    inputRange: [0, 1],
+    outputRange: mood === 'sleeping' ? [0.10, 0.22] : effectiveStatus === 'speaking' ? [0.45, 0.75] : [0.25, 0.5],
+  });
   const orbitRotate = orbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   const eyeShape = {
     calm: { w: 4, h: 8, radius: 2, leftTilt: '0deg', rightTilt: '0deg', offsetY: 0 },
     peek: { w: 5, h: 10, radius: 3, leftTilt: '0deg', rightTilt: '0deg', offsetY: -1 },
     sleeping: { w: 11, h: 3, radius: 2, leftTilt: '-8deg', rightTilt: '8deg', offsetY: 1 },
     listening: { w: 6, h: 11, radius: 4, leftTilt: '0deg', rightTilt: '0deg', offsetY: -1 },
+    speaking: { w: 5, h: 7, radius: 3, leftTilt: '-5deg', rightTilt: '5deg', offsetY: 0 },
     organizing: { w: 10, h: 4, radius: 3, leftTilt: '-10deg', rightTilt: '10deg', offsetY: 1 },
     saving: { w: 9, h: 4, radius: 4, leftTilt: '0deg', rightTilt: '0deg', offsetY: 0 },
     thinking: { w: 5, h: 9, radius: 3, leftTilt: '-7deg', rightTilt: '12deg', offsetY: 0 },
@@ -279,6 +285,7 @@ export function AnimatedFace({
               styles.mouth,
               expression === 'sleeping' && styles.mouthSleeping,
               expression === 'listening' && styles.mouthListening,
+              expression === 'speaking' && styles.mouthSpeaking,
               expression === 'organizing' && styles.mouthFocused,
               expression === 'thinking' && styles.mouthThinking,
               expression === 'saving' && styles.mouthSaving,
@@ -379,6 +386,7 @@ const styles = StyleSheet.create({
   },
   mouthSleeping: { width: 7, height: 2, borderRadius: 1, borderWidth: 0, backgroundColor: FACE },
   mouthListening: { width: 7, height: 8, borderRadius: 5, borderWidth: 2, borderColor: FACE, marginTop: 1 },
+  mouthSpeaking: { width: 13, height: 7, borderBottomLeftRadius: 10, borderBottomRightRadius: 10, borderTopLeftRadius: 2, borderTopRightRadius: 2, borderWidth: 2, borderTopWidth: 0, borderColor: FACE, marginTop: 1 },
   mouthFocused: { width: 11, height: 2, borderRadius: 1, borderWidth: 0, backgroundColor: FACE, marginTop: 3 },
   mouthThinking: { width: 8, height: 5, borderLeftWidth: 0, borderRightWidth: 2, borderTopWidth: 0, borderBottomWidth: 2, borderColor: FACE, borderRadius: 5, transform: [{ rotate: '-12deg' }] },
   mouthSaving: { width: 13, height: 6, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, borderWidth: 2, borderTopWidth: 0, borderColor: FACE, marginTop: 0 },

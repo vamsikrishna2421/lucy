@@ -146,6 +146,17 @@ export function ScheduleTab() {
     setBusy(true);
     try { const db = await getDatabase(); await cancelBlock(db, id); await load(); } finally { setBusy(false); }
   };
+  // Habit windows are SUGGESTIONS only — nothing is on the calendar until the user taps ✓ to add it.
+  const approveHabit = async (it: { title: string; start: number; end: number }) => {
+    setBusy(true);
+    try {
+      const db = await getDatabase();
+      const { classifyTask } = await import('../scheduling/classify');
+      const meta = classifyTask(it.title);
+      await commitBlock(db, { title: it.title, startMs: it.start, endMs: it.end, resources: meta.resources, energy: meta.energy, location: meta.location ?? null }, { force: true });
+      await load();
+    } finally { setBusy(false); }
+  };
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={LUCY_COLORS.primary} /></View>;
 
@@ -167,11 +178,15 @@ export function ScheduleTab() {
       title: h.label, start: k + h.startMin * 60000, end: k + h.endMin * 60000, habit: true, resources: { axes: [], location: null },
     }));
   };
-  const dayItems = (k: number): Item[] => blocks
-    .filter((b) => dayKey(b.start) === k)
-    .map((b): Item => ({ id: b.id, title: b.title, start: b.start, end: b.end, resources: b.resources, habit: false, device: b.source === 'calendar' }))
-    .concat(habitsFor(k))
-    .sort((a, b) => a.start - b.start);
+  const dayItems = (k: number): Item[] => {
+    const real = blocks
+      .filter((b) => dayKey(b.start) === k)
+      .map((b): Item => ({ id: b.id, title: b.title, start: b.start, end: b.end, resources: b.resources, habit: false, device: b.source === 'calendar' }));
+    // Hide a habit suggestion once it's been approved (a real block with the same title exists that day).
+    const realTitles = new Set(real.map((r) => r.title.toLowerCase()));
+    const habits = habitsFor(k).filter((h) => !realTitles.has(h.title.toLowerCase()));
+    return [...real, ...habits].sort((a, b) => a.start - b.start);
+  };
   const weekDays = (): number[] => {
     const dow = new Date(ref).getDay();
     const s = ref - dow * 86400000;
@@ -193,7 +208,13 @@ export function ScheduleTab() {
   };
   const DEVICE_COLOR = '#5B8CFF'; // connected Google/Teams/Outlook events
   const onBlockPress = (it: Item) => {
-    if (it.habit) return;
+    if (it.habit) {
+      Alert.alert(it.title, `Suggested ${clock(it.start)} – ${clock(it.end)} based on your routine. Add it to your schedule?`, [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Add ✓', onPress: () => approveHabit(it) },
+      ]);
+      return;
+    }
     if (it.device) {
       Alert.alert(it.title, `${clock(it.start)} - ${clock(it.end)}\n\nFrom a calendar you connected (Google / Teams / Outlook). LUCY schedules around it but won't change it.`, [{ text: 'Close' }]);
       return;
@@ -214,7 +235,7 @@ export function ScheduleTab() {
         const c = it.habit ? '#8a8a8a' : it.device ? DEVICE_COLOR : catColor(it.title, describeResources(it.resources));
         return (
           <TouchableOpacity key={i} activeOpacity={0.82} onPress={() => onBlockPress(it)} style={[styles.gridEvent, { top, height: ht, backgroundColor: `${c}28`, borderLeftColor: c }, it.habit && styles.gridHabit]}>
-            <Text numberOfLines={1} style={styles.gridEventTitle}>{it.device ? '📅 ' : ''}{it.title}</Text>
+            <Text numberOfLines={1} style={styles.gridEventTitle}>{it.habit ? '✓ ' : it.device ? '📅 ' : ''}{it.title}</Text>
             {ht > 28 ? <Text style={styles.gridEventTime}>{clock(it.start)}</Text> : null}
           </TouchableOpacity>
         );
@@ -319,9 +340,11 @@ export function ScheduleTab() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.blockT}>{b.device ? '📅 ' : ''}{b.title}{conf ? ' • conflict' : ''}</Text>
-                      <Text style={styles.rowD}>{b.habit ? 'Habit window' : b.device ? 'From your calendar' : `${describeResources(b.resources)} • Lucy`}</Text>
+                      <Text style={styles.rowD}>{b.habit ? 'Suggested from your routine' : b.device ? 'From your calendar' : `${describeResources(b.resources)} • Lucy`}</Text>
                     </View>
-                    {b.id && !b.habit ? <TouchableOpacity onPress={() => remove(b.id!)}><Text style={styles.x}>Remove</Text></TouchableOpacity> : null}
+                    {b.habit
+                      ? <TouchableOpacity style={styles.approveBtn} onPress={() => approveHabit(b)}><Text style={styles.approveT}>✓ Add</Text></TouchableOpacity>
+                      : b.id ? <TouchableOpacity onPress={() => remove(b.id!)}><Text style={styles.x}>Remove</Text></TouchableOpacity> : null}
                   </TouchableOpacity>
                 );
               })}
@@ -544,6 +567,8 @@ const styles = StyleSheet.create({
   blockTimeEnd: { color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '700', marginTop: 2 },
   blockT: { color: LUCY_COLORS.textDark, fontWeight: '800', fontSize: 14, lineHeight: 20 },
   x: { color: LUCY_COLORS.textSubtle, fontSize: 12, fontWeight: '800', paddingHorizontal: 4 },
+  approveBtn: { backgroundColor: LUCY_COLORS.primaryMist, borderWidth: 1, borderColor: LUCY_COLORS.primary, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  approveT: { color: LUCY_COLORS.primary, fontSize: 13, fontWeight: '900' },
   gridWrap: { flexDirection: 'row', borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 18, padding: 10, backgroundColor: LUCY_COLORS.surfaceRaised },
   weekScroll: { borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 18, backgroundColor: LUCY_COLORS.surfaceRaised },
   weekContent: { padding: 10 },

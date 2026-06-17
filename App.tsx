@@ -35,7 +35,7 @@ import { LucyWrapped } from './src/components/LucyWrapped';
 import { ConnectorsScreen } from './src/screens/Connectors';
 import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
 import ConversationModal from './src/components/ConversationModal';
-import { wakeWord } from './src/voice/wakeWord';
+import { wakeWord, type WakeWordStatus } from './src/voice/wakeWord';
 import { conversation, type ConvoState } from './src/voice/conversation';
 
 // Capture non-React JS errors (async/timers/native callbacks) to dev_log from first load.
@@ -97,6 +97,8 @@ export default function App() {
   const [convoState, setConvoState] = useState<ConvoState>(conversation.getState());
   useEffect(() => conversation.subscribe(() => setConvoState(conversation.getState())), []);
   const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
+  const [wakeStatus, setWakeStatus] = useState<WakeWordStatus>(wakeWord.status);
+  useEffect(() => wakeWord.onStatusChange(setWakeStatus), []);
   const [processingActive, setProcessingActive] = useState(false);
   const voiceRecording = useRef(false);
   const voicePressStart = useRef(0);
@@ -704,6 +706,21 @@ export default function App() {
                   }
                   onPress={() => setNotifCenterVisible(true)}
                 />
+                {/* Live "Hey Lucy" status pill — so you can see starting/listening without Settings */}
+                {wakeWordEnabled && wakeStatus !== 'disabled' ? (
+                  <View style={styles.wakePill}>
+                    <View style={[styles.wakeDot, {
+                      backgroundColor: wakeStatus === 'listening' ? '#4ADE80'
+                        : wakeStatus === 'unavailable' ? '#EF4444'
+                        : '#F59E0B',
+                    }]} />
+                    <Text style={styles.wakePillText}>
+                      {wakeStatus === 'listening' ? 'Listening'
+                        : wakeStatus === 'unavailable' ? 'Unavailable'
+                        : 'Starting…'}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             </View>
           </View>
@@ -908,7 +925,19 @@ const styles = StyleSheet.create({
   logoWrap: { position: 'relative', alignSelf: 'flex-start', marginTop: 8, paddingLeft: 2 },
   logoStar: { position: 'absolute', top: -8, right: -14, color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '800', textShadowColor: 'rgba(255,139,61,0.7)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
   headerPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 48 },
-  headerFaceRow: { position: 'absolute', right: -10, top: 18, zIndex: 20, elevation: 20 },
+  headerFaceRow: { position: 'absolute', right: -10, top: 18, zIndex: 20, elevation: 20, alignItems: 'center' },
+  wakePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  wakeDot: { width: 6, height: 6, borderRadius: 3 },
+  wakePillText: { color: '#E5E7EB', fontSize: 9, fontWeight: '600', letterSpacing: 0.2 },
   brandLogo: { height: 32, width: 160 },
   brandName: { color: LUCY_COLORS.textDark, fontSize: 25, fontWeight: '900', letterSpacing: 1.2 },
   brandNameAccent: { color: LUCY_COLORS.primary },

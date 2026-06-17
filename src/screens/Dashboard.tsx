@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Animated, Easing, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { PrivacyBadge } from '../components/PrivacyBadge';
 import { MeetingShareBar } from '../components/MeetingShareBar';
@@ -169,13 +169,14 @@ function greetingForHour(hour: number): string {
   return 'Good evening';
 }
 
-export function DashboardScreen({ refreshToken, onAskAbout, requestedView, requestKey, onViewChange, initialAskQuestion }: {
+export function DashboardScreen({ refreshToken, onAskAbout, requestedView, requestKey, onViewChange, initialAskQuestion, renderFace }: {
   refreshToken: number;
   onAskAbout?: (question: string) => void;
   requestedView?: ViewMode;
   requestKey?: number;
   onViewChange?: (v: ViewMode) => void;
   initialAskQuestion?: string;
+  renderFace?: () => ReactNode;
 }) {
   const [view, setView] = useState<ViewMode>('Timeline');
   const [tab, setTab] = useState<LibraryTab>('Home');
@@ -282,6 +283,7 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
               ? 'Your memory is organized. Nothing urgent is asking for attention.'
               : 'Start capturing and Lucy will quietly organize what matters.'}
         </Text>
+        {renderFace ? <View style={styles.heroFace}>{renderFace()}</View> : null}
       </View>
       <View style={styles.viewNav}>
         {views.map((item) => {
@@ -2314,7 +2316,8 @@ function Card({ title, detail, privacy, onDelete }: { title: string; detail: str
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  homeHero: { position: 'relative', overflow: 'hidden', backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.borderSoft, borderRadius: 18, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, marginTop: 6, marginBottom: 8 },
+  homeHero: { position: 'relative', overflow: 'hidden', backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.borderSoft, borderRadius: 18, paddingLeft: 14, paddingRight: 70, paddingTop: 10, paddingBottom: 10, marginTop: 6, marginBottom: 8 },
+  heroFace: { position: 'absolute', right: 12, top: 0, bottom: 0, justifyContent: 'center' },
   homeHeroGlow: { position: 'absolute', right: -72, top: -92, width: 156, height: 156, borderRadius: 78, backgroundColor: 'rgba(255,140,66,0.10)' },
   todayDate: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '800', letterSpacing: 0.8, marginBottom: 2, textTransform: 'uppercase' },
   title: { fontSize: 22, letterSpacing: -0.2, fontWeight: '900', color: LUCY_COLORS.textDark, lineHeight: 25 },

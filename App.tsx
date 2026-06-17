@@ -674,6 +674,45 @@ export default function App() {
   // up the Listen pill or trigger the no-key banner.
   const listenActive = passiveState.status === 'listening' && !passiveState.quickCapture;
 
+  // LUCY's animated face + live "Hey Lucy" status pill. Rendered fresh per call (a function, not a
+  // shared element, since both the header and the always-mounted dashboard may render it). It's placed
+  // either in the global header (non-dashboard screens) or inside the Home hero card (dashboard) — so
+  // on Home it sits in the greeting card and the Meeting/Listen pills stay clear.
+  const renderLucyFace = () => (
+    <View style={styles.faceRow}>
+      {wakeWordEnabled && wakeStatus !== 'disabled' ? (
+        <View style={styles.wakePill}>
+          <View style={[styles.wakeDot, {
+            backgroundColor: wakeStatus === 'listening' ? '#4ADE80'
+              : wakeStatus === 'unavailable' ? '#EF4444'
+              : '#F59E0B',
+          }]} />
+          <Text style={styles.wakePillText}>
+            {wakeStatus === 'listening' ? 'Listening'
+              : wakeStatus === 'unavailable' ? 'Unavailable'
+              : 'Starting…'}
+          </Text>
+        </View>
+      ) : null}
+      <AnimatedFace
+        unreadCount={unreadNotifCount}
+        celebrateKey={refreshToken}
+        status={
+          voiceStatus === 'transcribing' ? 'saving'
+          : (meetingVisible || meetingRecording) ? 'reading'
+          : (voiceStatus === 'recording' || passiveState.status === 'listening') ? 'listening'
+          : convoOpen && convoState === 'speaking' ? 'speaking'
+          : convoOpen && convoState === 'listening' ? 'listening'
+          : convoOpen && convoState === 'thinking' ? 'thinking'
+          : processingActive ? 'organizing'
+          : (screen === 'dashboard' && dashCurrentView === 'Ask Lucy') ? 'thinking'
+          : 'idle'
+        }
+        onPress={() => setNotifCenterVisible(true)}
+      />
+    </View>
+  );
+
   return (
    <ErrorBoundary>
     <SafeAreaProvider>
@@ -720,40 +759,11 @@ export default function App() {
                   </Text>
                 </TouchableOpacity>
               </View>
-              {/* LUCY's animated face — below the pills, the attraction piece + notifications */}
-              <View style={styles.headerFaceRow}>
-                <AnimatedFace
-                  unreadCount={unreadNotifCount}
-                  celebrateKey={refreshToken}
-                  status={
-                    voiceStatus === 'transcribing' ? 'saving'
-                    : (meetingVisible || meetingRecording) ? 'reading'
-                    : (voiceStatus === 'recording' || passiveState.status === 'listening') ? 'listening'
-                    : convoOpen && convoState === 'speaking' ? 'speaking'
-                    : convoOpen && convoState === 'listening' ? 'listening'
-                    : convoOpen && convoState === 'thinking' ? 'thinking'
-                    : processingActive ? 'organizing'
-                    : (screen === 'dashboard' && dashCurrentView === 'Ask Lucy') ? 'thinking'
-                    : 'idle'
-                  }
-                  onPress={() => setNotifCenterVisible(true)}
-                />
-                {/* Live "Hey Lucy" status pill — so you can see starting/listening without Settings */}
-                {wakeWordEnabled && wakeStatus !== 'disabled' ? (
-                  <View style={styles.wakePill}>
-                    <View style={[styles.wakeDot, {
-                      backgroundColor: wakeStatus === 'listening' ? '#4ADE80'
-                        : wakeStatus === 'unavailable' ? '#EF4444'
-                        : '#F59E0B',
-                    }]} />
-                    <Text style={styles.wakePillText}>
-                      {wakeStatus === 'listening' ? 'Listening'
-                        : wakeStatus === 'unavailable' ? 'Unavailable'
-                        : 'Starting…'}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
+              {/* On non-dashboard screens the face lives in the header (top-right). On the dashboard
+                  it moves into the Home hero card so the Meeting/Listen pills stay clear. */}
+              {screen !== 'dashboard' ? (
+                <View style={styles.headerFaceRow}>{renderLucyFace()}</View>
+              ) : null}
             </View>
           </View>
         </View>
@@ -803,6 +813,7 @@ export default function App() {
                   requestKey={dashRequestKey}
                   onViewChange={setDashCurrentView}
                   initialAskQuestion={askInitialQuestion}
+                  renderFace={renderLucyFace}
                 />
               </View>
               <View style={{ flex: 1, display: screen === 'settings' ? 'flex' : 'none' }}>
@@ -962,6 +973,7 @@ const styles = StyleSheet.create({
   logoStar: { position: 'absolute', top: -8, right: -14, color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '800', textShadowColor: 'rgba(255,139,61,0.7)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
   headerPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 48 },
   headerFaceRow: { position: 'absolute', right: -10, top: 18, zIndex: 20, elevation: 20, alignItems: 'center' },
+  faceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   wakePill: {
     flexDirection: 'row',
     alignItems: 'center',

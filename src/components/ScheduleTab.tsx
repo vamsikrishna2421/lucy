@@ -61,6 +61,7 @@ export function ScheduleTab() {
   const [detail, setDetail] = useState<{ id: number; title: string; start: number; end: number; resources: TaskResources } | null>(null);
   const [nameEdit, setNameEdit] = useState('');
   const [resolve, setResolve] = useState<{ a: Block; b: Block } | null>(null); // conflict being resolved
+  const [resolveSugg, setResolveSugg] = useState<{ a: SlotSuggestion[]; b: SlotSuggestion[]; loading: boolean }>({ a: [], b: [], loading: false });
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -282,6 +283,21 @@ export function ScheduleTab() {
       await load();
     } finally { setBusy(false); }
   };
+  // Open the resolver and fetch the top conflict-free reschedule slots for BOTH overlapping events.
+  const openResolve = async (c: { a: Block; b: Block }) => {
+    setResolve(c);
+    setResolveSugg({ a: [], b: [], loading: true });
+    try {
+      const db = await getDatabase();
+      const slotsFor = async (x: Block): Promise<SlotSuggestion[]> => {
+        if (!x.id) return [];
+        const dur = Math.max(5, Math.round((x.end - x.start) / 60000));
+        try { const r = await suggestForText(db, x.title, { durationMin: dur, maxResults: 3 }); return r.suggestions.slice(0, 3); } catch { return []; }
+      };
+      const [a, b] = await Promise.all([slotsFor(c.a), slotsFor(c.b)]);
+      setResolveSugg({ a, b, loading: false });
+    } catch { setResolveSugg({ a: [], b: [], loading: false }); }
+  };
 
   const DayCol = ({ k, w }: { k: number; w?: number }) => (
     <View style={[styles.dayCol, { height: G_H }, w ? { width: w } : { flex: 1 }]}>
@@ -412,16 +428,23 @@ export function ScheduleTab() {
     );
   };
 
-  // For a conflict, the concrete reschedule options for one event X (relative to the other, O):
-  // move it right after O, or right before O. Only LUCY blocks (with an id) can move.
-  const MoveOptions = ({ x, o }: { x: Block; o: Block }) => {
+  // Reschedule options for one side of an overlap: Lucy's top conflict-free slots PLUS quick
+  // before/after fallbacks. Only LUCY blocks (with an id) can move; device events are read-only.
+  const MoveOptions = ({ x, o, sugg }: { x: Block; o: Block; sugg: SlotSuggestion[] }) => {
     if (!x.id) return null;
     const dur = x.end - x.start;
     const afterS = o.end; const beforeS = o.start - dur;
     return (
       <View>
         <Text style={styles.eventSection}>Move “{x.title}”</Text>
+        {resolveSugg.loading ? <Text style={styles.rowD}>Finding free times…</Text> : null}
         <View style={styles.eventChipRow}>
+          {sugg.map((s, i) => (
+            <TouchableOpacity key={i} style={styles.eventChip} onPress={() => moveBlockTo(x, s.start, s.end)}>
+              <Text style={styles.eventChipT}>{dayLabel(s.start)} · {clock(s.start)}</Text>
+            </TouchableOpacity>
+          ))}
+          {/* Deterministic fallbacks (always valid even if no free slot was found). */}
           <TouchableOpacity style={styles.eventChip} onPress={() => moveBlockTo(x, afterS, afterS + dur)}>
             <Text style={styles.eventChipT}>After {o.title} · {clock(afterS)}</Text>
           </TouchableOpacity>
@@ -479,6 +502,19 @@ export function ScheduleTab() {
         </View>
         {renderBody()}
       </View>
+
+      {/* Overlaps — always visible (not buried) so the user can resolve them with one tap */}
+      {conflicts.length > 0 ? (
+        <View style={[styles.resultCard, styles.conflictCard]}>
+          <Text style={[styles.boxH, { color: LUCY_COLORS.error }]}>{conflicts.length} overlap{conflicts.length > 1 ? 's' : ''} — tap Resolve for reschedule options</Text>
+          {conflicts.map((c, i) => (
+            <View key={i} style={styles.conflictRow}>
+              <Text style={[styles.rowD, { flex: 1 }]} numberOfLines={2}>{c.a.title} overlaps {c.b.title}</Text>
+              <TouchableOpacity style={styles.btnSm} onPress={() => openResolve(c)}><Text style={styles.btnT}>Resolve</Text></TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
       {/* Plan with Lucy — collapsed by default (calendar-first) */}
       <TouchableOpacity style={styles.planToggle} onPress={() => setPlanOpen((o) => !o)} activeOpacity={0.8}>
@@ -543,17 +579,6 @@ export function ScheduleTab() {
             ) : null}
           </View>
 
-          {conflicts.length > 0 ? (
-            <View style={[styles.resultCard, styles.conflictCard]}>
-              <Text style={[styles.boxH, { color: LUCY_COLORS.error }]}>{conflicts.length} overlap{conflicts.length > 1 ? 's' : ''}</Text>
-              {conflicts.map((c, i) => (
-                <View key={i} style={styles.conflictRow}>
-                  <Text style={[styles.rowD, { flex: 1 }]} numberOfLines={2}>{c.a.title} overlaps {c.b.title}</Text>
-                  <TouchableOpacity style={styles.btnSm} onPress={() => setResolve(c)}><Text style={styles.btnT}>Resolve</Text></TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          ) : null}
         </>
       ) : null}
       {busy ? <View style={styles.busy}><ActivityIndicator color={LUCY_COLORS.primary} /></View> : null}
@@ -610,8 +635,8 @@ export function ScheduleTab() {
                 “{resolve.a.title}” ({clock(resolve.a.start)}–{clock(resolve.a.end)}) overlaps “{resolve.b.title}” ({clock(resolve.b.start)}–{clock(resolve.b.end)}). Pick which to move:
               </Text>
             ) : null}
-            {resolve ? <MoveOptions x={resolve.a} o={resolve.b} /> : null}
-            {resolve ? <MoveOptions x={resolve.b} o={resolve.a} /> : null}
+            {resolve ? <MoveOptions x={resolve.a} o={resolve.b} sugg={resolveSugg.a} /> : null}
+            {resolve ? <MoveOptions x={resolve.b} o={resolve.a} sugg={resolveSugg.b} /> : null}
             {resolve && !resolve.a.id && !resolve.b.id ? (
               <Text style={styles.emptyText}>Both events are from a connected calendar — change them in that calendar app.</Text>
             ) : null}

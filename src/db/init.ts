@@ -378,6 +378,11 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
   if (!existing.has('capture_kind')) {
     await db.execAsync("ALTER TABLE captures ADD COLUMN capture_kind TEXT DEFAULT 'thought';");
   }
+  if (!existing.has('source_image_path')) {
+    // On-device path to the ORIGINAL photo a capture was read from (LUCY Lens). Kept as the
+    // source-of-truth so the user can review the real image from the capture node. On-device only.
+    await db.execAsync('ALTER TABLE captures ADD COLUMN source_image_path TEXT;');
+  }
   if (!existing.has('archived_at')) {
     await db.execAsync('ALTER TABLE captures ADD COLUMN archived_at DATETIME;');
   }

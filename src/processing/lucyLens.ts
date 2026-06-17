@@ -7,8 +7,9 @@
  *   - OpenAI gpt-4o at HIGH detail otherwise.
  * There is NO on-device OCR here; reading an image needs remote intelligence enabled.
  *
- * Storage policy: ONLY the extracted memory text is stored. The original image
- * is NEVER saved — deleted immediately after extraction.
+ * Storage policy: the extracted memory text PLUS the original photo are kept ON-DEVICE (under
+ * lens_images/), linked to the capture, so the user can review the real source image from its node.
+ * The image is the user's own and never leaves the phone beyond the transient remote vision read.
  */
 
 // SDK 56 deprecated these on the main entry; the legacy module keeps them stable.
@@ -123,18 +124,40 @@ export async function processImageToMemory(
     result = { memoryText: hint, category: 'other', confidence: 'low' };
   }
 
-  // Enqueue as a capture — source 'voice' (closest existing source; a dedicated
-  // 'photo' source will be added when CaptureSource is extended)
+  // Enqueue as a capture, then keep the ORIGINAL photo on-device as the source of truth, linked to
+  // the capture so the user can review the real image from its node. The image is the user's own and
+  // never leaves the phone beyond the transient vision read above — so storing a local copy adds no
+  // exposure (it's strictly less than the remote read already done).
   if (result.memoryText) {
-    await enqueueTranscript(
-      `[Photo: ${result.category}] ${result.memoryText}`,
-      'text',
-      false,
-    );
+    const capId = await enqueueTranscript(`[Photo: ${result.category}] ${result.memoryText}`, 'text', false);
+    const stored = await persistOriginalImage(uri);
+    if (stored && capId) {
+      try {
+        const db = await getDatabase();
+        const { setCaptureSourceImage } = await import('../db/captures');
+        await setCaptureSourceImage(db, capId, stored);
+      } catch { /* linking the image is non-critical */ }
+    }
   }
 
-  // PRIVACY: delete the original image immediately — never stored
+  // Remove the temp picker copy (we kept our own persistent copy under lens_images/).
   deleteAsync(uri, { idempotent: true }).catch(() => {});
 
   return result;
+}
+
+/** Copies the picked image into a persistent on-device folder; returns the stored path (or null). */
+async function persistOriginalImage(uri: string): Promise<string | null> {
+  try {
+    const { documentDirectory, makeDirectoryAsync, copyAsync, getInfoAsync } = await import('expo-file-system/legacy');
+    const dir = `${documentDirectory}lens_images/`;
+    const info = await getInfoAsync(dir);
+    if (!info.exists) await makeDirectoryAsync(dir, { intermediates: true });
+    const ext = ((uri.split('?')[0].split('.').pop() ?? 'jpg').toLowerCase().slice(0, 4)) || 'jpg';
+    const dest = `${dir}lens_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    await copyAsync({ from: uri, to: dest });
+    return dest;
+  } catch {
+    return null;
+  }
 }

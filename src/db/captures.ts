@@ -23,6 +23,12 @@ export interface CaptureRow {
   guardian_note: string | null;
   listen_session_id: string | null;
   protected_values: string | null;
+  source_image_path: string | null;
+}
+
+/** Links the on-device original photo (LUCY Lens source-of-truth) to a capture. */
+export async function setCaptureSourceImage(db: SQLiteDatabase, id: number, path: string): Promise<void> {
+  await db.runAsync('UPDATE captures SET source_image_path = ? WHERE id = ?', path, id);
 }
 
 export type CaptureStatus = 'queued' | 'processing' | 'complete' | 'retrying' | 'archived';

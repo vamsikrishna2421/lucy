@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Easing, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Easing, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { PrivacyBadge } from '../components/PrivacyBadge';
 import { MeetingShareBar } from '../components/MeetingShareBar';
 import { formatMeetingRowText } from '../processing/meetingFormat';
@@ -1203,6 +1203,7 @@ function TimelineView({
   const [quickSending, setQuickSending] = useState(false);
   const [quickAck, setQuickAck] = useState('');
   const [readingImage, setReadingImage] = useState(false); // vision OCR in progress (snap-a-note)
+  const [viewerImage, setViewerImage] = useState<string | null>(null); // original photo being viewed
   const [pendingAction, setPendingAction] = useState<import('../processing/automationEngine').ExtractedAction | null>(null);
   const [executingAction, setExecutingAction] = useState(false);
   const [menuTarget, setMenuTarget] = useState<CaptureRow | null>(null);
@@ -1394,6 +1395,13 @@ function TimelineView({
             <Text style={styles.readingSubText}>Pulling out the text and key details</Text>
           </View>
         </View>
+      </Modal>
+      {/* Original-photo viewer — the source-of-truth image, tap anywhere to close */}
+      <Modal visible={!!viewerImage} transparent animationType="fade" onRequestClose={() => setViewerImage(null)}>
+        <Pressable style={styles.imageViewerBackdrop} onPress={() => setViewerImage(null)}>
+          {viewerImage ? <Image source={{ uri: viewerImage }} style={styles.imageViewerImg} resizeMode="contain" /> : null}
+          <Text style={styles.imageViewerHint}>Tap to close · original photo</Text>
+        </Pressable>
       </Modal>
       {/* Quick capture bar */}
       <View style={styles.tlQuickBar}>
@@ -1685,6 +1693,14 @@ function TimelineView({
                         <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, fontStyle: 'italic', marginTop: 4 }} numberOfLines={3}>
                           {item.processing_error}
                         </Text>
+                      ) : null}
+
+                      {/* ── Original photo (source of truth) — tap to view the real image ── */}
+                      {isExpanded && item.source_image_path ? (
+                        <TouchableOpacity style={styles.tlViewOriginal} onPress={() => setViewerImage(item.source_image_path)}>
+                          <Ionicons name="image-outline" size={15} color={LUCY_COLORS.primary} />
+                          <Text style={styles.tlViewOriginalText}>View original photo</Text>
+                        </TouchableOpacity>
                       ) : null}
 
                       {/* ── Extraction chips — second layer, only when expanded ── */}
@@ -2538,6 +2554,11 @@ const styles = StyleSheet.create({
   readingCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, paddingVertical: 26, paddingHorizontal: 30, alignItems: 'center', borderWidth: 1, borderColor: LUCY_COLORS.border, maxWidth: 280 },
   readingText: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '600', marginTop: 16 },
   readingSubText: { color: LUCY_COLORS.textSubtle, fontSize: 13, marginTop: 5, textAlign: 'center' },
+  tlViewOriginal: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, alignSelf: 'flex-start', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 9, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  tlViewOriginalText: { color: LUCY_COLORS.primary, fontSize: 12.5, fontWeight: '600' },
+  imageViewerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
+  imageViewerImg: { width: '94%', height: '80%' },
+  imageViewerHint: { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 14 },
   tlReceiptIcon: { fontSize: 16 },
   tlQuickSend: { backgroundColor: LUCY_COLORS.primary, width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   tlQuickSendText: { color: '#fff', fontSize: 16, fontWeight: '700' },

@@ -8,6 +8,7 @@
 import { parseDeadline, detectRecurrence } from '../src/scheduling/classify';
 import { overlaps } from '../src/scheduling/time';
 import { canCoexist, normalizeResources } from '../src/scheduling/resources';
+import { computeStart } from '../src/voice/timeResolve';
 import type { TaskResources } from '../src/scheduling/types';
 
 let pass = 0; let fail = 0;
@@ -71,6 +72,38 @@ ok('two self (you) cannot coexist', canCoexist(walk, walk) === false);
 ok('passive + passive can coexist (nothing exclusive)', canCoexist(passive, passive) === true);
 ok('location implies self axis', normalizeResources({ axes: [], location: 'gym' }).axes.includes('self'));
 ok('canCoexist is symmetric', canCoexist(focus, walk) === canCoexist(walk, focus));
+
+// ── computeStart (voice scheduling day/time resolution) ───────────────────────
+// NOW = Wed 2026-06-17 10:00 local.
+ok('computeStart null when no time', computeStart('monday', null, NOW) === null);
+ok('computeStart null on bad time', computeStart('monday', '25:99', NOW) === null);
+{
+  // "next Tuesday at 15:00" must NOT be today (the bug) — Tue is 2026-06-23.
+  const t = computeStart('next tuesday', '15:00', NOW);
+  ok('next tuesday resolves to a Tuesday', t !== null && new Date(t).getDay() === 2);
+  ok('next tuesday is in the future', t !== null && t > NOW);
+  ok('next tuesday is the 23rd', t !== null && new Date(t).getDate() === 23);
+}
+{
+  // bare "friday" → upcoming Friday 2026-06-19
+  const t = computeStart('friday', '09:00', NOW);
+  ok('friday → Fri the 19th', t !== null && new Date(t).getDay() === 5 && new Date(t).getDate() === 19);
+}
+{
+  // same weekday as today ("wednesday") → next week's Wed (24th), never today
+  const t = computeStart('wednesday', '14:00', NOW);
+  ok('wednesday (today is Wed) → next Wed 24th', t !== null && new Date(t).getDate() === 24);
+}
+{
+  const t = computeStart('tomorrow', '08:30', NOW);
+  ok('tomorrow → 18th 08:30', t !== null && new Date(t).getDate() === 18 && new Date(t).getHours() === 8);
+}
+{
+  // explicit past time today rolls to tomorrow
+  const t = computeStart('today', '09:00', NOW); // 9am already passed (now 10am)
+  ok('today past time rolls to tomorrow', t !== null && new Date(t).getDate() === 18);
+}
+ok('explicit ISO date honored', (() => { const t = computeStart('2026-07-04', '12:00', NOW); return t !== null && new Date(t).getMonth() === 6 && new Date(t).getDate() === 4; })());
 
 console.log(`\nhardening: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

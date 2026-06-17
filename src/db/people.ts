@@ -1,5 +1,4 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { getSetting } from './settings';
 
 const NON_PEOPLE = new Set([
   'date', 'time', 'today', 'tomorrow', 'yesterday', 'none', 'n/a', 'na', 'unknown', 'someone', 'self', 'me', 'i',
@@ -45,13 +44,30 @@ export async function upsertPerson(db: SQLiteDatabase, name: string, context: st
   );
 }
 
-/** One-time / periodic self-heal: drop people that are actually the user, orgs, or junk. */
+/**
+ * STRICT junk check used ONLY for deletion. Deliberately does NOT use the fuzzy `ORG_RE` or the
+ * name-token self-match from `looksLikePerson`: those have real false positives (a contact who works
+ * at "Apple", a family member who shares your surname) and `cleanupJunkPeople` does an irreversible
+ * DELETE. We only purge rows that are unambiguously not a person — blank, or an exact generic role.
+ */
+function isDefinitelyJunkPerson(name: string): boolean {
+  const n = (name ?? '').trim();
+  if (n.length < 2) return true;
+  return NON_PEOPLE.has(n.toLowerCase());
+}
+
+/**
+ * Periodic self-heal: drop ONLY clearly-junk people (blank / exact generic role words). It used to
+ * delete anything failing `looksLikePerson` (fuzzy org regex + name-token self-match), which
+ * permanently erased real contacts and family members. The insert-time filter (`looksLikePerson` in
+ * extract.ts) still prevents most junk from ever being created — and a wrong reject there is harmless
+ * (just not created), unlike a wrong delete here.
+ */
 export async function cleanupJunkPeople(db: SQLiteDatabase): Promise<number> {
-  const userName = (await getSetting(db, 'user_profile_name')) ?? '';
   const rows = await db.getAllAsync<{ id: number; name: string }>('SELECT id, name FROM people');
   let removed = 0;
   for (const r of rows) {
-    if (!looksLikePerson(r.name, userName)) { await db.runAsync('DELETE FROM people WHERE id = ?', r.id); removed++; }
+    if (isDefinitelyJunkPerson(r.name)) { await db.runAsync('DELETE FROM people WHERE id = ?', r.id); removed++; }
   }
   return removed;
 }

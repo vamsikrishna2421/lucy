@@ -8,6 +8,7 @@
 import { jsonrepair } from 'jsonrepair';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getDatabase } from '../db';
+import { computeStart } from './timeResolve';
 import type { AskTurn } from '../processing/ask';
 
 export type VoiceIntent = 'schedule' | 'capture' | 'task' | 'mood' | 'link' | 'project' | 'navigate' | 'ask';
@@ -25,7 +26,7 @@ const VOICE_SYSTEM = `You are LUCY's voice command interpreter. Convert the user
  "title":"<concise title/content>",
  "durationMin":<integer or null>,
  "time":"<HH:MM 24-hour, or null>",
- "day":"today|tomorrow|<YYYY-MM-DD>|null",
+ "day":"today|tomorrow|<weekday like monday/friday>|next <weekday>|<YYYY-MM-DD>|null",
  "url":"<url or null>",
  "tone":"positive|neutral|low|negative|null",
  "section":"home|timeline|ask|tasks|calendar|documents|resources|projects|brain|people|health|money|null",
@@ -42,21 +43,6 @@ Rules:
 - Any question or anything else → "ask" (text = the full question).
 - speak is natural, first-person as LUCY, confirms what you did or will do.`;
 
-function computeStart(day: string | null, time: string | null, now: number): number | null {
-  if (!time) return null;
-  const m = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
-  if (!m) return null;
-  const d = new Date(now);
-  if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
-    const p = day.split('-').map(Number); d.setFullYear(p[0], p[1] - 1, p[2]);
-  } else if (day === 'tomorrow') {
-    d.setDate(d.getDate() + 1);
-  }
-  d.setHours(Number(m[1]), Number(m[2]), 0, 0);
-  let ms = d.getTime();
-  if (ms < now - 60_000 && (!day || day === 'today')) { d.setDate(d.getDate() + 1); ms = d.getTime(); }
-  return ms;
-}
 
 interface ParsedCommand {
   intent: VoiceIntent; title?: string; durationMin?: number | null; time?: string | null; day?: string | null;

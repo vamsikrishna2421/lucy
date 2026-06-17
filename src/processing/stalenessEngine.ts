@@ -460,36 +460,13 @@ export async function dismissAllLowPriorityContext(db: SQLiteDatabase): Promise<
  * "Lower confidence" = the item with fewer captured words / less context.
  * Ties are broken by created_at (newer = less established = discard).
  */
-async function archiveIgnoredDuplicates(db: SQLiteDatabase): Promise<number> {
-  const stale = await db.getAllAsync<{
-    id: number; item_id: number; item_text: string;
-    related_id: number; related_text: string;
-  }>(
-    `SELECT id, item_id, item_text, related_id, related_text
-     FROM pending_staleness_reviews
-     WHERE kind = 'todo_duplicate'
-       AND dismissed_at IS NULL
-       AND created_at < datetime('now', '-7 days')`,
-  );
-
-  let count = 0;
-  for (const review of stale) {
-    // Determine which todo is "lower confidence" (shorter task text = less context)
-    const discardId = review.item_text.length >= review.related_text.length
-      ? review.related_id  // related is shorter → discard it
-      : review.item_id;    // item is shorter → discard it
-
-    const { archiveTodo } = await import('../db/todos');
-    await archiveTodo(db, discardId, 'auto-archived: duplicate todo ignored for 7 days').catch(() => {});
-
-    // Mark the review as dismissed so it doesn't re-trigger
-    await db.runAsync(
-      'UPDATE pending_staleness_reviews SET dismissed_at = CURRENT_TIMESTAMP WHERE id = ?',
-      review.id,
-    );
-    count++;
-  }
-  return count;
+async function archiveIgnoredDuplicates(_db: SQLiteDatabase): Promise<number> {
+  // DISABLED (2026-06-17 audit): this used to auto-archive a "duplicate" todo after 7 days, picking
+  // the loser purely by string length. The duplicate flag itself comes from uncalibrated fuzzy
+  // matching (Jaccard/keyword overlap), so this silently deleted legitimately distinct todos the user
+  // never confirmed (e.g. "Call mom" vs "Call mom's doctor"). We never auto-delete on a fuzzy match —
+  // the duplicate reviews stay surfaced for the user to resolve explicitly. No-op.
+  return 0;
 }
 
 // ─── Main nightly job ─────────────────────────────────────────────────────────

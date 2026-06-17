@@ -32,12 +32,18 @@ const FACT_STOPWORDS = new Set(['the', 'and', 'for', 'with', 'their', 'they', 't
 function contentTokens(s: string): Set<string> {
   return new Set(normalizeStatement(s).split(' ').filter((w) => w.length > 3 && !FACT_STOPWORDS.has(w)));
 }
-/** Token-overlap similarity (0-1) so rephrased facts ("logs work via voice notes" vs
- *  "logs work progress through voice notes") are recognised as the same fact. */
+/**
+ * Symmetric Jaccard token-overlap (0-1) so rephrased facts are recognised as the same fact, WITHOUT
+ * the old over-merge bug: the previous `m / min(|a|,|b|)` divided by the smaller set, so a short fact
+ * ("likes coffee") whose tokens appear inside a longer unrelated fact scored 1.0 and got merged.
+ * Jaccard (m / union) is symmetric, and we refuse to fuzzy-compare facts with <2 content tokens
+ * (they can only match on exact normalized text) — those are too short to judge safely.
+ */
 function similarity(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 || b.size === 0) return 0;
+  if (a.size < 2 || b.size < 2) return 0;
   let m = 0; for (const t of a) if (b.has(t)) m++;
-  return m / Math.min(a.size, b.size);
+  const union = a.size + b.size - m;
+  return union === 0 ? 0 : m / union;
 }
 
 const NEXT_CONFIDENCE: Record<LearnedConfidence, LearnedConfidence> = {
@@ -76,7 +82,9 @@ export async function upsertLearnedFact(
       const sim = similarity(tk, contentTokens(row.statement));
       if (sim > bestSim) { bestSim = sim; best = row; }
     }
-    if (best && bestSim >= 0.52) existing = best;
+    // Same-category gate + Jaccard floor: only merge a rephrasing of the SAME kind of fact, never
+    // collapse two distinct facts that happen to share words across categories.
+    if (best && bestSim >= 0.6 && best.category === category) existing = best;
   }
   if (existing) {
     const nextConf = source === 'feedback' ? 'confirmed' : NEXT_CONFIDENCE[existing.confidence];
@@ -134,7 +142,7 @@ const CONF_RANK: Record<LearnedConfidence, number> = { confirmed: 0, supported: 
  * each weaker duplicate into the strongest matching primary (sums evidence), then deletes it.
  * Returns the number merged away. Conservative threshold to avoid merging distinct facts.
  */
-export async function dedupLearnedFacts(db: SQLiteDatabase, threshold = 0.52): Promise<number> {
+export async function dedupLearnedFacts(db: SQLiteDatabase, threshold = 0.6): Promise<number> {
   const all = await db.getAllAsync<LearnedFactRow>('SELECT * FROM learned_facts');
   // Strongest first so weaker rephrasings fold into the confirmed/most-evidenced primary.
   all.sort((a, b) => (CONF_RANK[a.confidence] - CONF_RANK[b.confidence]) || (b.evidence_count - a.evidence_count) || (a.id - b.id));
@@ -142,7 +150,9 @@ export async function dedupLearnedFacts(db: SQLiteDatabase, threshold = 0.52): P
   const drops: Array<{ id: number; into: number; evidence: number }> = [];
   for (const row of all) {
     const tk = contentTokens(row.statement);
-    const match = kept.find((k) => similarity(tk, k.tokens) >= threshold);
+    // Only merge within the same category (symmetric Jaccard ≥ threshold) so distinct facts that
+    // share a few words across categories are never collapsed.
+    const match = kept.find((k) => k.row.category === row.category && similarity(tk, k.tokens) >= threshold);
     if (match) drops.push({ id: row.id, into: match.row.id, evidence: row.evidence_count });
     else kept.push({ row, tokens: tk });
   }
@@ -153,11 +163,16 @@ export async function dedupLearnedFacts(db: SQLiteDatabase, threshold = 0.52): P
   return drops.length;
 }
 
-/** Drops low-confidence facts not reinforced in ~45 days, so stale guesses fade out. */
+/**
+ * Drops only VERY old, low-confidence reflection GUESSES (default 180 days). These are emerging,
+ * LLM-inferred facts (not user-stated), so clearing ancient unreinforced ones avoids corrupting the
+ * prompt — but 45 days was too aggressive and risked forgetting real-but-quiet traits. Never touches
+ * 'supported'/'confirmed' facts or anything the user explicitly told LUCY.
+ */
 export async function decayStaleLearnedFacts(db: SQLiteDatabase): Promise<void> {
   await db.runAsync(
     `DELETE FROM learned_facts
      WHERE confidence = 'emerging' AND source = 'reflection'
-       AND last_seen_at < datetime('now', '-45 days')`,
+       AND last_seen_at < datetime('now', '-180 days')`,
   );
 }

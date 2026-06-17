@@ -759,11 +759,8 @@ export default function App() {
                   </Text>
                 </TouchableOpacity>
               </View>
-              {/* On non-dashboard screens the face lives in the header (top-right). On the dashboard
-                  it moves into the Home hero card so the Meeting/Listen pills stay clear. */}
-              {screen !== 'dashboard' ? (
-                <View style={styles.headerFaceRow}>{renderLucyFace()}</View>
-              ) : null}
+              {/* The face now lives in the Home hero card (see DashboardScreen renderFace), not the
+                  header — keeps the Meeting/Listen pills clear and the position consistent. */}
             </View>
           </View>
         </View>

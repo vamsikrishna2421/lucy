@@ -759,8 +759,8 @@ export default function App() {
                   </Text>
                 </TouchableOpacity>
               </View>
-              {/* The face now lives in the Home hero card (see DashboardScreen renderFace), not the
-                  header — keeps the Meeting/Listen pills clear and the position consistent. */}
+              {/* The face is a single global overlay (see styles.globalFace) pinned below the header,
+                  so it stays in the same fixed spot on every screen and the pills stay clear. */}
             </View>
           </View>
         </View>
@@ -810,7 +810,6 @@ export default function App() {
                   requestKey={dashRequestKey}
                   onViewChange={setDashCurrentView}
                   initialAskQuestion={askInitialQuestion}
-                  renderFace={renderLucyFace}
                 />
               </View>
               <View style={{ flex: 1, display: screen === 'settings' ? 'flex' : 'none' }}>
@@ -904,6 +903,11 @@ export default function App() {
         >
           <Ionicons name="chatbubbles" size={22} color={LUCY_COLORS.white} />
         </TouchableOpacity>
+        {/* LUCY's animated face — a single global overlay pinned just below the header so it sits in
+            the same fixed spot on every screen (over the Home greeting card on the dashboard). */}
+        <View style={styles.globalFace} pointerEvents="box-none">
+          {renderLucyFace()}
+        </View>
       </SafeAreaView>
       <NotificationDetailModal
         payload={notificationDetail}
@@ -969,7 +973,7 @@ const styles = StyleSheet.create({
   logoWrap: { position: 'relative', alignSelf: 'flex-start', marginTop: 8, paddingLeft: 2 },
   logoStar: { position: 'absolute', top: -8, right: -14, color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '800', textShadowColor: 'rgba(255,139,61,0.7)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
   headerPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 48 },
-  headerFaceRow: { position: 'absolute', right: -10, top: 18, zIndex: 20, elevation: 20, alignItems: 'center' },
+  globalFace: { position: 'absolute', right: 16, top: 70, zIndex: 30, elevation: 30, alignItems: 'flex-end' },
   faceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   wakePill: {
     flexDirection: 'row',

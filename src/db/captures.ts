@@ -70,6 +70,31 @@ export async function insertCapture(
   return result.lastInsertRowId;
 }
 
+/**
+ * Records a voice command that performed an ACTION (scheduled an event, created a task/project, saved
+ * a link, logged a mood) as a finished timeline note, so every voice capture always shows on the Home
+ * timeline IN ADDITION to whatever it did. Marked processed=1 with a title + the user's original words,
+ * so the extraction pipeline does NOT re-run it (which would duplicate the task/project it already made).
+ */
+export async function logVoiceActionToTimeline(
+  db: SQLiteDatabase,
+  source: CaptureSource,
+  rawText: string,
+  title: string,
+): Promise<number> {
+  const body = (rawText ?? '').trim();
+  if (!body) return 0;
+  const id = await insertCapture(db, source, body, 'normal');
+  await db.runAsync(
+    `UPDATE captures SET processed = 1, processed_at = CURRENT_TIMESTAMP, next_attempt_at = NULL,
+       extracted_title = ?, structured_text = ? WHERE id = ?`,
+    (title || body).slice(0, 80),
+    body,
+    id,
+  );
+  return id;
+}
+
 export interface ListenSessionGroup {
   sessionId: string;
   startedAt: string;

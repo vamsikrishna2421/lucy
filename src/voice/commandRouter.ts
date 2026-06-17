@@ -8,6 +8,7 @@
 import { jsonrepair } from 'jsonrepair';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getDatabase } from '../db';
+import { logVoiceActionToTimeline } from '../db/captures';
 import { computeStart } from './timeResolve';
 import type { AskTurn } from '../processing/ask';
 
@@ -102,6 +103,8 @@ export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, cont
   switch (cmd.intent) {
     case 'schedule': {
       const title = (cmd.title || 'Untitled').trim();
+      // Always keep a faithful timeline note of what the user said, in addition to scheduling it.
+      await logVoiceActionToTimeline(db, 'voice', text, title);
       const { classifyTask, detectRecurrence } = await import('../scheduling/classify');
       const meta = classifyTask(title, { durationMin: cmd.durationMin ?? undefined });
       // Recurrence is usually in the spoken command ("every day"), not the extracted title — read both.
@@ -155,11 +158,15 @@ export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, cont
         return { ok: true, intent: 'task', speak: `Got it — I'll split that into individual tasks.`, navigate: 'tasks' };
       }
       await db.runAsync("INSERT INTO todos (task, category, urgency, context, status) VALUES (?, 'general', 'medium', '', 'pending')", task);
+      // Single direct-insert tasks skip extraction, so log a timeline note here (comma-lists already
+      // go through the extractor above, which writes its own timeline capture).
+      await logVoiceActionToTimeline(db, 'voice', text, task);
       return { ok: true, intent: 'task', speak: cmd.speak || `Added "${task}" to your tasks.`, navigate: 'tasks' };
     }
     case 'mood': {
       const tone = ['positive', 'neutral', 'low', 'negative'].includes(String(cmd.tone)) ? String(cmd.tone) : 'neutral';
       await db.runAsync("INSERT INTO mood_entries (tone, energy) VALUES (?, 'medium')", tone);
+      await logVoiceActionToTimeline(db, 'voice', text, `Mood: feeling ${tone}`);
       return { ok: true, intent: 'mood', speak: cmd.speak || `Logged that you’re feeling ${tone}.`, navigate: 'health' };
     }
     case 'link': {
@@ -169,6 +176,7 @@ export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, cont
         "INSERT OR IGNORE INTO online_resources (url, title, platform, topic) VALUES (?, ?, 'web', 'General')",
         url, (cmd.title || url).trim(),
       );
+      await logVoiceActionToTimeline(db, 'voice', text, (cmd.title || url).trim());
       return { ok: true, intent: 'link', speak: cmd.speak || 'Saved that link to your resources.', navigate: 'resources' };
     }
     case 'project': {
@@ -176,6 +184,7 @@ export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, cont
       if (!name) return { ok: false, intent: 'project', speak: 'What should I name the project?' };
       const { createProject } = await import('../db/projects');
       await createProject(db, name, null);
+      await logVoiceActionToTimeline(db, 'voice', text, `Project: ${name}`);
       return { ok: true, intent: 'project', speak: cmd.speak || `Created the "${name}" project.`, navigate: 'projects' };
     }
     case 'navigate': {

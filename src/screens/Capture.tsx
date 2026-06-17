@@ -17,6 +17,8 @@ import {
   Easing,
 } from 'react-native';
 import type { PassiveListenerState } from '../audio/PassiveListener';
+import { acquireMic, releaseMic } from '../audio/micCoordinator';
+import { wakeWord } from '../voice/wakeWord';
 import { haptic } from '../config/haptics';
 import {
   ExpoSpeechRecognitionModule,
@@ -578,12 +580,22 @@ export function CaptureScreen({
         await new Promise<void>((resolve) => setTimeout(resolve, 300));
         clearSpeechSubscriptions();
       }
+      releaseMic('capture'); // let the "Hey Lucy" wake word resume
       return;
     }
+
+    // Take the single native recognizer from the low-priority "Hey Lucy" wake word BEFORE starting.
+    // Without this, the wake-word listener and this recorder both call start() on the same recognizer
+    // at once → an audio-session conflict that can crash the app. acquireMic() makes the wake word
+    // stand down synchronously; if it was active we give its abort a beat to settle before we start.
+    const wakeWasActive = wakeWord.isEnabled;
+    acquireMic('capture');
+    if (wakeWasActive) { await new Promise<void>((resolve) => setTimeout(resolve, 350)); }
 
     try {
       const microphonePermission = await ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync();
       if (!microphonePermission.granted) {
+        releaseMic('capture');
         Alert.alert(
           'Microphone access needed',
           'LUCY needs microphone access to record voice. Go to Settings → Apps → LUCY → Microphone and turn it on.',
@@ -612,12 +624,14 @@ export function CaptureScreen({
             clearSpeechSubscriptions();
             animateMicToIdle();
             setVoiceRecording(false);
+            releaseMic('capture');
             Alert.alert('On-device transcription failed', `${event.error}: ${event.message}`);
           }),
           ExpoSpeechRecognitionModule.addListener('end', () => {
             clearSpeechSubscriptions();
             animateMicToIdle();
             setVoiceRecording(false);
+            releaseMic('capture'); // recognizer finished — let the wake word resume
           }),
         ];
         ExpoSpeechRecognitionModule.start({
@@ -630,6 +644,7 @@ export function CaptureScreen({
         });
       } else {
         // LUCY transcribes on-device only — no cloud fallback.
+        releaseMic('capture');
         Alert.alert(
           'On-device dictation unavailable',
           'This device does not support private on-device speech recognition. You can still type your thought.',
@@ -641,6 +656,7 @@ export function CaptureScreen({
       setVoiceRecording(true);
     } catch (error) {
       clearSpeechSubscriptions();
+      releaseMic('capture');
       Alert.alert('Could not start recording', error instanceof Error ? error.message : 'Check microphone permission in Settings → LUCY.');
     }
   };

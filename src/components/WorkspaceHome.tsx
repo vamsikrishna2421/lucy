@@ -21,9 +21,21 @@ interface Tile {
   featured?: boolean;
 }
 
-const MORE: Array<[string, string]> = [
-  ['Galaxy', 'Glossary'], ['Meetings', 'Meetings'], ['Listen', 'Listen data'],
-  ['People', 'People'], ['Ideas', 'Ideas'], ['Expenses', 'Expenses'],
+interface BrainTile {
+  key: string;
+  label: string;
+  hint: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+}
+
+const BRAIN: BrainTile[] = [
+  { key: 'Galaxy', label: 'Glossary', hint: 'Words & meanings you keep', icon: 'planet', color: LUCY_COLORS.violet },
+  { key: 'People', label: 'People', hint: 'Who matters to you', icon: 'people', color: LUCY_COLORS.cyan },
+  { key: 'Meetings', label: 'Meetings', hint: 'Conversations captured', icon: 'people-circle', color: LUCY_COLORS.teal },
+  { key: 'Ideas', label: 'Ideas', hint: 'Sparks worth keeping', icon: 'bulb', color: LUCY_COLORS.gold },
+  { key: 'Listen', label: 'Listen data', hint: 'What Lucy has heard', icon: 'mic', color: LUCY_COLORS.rose },
+  { key: 'Expenses', label: 'Expenses', hint: 'Money in motion', icon: 'cash', color: LUCY_COLORS.primary },
 ];
 
 export function WorkspaceHome({ onOpen, onPlanDay }: { onOpen: (tab: string) => void; onPlanDay: () => void }) {
@@ -190,11 +202,22 @@ export function WorkspaceHome({ onOpen, onPlanDay }: { onOpen: (tab: string) => 
         </View>
       </View>
 
-      <Text style={styles.moreH}>More in your workspace</Text>
-      <View style={styles.moreRow}>
-        {MORE.map(([key, label]) => (
-          <TouchableOpacity key={key} style={styles.moreChip} onPress={() => onOpen(key)}>
-            <Text style={styles.moreChipT}>{label}</Text>
+      <Text style={styles.moreH}>Brain & knowledge</Text>
+      <View style={styles.grid}>
+        {BRAIN.map((b) => (
+          <TouchableOpacity
+            key={b.key}
+            activeOpacity={0.85}
+            onPress={() => onOpen(b.key)}
+            style={[styles.brainTile, { backgroundColor: `${b.color}14`, borderColor: `${b.color}45` }]}
+          >
+            <View style={[styles.brainIconWrap, { backgroundColor: `${b.color}24` }]}>
+              <Ionicons name={b.icon} size={18} color={b.color} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.brainName}>{b.label}</Text>
+              <Text style={styles.brainHint} numberOfLines={1}>{b.hint}</Text>
+            </View>
           </TouchableOpacity>
         ))}
       </View>
@@ -233,8 +256,9 @@ const styles = StyleSheet.create({
   qaGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 10 },
   qaBtn: { width: '47%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: LUCY_COLORS.background, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 13, paddingVertical: 13, paddingHorizontal: 8 },
   qaLabel: { color: LUCY_COLORS.textDark, fontSize: 12.5, fontWeight: '600' },
-  moreH: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '700', marginTop: 20, marginBottom: 8 },
-  moreRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  moreChip: { borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
-  moreChipT: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '600' },
+  moreH: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '800', marginTop: 20, marginBottom: 10 },
+  brainTile: { width: '48.5%', minHeight: 80, borderRadius: 16, borderWidth: 1, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  brainIconWrap: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  brainName: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 14 },
+  brainHint: { color: LUCY_COLORS.textMuted, fontSize: 11, marginTop: 3, lineHeight: 15 },
 });

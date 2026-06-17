@@ -9,12 +9,14 @@
  * Pure strings + a pure function. No imports, no side effects. Keep this in sync with the real app.
  *
  * Navigation vocabulary used throughout (so answers point to the right place):
- *  - Phone bottom bar: Home, Workspace, the center Voice mic, and the Capture (+) screen. Settings
- *    and "About You" live behind the header gear / profile.
+ *  - Phone bottom bar (5 items, left→right): Home, Workspace, the center Voice mic ("Hold to talk"),
+ *    Tasks, Settings. There is ALSO a small chat-bubbles button (bottom-right, above the bar) that
+ *    opens "Talk to Lucy". "About You" / profile lives behind the header avatar.
  *  - Home top tabs: Timeline, Focus Now, Ask Lucy, Health.
- *  - Workspace tile ("command center"): Calendar, Documents, Resources, Projects, Bookmarks (coming
- *    soon), plus Lucy Suggested, "Plan my day", and Quick actions. Brain areas (Glossary, People,
- *    Ideas, Meetings, Listen) and Money also live under Workspace/Brain.
+ *  - Workspace ("command center") top tiles: Calendar, Documents, Resources, Projects, Bookmarks
+ *    (coming soon), and Lucy Suggested — plus a "Plan My Day" button and Quick actions. SCROLL DOWN
+ *    in Workspace to the "Brain & knowledge" grid for: Glossary, People, Meetings, Ideas, Listen
+ *    data, and Expenses. There is NO separate "Brain" tab — those areas live inside Workspace.
  *  - Website (LAN companion): open http://<phone-ip>:8088 on a laptop on the SAME WiFi. It mirrors
  *    the app with a left sidebar for every section.
  */
@@ -30,12 +32,18 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
 ## Getting around
 
 ### On the phone
-- **Bottom bar:** **Home**, **Workspace**, the center **Voice mic**, and the **Capture (+)** screen.
+- **Bottom bar (5 items, left to right):** **Home**, **Workspace**, the center **Voice mic**
+  ("Hold to talk"), **Tasks**, **Settings**.
+- A small **chat-bubbles button** sits at the **bottom-right** (just above the bar) — tap it to open
+  **Talk to Lucy** (the spoken conversation). Saying **"Hey Lucy"** opens the same thing hands-free.
 - **Home** has top tabs: **Timeline**, **Focus Now**, **Ask Lucy**, **Health**.
-- **Workspace** is the command center tile — open it for Calendar, Documents, Resources, Projects,
-  Bookmarks (coming soon), Lucy Suggested, "Plan my day", and Quick actions. Brain areas (Glossary,
-  People, Ideas, Meetings, Listen) and Money live here too.
-- **Settings** and **About You** are behind the header gear / profile.
+- **Workspace** is the command center. The top tiles are **Calendar**, **Documents**, **Resources**,
+  **Projects**, **Bookmarks** (coming soon), and **Lucy Suggested**, plus a **Plan My Day** button and
+  **Quick actions**. **Scroll down** in Workspace to the **"Brain & knowledge"** grid for **Glossary**,
+  **People**, **Meetings**, **Ideas**, **Listen data**, and **Expenses**. There is **no separate Brain
+  tab** — those areas live inside Workspace.
+- **Tasks** is its own bottom tab (your to-dos + a quick capture box).
+- **Settings** is a bottom tab. **About You** / your profile is behind the **header avatar** (top-right).
 
 ### On the laptop (website / LAN companion)
 - LUCY's phone hosts a live web mirror at **http://<phone-ip>:8088**. Put the laptop on the SAME
@@ -48,8 +56,9 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
 
 - **What it does:** Records anything you want LUCY to remember and auto-extracts the structured bits
   (tasks, people, places, expenses, ideas, dates) into your memory.
-- **Where:** Phone — the **Capture (+)** screen (and the **Voice mic**). Website — the **Capture**
-  section in the sidebar.
+- **Where:** Phone — the **"Capture a thought" box** at the top of **Home** (the Timeline view), the
+  center **Voice mic** ("Hold to talk"), or **share-to-LUCY** from another app. Website — the
+  **Capture** section in the sidebar.
 - **How:**
   - **Text:** type or paste a note and save it. LUCY structures it automatically.
   - **Voice:** tap the mic and speak. Transcription happens **on-device** — your audio never goes to
@@ -81,8 +90,8 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
 ## 4. Tasks — your to-dos
 
 - **What it does:** Tracks todos with an **urgency** level and **categories**.
-- **Where:** Phone — tasks surface on the **Capture** screen / Focus Now and Workspace. Website —
-  **Tasks**.
+- **Where:** Phone — the **Tasks** bottom tab (also surfaced in **Home → Focus Now** and in
+  Workspace's **Lucy Suggested**). Website — **Tasks**.
 - **How:** add a task (type it, or say "add a task to …"), set urgency/category, then **complete** or
   **delete** it. Open todos can be auto-scheduled by the Calendar's "Plan my day".
 
@@ -91,9 +100,10 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
 - **What it does:** Scheduled reminders that fire as **notifications** at a set date and time. Unlike
   calendar blocks they do not occupy a slot — they just interrupt you at the right moment.
   LUCY nags you every 3 minutes for up to 30 minutes until you acknowledge the reminder.
-- **Where:** Phone — **Workspace → Reminders** tile. Website — **Reminders** section.
-- **How:** capture a reminder ("remind me to call the dentist on Friday at 10am"), or add one directly
-  in the Reminders tile. Tap the notification to acknowledge and stop the nag.
+- **Where:** Phone — **Settings → Scheduled reminders** (manage/view/delete). Website — **Reminders**
+  section.
+- **How:** capture a reminder ("remind me to call the dentist on Friday at 10am"), or manage them in
+  Settings → Scheduled reminders. Tap the notification to acknowledge and stop the nag.
 - Reminders can also be managed (view / delete / mark done) from the Reminders list.
 
 ## 4b. Focus Now — what to do right now
@@ -106,10 +116,13 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
 
 ## 5. Workspace — the command center
 
-- **What it does:** A top-level tile that gathers your productivity surfaces in one place.
+- **What it does:** The top-level command center that gathers your productivity surfaces in one place.
 - **Where:** Phone — the **Workspace** bottom tab. Website — the **Workspace** section.
-- **Contains:** tiles for **Calendar**, **Documents**, **Resources**, **Projects**, **Bookmarks**
-  (coming soon), plus **Lucy Suggested**, a **Plan my day** button, and **Quick actions**.
+- **Contains (top of the screen):** tiles for **Calendar**, **Documents**, **Resources**, **Projects**,
+  **Bookmarks** (coming soon), and **Lucy Suggested**, plus a **Plan My Day** button and **Quick
+  actions** (Find time, Upload doc, Add link, New project).
+- **Contains (scroll down — "Brain & knowledge"):** **Glossary**, **People**, **Meetings**, **Ideas**,
+  **Listen data**, and **Expenses**. These are the Brain areas; there is no separate Brain tab.
 
 ### 5a. Calendar — LUCY's own on-device calendar
 
@@ -152,7 +165,7 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
 - **Where:** Phone — **Workspace → Projects**. Website — **Projects**.
 - **How:** create a project ("start a project called …"), then file work into it.
 
-## 6. Brain — your knowledge graph and entities
+## 6. Brain & knowledge — your knowledge graph and entities
 
 - **What it does:** The structured side of your memory, broken into:
   - **Glossary:** a knowledge graph of entities and the connections between them.
@@ -160,7 +173,10 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
   - **Ideas:** captured ideas.
   - **Meetings:** meeting captures and summaries.
   - **Listen data:** what LUCY has gathered from listening sessions.
-- **Where:** Phone — under **Workspace / Brain**. Website — the corresponding sidebar sections.
+  - **Expenses:** your tracked spending (see Money below).
+- **Where:** Phone — open the **Workspace** tab and **scroll down** to the **"Brain & knowledge"**
+  grid, then tap **Glossary / People / Meetings / Ideas / Listen data / Expenses**. There is NO
+  separate "Brain" tab in the bottom bar. Website — the corresponding sidebar sections.
 - **How:** browse entities, open a person or term to see connected memories, review ideas/meetings.
 
 ## 7. Health — mood
@@ -173,7 +189,7 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
 ## 8. Money — expenses
 
 - **What it does:** Tracks expenses **by category** so you can ask spending questions in Ask Lucy.
-- **Where:** Phone — under **Workspace / Brain → Money**. Website — **Money**.
+- **Where:** Phone — **Workspace → scroll down → Brain & knowledge → Expenses**. Website — **Money**.
 - **How:** capture spending (a receipt image or "spent $12 on lunch"); review totals by category.
 
 ## 9. About You — profile, learning, and controls
@@ -193,7 +209,7 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
 
 ## 9a. Settings — full list of what's in Settings
 
-Settings is behind the **gear icon** in the header (top-right). Key sections:
+Settings is the **Settings bottom tab** (far right of the bottom bar). Key sections:
 
 - **Laptop access (local network):** toggle to start the LAN web server; shows the URL + PIN.
 - **LUCY Wrapped:** your quarterly story — captures, tasks, people, mood summary. Tap **View**.
@@ -246,13 +262,17 @@ Settings is behind the **gear icon** in the header (top-right). Key sections:
 - **What it does:** A hands-free multi-turn spoken conversation with LUCY (like ChatGPT voice mode).
   LUCY listens, thinks, and speaks replies aloud. You can ask questions, give commands, and have
   back-and-forth without touching the phone.
-- **Where:** Phone — the **chat-bubbles FAB** (floating button, bottom-right corner of any screen).
-  Tap it to open the "Talk to Lucy" modal.
-- **How:** the modal opens, LUCY says "I'm listening — what's up?", then it's a continuous loop:
-  you speak → she replies aloud → she listens again. A pulsing orb shows the current state
-  (Listening / Thinking / Speaking). Say **"stop listening"**, **"that's all"**, or **"goodbye"**
-  to end, or tap **End conversation**.
-- The transcript of the conversation appears in the modal so you can read what was said.
+- **Where:** Phone — the **chat-bubbles button** (bottom-right corner, just above the nav bar). Tap it,
+  or say **"Hey Lucy"** if the wake word is on.
+- **How:** a small **floating card slides up at the bottom** — it does NOT take over the screen, so you
+  can keep using and navigating the app while you talk (great for live demos). LUCY greets you, then
+  it's a continuous loop: you speak → she replies aloud → she listens again. The card shows the state
+  (Listening / Thinking / Speaking) and her last reply. **Tap her message while she's speaking to take
+  over (barge-in)** instead of waiting for her to finish. Say **"stop listening"**, **"that's all"**, or
+  **"goodbye"** to end, or tap **End conversation**.
+- LUCY is **aware of the screen you're on** during the conversation, so she can guide you live — e.g.
+  ask "walk me through a demo of your features" and she'll give one step at a time and tell you exactly
+  which tab/tile to open next.
 
 ## 10b. Hey Lucy — foreground wake word
 
@@ -318,7 +338,8 @@ Settings is behind the **gear icon** in the header (top-right). Key sections:
 - **"Where do I see what LUCY sent to the AI?"** → Settings → AI call log (bottom of Settings).
 - **"How do I talk to Lucy hands-free?"** → Tap the chat-bubbles FAB (bottom-right); or say "Hey Lucy" if the wake word is enabled in Settings.
 - **"How do I enable Hey Lucy?"** → Settings → Hey Lucy wake word → toggle on.
-- **"Where are my reminders?"** → Workspace → Reminders tile.
+- **"Where are my reminders?"** → Settings → Scheduled reminders.
+- **"Where is Brain / People / Glossary?"** → Open the Workspace tab and scroll down to "Brain & knowledge".
 - **"What should I do right now?"** → Home → Focus Now tab.
 - **"What is LUCY Wrapped?"** → Settings → LUCY Wrapped → View — your quarterly life summary.
 - **"How do I export my data?"** → Settings → Export as JSON (structured) or Export as Markdown (readable).

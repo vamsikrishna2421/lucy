@@ -103,6 +103,12 @@ class ConversationManager {
       }),
       ExpoSpeechRecognitionModule.addListener('error', (e: ExpoSpeechRecognitionErrorEvent) => {
         if (!this.active || e.error === 'aborted' || e.error === 'no-speech') return;
+        // 'interrupted' = a transient audio-session blip (usually TTS starting/stopping while we
+        // also hold the recognizer). Never end the conversation over it — just resume listening.
+        if (e.error === 'interrupted') {
+          if (this.state === 'listening') { this.endTimer = setTimeout(() => this.startRecognition(), 350); }
+          return;
+        }
         this.fail(`Voice error (${e.error}). ${e.message || ''}`.trim());
       }),
       ExpoSpeechRecognitionModule.addListener('end', () => {
@@ -165,7 +171,20 @@ class ConversationManager {
     this.set('speaking');
     await speak(reply);
     if (!this.active) return;
-    this.beginListening(); // back to the user
+    // If the user barged in (interrupt() flipped us to 'listening' mid-speech), don't double-start.
+    if (this.state === 'speaking') this.beginListening(); // back to the user
+  }
+
+  /**
+   * Barge-in: the user wants to take over while LUCY is talking (they've already read the reply).
+   * Stops TTS immediately and starts listening, without waiting for the sentence to finish.
+   */
+  interrupt(): void {
+    if (!this.active) return;
+    if (this.state === 'speaking') {
+      void stopSpeaking();
+      this.beginListening(); // flips state to 'listening' so the awaited speak() won't re-listen
+    }
   }
 
   private async speakAndEnd(text: string): Promise<void> {

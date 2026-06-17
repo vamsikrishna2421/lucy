@@ -114,40 +114,47 @@ export default function ConversationModal({
         {/* Amber glow line + glow strip at the very top of the panel */}
         <View style={styles.glowStrip} />
 
-        {/* State indicator row */}
-        <View style={styles.stateRow}>
-          {snap.state === 'thinking' && (
-            <Animated.Text style={[styles.stateThinking, { opacity: dotOpacity }]}>
-              {'●●●'}
-            </Animated.Text>
-          )}
-          {snap.state === 'listening' && (
-            <View style={styles.stateInlineRow}>
-              <View style={[styles.stateDot, { backgroundColor: '#4ADE80' }]} />
-              <Text style={styles.stateText}>Listening…</Text>
-            </View>
-          )}
-          {snap.state === 'speaking' && (
-            <View style={styles.stateInlineRow}>
-              <View style={[styles.stateDot, { backgroundColor: C.primary }]} />
-              <Text style={styles.stateText}>Speaking…</Text>
-            </View>
-          )}
-        </View>
+        {/* Tap the message area while Lucy is speaking to take over (barge-in). */}
+        <Pressable
+          onPress={() => { if (snap.state === 'speaking') conversation.interrupt(); }}
+          disabled={snap.state !== 'speaking'}
+        >
+          {/* State indicator row */}
+          <View style={styles.stateRow}>
+            {snap.state === 'thinking' && (
+              <Animated.Text style={[styles.stateThinking, { opacity: dotOpacity }]}>
+                {'●●●'}
+              </Animated.Text>
+            )}
+            {snap.state === 'listening' && (
+              <View style={styles.stateInlineRow}>
+                <View style={[styles.stateDot, { backgroundColor: '#4ADE80' }]} />
+                <Text style={styles.stateText}>Listening…</Text>
+              </View>
+            )}
+            {snap.state === 'speaking' && (
+              <View style={styles.stateInlineRow}>
+                <View style={[styles.stateDot, { backgroundColor: C.primary }]} />
+                <Text style={styles.stateText}>Speaking…</Text>
+                <Text style={styles.tapHint}>· tap to reply</Text>
+              </View>
+            )}
+          </View>
 
-        {/* Lucy's last message */}
-        <View style={styles.lucyTextWrap}>
-          {lastLucyTurn ? (
-            <Text style={styles.lucyText}>{lastLucyTurn.text}</Text>
-          ) : snap.state === 'listening' ? (
-            <Text style={styles.lucyPlaceholder}>What's up?</Text>
+          {/* Lucy's last message (capped so the card stays compact) */}
+          <View style={styles.lucyTextWrap}>
+            {lastLucyTurn ? (
+              <Text style={styles.lucyText} numberOfLines={3}>{lastLucyTurn.text}</Text>
+            ) : snap.state === 'listening' ? (
+              <Text style={styles.lucyPlaceholder}>What's up?</Text>
+            ) : null}
+          </View>
+
+          {/* User's live partial transcript */}
+          {snap.partial ? (
+            <Text style={styles.partialText} numberOfLines={2}>{snap.partial}</Text>
           ) : null}
-        </View>
-
-        {/* User's live partial transcript */}
-        {snap.partial ? (
-          <Text style={styles.partialText}>{snap.partial}</Text>
-        ) : null}
+        </Pressable>
 
         {/* Error notice */}
         {snap.error ? (
@@ -178,17 +185,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
 
-  // Floating card pinned near the bottom but ABOVE the nav, so the app stays usable.
+  // Compact floating card pinned near the bottom but ABOVE the nav, so the app stays usable.
   panel: {
     backgroundColor: 'rgba(12, 8, 18, 0.97)',
     borderWidth: 1.5,
     borderColor: 'rgba(255, 140, 0, 0.55)',
-    borderRadius: 22,
-    marginHorizontal: 12,
-    marginBottom: 104, // clear the bottom nav / mic button
-    paddingBottom: 6,
-    paddingHorizontal: 20,
-    paddingTop: 4,
+    borderRadius: 20,
+    marginHorizontal: 14,
+    marginBottom: 100, // clear the bottom nav / mic button
+    paddingBottom: 2,
+    paddingHorizontal: 16,
+    paddingTop: 2,
     shadowColor: '#FF8C00',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
@@ -198,20 +205,20 @@ const styles = StyleSheet.create({
 
   // Thin warm glow strip at the top of the card.
   glowStrip: {
-    height: 10,
+    height: 8,
     backgroundColor: 'rgba(255, 120, 0, 0.08)',
-    marginHorizontal: -20,
-    marginTop: -4,
-    marginBottom: 8,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    marginHorizontal: -16,
+    marginTop: -2,
+    marginBottom: 4,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
 
   // Row that shows the current state indicator.
   stateRow: {
-    minHeight: 24,
+    minHeight: 20,
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 6,
   },
 
   // Pulsing thinking dots.
@@ -234,25 +241,31 @@ const styles = StyleSheet.create({
   },
   stateText: {
     color: C.textMuted,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
     letterSpacing: 0.2,
+  },
+  // "· tap to reply" hint shown while Lucy is speaking.
+  tapHint: {
+    color: C.primary,
+    fontSize: 12,
+    fontWeight: '500',
   },
 
   // Lucy's last reply text area.
   lucyTextWrap: {
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   lucyText: {
     color: C.textDark,
-    fontSize: 17,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 21,
   },
   lucyPlaceholder: {
     color: C.textSubtle,
-    fontSize: 17,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 21,
     fontStyle: 'italic',
   },
 
@@ -261,7 +274,7 @@ const styles = StyleSheet.create({
     color: '#F59E0B',
     fontSize: 13,
     lineHeight: 18,
-    marginBottom: 6,
+    marginBottom: 4,
   },
 
   // Error notice.
@@ -275,8 +288,8 @@ const styles = StyleSheet.create({
   // End conversation button.
   endBtn: {
     alignItems: 'center',
-    paddingVertical: 14,
-    marginTop: 4,
+    paddingVertical: 10,
+    marginTop: 2,
   },
   endBtnPressed: {
     opacity: 0.6,

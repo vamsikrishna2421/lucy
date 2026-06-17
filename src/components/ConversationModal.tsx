@@ -47,6 +47,9 @@ export default function ConversationModal({
   // Dot opacity for the "thinking" pulsing animation.
   const dotOpacity = useRef(new Animated.Value(1)).current;
   const dotLoop = useRef<Animated.CompositeAnimation | null>(null);
+  // Seconds left before the card self-dismisses after Lucy ends the conversation (null = not counting).
+  const AUTO_DISMISS_SECONDS = 15;
+  const [dismissIn, setDismissIn] = useState<number | null>(null);
 
   // Subscribe to the conversation engine while mounted.
   useEffect(() => conversation.subscribe(setSnap), []);
@@ -94,6 +97,23 @@ export default function ConversationModal({
     }
     return () => { dotLoop.current?.stop(); };
   }, [snap.state, dotOpacity]);
+
+  // When Lucy ends the conversation herself (engine → 'off') but the card is still on screen,
+  // keep her sign-off visible briefly, then auto-dismiss with a visible countdown so the user
+  // isn't left wondering whether they must tap something.
+  useEffect(() => {
+    if (!(visible && snap.state === 'off')) { setDismissIn(null); return; }
+    setDismissIn(AUTO_DISMISS_SECONDS);
+    const id = setInterval(() => {
+      setDismissIn((n) => (n === null ? null : n - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [visible, snap.state]);
+
+  // Fire the close once the countdown reaches zero.
+  useEffect(() => {
+    if (dismissIn === 0) onClose();
+  }, [dismissIn, onClose]);
 
   const close = (): void => {
     void conversation.end();
@@ -166,7 +186,9 @@ export default function ConversationModal({
           style={({ pressed }) => [styles.endBtn, pressed && styles.endBtnPressed]}
           onPress={close}
         >
-          <Text style={styles.endBtnText}>End conversation</Text>
+          <Text style={styles.endBtnText}>
+            {dismissIn !== null ? `Closing in ${dismissIn}s · tap to close now` : 'End conversation'}
+          </Text>
         </Pressable>
       </Animated.View>
     </View>

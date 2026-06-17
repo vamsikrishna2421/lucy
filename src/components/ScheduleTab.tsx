@@ -52,10 +52,11 @@ export function ScheduleTab() {
   const [sugg, setSugg] = useState<Sugg | null>(null);
   const [proposals, setProposals] = useState<DayProposal[] | null>(null);
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<'agenda' | 'day' | 'week' | 'month'>('agenda');
+  const [view, setView] = useState<'agenda' | 'day' | 'week' | 'month'>('day');
   const [ref, setRef] = useState<number>(dayKey(Date.now()));
   const [calPerm, setCalPerm] = useState<boolean | null>(null);
   const [nowMs, setNowMs] = useState<number>(Date.now());
+  const [planOpen, setPlanOpen] = useState(false); // "Plan with Lucy" collapsible (calendar-first)
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -232,6 +233,28 @@ export function ScheduleTab() {
     </View>
   );
 
+  // Fantastical-style week strip: 7 days for context, tap to focus a day; dots preview that day's events.
+  const WeekStrip = () => (
+    <View style={styles.weekStrip}>
+      {weekDays().map((k) => {
+        const isToday = dayKey(k) === today;
+        const isSel = dayKey(k) === dayKey(ref);
+        const evs = dayItems(k).filter((x) => !x.habit);
+        return (
+          <TouchableOpacity key={k} style={styles.wsDay} activeOpacity={0.7} onPress={() => { setRef(dayKey(k)); if (view === 'month' || view === 'agenda') setView('day'); }}>
+            <Text style={[styles.wsDow, isSel && styles.wsDowSel]}>{new Date(k).toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 1)}</Text>
+            <View style={[styles.wsNum, isToday && styles.wsNumToday, isSel && !isToday && styles.wsNumSel]}>
+              <Text style={[styles.wsNumT, (isToday || isSel) && styles.wsNumTOn]}>{new Date(k).getDate()}</Text>
+            </View>
+            <View style={styles.wsDots}>
+              {evs.slice(0, 3).map((it, i) => <View key={i} style={[styles.wsDot, { backgroundColor: it.device ? DEVICE_COLOR : catColor(it.title, describeResources(it.resources)) }]} />)}
+            </View>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+
   const renderBody = () => {
     if (view === 'month') {
       const d = new Date(ref); const y = d.getFullYear(); const m = d.getMonth();
@@ -309,30 +332,18 @@ export function ScheduleTab() {
     );
   };
 
+  const loosePlanCount = unsched.length;
   return (
     <ScrollView contentContainerStyle={styles.wrap}>
-      <View style={styles.hero}>
-        <View style={styles.heroTop}>
+      {/* Slim, calendar-first header */}
+      <View style={styles.headRow}>
+        <View style={{ flex: 1 }}>
           <Text style={styles.kicker}>Lucy Calendar</Text>
-          <Text style={styles.heroMeta}>{conflicts.length ? `${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}` : 'Conflict-free'}</Text>
+          <Text style={styles.headTitle} numberOfLines={1}>{nextBlock ? `Next: ${nextBlock.title}` : todayCount ? 'Your day has shape.' : 'Your day is open.'}</Text>
+          <Text style={styles.headSub} numberOfLines={1}>{nextBlock ? `${dayLabel(nextBlock.start)} at ${clock(nextBlock.start)} · ${(focusMinutes / 60).toFixed(1)}h focus` : 'Nothing pressing right now.'}</Text>
         </View>
-        <Text style={styles.heroTitle}>{nextBlock ? `Next: ${nextBlock.title}` : todayCount ? 'Your day has shape.' : 'Your day is open.'}</Text>
-        <Text style={styles.heroSub}>
-          {nextBlock
-            ? `${dayLabel(nextBlock.start)} at ${clock(nextBlock.start)}. ${unsched.length ? `${unsched.length} task${unsched.length === 1 ? '' : 's'} still need a home.` : 'Loose tasks are handled.'}`
-            : unsched.length
-              ? `${unsched.length} task${unsched.length === 1 ? '' : 's'} can be placed around your real availability.`
-              : 'Nothing is pressing for a slot right now.'}
-        </Text>
-        <View style={styles.heroStats}>
-          <View style={styles.heroStat}><Text style={styles.heroStatN}>{todayCount}</Text><Text style={styles.heroStatL}>today</Text></View>
-          <View style={styles.heroStat}><Text style={styles.heroStatN}>{(focusMinutes / 60).toFixed(1)}h</Text><Text style={styles.heroStatL}>focus</Text></View>
-          <View style={styles.heroStat}><Text style={styles.heroStatN}>{unsched.length}</Text><Text style={styles.heroStatL}>to place</Text></View>
-        </View>
-        <TouchableOpacity style={styles.heroPlan} onPress={planDay} disabled={busy}><Text style={styles.heroPlanText}>Plan my day</Text></TouchableOpacity>
+        <Text style={styles.heroMeta}>{conflicts.length ? `${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}` : 'Conflict-free'}</Text>
       </View>
-
-      {av ? <Text style={styles.avLine}>On-device calendar - work {hm(av.workStartMin)}-{hm(av.workEndMin)} - peak {av.peakWindows[0] ? `${hm(av.peakWindows[0].startMin)}-${hm(av.peakWindows[0].endMin)}` : '-'}</Text> : null}
 
       {calPerm === false ? (
         <TouchableOpacity style={styles.connectCard} onPress={connectCalendars} activeOpacity={0.85}>
@@ -347,85 +358,98 @@ export function ScheduleTab() {
         <View style={styles.syncedPill}><View style={styles.syncedDot} /><Text style={styles.syncedText}>Synced with your connected calendars</Text></View>
       ) : null}
 
-      <View style={styles.plannerCard}>
-        <Text style={styles.panelEyebrow}>Schedule something</Text>
-        <Text style={styles.panelTitle}>Tell Lucy what needs a place.</Text>
-        <View style={styles.findRow}>
-          <TextInput style={styles.input} placeholder="Write the doc, call mom, gym..." placeholderTextColor={LUCY_COLORS.textFaint} value={task} onChangeText={setTask} onSubmitEditing={() => doSuggest(task)} />
-          <TouchableOpacity style={styles.btn} onPress={() => doSuggest(task)} disabled={busy}><Text style={styles.btnT}>Suggest</Text></TouchableOpacity>
-        </View>
-      </View>
-
-      {sugg ? (
-        <View style={styles.resultCard}>
-          <Text style={styles.boxH}>{sugg.suggestions.length ? `Best times for "${sugg.meta.title}"` : `No conflict-free slot for "${sugg.meta.title}"`}</Text>
-          <Text style={styles.rowD}>{sugg.meta.durationMin} min - {describeResources(sugg.meta.resources)}</Text>
-          {sugg.suggestions.map((s, i) => (
-            <View key={i} style={styles.slotRow}>
-              <View style={{ flex: 1 }}><Text style={styles.rowT}>{dayLabel(s.start)} - {clock(s.start)} to {clock(s.end)}</Text><Text style={styles.rowD}>{s.reasons.join(', ')}</Text></View>
-              <TouchableOpacity style={styles.btnSm} onPress={() => accept(s)}><Text style={styles.btnT}>Add</Text></TouchableOpacity>
-            </View>
-          ))}
-        </View>
-      ) : null}
-
-      <View style={styles.queueCard}>
-        <View style={styles.boxHead}>
-          <View>
-            <Text style={styles.panelEyebrow}>Loose tasks</Text>
-            <Text style={styles.boxH}>{unsched.length ? `${unsched.length} waiting for time` : 'Nothing waiting'}</Text>
-          </View>
-          <TouchableOpacity style={styles.btnSm} onPress={planDay} disabled={busy}><Text style={styles.btnT}>Plan</Text></TouchableOpacity>
-        </View>
-        {unsched.length === 0 && !proposals ? <Text style={styles.emptyText}>No pending tasks need a time. Lucy will surface them here when they do.</Text> : null}
-        {unsched.map((t) => (
-          <View key={t.id} style={styles.taskRow}>
-            <Text style={[styles.rowT, { flex: 1 }]} numberOfLines={2}>{t.task}</Text>
-            <TouchableOpacity style={styles.btnGhost} onPress={() => doSuggest(t.task, t.id)}><Text style={styles.btnGhostT}>Find time</Text></TouchableOpacity>
-          </View>
-        ))}
-        {proposals ? (
-          <View style={styles.proposalWrap}>
-            <View style={styles.boxHead}><Text style={styles.boxH}>Proposed plan ({proposals.length})</Text>{proposals.length > 0 ? <TouchableOpacity style={styles.btnSm} onPress={acceptAll}><Text style={styles.btnT}>Add all</Text></TouchableOpacity> : null}</View>
-            {proposals.length === 0 ? <Text style={styles.emptyText}>Nothing fit your free time right now.</Text> : null}
-            {proposals.map((p, i) => (
-              <View key={i} style={styles.slotRow}>
-                <View style={{ flex: 1 }}><Text style={styles.rowT}>{p.title}</Text><Text style={styles.rowD}>{dayLabel(p.start)} - {clock(p.start)} to {clock(p.end)} - {p.resourceLabel}</Text></View>
-                <TouchableOpacity style={styles.btnGhost} onPress={() => acceptProposal(p)}><Text style={styles.btnGhostT}>Add</Text></TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        ) : null}
-      </View>
-
-      {conflicts.length > 0 ? (
-        <View style={[styles.resultCard, styles.conflictCard]}>
-          <Text style={[styles.boxH, { color: LUCY_COLORS.error }]}>{conflicts.length} conflict{conflicts.length > 1 ? 's' : ''}</Text>
-          {conflicts.map((c, i) => <Text key={i} style={styles.rowD}>{c.a} overlaps {c.b}. Lucy cannot run those in parallel.</Text>)}
-        </View>
-      ) : null}
-
+      {/* Calendar — leads the screen */}
       <View style={styles.timetableCard}>
         <View style={styles.timetableHead}>
-          <View>
-            <Text style={styles.panelEyebrow}>Timetable</Text>
-            <Text style={styles.section}>Your schedule</Text>
-          </View>
           <Text style={styles.rangeL}>{rangeLabel()}</Text>
+          <View style={styles.navGroup}>
+            <TouchableOpacity style={styles.navBtn} onPress={() => navCal(-1)}><Text style={styles.navT}>{'‹'}</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.navBtn} onPress={() => setRef(today)}><Text style={styles.navT}>Today</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.navBtn} onPress={() => navCal(1)}><Text style={styles.navT}>{'›'}</Text></TouchableOpacity>
+          </View>
         </View>
+        {view !== 'month' ? <WeekStrip /> : null}
         <View style={styles.viewRow}>
-          {(['agenda', 'day', 'week', 'month'] as const).map((v) => (
+          {(['day', 'agenda', 'week', 'month'] as const).map((v) => (
             <TouchableOpacity key={v} style={[styles.viewChip, view === v && styles.viewChipOn]} onPress={() => setView(v)}>
-              <Text style={[styles.viewChipT, view === v && styles.viewChipTOn]}>{v === 'month' ? 'Month' : v[0].toUpperCase() + v.slice(1)}</Text>
+              <Text style={[styles.viewChipT, view === v && styles.viewChipTOn]}>{v === 'agenda' ? 'Upcoming' : v[0].toUpperCase() + v.slice(1)}</Text>
             </TouchableOpacity>
           ))}
-          <View style={{ flex: 1 }} />
-          <TouchableOpacity style={styles.navBtn} onPress={() => navCal(-1)}><Text style={styles.navT}>{'<'}</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.navBtn} onPress={() => setRef(today)}><Text style={styles.navT}>Today</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.navBtn} onPress={() => navCal(1)}><Text style={styles.navT}>{'>'}</Text></TouchableOpacity>
         </View>
         {renderBody()}
       </View>
+
+      {/* Plan with Lucy — collapsed by default (calendar-first) */}
+      <TouchableOpacity style={styles.planToggle} onPress={() => setPlanOpen((o) => !o)} activeOpacity={0.8}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.planToggleT}>Plan with Lucy</Text>
+          <Text style={styles.planToggleSub}>{loosePlanCount ? `${loosePlanCount} loose task${loosePlanCount === 1 ? '' : 's'} to place` : 'Schedule a task, auto-plan your day'}</Text>
+        </View>
+        {loosePlanCount ? <View style={styles.planBadge}><Text style={styles.planBadgeT}>{loosePlanCount}</Text></View> : null}
+        <Text style={styles.planChevron}>{planOpen ? '▾' : '▸'}</Text>
+      </TouchableOpacity>
+
+      {planOpen ? (
+        <>
+          <View style={styles.plannerCard}>
+            <Text style={styles.panelEyebrow}>Schedule something</Text>
+            <View style={styles.findRow}>
+              <TextInput style={styles.input} placeholder="Write the doc, call mom, gym..." placeholderTextColor={LUCY_COLORS.textFaint} value={task} onChangeText={setTask} onSubmitEditing={() => doSuggest(task)} />
+              <TouchableOpacity style={styles.btn} onPress={() => doSuggest(task)} disabled={busy}><Text style={styles.btnT}>Suggest</Text></TouchableOpacity>
+            </View>
+            <TouchableOpacity style={styles.heroPlan} onPress={planDay} disabled={busy}><Text style={styles.heroPlanText}>Plan my day</Text></TouchableOpacity>
+          </View>
+
+          {sugg ? (
+            <View style={styles.resultCard}>
+              <Text style={styles.boxH}>{sugg.suggestions.length ? `Best times for "${sugg.meta.title}"` : `No conflict-free slot for "${sugg.meta.title}"`}</Text>
+              <Text style={styles.rowD}>{sugg.meta.durationMin} min - {describeResources(sugg.meta.resources)}</Text>
+              {sugg.suggestions.map((s, i) => (
+                <View key={i} style={styles.slotRow}>
+                  <View style={{ flex: 1 }}><Text style={styles.rowT}>{dayLabel(s.start)} - {clock(s.start)} to {clock(s.end)}</Text><Text style={styles.rowD}>{s.reasons.join(', ')}</Text></View>
+                  <TouchableOpacity style={styles.btnSm} onPress={() => accept(s)}><Text style={styles.btnT}>Add</Text></TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <View style={styles.queueCard}>
+            <View style={styles.boxHead}>
+              <View>
+                <Text style={styles.panelEyebrow}>Loose tasks</Text>
+                <Text style={styles.boxH}>{unsched.length ? `${unsched.length} waiting for time` : 'Nothing waiting'}</Text>
+              </View>
+              <TouchableOpacity style={styles.btnSm} onPress={planDay} disabled={busy}><Text style={styles.btnT}>Plan</Text></TouchableOpacity>
+            </View>
+            {unsched.length === 0 && !proposals ? <Text style={styles.emptyText}>No pending tasks need a time. Lucy will surface them here when they do.</Text> : null}
+            {unsched.map((t) => (
+              <View key={t.id} style={styles.taskRow}>
+                <Text style={[styles.rowT, { flex: 1 }]} numberOfLines={2}>{t.task}</Text>
+                <TouchableOpacity style={styles.btnGhost} onPress={() => doSuggest(t.task, t.id)}><Text style={styles.btnGhostT}>Find time</Text></TouchableOpacity>
+              </View>
+            ))}
+            {proposals ? (
+              <View style={styles.proposalWrap}>
+                <View style={styles.boxHead}><Text style={styles.boxH}>Proposed plan ({proposals.length})</Text>{proposals.length > 0 ? <TouchableOpacity style={styles.btnSm} onPress={acceptAll}><Text style={styles.btnT}>Add all</Text></TouchableOpacity> : null}</View>
+                {proposals.length === 0 ? <Text style={styles.emptyText}>Nothing fit your free time right now.</Text> : null}
+                {proposals.map((p, i) => (
+                  <View key={i} style={styles.slotRow}>
+                    <View style={{ flex: 1 }}><Text style={styles.rowT}>{p.title}</Text><Text style={styles.rowD}>{dayLabel(p.start)} - {clock(p.start)} to {clock(p.end)} - {p.resourceLabel}</Text></View>
+                    <TouchableOpacity style={styles.btnGhost} onPress={() => acceptProposal(p)}><Text style={styles.btnGhostT}>Add</Text></TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+
+          {conflicts.length > 0 ? (
+            <View style={[styles.resultCard, styles.conflictCard]}>
+              <Text style={[styles.boxH, { color: LUCY_COLORS.error }]}>{conflicts.length} conflict{conflicts.length > 1 ? 's' : ''}</Text>
+              {conflicts.map((c, i) => <Text key={i} style={styles.rowD}>{c.a} overlaps {c.b}. Lucy cannot run those in parallel.</Text>)}
+            </View>
+          ) : null}
+        </>
+      ) : null}
       {busy ? <View style={styles.busy}><ActivityIndicator color={LUCY_COLORS.primary} /></View> : null}
     </ScrollView>
   );
@@ -447,6 +471,27 @@ const styles = StyleSheet.create({
   heroPlan: { marginTop: 14, backgroundColor: LUCY_COLORS.primary, borderRadius: 16, paddingVertical: 13, alignItems: 'center' },
   heroPlanText: { color: LUCY_COLORS.white, fontSize: 15, fontWeight: '900' },
   avLine: { color: LUCY_COLORS.textMuted, fontSize: 12, marginBottom: 12, paddingHorizontal: 5 },
+  headRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12, paddingHorizontal: 2 },
+  headTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '900', marginTop: 3, lineHeight: 25 },
+  headSub: { color: LUCY_COLORS.textMuted, fontSize: 12.5, marginTop: 3 },
+  navGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  weekStrip: { flexDirection: 'row', marginBottom: 12 },
+  wsDay: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 4 },
+  wsDow: { color: LUCY_COLORS.textSubtle, fontSize: 10.5, fontWeight: '800' },
+  wsDowSel: { color: LUCY_COLORS.primary },
+  wsNum: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  wsNumToday: { backgroundColor: LUCY_COLORS.primary },
+  wsNumSel: { borderWidth: 1.5, borderColor: LUCY_COLORS.primary },
+  wsNumT: { color: LUCY_COLORS.textDark, fontSize: 13.5, fontWeight: '800' },
+  wsNumTOn: { color: '#fff' },
+  wsDots: { flexDirection: 'row', gap: 2, height: 5 },
+  wsDot: { width: 4, height: 4, borderRadius: 2 },
+  planToggle: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 18, padding: 15, marginTop: 12 },
+  planToggleT: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '900' },
+  planToggleSub: { color: LUCY_COLORS.textMuted, fontSize: 12.5, marginTop: 2 },
+  planBadge: { backgroundColor: LUCY_COLORS.primary, borderRadius: 999, minWidth: 22, height: 22, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  planBadgeT: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  planChevron: { color: LUCY_COLORS.textMuted, fontSize: 16, fontWeight: '900' },
   connectCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: '#5B8CFF55', borderRadius: 18, padding: 14, marginBottom: 12 },
   connectIcon: { fontSize: 22 },
   connectTitle: { color: LUCY_COLORS.textDark, fontWeight: '900', fontSize: 14.5 },

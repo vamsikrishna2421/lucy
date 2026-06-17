@@ -41,7 +41,7 @@ export function pickImage(title = 'Add an image', message = 'Snap it or pick fro
  * as a memory. The image itself is deleted after extraction (privacy).
  * Returns true if a memory was stored.
  */
-export async function snapImageToMemory(): Promise<boolean> {
+export async function snapImageToMemory(onReading?: (busy: boolean) => void): Promise<boolean> {
   const uri = await pickImage('Snap a note or image', 'LUCY reads it, pulls out the key info, and saves it to your memory.');
   if (!uri) return false;
   try {
@@ -51,8 +51,12 @@ export async function snapImageToMemory(): Promise<boolean> {
       Alert.alert('Remote intelligence needed', 'Reading images uses a vision model (Claude or OpenAI). Add an API key in Settings → Remote intelligence, then try again.');
       return false;
     }
+    // Image picked + remote ready — the vision read takes a couple seconds; show a "reading…" spinner
+    // so the user isn't staring at a frozen screen wondering if it worked.
+    onReading?.(true);
     const { processImageToMemory } = await import('./lucyLens');
     const result = await processImageToMemory(uri, null);
+    onReading?.(false); // clear the spinner BEFORE the result alert so they don't stack
     if (result?.memoryText) {
       Alert.alert('Saved to memory ✓', `${result.category.toUpperCase()} — ${result.memoryText.slice(0, 140)}${result.memoryText.length > 140 ? '…' : ''}`);
       return true;
@@ -60,6 +64,7 @@ export async function snapImageToMemory(): Promise<boolean> {
     Alert.alert("Couldn't read it", 'I couldn\'t make out the text. Try a clearer, well-lit photo.');
     return false;
   } catch (e) {
+    onReading?.(false);
     Alert.alert('Could not read image', e instanceof Error ? e.message : 'Please try again.');
     return false;
   }

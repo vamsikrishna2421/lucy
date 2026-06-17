@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Easing, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Easing, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { PrivacyBadge } from '../components/PrivacyBadge';
 import { MeetingShareBar } from '../components/MeetingShareBar';
 import { formatMeetingRowText } from '../processing/meetingFormat';
@@ -1202,6 +1202,7 @@ function TimelineView({
   const [quickText, setQuickText] = useState('');
   const [quickSending, setQuickSending] = useState(false);
   const [quickAck, setQuickAck] = useState('');
+  const [readingImage, setReadingImage] = useState(false); // vision OCR in progress (snap-a-note)
   const [pendingAction, setPendingAction] = useState<import('../processing/automationEngine').ExtractedAction | null>(null);
   const [executingAction, setExecutingAction] = useState(false);
   const [menuTarget, setMenuTarget] = useState<CaptureRow | null>(null);
@@ -1383,6 +1384,17 @@ function TimelineView({
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Reading-image overlay — the vision OCR takes a couple seconds; show progress so the user
+          knows LUCY is working on the photo rather than wondering if the tap registered. */}
+      <Modal visible={readingImage} transparent animationType="fade" onRequestClose={() => {}}>
+        <View style={styles.readingOverlay}>
+          <View style={styles.readingCard}>
+            <ActivityIndicator size="large" color={LUCY_COLORS.primary} />
+            <Text style={styles.readingText}>Reading your image…</Text>
+            <Text style={styles.readingSubText}>Pulling out the text and key details</Text>
+          </View>
+        </View>
+      </Modal>
       {/* Quick capture bar */}
       <View style={styles.tlQuickBar}>
         <TextInput
@@ -1413,8 +1425,12 @@ function TimelineView({
                 text: '📝 Note / document / image',
                 onPress: async () => {
                   const { snapImageToMemory } = await import('../processing/imageCapture');
-                  const ok = await snapImageToMemory();
-                  if (ok) onQueued?.();
+                  try {
+                    const ok = await snapImageToMemory(setReadingImage);
+                    if (ok) onQueued?.();
+                  } finally {
+                    setReadingImage(false);
+                  }
                 },
               },
               { text: 'Cancel', style: 'cancel' },
@@ -2518,6 +2534,10 @@ const styles = StyleSheet.create({
   tlQuickBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.primary + '44', paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, gap: 10 },
   tlQuickInput: { flex: 1, color: LUCY_COLORS.textDark, fontSize: 15, paddingVertical: 0 },
   tlReceiptBtn: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 6, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  readingOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
+  readingCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, paddingVertical: 26, paddingHorizontal: 30, alignItems: 'center', borderWidth: 1, borderColor: LUCY_COLORS.border, maxWidth: 280 },
+  readingText: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '600', marginTop: 16 },
+  readingSubText: { color: LUCY_COLORS.textSubtle, fontSize: 13, marginTop: 5, textAlign: 'center' },
   tlReceiptIcon: { fontSize: 16 },
   tlQuickSend: { backgroundColor: LUCY_COLORS.primary, width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   tlQuickSendText: { color: '#fff', fontSize: 16, fontWeight: '700' },

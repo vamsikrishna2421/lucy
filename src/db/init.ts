@@ -650,6 +650,19 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       error TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_dev_log_created ON dev_log(created_at DESC);
+    -- Self-improving brain (propose-and-confirm): when a new capture corrects/enriches an earlier
+    -- note, a proposal is recorded here; the user applies/dismisses it (never auto-rewrites memory).
+    CREATE TABLE IF NOT EXISTS memory_update_proposals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      new_capture_id INTEGER NOT NULL,
+      old_capture_id INTEGER NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'enrichment',
+      summary TEXT NOT NULL DEFAULT '',
+      suggested_context TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'open'
+    );
+    CREATE INDEX IF NOT EXISTS idx_memupd_status ON memory_update_proposals(status, created_at DESC);
     -- Hot-path indexes (core-logic audit 2026-06-17): these tables were scanned with status filters /
     -- range queries but had no supporting index — fine at MVP scale, slow as the memory store grows.
     CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status, archived_at);

@@ -288,6 +288,11 @@ async function persistExtraction(
       await updateCaptureProtectedValues(db, capture.id, protectedValues);
     } catch { /* highlighting is non-critical */ }
     await markCaptureProcessed(db, capture.id);
+    // Self-improving brain: check if this new note corrects/enriches an EARLIER note and, if so,
+    // record a propose-and-confirm proposal (never auto-rewrites memory). Fire-and-forget, guarded.
+    void import('./proposeMemoryUpdates')
+      .then((m) => m.proposeMemoryUpdates(db, capture.id))
+      .catch(() => { /* non-critical */ });
     // Store a detected action so the Timeline can offer it as a "LUCY can do this" card
     // after the capture finishes processing — avoids synchronous regex false positives.
     if (extraction.detected_action) {

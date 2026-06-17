@@ -1019,6 +1019,29 @@ function NeedsContextView({
   onAnswered: () => void;
 }) {
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [proposals, setProposals] = useState<import('../db/memoryUpdateProposals').MemoryUpdateProposalRow[]>([]);
+
+  const loadProposals = async () => {
+    const db = await getDatabase();
+    const { listOpenMemoryUpdateProposals } = await import('../db/memoryUpdateProposals');
+    setProposals(await listOpenMemoryUpdateProposals(db));
+  };
+  useEffect(() => { void loadProposals(); }, [requests.length]);
+
+  // Self-improving brain (propose-and-confirm): apply folds the context into the OLD note + re-extracts.
+  const applyProposal = async (id: number) => {
+    const db = await getDatabase();
+    const { applyMemoryUpdateProposal } = await import('../processing/proposeMemoryUpdates');
+    await applyMemoryUpdateProposal(db, id);
+    setProposals((p) => p.filter((x) => x.id !== id));
+    onAnswered();
+  };
+  const dismissProposal = async (id: number) => {
+    const db = await getDatabase();
+    const { setMemoryUpdateProposalStatus } = await import('../db/memoryUpdateProposals');
+    await setMemoryUpdateProposalStatus(db, id, 'dismissed');
+    setProposals((p) => p.filter((x) => x.id !== id));
+  };
 
   const rememberContext = async (request: ContextRequestRow) => {
     const answer = (answers[request.id] ?? '').trim();
@@ -1060,6 +1083,28 @@ function NeedsContextView({
             Optional questions that help LUCY connect memories more accurately. Your answers stay in encrypted local memory.
           </Text>
         </View>
+        {/* Self-improving brain: proposals to update an EARLIER note from a newer related one. */}
+        {proposals.map((p) => (
+          <View style={[styles.contextCard, { borderColor: LUCY_COLORS.primarySoft }]} key={`prop-${p.id}`}>
+            <Text style={styles.contextLucyLabel}>{p.kind === 'correction' ? 'i think this corrects an earlier note —' : 'i can enrich an earlier note —'}</Text>
+            <Text style={styles.contextQuestion}>{p.summary}</Text>
+            {(p.old_created_at || p.old_title) ? (
+              <Text style={styles.contextSource}>
+                Earlier note{p.old_created_at ? ` · ${new Date(`${String(p.old_created_at).replace(' ', 'T')}Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}{p.old_title ? ` · ${p.old_title}` : ''}
+              </Text>
+            ) : null}
+            {p.old_excerpt ? <Text style={styles.contextSnippet} numberOfLines={3}>Old: "{protectedPreview(p.old_excerpt)}"</Text> : null}
+            <Text style={[styles.contextSnippet, { color: LUCY_COLORS.primaryGlow }]} numberOfLines={3}>Add: {protectedPreview(p.suggested_context)}</Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+              <TouchableOpacity style={[styles.contextButton, { flex: 1 }]} onPress={() => void applyProposal(p.id)}>
+                <Text style={styles.contextButtonText}>Apply to memory</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.contextButton, styles.contextButtonDisabled, { flex: 0, paddingHorizontal: 18 }]} onPress={() => void dismissProposal(p.id)}>
+                <Text style={styles.contextButtonText}>Dismiss</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))}
         {requests.map((request) => (
           <View style={styles.contextCard} key={request.id}>
             <Text style={styles.contextLucyLabel}>hey, quick question —</Text>
@@ -1093,7 +1138,7 @@ function NeedsContextView({
             </TouchableOpacity>
           </View>
         ))}
-        {!requests.length ? <EmptyLine text="Nothing needs clarification right now. LUCY will ask only when extra context can help." /> : null}
+        {!requests.length && !proposals.length ? <EmptyLine text="Nothing needs clarification right now. LUCY will ask only when extra context can help." /> : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );

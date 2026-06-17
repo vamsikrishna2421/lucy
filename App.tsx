@@ -973,7 +973,7 @@ const styles = StyleSheet.create({
   logoWrap: { position: 'relative', alignSelf: 'flex-start', marginTop: 8, paddingLeft: 2 },
   logoStar: { position: 'absolute', top: -8, right: -14, color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '800', textShadowColor: 'rgba(255,139,61,0.7)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
   headerPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 48 },
-  globalFace: { position: 'absolute', right: 16, top: 70, zIndex: 30, elevation: 30, alignItems: 'flex-end' },
+  globalFace: { position: 'absolute', right: 16, top: 118, zIndex: 30, elevation: 30, alignItems: 'flex-end' },
   faceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   wakePill: {
     flexDirection: 'row',

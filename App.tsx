@@ -11,6 +11,7 @@ import { ErrorBoundary, installGlobalErrorLogger } from './src/components/ErrorB
 import { MeetingMode } from './src/components/MeetingMode';
 import { Onboarding } from './src/components/Onboarding';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { LUCY_COLORS } from './src/config/colors';
 import { getDatabase } from './src/db';
 import { resetInterruptedCaptures } from './src/db/captures';
@@ -715,6 +716,7 @@ export default function App() {
 
   return (
    <ErrorBoundary>
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
         <StatusBar style="light" />
@@ -957,6 +959,7 @@ export default function App() {
         if (startTour) startGuidedTour(false);
       }} />
     </SafeAreaProvider>
+    </GestureHandlerRootView>
    </ErrorBoundary>
   );
 }

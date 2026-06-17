@@ -14,7 +14,17 @@ import type { SQLiteDatabase } from 'expo-sqlite';
  * Safety: the merge is append-only on the old note (original words preserved) and the new capture is
  * archived as a child, so every merge is fully reversible. Fully guarded + remote-AI-only.
  */
+/**
+ * DISABLED by default (user decision 2026-06-17). In on-device testing the auto-connect made the
+ * timeline messier — re-photographing a list produced several overlapping notes instead of one clean
+ * note, and the auto-merge fought with list extraction/segmentation. The user prefers the plain
+ * default: every capture stands on its own, nothing silently touches earlier notes. The merge engine
+ * is kept intact for a future OPT-IN behind a proper review-card UI; flip this to re-enable.
+ */
+const AUTO_MEMORY_UPDATES_ENABLED = false;
+
 export async function proposeMemoryUpdates(db: SQLiteDatabase, newCaptureId: number): Promise<number> {
+  if (!AUTO_MEMORY_UPDATES_ENABLED) return 0; // default behavior: captures stay independent
   try {
     const { resolveRemoteAvailability } = await import('../ai/provider');
     const { available, openAIKey } = await resolveRemoteAvailability();

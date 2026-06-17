@@ -47,15 +47,25 @@ export function getSelectedVoiceId(): string | null {
 
 export interface TtsVoice { identifier: string; name: string; language: string; quality?: string }
 
-/** List the English voices available on this device, premium/enhanced first. */
+// Only these voices sound natural enough for Lucy; the rest are filtered out of the picker.
+// Matched against the start of the voice name (covers "Samantha", "Karen (Enhanced)", etc.).
+const ALLOWED_VOICE_PREFIXES = ['samantha', 'karen'];
+
+/** List the curated good English voices available on this device, premium/enhanced first. */
 export async function listVoices(): Promise<TtsVoice[]> {
   const S = await speech();
   if (!S) return [];
   try {
     const raw = await S.getAvailableVoicesAsync();
-    const voices: TtsVoice[] = (raw ?? [])
+    const english: TtsVoice[] = (raw ?? [])
       .map((v) => ({ identifier: v.identifier, name: v.name, language: v.language, quality: v.quality as string | undefined }))
       .filter((v) => v.language.toLowerCase().startsWith('en'));
+    const allowed = english.filter((v) =>
+      ALLOWED_VOICE_PREFIXES.some((p) => v.name.trim().toLowerCase().startsWith(p)),
+    );
+    // Fall back to the full English list if this device has none of the curated voices,
+    // so the picker is never empty (System default always remains available too).
+    const voices = allowed.length > 0 ? allowed : english;
     const rank = (q?: string): number => {
       const s = (q ?? '').toLowerCase();
       if (s.includes('enhanced') || s.includes('premium')) return 0;

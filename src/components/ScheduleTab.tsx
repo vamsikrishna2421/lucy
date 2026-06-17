@@ -3,13 +3,14 @@
  * Visual redesign only: keeps the same scheduling engine calls and data shapes.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import {
-  getPlan, suggestForText, suggestForTodo, commitBlock, cancelBlock, autoPlanDay,
+  getPlan, suggestForText, suggestForTodo, commitBlock, cancelBlock, commitSeries, autoPlanDay,
   unscheduledPendingTodos, describeResources, type DayProposal,
 } from '../scheduling';
+import { updateScheduledBlock } from '../db/schedule';
 import { getAvailability } from '../scheduling/availability';
 import { hasCalendarPermission, requestCalendarPermission } from '../processing/calendarConnector';
 import type { AvailabilityProfile, Block, SlotSuggestion, TaskResources } from '../scheduling/types';
@@ -57,6 +58,8 @@ export function ScheduleTab() {
   const [calPerm, setCalPerm] = useState<boolean | null>(null);
   const [nowMs, setNowMs] = useState<number>(Date.now());
   const [planOpen, setPlanOpen] = useState(false); // "Plan with Lucy" collapsible (calendar-first)
+  const [detail, setDetail] = useState<{ id: number; title: string; start: number; end: number; resources: TaskResources } | null>(null);
+  const [nameEdit, setNameEdit] = useState('');
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -220,10 +223,50 @@ export function ScheduleTab() {
       return;
     }
     if (!it.id) return;
-    Alert.alert(it.title, `${clock(it.start)} - ${clock(it.end)}`, [
-      { text: 'Close', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => remove(it.id!) },
-    ]);
+    // Open the rich event card for LUCY's own events (rename / recurring / reschedule / delete).
+    setDetail({ id: it.id, title: it.title, start: it.start, end: it.end, resources: it.resources });
+    setNameEdit(it.title);
+  };
+
+  // ── Event-card actions ──────────────────────────────────────────────────────
+  const saveName = async () => {
+    if (!detail || !nameEdit.trim() || nameEdit.trim() === detail.title) return;
+    setBusy(true);
+    try {
+      const db = await getDatabase();
+      await updateScheduledBlock(db, detail.id, { title: nameEdit.trim() });
+      setDetail({ ...detail, title: nameEdit.trim() });
+      await load();
+    } finally { setBusy(false); }
+  };
+  const shiftEvent = async (deltaMs: number) => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      const db = await getDatabase();
+      const start = detail.start + deltaMs; const end = detail.end + deltaMs;
+      await updateScheduledBlock(db, detail.id, { startMs: start, endMs: end });
+      setDetail({ ...detail, start, end });
+      setRef(dayKey(start));
+      await load();
+    } finally { setBusy(false); }
+  };
+  const makeRecurring = async (rule: 'daily' | 'weekdays' | 'weekly') => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      const db = await getDatabase();
+      const r = await commitSeries(db, { title: detail.title, startMs: detail.start, endMs: detail.end, resources: detail.resources }, rule);
+      setDetail(null);
+      await load();
+      Alert.alert('Made recurring', `"${detail.title}" added ${rule === 'weekdays' ? 'every weekday' : rule} — ${r.count} upcoming.`);
+    } finally { setBusy(false); }
+  };
+  const deleteEvent = async () => {
+    if (!detail) return;
+    const id = detail.id;
+    setDetail(null);
+    await remove(id);
   };
 
   const DayCol = ({ k, w }: { k: number; w?: number }) => (
@@ -474,6 +517,47 @@ export function ScheduleTab() {
         </>
       ) : null}
       {busy ? <View style={styles.busy}><ActivityIndicator color={LUCY_COLORS.primary} /></View> : null}
+
+      {/* Event detail card — rename / recurring / reschedule / delete */}
+      <Modal visible={!!detail} transparent animationType="slide" onRequestClose={() => setDetail(null)}>
+        <Pressable style={styles.cardBackdrop} onPress={() => setDetail(null)}>
+          <Pressable style={styles.eventCard} onPress={() => { /* swallow */ }}>
+            <View style={styles.cardGrip} />
+            <View style={[styles.eventBar, { backgroundColor: detail ? catColor(detail.title, describeResources(detail.resources)) : LUCY_COLORS.primary }]} />
+            <Text style={styles.eventWhen}>{detail ? `${dayLabel(detail.start)} · ${clock(detail.start)} – ${clock(detail.end)}` : ''}</Text>
+            <TextInput style={styles.eventTitleInput} value={nameEdit} onChangeText={setNameEdit} placeholder="Event name" placeholderTextColor={LUCY_COLORS.textFaint} />
+            {detail && nameEdit.trim() && nameEdit.trim() !== detail.title ? (
+              <TouchableOpacity style={styles.eventSave} onPress={saveName}><Text style={styles.eventSaveT}>Save name</Text></TouchableOpacity>
+            ) : null}
+
+            <Text style={styles.eventSection}>Make recurring</Text>
+            <View style={styles.eventChipRow}>
+              {(['daily', 'weekdays', 'weekly'] as const).map((r) => (
+                <TouchableOpacity key={r} style={styles.eventChip} onPress={() => makeRecurring(r)}>
+                  <Text style={styles.eventChipT}>{r === 'weekdays' ? 'Weekdays' : r[0].toUpperCase() + r.slice(1)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.eventSection}>Reschedule</Text>
+            <View style={styles.eventChipRow}>
+              <TouchableOpacity style={styles.eventChip} onPress={() => shiftEvent(-3600_000)}><Text style={styles.eventChipT}>−1h</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.eventChip} onPress={() => shiftEvent(-900_000)}><Text style={styles.eventChipT}>−15m</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.eventChip} onPress={() => shiftEvent(900_000)}><Text style={styles.eventChipT}>+15m</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.eventChip} onPress={() => shiftEvent(3600_000)}><Text style={styles.eventChipT}>+1h</Text></TouchableOpacity>
+            </View>
+            <View style={styles.eventChipRow}>
+              <TouchableOpacity style={styles.eventChip} onPress={() => shiftEvent(86400_000)}><Text style={styles.eventChipT}>+1 day</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.eventChip} onPress={() => shiftEvent(7 * 86400_000)}><Text style={styles.eventChipT}>+1 week</Text></TouchableOpacity>
+            </View>
+
+            <View style={styles.eventActions}>
+              <TouchableOpacity style={styles.eventDelete} onPress={deleteEvent}><Text style={styles.eventDeleteT}>Delete event</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.eventDone} onPress={() => setDetail(null)}><Text style={styles.eventDoneT}>Done</Text></TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -595,4 +679,21 @@ const styles = StyleSheet.create({
   monthCellDateToday: { color: LUCY_COLORS.primary },
   monthCellCount: { marginTop: 3, backgroundColor: LUCY_COLORS.primary, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1, color: '#fff', fontSize: 10, fontWeight: '900', overflow: 'hidden' },
   busy: { paddingVertical: 16 },
+  cardBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  eventCard: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 20, paddingBottom: 30, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  cardGrip: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.border, marginBottom: 14 },
+  eventBar: { height: 4, borderRadius: 2, width: 44, marginBottom: 10 },
+  eventWhen: { color: LUCY_COLORS.textMuted, fontSize: 13, fontWeight: '700', marginBottom: 6 },
+  eventTitleInput: { color: LUCY_COLORS.textDark, fontSize: 22, fontWeight: '900', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.border },
+  eventSave: { alignSelf: 'flex-start', marginTop: 10, backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 9 },
+  eventSaveT: { color: '#fff', fontWeight: '900', fontSize: 13 },
+  eventSection: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase', marginTop: 20, marginBottom: 9 },
+  eventChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  eventChip: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 13, paddingHorizontal: 15, paddingVertical: 11 },
+  eventChipT: { color: LUCY_COLORS.textDark, fontSize: 13.5, fontWeight: '800' },
+  eventActions: { flexDirection: 'row', gap: 10, marginTop: 24 },
+  eventDelete: { flex: 1, alignItems: 'center', paddingVertical: 13, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.error },
+  eventDeleteT: { color: LUCY_COLORS.error, fontWeight: '900', fontSize: 14 },
+  eventDone: { flex: 1, alignItems: 'center', paddingVertical: 13, borderRadius: 14, backgroundColor: LUCY_COLORS.primary },
+  eventDoneT: { color: '#fff', fontWeight: '900', fontSize: 14 },
 });

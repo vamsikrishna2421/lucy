@@ -85,7 +85,7 @@ export async function analyzeWithOpenAI(
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
   if (start === -1 || end === -1) {
-    throw new Error('GPT-5.4 Nano did not return structured JSON.');
+    throw new Error('The AI model did not return structured JSON.');
   }
   return JSON.parse(raw.slice(start, end + 1)) as ExtractionResult;
 }

@@ -1579,11 +1579,8 @@ function TimelineView({
                             {/* Processing state — shown instead of type pill when pending; meetings skip extraction so always treated as done */}
                             {!nt && item.processed !== 1 && item.source !== 'meeting' ? (
                               <View style={styles.tlTypePill}>
-                                {item.processed === -1 ? (
-                                  <Text style={[styles.tlTypePillText, { color: '#F59E0B' }]}>FAILED</Text>
-                                ) : (
-                                  <OrganizingDots />
-                                )}
+                                {/* -1 now only means "transient hiccup, retrying quietly" — keep it calm, never "FAILED" */}
+                                <OrganizingDots />
                               </View>
                             ) : null}
 
@@ -1632,8 +1629,8 @@ function TimelineView({
                           {(item.raw_transcript ?? '').split('\n')[0] || 'Meeting'}
                         </Text>
                       ) : item.processed === -1 ? (
-                        <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '600', lineHeight: 19 }}>
-                          Couldn't organize — tap ⋯ to retry
+                        <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, fontWeight: '500', lineHeight: 19 }}>
+                          Saved · still organizing…
                         </Text>
                       ) : (
                         <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13, fontWeight: '500', lineHeight: 19 }}>

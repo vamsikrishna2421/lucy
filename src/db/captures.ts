@@ -350,6 +350,28 @@ export async function markCaptureFailed(db: SQLiteDatabase, id: number, error: s
   );
 }
 
+/**
+ * Graceful fallback when the AI can't structure a capture (e.g. the model didn't return JSON, or
+ * we're out of credits). Instead of leaving a scary "Couldn't organize — tap to retry" badge that
+ * makes end users think the app is broken, we just keep their words as a plain, readable note:
+ * the raw text becomes the memory, marked done. Nothing is lost and it can still be reprocessed.
+ */
+export async function saveCaptureAsPlainNote(db: SQLiteDatabase, id: number, rawText: string): Promise<void> {
+  const clean = (rawText ?? '').trim();
+  const firstLine = clean.split('\n').map((l) => l.trim()).find((l) => l.length) ?? 'Note';
+  const title = firstLine.length > 60 ? `${firstLine.slice(0, 57)}…` : firstLine;
+  await db.runAsync(
+    `UPDATE captures SET processed = 1, processing_error = NULL, processed_at = CURRENT_TIMESTAMP,
+       next_attempt_at = NULL,
+       extracted_title = COALESCE(NULLIF(extracted_title, ''), ?),
+       structured_text = COALESCE(NULLIF(structured_text, ''), ?)
+     WHERE id = ?`,
+    title,
+    clean || title,
+    id,
+  );
+}
+
 export async function retryCapture(db: SQLiteDatabase, id: number): Promise<void> {
   await db.runAsync('UPDATE captures SET processed = 0, processing_error = NULL, next_attempt_at = NULL WHERE id = ?', id);
 }

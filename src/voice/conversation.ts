@@ -21,7 +21,7 @@ export interface ConvoTurn { role: 'user' | 'lucy'; text: string }
 export interface ConvoSnapshot { state: ConvoState; turns: ConvoTurn[]; partial: string; error: string | null }
 
 // Spoken phrases that end the conversation. Kept conservative so normal mid-chat words don't end it.
-const END_RE = /\b(stop listening|stop conversation|end conversation|never mind|that'?s all|that is all|good ?bye|^bye$|we'?re done|i'?m done|that'?ll be all)\b/i;
+const END_RE = /\b(stop listening|stop conversation|end conversation|never mind|that'?s all|that is all|that'?s it|that is it|good ?bye|^bye$|we'?re done|i'?m done|i'?m good|all done|all set|thank you|thanks|that'?ll be all|that'?ll do)\b/i;
 
 class ConversationManager {
   private state: ConvoState = 'off';
@@ -147,7 +147,13 @@ class ConversationManager {
     if (!this.active) return;
     // Only end when the end-phrase is essentially the WHOLE utterance (≤5 words) — so "I'm done with
     // the report, schedule a break" keeps the conversation going instead of hanging up mid-command.
-    if (END_RE.test(text) && text.trim().split(/\s+/).length <= 5) { this.turns.push({ role: 'user', text }); this.emit(); await this.speakAndEnd('Okay — talk soon.'); return; }
+    if (END_RE.test(text) && text.trim().split(/\s+/).length <= 5) {
+      this.turns.push({ role: 'user', text });
+      this.emit();
+      const isThanks = /\b(thank you|thanks)\b/i.test(text);
+      await this.speakAndEnd(isThanks ? "You're welcome — talk soon." : 'Okay — talk soon.');
+      return;
+    }
     // Pause recognition while thinking + speaking so LUCY doesn't hear herself.
     try { ExpoSpeechRecognitionModule.stop(); } catch { /* ignore */ }
     // Capture prior turns as history (before pushing this utterance) so LUCY remembers a

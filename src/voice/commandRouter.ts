@@ -134,7 +134,11 @@ export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, cont
       return { ok: r.ok, intent: 'schedule', speak: cmd.speak || `Scheduled "${title}" for ${when}.`, navigate: 'calendar', data: { blockId: r.blockId } };
     }
     case 'capture': {
-      const body = (cmd.text || cmd.title || text).trim();
+      // Capture the user's ACTUAL words, not the model's paraphrase. The interpreter sometimes
+      // returns a meta-description in cmd.text (e.g. "User wants to log a past activity — awaiting
+      // details") which then fails extraction; the original utterance is the faithful memory.
+      const body = (text || cmd.text || cmd.title || '').trim();
+      if (!body) return { ok: false, intent: 'capture', speak: 'What should I remember?' };
       const { enqueueTranscript, processQueue } = await import('../processing/extract');
       await enqueueTranscript(body, 'text'); void processQueue();
       return { ok: true, intent: 'capture', speak: cmd.speak || 'Captured — I’ll organize it.', navigate: 'timeline' };

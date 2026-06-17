@@ -6,9 +6,11 @@ import {
   markCaptureProcessed,
   markCaptureProcessing,
   nextQueuedCapture,
+  saveCaptureAsPlainNote,
   updateCaptureGuardianNote,
   updateCaptureProtectedValues,
   updateCaptureResult,
+  MAX_AUTO_RETRIES,
   type CaptureRow,
 } from '../db/captures';
 import { findProtectedValues } from './sensitiveShield';
@@ -582,7 +584,18 @@ export async function processQueue(onChange?: () => void, maxCaptures = Number.P
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Processing failed.';
       console.warn(`Capture processing deferred: ${message}`);
-      await markCaptureFailed(db, capture.id, message);
+      const lower = message.toLowerCase();
+      // Only genuinely transient errors are worth a quiet auto-retry (network blips, server hiccups).
+      const transient = /network|timeout|timed out|temporarily|unavailable|fetch failed|econn|socket|\b50\d\b|error page/.test(lower);
+      const exhausted = (capture.attempt_count ?? 0) >= MAX_AUTO_RETRIES;
+      if (transient && !exhausted) {
+        // Retry quietly in the background; the timeline shows a calm "still saving…", never "FAILED".
+        await markCaptureFailed(db, capture.id, message);
+      } else {
+        // Structural failures (no JSON), billing/quota, or exhausted retries: never strand the user
+        // on a scary "tap to retry" badge. Keep their words as a plain note instead.
+        await saveCaptureAsPlainNote(db, capture.id, capture.raw_transcript ?? '');
+      }
       void logError(`processQueue#${capture.id}`, error, db);
     }
     processedCount += 1;

@@ -69,15 +69,20 @@ export async function insertTodo(
   todo: ExtractedTask,
   privacy: PrivacyLevel,
 ): Promise<void> {
-  if (looksLikeMetaTask(todo.task)) return; // never create app-dev / meta tasks as user todos
+  // Meta/app-dev tasks shouldn't clutter the active board — but DON'T silently discard them (that
+  // permanently loses a task the user may actually want, e.g. "design the kitchen layout"). Insert
+  // them pre-archived with a reason so they're recoverable from the archive instead of vanishing.
+  const isMeta = looksLikeMetaTask(todo.task);
   await db.runAsync(
-    'INSERT INTO todos (capture_id, task, category, urgency, context, privacy_level) VALUES (?, ?, ?, ?, ?, ?)',
+    `INSERT INTO todos (capture_id, task, category, urgency, context, privacy_level, archived_at, archive_reason)
+     VALUES (?, ?, ?, ?, ?, ?, ${isMeta ? 'CURRENT_TIMESTAMP' : 'NULL'}, ?)`,
     captureId,
     todo.task,
     categorizeTask(todo.task, todo.category),
     todo.urgency,
     todo.context,
     privacy,
+    isMeta ? 'auto-archived: looked like an app/meta task' : null,
   );
 }
 

@@ -650,6 +650,13 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       error TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_dev_log_created ON dev_log(created_at DESC);
+    -- Hot-path indexes (core-logic audit 2026-06-17): these tables were scanned with status filters /
+    -- range queries but had no supporting index — fine at MVP scale, slow as the memory store grows.
+    CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status, archived_at);
+    CREATE INDEX IF NOT EXISTS idx_reminders_status_remind ON reminders(status, remind_at);
+    CREATE INDEX IF NOT EXISTS idx_expenses_created ON expenses(created_at);
+    CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
+    CREATE INDEX IF NOT EXISTS idx_scheduled_blocks_status_range ON scheduled_blocks(status, start_at, end_at);
   `);
 
   // ── lucy_notifications column migrations (schema evolved across builds 1.0.95→1.0.101) ──

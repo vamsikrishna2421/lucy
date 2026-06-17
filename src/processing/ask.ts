@@ -267,6 +267,12 @@ async function answerFromMemoryMap(question: string): Promise<LucyAnswer> {
 }
 
 function detectsCaptureIntent(text: string): boolean {
+  // A question is NEVER a capture command — "do you remember that meeting?" must be answered, not
+  // saved as a new note. Exclude interrogatives (leading question word or a trailing '?').
+  const t = text.trim();
+  if (/\?\s*$/.test(t) || /^\s*(do|does|did|are|is|was|were|can|could|would|will|what|who|whom|when|where|why|how|which)\b/i.test(t)) {
+    return false;
+  }
   return /\b(add|save|remember|capture|note|log|record)\b.{0,30}\b(this|that|progress|update|today|memory)\b/i.test(text)
     || /\b(yes,?\s*add|please\s*(add|save|remember))\b/i.test(text);
 }

@@ -145,7 +145,9 @@ class ConversationManager {
 
   private async handleUtterance(text: string): Promise<void> {
     if (!this.active) return;
-    if (END_RE.test(text)) { this.turns.push({ role: 'user', text }); this.emit(); await this.speakAndEnd('Okay — talk soon.'); return; }
+    // Only end when the end-phrase is essentially the WHOLE utterance (≤5 words) — so "I'm done with
+    // the report, schedule a break" keeps the conversation going instead of hanging up mid-command.
+    if (END_RE.test(text) && text.trim().split(/\s+/).length <= 5) { this.turns.push({ role: 'user', text }); this.emit(); await this.speakAndEnd('Okay — talk soon.'); return; }
     // Pause recognition while thinking + speaking so LUCY doesn't hear herself.
     try { ExpoSpeechRecognitionModule.stop(); } catch { /* ignore */ }
     // Capture prior turns as history (before pushing this utterance) so LUCY remembers a

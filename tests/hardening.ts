@@ -9,6 +9,7 @@ import { parseDeadline, detectRecurrence } from '../src/scheduling/classify';
 import { overlaps } from '../src/scheduling/time';
 import { canCoexist, normalizeResources } from '../src/scheduling/resources';
 import { computeStart } from '../src/voice/timeResolve';
+import { spendingWindow } from '../src/processing/askIntent';
 import type { TaskResources } from '../src/scheduling/types';
 
 let pass = 0; let fail = 0;
@@ -104,6 +105,18 @@ ok('computeStart null on bad time', computeStart('monday', '25:99', NOW) === nul
   ok('today past time rolls to tomorrow', t !== null && new Date(t).getDate() === 18);
 }
 ok('explicit ISO date honored', (() => { const t = computeStart('2026-07-04', '12:00', NOW); return t !== null && new Date(t).getMonth() === 6 && new Date(t).getDate() === 4; })());
+
+// ── spendingWindow (scope parsing — "last week" must not become all-time) ─────
+ok('spend last week → week', spendingWindow('how much did I spend last week?').kind === 'week');
+ok('spend this week → week', spendingWindow('my spending this week').kind === 'week');
+ok('spend this month → month', spendingWindow('how much this month?').kind === 'month');
+ok('spend last month → lastMonth', spendingWindow('what did I spend last month').kind === 'lastMonth');
+ok('spend today → today', spendingWindow('how much have I spent today').kind === 'today');
+ok('spend this year → year', spendingWindow('total this year').kind === 'year');
+ok('spend in total → all', spendingWindow('how much have I spent in total').kind === 'all');
+ok('spend overall → all', spendingWindow('my overall spending').kind === 'all');
+ok('spend no-period defaults all', spendingWindow('how much did I spend on food').kind === 'all');
+ok('spendingWindow has a human label', spendingWindow('last week').label === 'the last 7 days');
 
 console.log(`\nhardening: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

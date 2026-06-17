@@ -8,7 +8,7 @@ import { listPendingTodos, type TodoRow } from '../db/todos';
 import { listRecentCaptures } from '../db/captures';
 import type { ExtractionResult, PrivacyLevel } from '../types/extraction';
 import { isInvalidDeadline, isInvalidPendingTask } from './artifactCleanup';
-import { normalizeMemoryLookupText, recognizesMemoryMapQuestion, recognizesMonthlySpendingQuestion, recognizesTodayPlanQuestion, requestedTaskContext, spendingScopeIsAllTime, recognizesSchedulingQuestion, extractSchedulableTask } from './askIntent';
+import { normalizeMemoryLookupText, recognizesMemoryMapQuestion, recognizesMonthlySpendingQuestion, recognizesTodayPlanQuestion, requestedTaskContext, spendingWindow, type SpendingWindow, recognizesSchedulingQuestion, extractSchedulableTask } from './askIntent';
 import { organizeMemory } from './organizer';
 import { promptAI } from '../ai/openai';
 import { resolveRemoteAvailability } from '../ai/provider';
@@ -103,11 +103,24 @@ function extractedNames(result: ExtractionResult): string[] {
   ];
 }
 
-function isCurrentMonth(value: string): boolean {
-  const recorded = new Date(`${value.replace(' ', 'T')}Z`);
-  const now = new Date();
-  return recorded.getFullYear() === now.getFullYear()
-    && recorded.getMonth() === now.getMonth();
+/** Is an expense's UTC created_at within the asked-about window? (computed against local "now"). */
+function expenseInWindow(createdAt: string, win: SpendingWindow, now = new Date()): boolean {
+  if (win.kind === 'all') return true;
+  const t = new Date(`${createdAt.replace(' ', 'T')}Z`).getTime();
+  if (!Number.isFinite(t)) return false;
+  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
+  switch (win.kind) {
+    case 'today': return t >= startOfToday.getTime();
+    case 'week': return t >= now.getTime() - 7 * 86_400_000;
+    case 'month': return t >= new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    case 'lastMonth': {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+      const end = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      return t >= start && t < end;
+    }
+    case 'year': return t >= new Date(now.getFullYear(), 0, 1).getTime();
+    default: return true;
+  }
 }
 
 function recordedAmount(expense: ExpenseRow): number {
@@ -116,10 +129,9 @@ function recordedAmount(expense: ExpenseRow): number {
 
 async function answerMonthlySpending(question: string): Promise<LucyAnswer> {
   const db = await getDatabase();
-  const allTime = spendingScopeIsAllTime(question);
-  const expenses = allTime
-    ? await listExpenses(db)
-    : (await listExpenses(db)).filter((expense) => isCurrentMonth(expense.created_at));
+  const win = spendingWindow(question);
+  const now = new Date();
+  const expenses = (await listExpenses(db)).filter((expense) => expenseInWindow(expense.created_at, win, now));
   const total = expenses.reduce((sum, expense) => sum + recordedAmount(expense), 0);
   const grouped = new Map<string, LucySpendingCategory>();
   expenses.forEach((expense) => {
@@ -129,16 +141,17 @@ async function answerMonthlySpending(question: string): Promise<LucyAnswer> {
     grouped.set(expense.category, existing);
   });
   const categories = Array.from(grouped.values()).sort((left, right) => right.total - left.total);
-  const scopeWord = allTime ? 'in total' : 'this month';
+  const scopeWord = win.label; // honest scope: "in total" / "this month" / "the last 7 days" / "last month" / "today" / "this year"
+  const isAll = win.kind === 'all';
   const summary = expenses.length
     ? `I remember ${expenses.length} payment${expenses.length === 1 ? '' : 's'} ${scopeWord}, totaling ${total.toFixed(2)} in recorded amounts.`
     : `I do not remember any recorded payments ${scopeWord} yet.`;
-  await insertQuestionSignal(db, question, allTime ? 'total_spending_summary' : 'monthly_spending_summary', summary, 'Maintain a spending insight view.');
+  await insertQuestionSignal(db, question, isAll ? 'total_spending_summary' : 'monthly_spending_summary', summary, 'Maintain a spending insight view.');
   await organizeMemory(db, 'question');
   return {
     supported: true,
     answerKind: 'spending',
-    title: allTime ? 'Total recorded payments' : 'Payments this month',
+    title: isAll ? 'Total recorded payments' : `Recorded payments · ${scopeWord}`,
     message: summary,
     tasks: [],
     deadlines: [],

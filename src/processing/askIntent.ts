@@ -19,9 +19,26 @@ export function recognizesMonthlySpendingQuestion(question: string): boolean {
  * Defaults to all-time when no month phrase is present (so "how much have I spent?" sums everything).
  */
 export function spendingScopeIsAllTime(question: string): boolean {
-  const monthly = /\b(this month|this\s+month'?s|monthly|past month|last month)\b/i.test(question);
-  if (monthly) return false;
-  return true;
+  return spendingWindow(question).kind === 'all';
+}
+
+/**
+ * Resolve the time window a spending question asks about, so "how much did I spend LAST WEEK" isn't
+ * silently answered with the all-time total. Returns a kind + a human label used verbatim in the
+ * answer so the scope is always honest. Defaults to all-time only when no period phrase is present.
+ */
+export type SpendingWindowKind = 'today' | 'week' | 'month' | 'lastMonth' | 'year' | 'all';
+export interface SpendingWindow { kind: SpendingWindowKind; label: string }
+
+export function spendingWindow(question: string): SpendingWindow {
+  const q = question.toLowerCase();
+  if (/\blast month\b/.test(q)) return { kind: 'lastMonth', label: 'last month' };
+  if (/\b(this month|this\s+month'?s|past month|monthly)\b/.test(q)) return { kind: 'month', label: 'this month' };
+  if (/\b(today|so far today)\b/.test(q)) return { kind: 'today', label: 'today' };
+  if (/\b(this week|last week|past week|weekly|last 7 days|past 7 days)\b/.test(q)) return { kind: 'week', label: 'the last 7 days' };
+  if (/\b(this year|year to date|ytd|annually|this\s+year'?s)\b/.test(q)) return { kind: 'year', label: 'this year' };
+  if (/\b(total|all[- ]?time|overall|ever|so far|altogether|in all)\b/.test(q)) return { kind: 'all', label: 'in total' };
+  return { kind: 'all', label: 'in total' };
 }
 
 export function recognizesSchedulingQuestion(question: string): boolean {

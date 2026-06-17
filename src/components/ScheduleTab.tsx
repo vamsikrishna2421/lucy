@@ -46,7 +46,7 @@ interface Sugg {
 export function ScheduleTab() {
   const [loading, setLoading] = useState(true);
   const [blocks, setBlocks] = useState<Block[]>([]);
-  const [conflicts, setConflicts] = useState<Array<{ a: string; b: string }>>([]);
+  const [conflicts, setConflicts] = useState<Array<{ a: Block; b: Block }>>([]);
   const [av, setAv] = useState<AvailabilityProfile | null>(null);
   const [unsched, setUnsched] = useState<Array<{ id: number; task: string }>>([]);
   const [task, setTask] = useState('');
@@ -60,6 +60,7 @@ export function ScheduleTab() {
   const [planOpen, setPlanOpen] = useState(false); // "Plan with Lucy" collapsible (calendar-first)
   const [detail, setDetail] = useState<{ id: number; title: string; start: number; end: number; resources: TaskResources } | null>(null);
   const [nameEdit, setNameEdit] = useState('');
+  const [resolve, setResolve] = useState<{ a: Block; b: Block } | null>(null); // conflict being resolved
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -71,7 +72,7 @@ export function ScheduleTab() {
       hasCalendarPermission(),
     ]);
     setBlocks(plan.blocks);
-    setConflicts(plan.conflicts.map((c) => ({ a: c.a.title, b: c.b.title })));
+    setConflicts(plan.conflicts.map((c) => ({ a: c.a, b: c.b })));
     setAv(a);
     setUnsched(us.slice(0, 12));
     setCalPerm(perm);
@@ -163,7 +164,7 @@ export function ScheduleTab() {
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={LUCY_COLORS.primary} /></View>;
 
-  const conflictTitles = new Set<string>(); conflicts.forEach((c) => { conflictTitles.add(c.a); conflictTitles.add(c.b); });
+  const conflictTitles = new Set<string>(); conflicts.forEach((c) => { conflictTitles.add(c.a.title); conflictTitles.add(c.b.title); });
   const today = dayKey(Date.now());
   const todayCount = blocks.filter((b) => dayKey(b.start) === today).length;
   const nextBlock = blocks.filter((b) => b.start >= Date.now()).sort((a, b) => a.start - b.start)[0];
@@ -267,6 +268,19 @@ export function ScheduleTab() {
     const id = detail.id;
     setDetail(null);
     await remove(id);
+  };
+  // Move one side of an overlap to a new time (resolve a conflict). Only LUCY blocks (with an id) move;
+  // device (Google/Teams) events are read-only.
+  const moveBlockTo = async (block: Block, startMs: number, endMs: number) => {
+    if (!block.id) return;
+    setBusy(true);
+    try {
+      const db = await getDatabase();
+      await updateScheduledBlock(db, block.id, { startMs, endMs });
+      setResolve(null);
+      setRef(dayKey(startMs));
+      await load();
+    } finally { setBusy(false); }
   };
 
   const DayCol = ({ k, w }: { k: number; w?: number }) => (
@@ -398,6 +412,27 @@ export function ScheduleTab() {
     );
   };
 
+  // For a conflict, the concrete reschedule options for one event X (relative to the other, O):
+  // move it right after O, or right before O. Only LUCY blocks (with an id) can move.
+  const MoveOptions = ({ x, o }: { x: Block; o: Block }) => {
+    if (!x.id) return null;
+    const dur = x.end - x.start;
+    const afterS = o.end; const beforeS = o.start - dur;
+    return (
+      <View>
+        <Text style={styles.eventSection}>Move “{x.title}”</Text>
+        <View style={styles.eventChipRow}>
+          <TouchableOpacity style={styles.eventChip} onPress={() => moveBlockTo(x, afterS, afterS + dur)}>
+            <Text style={styles.eventChipT}>After {o.title} · {clock(afterS)}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.eventChip} onPress={() => moveBlockTo(x, beforeS, beforeS + dur)}>
+            <Text style={styles.eventChipT}>Before {o.title} · {clock(beforeS)}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   const loosePlanCount = unsched.length;
   return (
     <ScrollView contentContainerStyle={styles.wrap}>
@@ -510,8 +545,13 @@ export function ScheduleTab() {
 
           {conflicts.length > 0 ? (
             <View style={[styles.resultCard, styles.conflictCard]}>
-              <Text style={[styles.boxH, { color: LUCY_COLORS.error }]}>{conflicts.length} conflict{conflicts.length > 1 ? 's' : ''}</Text>
-              {conflicts.map((c, i) => <Text key={i} style={styles.rowD}>{c.a} overlaps {c.b}. Lucy cannot run those in parallel.</Text>)}
+              <Text style={[styles.boxH, { color: LUCY_COLORS.error }]}>{conflicts.length} overlap{conflicts.length > 1 ? 's' : ''}</Text>
+              {conflicts.map((c, i) => (
+                <View key={i} style={styles.conflictRow}>
+                  <Text style={[styles.rowD, { flex: 1 }]} numberOfLines={2}>{c.a.title} overlaps {c.b.title}</Text>
+                  <TouchableOpacity style={styles.btnSm} onPress={() => setResolve(c)}><Text style={styles.btnT}>Resolve</Text></TouchableOpacity>
+                </View>
+              ))}
             </View>
           ) : null}
         </>
@@ -554,6 +594,29 @@ export function ScheduleTab() {
             <View style={styles.eventActions}>
               <TouchableOpacity style={styles.eventDelete} onPress={deleteEvent}><Text style={styles.eventDeleteT}>Delete event</Text></TouchableOpacity>
               <TouchableOpacity style={styles.eventDone} onPress={() => setDetail(null)}><Text style={styles.eventDoneT}>Done</Text></TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Conflict resolution — pick which event to move out of the overlap */}
+      <Modal visible={!!resolve} transparent animationType="slide" onRequestClose={() => setResolve(null)}>
+        <Pressable style={styles.cardBackdrop} onPress={() => setResolve(null)}>
+          <Pressable style={styles.eventCard} onPress={() => { /* swallow */ }}>
+            <View style={styles.cardGrip} />
+            <Text style={styles.resolveH}>Resolve overlap</Text>
+            {resolve ? (
+              <Text style={styles.eventWhen}>
+                “{resolve.a.title}” ({clock(resolve.a.start)}–{clock(resolve.a.end)}) overlaps “{resolve.b.title}” ({clock(resolve.b.start)}–{clock(resolve.b.end)}). Pick which to move:
+              </Text>
+            ) : null}
+            {resolve ? <MoveOptions x={resolve.a} o={resolve.b} /> : null}
+            {resolve ? <MoveOptions x={resolve.b} o={resolve.a} /> : null}
+            {resolve && !resolve.a.id && !resolve.b.id ? (
+              <Text style={styles.emptyText}>Both events are from a connected calendar — change them in that calendar app.</Text>
+            ) : null}
+            <View style={styles.eventActions}>
+              <TouchableOpacity style={styles.eventDone} onPress={() => setResolve(null)}><Text style={styles.eventDoneT}>Close</Text></TouchableOpacity>
             </View>
           </Pressable>
         </Pressable>
@@ -630,6 +693,8 @@ const styles = StyleSheet.create({
   slotRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10, backgroundColor: LUCY_COLORS.surface, borderRadius: 15, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 12 },
   proposalWrap: { marginTop: 12 },
   conflictCard: { borderColor: LUCY_COLORS.error },
+  conflictRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 9 },
+  resolveH: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '900', marginBottom: 6 },
   timetableCard: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 24, padding: 15 },
   timetableHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
   section: { color: LUCY_COLORS.textDark, fontWeight: '900', fontSize: 20, marginTop: 3 },

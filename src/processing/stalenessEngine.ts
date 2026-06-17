@@ -226,6 +226,21 @@ async function processStaleReminders(db: SQLiteDatabase): Promise<number> {
     const overdue = now - fireTime;
     if (overdue <= 0) continue; // not yet due
 
+    // Recurring reminders advance to their next future occurrence (and reschedule the nag) instead
+    // of being archived/reviewed — that's what makes "every month on the 5th" actually repeat.
+    if (r.recurrence) {
+      const { advanceRecurringReminder } = await import('../db/reminders');
+      const nextMs = await advanceRecurringReminder(db, r.id, now);
+      if (nextMs !== null) {
+        const nextReminder = { ...r, time: new Date(nextMs).toISOString() };
+        const { scheduleCapturedReminder } = await import('./notifications');
+        const key = await scheduleCapturedReminder(r.id, nextReminder, r.privacy_level, r.text).catch(() => null);
+        if (key) { const { markReminderScheduled } = await import('../db/reminders'); await markReminderScheduled(db, r.id, key); }
+        count++;
+        continue;
+      }
+    }
+
     if (overdue > REMINDER_SILENT_ARCHIVE_MS) {
       // More than 24 hours past — silent archive, no prompt needed
       await archiveReminder(db, r.id, 'auto-archived: reminder time passed by more than 24 hours');

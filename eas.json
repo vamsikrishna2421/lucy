@@ -6,6 +6,7 @@
   "build": {
     "testflight": {
       "distribution": "store",
+      "channel": "production",
       "env": {
         "EXPO_PUBLIC_AI_MODE": "hybrid",
         "EXPO_PUBLIC_LOCAL_INFERENCE": "device",
@@ -18,6 +19,7 @@
     },
     "android-release": {
       "distribution": "internal",
+      "channel": "production",
       "env": {
         "EXPO_PUBLIC_AI_MODE": "hybrid",
         "EXPO_PUBLIC_LOCAL_INFERENCE": "device",
@@ -31,6 +33,7 @@
     },
     "beta": {
       "distribution": "internal",
+      "channel": "production",
       "env": {
         "EXPO_PUBLIC_AI_MODE": "hybrid",
         "EXPO_PUBLIC_LOCAL_INFERENCE": "device",

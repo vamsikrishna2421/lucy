@@ -405,6 +405,14 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
   if (!existingTodoColumns.has('list_name')) {
     await db.execAsync('ALTER TABLE todos ADD COLUMN list_name TEXT;');
   }
+
+  // Recurring reminders: a recurrence rule ('daily'|'weekdays'|'weekly'|'monthly'); NULL = one-shot.
+  // When a recurring reminder is acknowledged/fires, its remind_at advances to the next occurrence
+  // instead of being consumed (see src/processing/reminderRecurrence.ts).
+  const reminderRecurCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(reminders)');
+  if (!new Set(reminderRecurCols.map((c) => c.name)).has('recurrence')) {
+    await db.execAsync('ALTER TABLE reminders ADD COLUMN recurrence TEXT;');
+  }
   await db.execAsync(`
     CREATE INDEX IF NOT EXISTS idx_captures_created_at ON captures(created_at, id);
     CREATE INDEX IF NOT EXISTS idx_captures_parent_created_at ON captures(parent_capture_id, created_at, id);

@@ -235,7 +235,11 @@ async function persistExtraction(
     for (const reminder of extraction.reminders) {
       const isDupe = await reminderAlreadyExists(db, reminder.text, reminder.time);
       if (isDupe) continue;
-      const id = await insertReminder(db, capture.id, reminder, extraction.privacy_level);
+      // Recurring reminders: detect "every day / weekly / every month / on the 5th" from the reminder
+      // text (falling back to the raw transcript) so it regenerates instead of firing once.
+      const { detectReminderRecurrence } = await import('./reminderRecurrence');
+      const recurrence = detectReminderRecurrence(reminder.text) ?? detectReminderRecurrence(capture.raw_transcript ?? '');
+      const id = await insertReminder(db, capture.id, reminder, extraction.privacy_level, recurrence);
       reminderRows.push({ id, reminder });
     }
     for (const interest of extraction.interests) {

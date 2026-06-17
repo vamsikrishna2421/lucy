@@ -82,9 +82,6 @@ function isLucyToken(word: string): boolean {
   return false;
 }
 
-// Optional leading filler words ("hey lucy", "ok lucy …") — not required.
-const FILLERS = new Set(['hey', 'hi', 'ok', 'okay', 'hello', 'yo', 'a', 'uh']);
-
 export type WakeWordStatus = 'disabled' | 'starting' | 'listening' | 'unavailable';
 
 class WakeWordListener {
@@ -98,6 +95,8 @@ class WakeWordListener {
   private cooldownUntil = 0;   // ignore detections briefly after firing (debounce)
   private statusListeners = new Set<(s: WakeWordStatus) => void>();
   private _status: WakeWordStatus = 'disabled';
+  private lastEventAt = 0;     // last time the recognizer emitted any event (for the watchdog)
+  private watchdogTimer: ReturnType<typeof setInterval> | null = null;
 
   private setStatus(s: WakeWordStatus): void {
     if (this._status === s) return;
@@ -151,6 +150,7 @@ class WakeWordListener {
       else this.scheduleStart(400);
     });
     if (!isMicBusy()) this.scheduleStart(200);
+    this.startWatchdog();
     return true;
   }
 
@@ -158,8 +158,36 @@ class WakeWordListener {
     this.enabled = false;
     this.onWake = null;
     if (this.unsubMic) { this.unsubMic(); this.unsubMic = null; }
+    this.stopWatchdog();
     this.pauseRecognition();
     this.setStatus('disabled');
+  }
+
+  /**
+   * iOS can silently tear down the recognizer (audio-session loss after backgrounding, another app
+   * grabbing the mic, etc.) WITHOUT firing 'end' or 'error'. When that happens `running` stays true,
+   * so startRecognition() keeps early-returning and the wake word is wedged — it looks "listening"
+   * but hears nothing. This watchdog notices the silence and force-restarts a fresh recognizer.
+   */
+  private startWatchdog(): void {
+    if (this.watchdogTimer) return;
+    this.lastEventAt = Date.now();
+    this.watchdogTimer = setInterval(() => {
+      if (!this.enabled || isMicBusy()) return;
+      const stale = Date.now() - this.lastEventAt > 20000;
+      if (this.running && stale) {
+        console.warn('[WakeWord] watchdog: recognizer wedged — forcing restart');
+        this.pauseRecognition();
+        this.scheduleStart(300);
+      } else if (!this.running && !this.restartTimer) {
+        // Missed a restart somehow — recover.
+        this.scheduleStart(300);
+      }
+    }, 5000);
+  }
+
+  private stopWatchdog(): void {
+    if (this.watchdogTimer) { clearInterval(this.watchdogTimer); this.watchdogTimer = null; }
   }
 
   private scheduleStart(delay: number): void {
@@ -184,6 +212,7 @@ class WakeWordListener {
         // No iosCategory — let the system manage the audio session, same as the Capture voice button.
       });
       this.running = true;
+      this.lastEventAt = Date.now();
     } catch (e) {
       console.warn('[WakeWord] start failed:', e);
       this.running = false;
@@ -203,6 +232,7 @@ class WakeWordListener {
     this.clearListeners();
     this.subs = [
       ExpoSpeechRecognitionModule.addListener('result', (e: ExpoSpeechRecognitionResultEvent) => {
+        this.lastEventAt = Date.now();
         // Check all hypotheses (results[0] is best; others are alternates)
         for (let i = 0; i < e.results.length; i++) {
           const text = e.results[i]?.transcript ?? '';
@@ -212,23 +242,17 @@ class WakeWordListener {
             console.log('[WakeWord] heard:', JSON.stringify(text));
             this.setStatus('listening');
           }
-          // Tokenize and find the first "Lucy"-like word near the start of the utterance.
           const tokens = text.split(/[\s,.!?-]+/).filter(Boolean);
-          // Allow the match within the first 4 words (a leading filler like "hey"/"ok" is optional,
-          // not required). This keeps "hey lucy" / "lucy" / "ok lucy add milk" triggering while
-          // making a mid-sentence "...a lucy moment" far less likely to fire.
-          const searchLimit = Math.min(tokens.length, 4);
+          if (!tokens.length) continue;
+          // In `continuous` mode iOS ACCUMULATES the whole session transcript, so a just-spoken
+          // "hey lucy" lands among the MOST RECENT words, not the first ones. Scan the tail
+          // (last 6 tokens) from the end and take the latest Lucy-like token.
+          const start = Math.max(0, tokens.length - 6);
           let matchIdx = -1;
-          for (let t = 0; t < searchLimit; t++) {
+          for (let t = tokens.length - 1; t >= start; t--) {
             if (isLucyToken(tokens[t])) { matchIdx = t; break; }
           }
           if (matchIdx === -1) continue;
-          // Any tokens before the match must be fillers (avoids false positives from real words).
-          let onlyFillersBefore = true;
-          for (let t = 0; t < matchIdx; t++) {
-            if (!FILLERS.has(tokens[t].toLowerCase().replace(/[^a-z]/g, ''))) { onlyFillersBefore = false; break; }
-          }
-          if (!onlyFillersBefore) continue;
           if (Date.now() < this.cooldownUntil) return;
           this.cooldownUntil = Date.now() + 4000;
           const trailing = tokens.slice(matchIdx + 1).join(' ').trim();
@@ -239,6 +263,7 @@ class WakeWordListener {
       }),
       ExpoSpeechRecognitionModule.addListener('error', (e: ExpoSpeechRecognitionErrorEvent) => {
         if (!this.enabled || e.error === 'aborted') return;
+        this.lastEventAt = Date.now();
         console.warn('[WakeWord] error:', e.error, e.message);
         this.running = false;
         // Fatal errors — retrying won't help; mark unavailable and stop.
@@ -251,6 +276,7 @@ class WakeWordListener {
         this.scheduleStart(1200);
       }),
       ExpoSpeechRecognitionModule.addListener('end', () => {
+        this.lastEventAt = Date.now();
         this.running = false;
         if (this.enabled && !isMicBusy()) {
           this.setStatus('starting');

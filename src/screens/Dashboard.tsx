@@ -997,7 +997,7 @@ function NowView({
                 ? `${contextCount} memories could be clearer — tap to answer one`
                 : `${contextCount} memory detail${contextCount === 1 ? '' : 's'} could become clearer`}
             </Text>
-            <Text style={styles.tonightDetail}>Add context when you have time. LUCY keeps your original thought unchanged.</Text>
+            <Text style={styles.tonightDetail}>Add context when you have time — LUCY folds your answer into that memory and re-organizes it.</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -1027,6 +1027,24 @@ function NeedsContextView({
     }
     const db = await getDatabase();
     await answerContextRequest(db, request.id, answer);
+    // Make the answer actually CORRECT the brain: append it to the source capture as a marked
+    // addendum (original words preserved) and re-extract, so anything mis-stored / mis-linked /
+    // mis-understood is re-derived with the new context — not just filed as a side "clarification".
+    if (request.capture_id) {
+      try {
+        const cap = await db.getFirstAsync<{ raw_transcript: string | null }>(
+          'SELECT raw_transcript FROM captures WHERE id = ?', request.capture_id,
+        );
+        const base = (cap?.raw_transcript ?? '').trim();
+        const q = (request.question || 'clarification').replace(/\s+/g, ' ').trim();
+        const addendum = `\n\n[Added context — ${q}: ${answer}]`;
+        await db.runAsync('UPDATE captures SET raw_transcript = ? WHERE id = ?', base + addendum, request.capture_id);
+        const { resetCaptureForReprocess } = await import('../db/captures');
+        await resetCaptureForReprocess(db, request.capture_id);
+        const { processQueue } = await import('../processing/extract');
+        void processQueue();
+      } catch { /* non-fatal — the organize below still records the clarification */ }
+    }
     await organizeMemory(db, 'clarification');
     setAnswers((existing) => ({ ...existing, [request.id]: '' }));
     onAnswered();
@@ -1048,8 +1066,15 @@ function NeedsContextView({
             <Text style={styles.contextQuestion}>
               {request.question || 'Can you add any context that might help me organize this memory?'}
             </Text>
-            {request.snippet ? (
-              <Text style={styles.contextSnippet}>You said: "{protectedPreview(request.snippet)}"</Text>
+            {/* Ground the question in the source note so it's recognizable (a 3-4 word snippet wasn't
+                enough to recall what it was about). */}
+            {(request.source_created_at || request.source_title) ? (
+              <Text style={styles.contextSource}>
+                From your note{request.source_created_at ? ` · ${new Date(`${String(request.source_created_at).replace(' ', 'T')}Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}{request.source_title ? ` · ${request.source_title}` : ''}
+              </Text>
+            ) : null}
+            {(request.source_excerpt || request.snippet) ? (
+              <Text style={styles.contextSnippet} numberOfLines={4}>You said: "{protectedPreview(request.source_excerpt || request.snippet || '')}"</Text>
             ) : null}
             <TextInput
               multiline
@@ -2389,6 +2414,7 @@ const styles = StyleSheet.create({
   contextCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 18, marginBottom: 12, gap: 9 },  // was 15
   contextLucyLabel: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700', letterSpacing: 0.3, textTransform: 'uppercase', marginBottom: 2 },
   contextSnippet: { color: LUCY_COLORS.textMuted, fontSize: 13, fontStyle: 'italic' },
+  contextSource: { color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '600', marginBottom: 4 },
   contextQuestion: { color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '800', lineHeight: 24 },
   contextInput: { minHeight: 64, color: LUCY_COLORS.textDark, borderRadius: 13, borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surface, padding: 12, textAlignVertical: 'top' },
   contextButton: { backgroundColor: LUCY_COLORS.primary, paddingVertical: 11, borderRadius: 12, alignItems: 'center' },

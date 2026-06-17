@@ -15,6 +15,11 @@ export interface ContextRequestRow {
   answer_text: string | null;
   answered_at: string | null;
   privacy_level: 'private';
+  // Joined from the source capture so the question is self-explanatory (the user couldn't recall a
+  // memory from a 3-4 word snippet). Nullable when the capture was deleted.
+  source_created_at?: string | null;
+  source_title?: string | null;
+  source_excerpt?: string | null;
 }
 
 export async function insertContextRequest(
@@ -48,9 +53,15 @@ export async function insertContextRequest(
 
 export async function listOpenContextRequests(db: SQLiteDatabase): Promise<ContextRequestRow[]> {
   return db.getAllAsync<ContextRequestRow>(
-    `SELECT * FROM context_requests WHERE status = 'open'
-     ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
-     created_at DESC, id DESC`,
+    `SELECT cr.*,
+            c.created_at      AS source_created_at,
+            c.extracted_title AS source_title,
+            substr(c.raw_transcript, 1, 280) AS source_excerpt
+     FROM context_requests cr
+     LEFT JOIN captures c ON c.id = cr.capture_id
+     WHERE cr.status = 'open'
+     ORDER BY CASE cr.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+     cr.created_at DESC, cr.id DESC`,
   );
 }
 

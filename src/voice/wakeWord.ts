@@ -16,8 +16,9 @@ import {
 } from 'expo-speech-recognition';
 import { isMicBusy, onMicBusyChange } from '../audio/micCoordinator';
 
-// "hey lucy" + common mishearings; also "hi/ok lucy". Captures any trailing command in the same breath.
-const WAKE_RE = /\b(?:hey|hi|ok|okay|hey there)\s*,?\s*(?:lucy|lucie|loocy|loosey|lucid|lucky)\b[\s,.!?-]*(.*)/i;
+// "hey lucy" + common mishearings; prefix (hey/hi/ok/hello) is optional so bare "Lucy" also triggers.
+// Wider name set covers cloud-speech mishearings (Luce, Luci, Lousy, Losie, Lose, Luzy, etc.).
+const WAKE_RE = /\b(?:(?:hey|hi|ok|okay|hey there|hello|yo)\s*,?\s*)?(?:lucy|lucie|luce|luci|loocy|loosey|lousy|losie|lose|luzy|lucid|lucky)\b[\s,.!?-]*(.*)/i;
 
 export type WakeWordStatus = 'disabled' | 'starting' | 'listening' | 'unavailable';
 
@@ -137,15 +138,24 @@ class WakeWordListener {
     this.clearListeners();
     this.subs = [
       ExpoSpeechRecognitionModule.addListener('result', (e: ExpoSpeechRecognitionResultEvent) => {
-        this.setStatus('listening');
-        const text = e.results[0]?.transcript ?? '';
-        if (!text) return;
-        const m = WAKE_RE.exec(text);
-        if (!m) return;
-        if (Date.now() < this.cooldownUntil) return;
-        this.cooldownUntil = Date.now() + 4000;
-        const trailing = (m[1] || '').trim();
-        this.fire(trailing || null);
+        // Check all hypotheses (results[0] is best; others are alternates)
+        for (let i = 0; i < e.results.length; i++) {
+          const text = e.results[i]?.transcript ?? '';
+          if (!text) continue;
+          if (i === 0) {
+            // Log every non-empty transcript so DevLog can show what iOS heard
+            console.log('[WakeWord] heard:', JSON.stringify(text));
+            this.setStatus('listening');
+          }
+          const m = WAKE_RE.exec(text);
+          if (!m) continue;
+          if (Date.now() < this.cooldownUntil) return;
+          this.cooldownUntil = Date.now() + 4000;
+          const trailing = (m[1] || '').trim();
+          console.log('[WakeWord] MATCHED text:', JSON.stringify(text), 'trailing:', trailing);
+          this.fire(trailing || null);
+          return;
+        }
       }),
       ExpoSpeechRecognitionModule.addListener('error', (e: ExpoSpeechRecognitionErrorEvent) => {
         if (!this.enabled || e.error === 'aborted') return;
@@ -177,7 +187,8 @@ class WakeWordListener {
     void (async () => {
       try { const H = await import('expo-haptics'); await H.notificationAsync(H.NotificationFeedbackType.Success); } catch { /* ignore */ }
     })();
-    try { this.onWake?.(trailing); } catch { /* non-critical */ }
+    console.log('[WakeWord] firing onWake, hasCallback:', !!this.onWake, 'trailing:', trailing);
+    try { this.onWake?.(trailing); } catch (e) { console.warn('[WakeWord] onWake threw:', e); }
     // If nothing took the mic (e.g. handler chose not to), resume after the cooldown.
     setTimeout(() => { if (this.enabled && !isMicBusy()) this.scheduleStart(200); }, 4200);
   }

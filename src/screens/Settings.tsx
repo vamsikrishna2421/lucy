@@ -31,6 +31,7 @@ interface SettingsScreenProps {
   onOpenWrapped?: () => void;
   wakeWordEnabled: boolean;
   onChangeWakeWord: (enabled: boolean) => Promise<void>;
+  onStartTour?: () => void;
 }
 
 type SettingsPanel = 'intelligence' | 'remote' | 'background' | 'organization' | 'queue' | 'privacy' | 'profile' | 'connectors' | null;
@@ -59,7 +60,7 @@ function findModel(id: string): ModelOption | undefined {
   return ALL_MODELS.find((m) => m.id === id);
 }
 
-export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll, onOpenWrapped, wakeWordEnabled, onChangeWakeWord }: SettingsScreenProps) {
+export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll, onOpenWrapped, wakeWordEnabled, onChangeWakeWord, onStartTour }: SettingsScreenProps) {
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
   const [devLogVisible, setDevLogVisible] = useState(false);
   const [checkInSchedulerVisible, setCheckInSchedulerVisible] = useState(false);
@@ -593,6 +594,14 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           onAction={() => setVoicePickerVisible(true)}
           onInfo={() => setVoicePickerVisible(true)}
         />
+        {onStartTour ? (
+          <SettingsRow
+            title="Guided tour with Lucy"
+            value="Lucy walks you through the app out loud — try each feature live as she explains"
+            actionLabel="Start"
+            onAction={onStartTour}
+          />
+        ) : null}
         <SettingsRow
           title="Re-organize now"
           value={runSummary}

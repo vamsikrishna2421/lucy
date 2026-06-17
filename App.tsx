@@ -55,17 +55,26 @@ export default function App() {
   }, []);
 
   // The screen the user is on, for the context-aware voice button.
+  // NOTE: this must be a STABLE function (deps []) that reads the latest screen via refs — the
+  // conversation engine captures this reference once at start, so closing over screen/dashCurrentView
+  // directly would freeze the context to whatever screen the conversation was opened on (which made
+  // Lucy always claim "you're on Settings"). Refs keep it live across navigation.
+  const screenRef = useRef(screen);
+  const dashViewRef = useRef(dashCurrentView);
+  screenRef.current = screen;
+  dashViewRef.current = dashCurrentView;
   const currentVoiceContext = useCallback((): string => {
-    if (screen === 'capture') return 'tasks';
-    if (screen === 'settings') return 'settings';
-    switch (dashCurrentView) {
+    const s = screenRef.current;
+    if (s === 'capture') return 'tasks';
+    if (s === 'settings') return 'settings';
+    switch (dashViewRef.current) {
       case 'Brain': return 'workspace';
       case 'Ask Lucy': return 'ask';
       case 'Health': return 'health';
       case 'Focus Now': return 'tasks';
       default: return 'timeline';
     }
-  }, [screen, dashCurrentView]);
+  }, []);
 
   // Where a voice command says to go next.
   const applyVoiceNav = useCallback((section: string) => {
@@ -601,6 +610,29 @@ export default function App() {
     setConvoOpen(true);
   }, []);
 
+  // Live guided tour: Lucy walks through the app out loud while the user tries each feature. The
+  // conversation card is non-blocking, so they can navigate as she explains. `offer` shows a prompt
+  // first (used on first install); pass false to start immediately (e.g. a "Replay tour" button).
+  const startGuidedTour = useCallback((offer: boolean) => {
+    const begin = (): void => {
+      setConvoInitial(
+        'Give me a guided tour of the app. Walk me through the main features one at a time, tell me ' +
+        'exactly which tab or tile to tap next, and wait for me to say "next" before moving on. ' +
+        'Start with a warm one-line welcome, then the first step.',
+      );
+      setConvoOpen(true);
+    };
+    if (!offer) { begin(); return; }
+    Alert.alert(
+      'Take a tour with Lucy?',
+      'Lucy can walk you through the app out loud — you try each feature live as she explains. You can stop anytime.',
+      [
+        { text: 'Maybe later', style: 'cancel' },
+        { text: 'Start tour', onPress: begin },
+      ],
+    );
+  }, []);
+
   // Persist + apply the wake-word toggle (also called from Settings).
   const setWakeWordPreference = useCallback(async (on: boolean) => {
     setWakeWordEnabled(on);
@@ -782,6 +814,7 @@ export default function App() {
                   onOpenWrapped={() => setWrappedVisible(true)}
                   wakeWordEnabled={wakeWordEnabled}
                   onChangeWakeWord={setWakeWordPreference}
+                  onStartTour={() => { setScreen('dashboard'); startGuidedTour(false); }}
                 />
               </View>
             </>
@@ -907,6 +940,9 @@ export default function App() {
             void drainQueue();
           }
         } catch { /* non-critical */ }
+        // First-run: offer a live, spoken guided tour where Lucy walks through the app and the
+        // user tries each feature alongside her (the conversation card is non-blocking).
+        startGuidedTour(true);
       }} />
     </SafeAreaProvider>
    </ErrorBoundary>

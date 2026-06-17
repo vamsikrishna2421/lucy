@@ -340,11 +340,10 @@ async function route(req: ParsedRequest): Promise<string> {
     if (req.method === 'DELETE' && req.path.startsWith('/api/capture/')) {
       const id = Number(req.path.split('/').pop());
       if (!id) return json(400, { error: 'Missing id' });
-      const { deleteCaptureCompletely, purgeCaptureDerivedData } = await import('../db/captures');
+      const { deleteCaptureCompletely, hardDeleteCapture } = await import('../db/captures');
       let done = false;
       if (req.query.hard === '1') {
-        await purgeCaptureDerivedData(db, id);
-        done = (await db.runAsync('DELETE FROM captures WHERE id = ?', id)).changes > 0;
+        done = await hardDeleteCapture(db, id);
       } else done = await deleteCaptureCompletely(db, id);
       return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such capture' }) });
     }

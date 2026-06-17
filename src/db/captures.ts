@@ -230,8 +230,19 @@ export async function archiveCapture(db: SQLiteDatabase, id: number, reason: str
 const CAPTURE_DERIVED_TABLES = [
   'todos', 'expenses', 'ideas', 'places', 'reminders',
   'open_loops', 'follow_ups', 'context_requests', 'mood_entries',
-  'extractions', 'capture_embeddings',
+  'extractions', 'capture_embeddings', 'pending_actions',
 ] as const;
+
+/**
+ * Rows that REFERENCE a capture but aren't owned by it (so we null/clear, not delete the row).
+ * knowledge_entities/connections keep a `latest_capture_id` pointer (FK, no ON DELETE rule) that
+ * would block a hard delete; memory_update_proposals points at it without an FK but shouldn't dangle.
+ */
+async function clearCaptureBackReferences(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync('UPDATE knowledge_entities SET latest_capture_id = NULL WHERE latest_capture_id = ?', id);
+  await db.runAsync('UPDATE knowledge_connections SET latest_capture_id = NULL WHERE latest_capture_id = ?', id);
+  try { await db.runAsync('DELETE FROM memory_update_proposals WHERE new_capture_id = ? OR old_capture_id = ?', id, id); } catch { /* table may predate this feature */ }
+}
 
 /** Deletes every derived row for a capture (tasks, ideas, expenses, embeddings,
  *  extraction evidence, …) WITHOUT touching the capture row. Used by both delete and
@@ -240,6 +251,37 @@ export async function purgeCaptureDerivedData(db: SQLiteDatabase, id: number): P
   for (const table of CAPTURE_DERIVED_TABLES) {
     await db.runAsync(`DELETE FROM ${table} WHERE capture_id = ?`, id);
   }
+}
+
+/**
+ * Permanently removes a capture row and ALL of its references — derived rows, back-references, and
+ * any child "update" captures (which reference it via parent_capture_id, an FK with no ON DELETE
+ * rule). Without clearing those first, `DELETE FROM captures` fails with a foreign-key violation
+ * (the cause of the 500s when hard-deleting segmented/merged captures). All-or-nothing transaction.
+ * Returns true if the target row was removed.
+ */
+export async function hardDeleteCapture(db: SQLiteDatabase, id: number): Promise<boolean> {
+  const exists = await db.getFirstAsync<{ id: number }>('SELECT id FROM captures WHERE id = ?', id);
+  if (!exists) return false;
+  // Collect the capture + every descendant (children-of-children) that points back via parent_capture_id.
+  const all: number[] = [id];
+  for (let i = 0; i < all.length; i++) {
+    const kids = await db.getAllAsync<{ id: number }>('SELECT id FROM captures WHERE parent_capture_id = ?', all[i]);
+    for (const k of kids) if (!all.includes(k.id)) all.push(k.id);
+  }
+  let removed = false;
+  await db.withTransactionAsync(async () => {
+    for (const cid of all) {
+      await purgeCaptureDerivedData(db, cid);
+      await clearCaptureBackReferences(db, cid);
+    }
+    // Delete descendants before ancestors so no parent_capture_id FK is left dangling mid-delete.
+    for (let i = all.length - 1; i >= 0; i--) {
+      const r = await db.runAsync('DELETE FROM captures WHERE id = ?', all[i]);
+      if (all[i] === id) removed = r.changes > 0;
+    }
+  });
+  return removed;
 }
 
 /**

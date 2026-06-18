@@ -17,14 +17,10 @@ const DEFAULTS: AvailabilityProfile = {
   bufferMin: 10,
   maxFocusMinPerDay: 4 * 60,
   workDays: [1, 2, 3, 4, 5], // Mon–Fri; weekends open
-  // Suggested healthy-habit windows (everyone starts with these; the user can edit/remove). Sleep
-  // and work hours live in their own fields; these are the daily-rhythm habits LUCY protects + nudges.
-  protectedWindows: [
-    { label: 'Morning walk', startMin: 7 * 60, endMin: 7 * 60 + 30 },
-    { label: 'Lunch', startMin: 12 * 60 + 30, endMin: 13 * 60 + 30 },
-    { label: 'Gym', startMin: 18 * 60, endMin: 19 * 60, days: [1, 2, 3, 4, 5] },
-    { label: 'Dinner', startMin: 19 * 60 + 30, endMin: 20 * 60 + 30 },
-  ],
+  // No hardcoded default habits. LUCY should suggest activities for a slot from the user's OWN learned
+  // patterns/routine (see backlog "learned activity suggestions"), not impose generic walk/lunch/gym/
+  // dinner blocks. Empty unless the user (or a future learned-suggestion engine) adds windows.
+  protectedWindows: [],
   peakWindows: [
     { label: 'Morning focus', startMin: 9 * 60, endMin: 11 * 60 + 30 },
   ],
@@ -76,10 +72,14 @@ export async function getAvailability(db: SQLiteDatabase): Promise<AvailabilityP
     try {
       const s = JSON.parse(raw) as Partial<AvailabilityProfile>;
       const merged: AvailabilityProfile = { ...DEFAULTS, ...s };
-      // Backfill fields added after the profile was saved (workdays + healthy-habit windows), so
-      // existing users get the new defaults instead of an empty/old set.
+      // Backfill workdays if missing. Do NOT force-inject habit windows — honor whatever the user has
+      // (including none); we no longer impose generic default habits.
       if (!Array.isArray(s.workDays) || !s.workDays.length) merged.workDays = DEFAULTS.workDays;
-      if (!Array.isArray(s.protectedWindows) || s.protectedWindows.length <= 1) merged.protectedWindows = DEFAULTS.protectedWindows;
+      // Drop the old hardcoded default habits (Morning walk/Lunch/Gym/Dinner at their default times) that
+      // earlier builds injected, so they stop ghosting on existing users' calendars. Keep any others.
+      const LEGACY: Array<[string, number]> = [['Morning walk', 420], ['Lunch', 750], ['Gym', 1080], ['Dinner', 1170]];
+      merged.protectedWindows = (Array.isArray(s.protectedWindows) ? s.protectedWindows : [])
+        .filter((w) => !LEGACY.some(([l, st]) => w.label === l && w.startMin === st));
       return merged;
     } catch { /* fall through */ }
   }

@@ -157,9 +157,17 @@ export function ScheduleTab() {
     setBusy(true);
     try {
       const db = await getDatabase();
-      const { classifyTask } = await import('../scheduling/classify');
-      const meta = classifyTask(it.title);
-      await commitBlock(db, { title: it.title, startMs: it.start, endMs: it.end, resources: meta.resources, energy: meta.energy, location: meta.location ?? null }, { force: true });
+      // Dedup: don't stack a second identical block if one with the same title already overlaps this
+      // slot (this caused "Gym overlaps Gym" pileups when a suggestion was approved more than once).
+      const dupe = await db.getFirstAsync<{ id: number }>(
+        "SELECT id FROM scheduled_blocks WHERE status='committed' AND lower(title)=lower(?) AND start_at < ? AND end_at > ?",
+        it.title, it.end, it.start,
+      );
+      if (!dupe) {
+        const { classifyTask } = await import('../scheduling/classify');
+        const meta = classifyTask(it.title);
+        await commitBlock(db, { title: it.title, startMs: it.start, endMs: it.end, resources: meta.resources, energy: meta.energy, location: meta.location ?? null }, { force: true });
+      }
       await load();
     } finally { setBusy(false); }
   };
@@ -672,9 +680,16 @@ export function ScheduleTab() {
                     <Text style={styles.sheetWhen}>{habitSuggest ? `${clock(habitSuggest.start)} – ${clock(habitSuggest.end)}` : ''}</Text>
                   </View>
                   <Text style={styles.sheetBody}>Add this to today's schedule? It stays just a gentle nudge until you do — nothing takes up your time yet.</Text>
+                  <Text style={styles.eventSection}>Prefer another time?</Text>
+                  <View style={styles.eventChipRow}>
+                    <TouchableOpacity style={styles.eventChip} activeOpacity={0.7} onPress={() => setHabitSuggest((h) => h ? { ...h, start: h.start - 3600_000, end: h.end - 3600_000 } : h)}><Text style={styles.eventChipT}>−1h</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.eventChip} activeOpacity={0.7} onPress={() => setHabitSuggest((h) => h ? { ...h, start: h.start - 1800_000, end: h.end - 1800_000 } : h)}><Text style={styles.eventChipT}>−30m</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.eventChip} activeOpacity={0.7} onPress={() => setHabitSuggest((h) => h ? { ...h, start: h.start + 1800_000, end: h.end + 1800_000 } : h)}><Text style={styles.eventChipT}>+30m</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.eventChip} activeOpacity={0.7} onPress={() => setHabitSuggest((h) => h ? { ...h, start: h.start + 3600_000, end: h.end + 3600_000 } : h)}><Text style={styles.eventChipT}>+1h</Text></TouchableOpacity>
+                  </View>
                   <View style={styles.eventActions}>
                     <TouchableOpacity style={styles.sheetSecondary} activeOpacity={0.7} onPress={() => setHabitSuggest(null)}><Text style={styles.sheetSecondaryT}>Not now</Text></TouchableOpacity>
-                    <TouchableOpacity style={styles.eventDone} activeOpacity={0.85} onPress={() => { const h = habitSuggest; setHabitSuggest(null); if (h) void approveHabit(h); }}><Text style={styles.eventDoneT}>Add to today</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.eventDone} activeOpacity={0.85} onPress={() => { const h = habitSuggest; setHabitSuggest(null); if (h) void approveHabit(h); }}><Text style={styles.eventDoneT}>Add at {habitSuggest ? clock(habitSuggest.start) : ''}</Text></TouchableOpacity>
                   </View>
                 </>
               );

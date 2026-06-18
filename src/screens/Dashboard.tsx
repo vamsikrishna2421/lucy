@@ -1532,6 +1532,8 @@ export function NeedsContextView({
 }) {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [proposals, setProposals] = useState<import('../db/memoryUpdateProposals').MemoryUpdateProposalRow[]>([]);
+  const [feedbackOpen, setFeedbackOpen] = useState<Record<number, boolean>>({});
+  const [feedbackText, setFeedbackText] = useState<Record<number, string>>({});
 
   const loadProposals = async () => {
     const db = await getDatabase();
@@ -1553,6 +1555,24 @@ export function NeedsContextView({
     const { setMemoryUpdateProposalStatus } = await import('../db/memoryUpdateProposals');
     await setMemoryUpdateProposalStatus(db, id, 'dismissed');
     setProposals((p) => p.filter((x) => x.id !== id));
+  };
+  // "No, that's wrong" — reject the proposal AND teach LUCY the correction so it sticks and isn't
+  // re-suggested (the opposite of silently accepting a bad change).
+  const rejectProposal = async (id: number) => {
+    const note = (feedbackText[id] ?? '').trim();
+    const db = await getDatabase();
+    if (note) {
+      try {
+        const { upsertLearnedFact } = await import('../db/learnedProfile');
+        await upsertLearnedFact(db, 'correction', note, 'feedback');
+      } catch { /* non-fatal */ }
+    }
+    const { setMemoryUpdateProposalStatus } = await import('../db/memoryUpdateProposals');
+    await setMemoryUpdateProposalStatus(db, id, 'dismissed');
+    setProposals((p) => p.filter((x) => x.id !== id));
+    setFeedbackOpen((f) => ({ ...f, [id]: false }));
+    setFeedbackText((f) => ({ ...f, [id]: '' }));
+    onAnswered();
   };
 
   const rememberContext = async (request: ContextRequestRow) => {
@@ -1600,14 +1620,38 @@ export function NeedsContextView({
           ) : null}
           {p.old_excerpt ? <Text style={styles.contextSnippet} numberOfLines={4}>Old: "{protectedPreview(p.old_excerpt)}"</Text> : null}
           <Text style={[styles.contextSnippet, { color: LUCY_COLORS.primaryGlow }]} numberOfLines={4}>Add: {protectedPreview(p.suggested_context)}</Text>
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-            <TouchableOpacity style={[styles.contextButton, { flex: 1 }]} onPress={() => void applyProposal(p.id)}>
-              <Text style={styles.contextButtonText}>Apply to memory</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.contextButton, styles.contextButtonDisabled, { flex: 0, paddingHorizontal: 18 }]} onPress={() => void dismissProposal(p.id)}>
-              <Text style={styles.contextButtonText}>Dismiss</Text>
-            </TouchableOpacity>
-          </View>
+          {feedbackOpen[p.id] ? (
+            <>
+              <TextInput
+                multiline
+                placeholder="What's actually right? (e.g. it's 'AD groups' — Azure AD, not 'AB')"
+                placeholderTextColor={LUCY_COLORS.textSubtle}
+                style={styles.contextInput}
+                value={feedbackText[p.id] ?? ''}
+                onChangeText={(v) => setFeedbackText((f) => ({ ...f, [p.id]: v }))}
+              />
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                <TouchableOpacity style={[styles.contextButton, { flex: 1 }]} onPress={() => void rejectProposal(p.id)}>
+                  <Text style={styles.contextButtonText}>Send feedback & discard</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.contextButton, styles.contextButtonDisabled, { flex: 0, paddingHorizontal: 16 }]} onPress={() => setFeedbackOpen((f) => ({ ...f, [p.id]: false }))}>
+                  <Text style={styles.contextButtonText}>Back</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+              <TouchableOpacity style={[styles.contextButton, { flex: 1 }]} onPress={() => void applyProposal(p.id)}>
+                <Text style={styles.contextButtonText}>Apply</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.contextButton, styles.contextButtonDisabled, { flex: 1 }]} onPress={() => setFeedbackOpen((f) => ({ ...f, [p.id]: true }))}>
+                <Text style={styles.contextButtonText}>No, that's wrong</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.contextButton, styles.contextButtonDisabled, { flex: 0, paddingHorizontal: 14 }]} onPress={() => void dismissProposal(p.id)}>
+                <Text style={styles.contextButtonText}>Skip</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       ),
     })),

@@ -10,7 +10,8 @@ export type NotificationDetailPayload =
   | { kind: 'post-meeting'; eventTitle: string }
   | { kind: 'on-this-day'; memoryCount: number; yearsAgo: number }
   | { kind: 'morning-brief' }
-  | { kind: 'weekly-insight' };
+  | { kind: 'weekly-insight' }
+  | { kind: 'raw'; title?: string; body?: string };
 
 function buildExplanation(payload: NotificationDetailPayload): { headline: string; explanation: string } {
   if (payload.kind === 'guardian') {
@@ -75,6 +76,13 @@ function buildExplanation(payload: NotificationDetailPayload): { headline: strin
     return {
       headline: `a note from me`,
       explanation: `I went through your memories and patterns to put this together. It's not a statistic — it's something I actually noticed about how you've been living lately.`,
+    };
+  }
+
+  if (payload.kind === 'raw') {
+    return {
+      headline: (payload.title && payload.title.trim()) || 'a note from me',
+      explanation: (payload.body && payload.body.trim()) || 'Tap done when you have got this.',
     };
   }
 

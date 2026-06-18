@@ -527,12 +527,10 @@ export default function App() {
       const req = response.notification.request;
       const data = req.content.data as Record<string, unknown> | undefined;
       // Tapping any buzz of a persistent reminder/event silences the rest of its burst.
-      // Tapping a nag opens the in-app alarm so the user can Snooze/Dismiss properly (it also
-      // silences the remaining burst). For non-alarm notifications, open the detail as before.
+      // Tapping a notification silences any remaining alarm burst, then opens a detailed popup so
+      // the user can read the FULL note and dismiss it. Rich kinds (guardian/digest/…) get their
+      // tailored explanation; anything else (incl. reminder/calendar alarms) shows its title+body.
       const content = req.content;
-      void import('./src/audio/alarmManager')
-        .then(({ ringFromNotificationData }) => ringFromNotificationData(data, content.title ?? '', content.body ?? ''))
-        .catch(() => {});
       void import('./src/processing/persistentReminders')
         .then(({ acknowledgeNagFromResponse }) => acknowledgeNagFromResponse(data))
         .catch(() => {});
@@ -542,8 +540,11 @@ export default function App() {
         .then((db) => getTotalUnreadCount(db))
         .then(setUnreadNotifCount)
         .catch(() => {});
-      if (data?.kind && typeof data.kind === 'string' && typeof data.nagGroup !== 'string') {
+      const RICH_KINDS = new Set(['guardian', 'digest', 'open-loop', 'captured-reminder', 'pre-meeting', 'post-meeting', 'on-this-day', 'morning-brief', 'weekly-insight']);
+      if (data?.kind && typeof data.kind === 'string' && RICH_KINDS.has(data.kind)) {
         setNotificationDetail(data as unknown as NotificationDetailPayload);
+      } else {
+        setNotificationDetail({ kind: 'raw', title: content.title ?? undefined, body: content.body ?? undefined });
       }
     });
     // Notification fired while app is foregrounded → log it + raise the in-app alarm if it's a nag.

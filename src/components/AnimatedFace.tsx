@@ -90,6 +90,9 @@ export function AnimatedFace({
   const [phase, setPhase] = useState<DayPhase>(() => phaseForHour(new Date().getHours()));
   const [mood, setMood] = useState<Mood>(() => moodForPhase(phaseForHour(new Date().getHours())));
   const [peeked, setPeeked] = useState(false);
+  // Ambient idle showcase — Lucy gently cycles through her personality at rest (daytime only).
+  // This is internal state driven by a timer; it never changes what callers pass.
+  const [showcase, setShowcase] = useState<FaceExpression>('calm');
   const effectiveStatus: LucyStatus = status !== 'idle' ? status : (phase === 'night' ? 'sleeping' : 'idle');
   const palette = PHASE_PALETTE[phase];
 
@@ -122,8 +125,9 @@ export function AnimatedFace({
     if (effectiveStatus === 'thinking') return 'thinking';
     if (effectiveStatus === 'reading') return 'reading';
     if (effectiveStatus === 'music') return 'music';
-    return 'calm';
-  }, [effectiveStatus, peeked]);
+    // Idle + awake → ambient showcase step (calm by default).
+    return showcase;
+  }, [effectiveStatus, peeked, showcase]);
 
   useEffect(() => {
     const tick = () => {
@@ -224,7 +228,8 @@ export function AnimatedFace({
     gazeUp.stopAnimation();
     let loop: Animated.CompositeAnimation | null = null;
 
-    if (effectiveStatus === 'reading') {
+    // Drive off `expression` so it follows both real statuses AND the ambient idle showcase.
+    if (expression === 'reading') {
       loop = Animated.loop(Animated.sequence([
         Animated.timing(gaze, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
         Animated.delay(120),
@@ -232,19 +237,19 @@ export function AnimatedFace({
         Animated.delay(220),
       ]));
       Animated.timing(gazeUp, { toValue: 0.15, duration: 300, useNativeDriver: true }).start();
-    } else if (effectiveStatus === 'thinking') {
+    } else if (expression === 'thinking') {
       Animated.timing(gazeUp, { toValue: 1, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
       loop = Animated.loop(Animated.sequence([
         Animated.timing(gaze, { toValue: 0.7, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
         Animated.timing(gaze, { toValue: 0.3, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]));
-    } else if (effectiveStatus === 'organizing' || effectiveStatus === 'saving') {
+    } else if (expression === 'organizing' || expression === 'saving') {
       Animated.timing(gazeUp, { toValue: 0, duration: 300, useNativeDriver: true }).start();
       loop = Animated.loop(Animated.sequence([
         Animated.timing(gaze, { toValue: 0.85, duration: 700, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
         Animated.timing(gaze, { toValue: 0.15, duration: 700, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
       ]));
-    } else if (effectiveStatus === 'idle' && mood !== 'sleeping') {
+    } else if ((expression === 'calm' || expression === 'peek') && mood !== 'sleeping') {
       Animated.timing(gazeUp, { toValue: 0, duration: 400, useNativeDriver: true }).start();
       loop = Animated.loop(Animated.sequence([
         Animated.delay(1800),
@@ -256,7 +261,7 @@ export function AnimatedFace({
         Animated.delay(1400),
         Animated.timing(gaze, { toValue: 0.5, duration: 600, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
       ]));
-    } else if (effectiveStatus === 'music') {
+    } else if (expression === 'music') {
       // Music: eyes relaxed/centered, sway gently side to side with the beat.
       Animated.timing(gazeUp, { toValue: 0, duration: 300, useNativeDriver: true }).start();
       loop = Animated.loop(Animated.sequence([
@@ -264,14 +269,14 @@ export function AnimatedFace({
         Animated.timing(gaze, { toValue: 0.34, duration: 720, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]));
     } else {
-      // listening / speaking / peek / sleeping: centered, attentive.
+      // listening / speaking / sleeping: centered, attentive.
       Animated.timing(gaze, { toValue: 0.5, duration: 300, useNativeDriver: true }).start();
       Animated.timing(gazeUp, { toValue: 0, duration: 300, useNativeDriver: true }).start();
     }
 
     loop?.start();
     return () => loop?.stop();
-  }, [effectiveStatus, mood, gaze, gazeUp]);
+  }, [expression, mood, gaze, gazeUp]);
 
   // Attentive pulse (listening) and talk cadence (speaking).
   useEffect(() => {
@@ -290,10 +295,16 @@ export function AnimatedFace({
         Animated.timing(pulse, { toValue: 0.7, duration: 150, easing: Easing.out(Easing.quad), useNativeDriver: true }),
         Animated.timing(pulse, { toValue: 0, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       ]));
+    } else if (expression === 'thinking') {
+      // Keeps the thought-bubble dots gently cycling (covers showcase-thinking too).
+      loop = Animated.loop(Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 560, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 560, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]));
     }
     loop?.start();
     return () => loop?.stop();
-  }, [effectiveStatus, pulse]);
+  }, [effectiveStatus, expression, pulse]);
 
   useEffect(() => {
     if (mood !== 'sleeping') return;
@@ -325,7 +336,7 @@ export function AnimatedFace({
     bob.stopAnimation();
     bob.setValue(0);
     let loop: Animated.CompositeAnimation | null = null;
-    if (effectiveStatus === 'music') {
+    if (expression === 'music') {
       loop = Animated.loop(Animated.sequence([
         Animated.timing(bob, { toValue: 1, duration: 360, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
         Animated.timing(bob, { toValue: -1, duration: 360, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
@@ -338,7 +349,7 @@ export function AnimatedFace({
     }
     loop?.start();
     return () => loop?.stop();
-  }, [effectiveStatus, bob]);
+  }, [effectiveStatus, expression, bob]);
 
   // Accessory entrance — glasses/headphones/thought-bubble pop in when their state begins.
   useEffect(() => {
@@ -351,9 +362,9 @@ export function AnimatedFace({
     }).start();
   }, [expression, propIn]);
 
-  // Floating musical notes rise while in the music state.
+  // Floating musical notes rise while in the music state (real status or showcase).
   useEffect(() => {
-    if (effectiveStatus !== 'music') return;
+    if (expression !== 'music') return;
     const make = (v: Animated.Value, delay: number) => Animated.loop(Animated.sequence([
       Animated.delay(delay),
       Animated.timing(v, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: true }),
@@ -362,7 +373,7 @@ export function AnimatedFace({
     const loops = [make(note0, 0), make(note1, 600), make(note2, 1200)];
     loops.forEach(l => l.start());
     return () => { loops.forEach(l => l.stop()); note0.setValue(0); note1.setValue(0); note2.setValue(0); };
-  }, [effectiveStatus, note0, note1, note2]);
+  }, [expression, note0, note1, note2]);
 
   useEffect(() => {
     if (celebrateKey === undefined) return;
@@ -376,6 +387,59 @@ export function AnimatedFace({
       Animated.timing(sparkle, { toValue: 1, duration: 1050, easing: Easing.out(Easing.quad), useNativeDriver: true }),
     ]).start();
   }, [celebrateKey, happy, sparkle]);
+
+  // ── Ambient idle showcase ─────────────────────────────────────────────────
+  // At rest (idle + daytime/awake, not peeked) Lucy gently rotates through her
+  // personality: calm smile → reading → thinking → music → a little happy/sparkle
+  // beat → back to calm. A real status pauses the cycle (the expression memo shows
+  // the real state immediately); when idle resumes we hold a calm beat then restart.
+  const isShowcasing = effectiveStatus === 'idle' && mood !== 'sleeping' && !peeked;
+  useEffect(() => {
+    if (!isShowcasing) {
+      // Real status (or night/peek) took over — pause and reset to calm so the next
+      // resume starts from a settled, smiling beat.
+      setShowcase('calm');
+      return;
+    }
+    // Each step is [expression, dwell-ms]. The transition between steps is carried
+    // by the existing per-expression animations (prop entrance springs, gaze, bob).
+    const SEQUENCE: Array<[FaceExpression, number]> = [
+      ['calm', 5000],      // settle on the warm resting smile
+      ['reading', 5000],   // glasses + scanning eyes
+      ['thinking', 4500],  // thought bubble + glance up
+      ['music', 5500],     // headphones + notes + head-bob
+      ['calm', 3200],      // brief calm, then a happy sparkle beat fires below
+    ];
+    let idx = 0;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const step = () => {
+      if (cancelled) return;
+      const [expr, dwell] = SEQUENCE[idx];
+      setShowcase(expr);
+      // On the final calm beat, give a charming little happy + sparkle flourish.
+      const isHappyBeat = idx === SEQUENCE.length - 1;
+      if (isHappyBeat) {
+        sparkle.setValue(0);
+        Animated.parallel([
+          Animated.sequence([
+            Animated.timing(happy, { toValue: 1, duration: 220, easing: Easing.out(Easing.back(2)), useNativeDriver: true }),
+            Animated.delay(900),
+            Animated.timing(happy, { toValue: 0, duration: 320, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+          ]),
+          Animated.timing(sparkle, { toValue: 1, duration: 1100, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        ]).start();
+      }
+      idx = (idx + 1) % SEQUENCE.length;
+      timer = setTimeout(step, dwell);
+    };
+
+    // Brief calm beat before the cycle gets going (also the resume-from-real-status beat).
+    setShowcase('calm');
+    timer = setTimeout(step, 1500);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [isShowcasing, happy, sparkle]);
 
   const scale = breathe.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.06] });
   const glowOpacity = glow.interpolate({

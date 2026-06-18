@@ -40,6 +40,31 @@ export async function resolveRemoteAvailability(): Promise<{ available: boolean;
   return { available: Boolean(openAIKey), openAIKey: openAIKey ?? '' };
 }
 
+/** Status of the user's SELECTED model + whether its provider key is present. Used by interactive
+ *  flows (Ask/voice/image/food) to show an actionable "add your key" popup instead of silently
+ *  falling back to a different model or on-device. */
+export interface ModelKeyStatus { model: string; remote: boolean; keyPresent: boolean; provider: string }
+
+export async function getModelKeyStatus(): Promise<ModelKeyStatus> {
+  const model = getPreferredModel(config.openAIModel);
+  if (model.startsWith('claude-')) {
+    const claudeKey = (await getClaudeApiKey()) ?? process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY?.trim() ?? null;
+    return { model, remote: true, keyPresent: Boolean(claudeKey), provider: 'Anthropic (Claude)' };
+  }
+  // Anything that isn't an OpenAI model is treated as on-device (no key needed).
+  if (!/^(gpt|o[0-9]|chatgpt|text-)/i.test(model)) {
+    return { model, remote: false, keyPresent: true, provider: 'on-device' };
+  }
+  const remote = await getRemoteAccessState();
+  const openAIKey = remote.enabled && remote.hasKey ? await getRemoteOpenAIKey() : null;
+  return { model, remote: true, keyPresent: Boolean(openAIKey), provider: 'OpenAI' };
+}
+
+/** Actionable, non-scary message when the selected model's key is missing. */
+export function modelKeyMissingMessage(s: ModelKeyStatus): string {
+  return `I can't reach ${s.model} — add your ${s.provider} API key in Settings → Remote intelligence to use it.`;
+}
+
 function localAnalyze(transcript: string): Promise<ExtractionResult> {
   return config.localInference === 'ollama-dev'
     ? analyzeWithOllama(transcript)

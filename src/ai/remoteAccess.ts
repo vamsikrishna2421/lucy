@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { config } from '../config';
+import { getPreferredModel } from './modelPreference';
 import { getDatabase } from '../db';
 import { getSetting, setSetting } from '../db/settings';
 
@@ -33,7 +34,7 @@ export async function getRemoteAccessState(): Promise<RemoteAccessState> {
     enabled: enabled === 'true',
     hasKey: Boolean(localKey || developmentKey()),
     usingDevelopmentKey: development,
-    modelName: config.openAIModel,
+    modelName: getPreferredModel(config.openAIModel),
   };
 }
 

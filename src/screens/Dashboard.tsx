@@ -857,6 +857,9 @@ function HealthView() {
     setLogging(true);
     try {
       const db = await getDatabase();
+      const { getModelKeyStatus, modelKeyMissingMessage } = await import('../ai/provider');
+      const status = await getModelKeyStatus();
+      if (status.remote && !status.keyPresent) { setLogging(false); Alert.alert('Add your API key', modelKeyMissingMessage(status)); return; }
       const { logFoodFromText } = await import('../processing/foodNutrition');
       const res = await logFoodFromText(db, text);
       setMealText('');
@@ -877,10 +880,10 @@ function HealthView() {
       const { pickImage } = await import('../processing/imageCapture');
       const uri = await pickImage('Snap a meal', 'I’ll read the photo and estimate the foods and calories.');
       if (!uri) return;
-      const { resolveRemoteAvailability } = await import('../ai/provider');
-      const { available } = await resolveRemoteAvailability();
-      if (!available) {
-        Alert.alert('Remote intelligence needed', 'Reading a meal photo uses a vision model. Add an API key in Settings → Remote intelligence, then try again.');
+      const { getModelKeyStatus, modelKeyMissingMessage } = await import('../ai/provider');
+      const status = await getModelKeyStatus();
+      if (status.remote && !status.keyPresent) {
+        Alert.alert('Add your API key', modelKeyMissingMessage(status));
         return;
       }
       setReading(true);
@@ -2032,6 +2035,9 @@ function TimelineView({
               {
                 text: '📝 Note / document / image',
                 onPress: async () => {
+                  const { getModelKeyStatus, modelKeyMissingMessage } = await import('../ai/provider');
+                  const status = await getModelKeyStatus();
+                  if (status.remote && !status.keyPresent) { Alert.alert('Add your API key', modelKeyMissingMessage(status)); return; }
                   const { snapImageToMemory } = await import('../processing/imageCapture');
                   try {
                     const ok = await snapImageToMemory(setReadingImage);

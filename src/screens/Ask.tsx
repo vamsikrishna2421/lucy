@@ -233,6 +233,9 @@ export function AskScreen({ initialQuestion }: { initialQuestion?: string } = {}
       const answer = await askLucy(trimmed, captureCallback, history);
       await insertLucyAskMessage(db, currentThreadId, answer);
       setMessages((existing) => [...existing, { id: `lucy-${messageId}`, role: 'lucy', answer }]);
+      if (answer.needsApiKey) {
+        Alert.alert('Add your API key', answer.message || 'Add your model API key in Settings → Remote intelligence.');
+      }
     } catch {
       // Never leave the user with no reply (esp. a cold first-ask). Degrade to a calm, non-scary
       // bubble that invites a retry — no red error, no failed state.

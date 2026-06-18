@@ -6,7 +6,7 @@
  * Falls back to on-device pattern matching for common receipt formats.
  */
 
-import { getRemoteAccessState, getRemoteOpenAIKey } from '../ai/remoteAccess';
+import { getRemoteOpenAIKey } from '../ai/remoteAccess';
 
 export interface ExtractedReceipt {
   amount: string | null;
@@ -68,18 +68,41 @@ function extractWithPatterns(imageUri: string): ExtractedReceipt {
   return { amount: null, merchant: null, category: 'other', date: null, rawText: '' };
 }
 
+const RECEIPT_PROMPT = 'Extract from this receipt: total amount (just the number), merchant/store name, and best category (food/transport/shopping/entertainment/other). Reply with JSON only: {"amount":"","merchant":"","category":"","date":""}. Use null for missing fields.';
+
+function parseReceiptJson(content: string): ExtractedReceipt | null {
+  const start = content.indexOf('{'); const end = content.lastIndexOf('}');
+  if (start === -1 || end === -1) return null;
+  try {
+    const parsed = JSON.parse(content.slice(start, end + 1)) as { amount?: string; merchant?: string; category?: string; date?: string };
+    return {
+      amount: parsed.amount ?? null,
+      merchant: parsed.merchant ?? null,
+      category: (['food', 'transport', 'shopping', 'entertainment'].includes(parsed.category ?? '') ? parsed.category : 'other') as ExtractedReceipt['category'],
+      date: parsed.date ?? null,
+      rawText: content,
+    };
+  } catch { return null; }
+}
+
 export async function processReceiptImage(imageUri: string): Promise<ExtractedReceipt> {
-  const remote = await getRemoteAccessState();
-  if (remote.enabled && remote.hasKey) {
-    try {
-      const apiKey = await getRemoteOpenAIKey();
-      if (apiKey) {
-        const base64 = await imageToBase64(imageUri);
-        const result = await extractWithVision(base64, apiKey);
-        if (result) return result;
+  try {
+    const { getModelKeyStatus } = await import('../ai/provider');
+    const status = await getModelKeyStatus();
+    if (status.remote && status.keyPresent) {
+      const base64 = await imageToBase64(imageUri);
+      if (status.model.startsWith('claude-')) {
+        // Use Claude vision when a Claude model is selected (never silently use gpt).
+        const { promptClaudeVision } = await import('../ai/claude');
+        const out = await promptClaudeVision(RECEIPT_PROMPT, base64, /\.png$/i.test(imageUri) ? 'image/png' : 'image/jpeg', status.model);
+        const r = parseReceiptJson(out);
+        if (r) return r;
+      } else {
+        const apiKey = await getRemoteOpenAIKey();
+        if (apiKey) { const r = await extractWithVision(base64, apiKey); if (r) return r; }
       }
-    } catch { /* fall through */ }
-  }
+    }
+  } catch { /* fall through to on-device patterns */ }
   return extractWithPatterns(imageUri);
 }
 

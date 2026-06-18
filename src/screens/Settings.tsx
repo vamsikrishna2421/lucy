@@ -37,7 +37,7 @@ interface SettingsScreenProps {
 type SettingsPanel = 'intelligence' | 'remote' | 'background' | 'organization' | 'queue' | 'privacy' | 'profile' | 'connectors' | null;
 
 const emptyQueue: CaptureQueueSummary = { queued: 0, processing: 0, retrying: 0, complete: 0, archived: 0 };
-const emptyRemote: RemoteAccessState = { enabled: false, hasKey: false, usingDevelopmentKey: false, modelName: 'gpt-5.4-nano' };
+const emptyRemote: RemoteAccessState = { enabled: false, hasKey: false, usingDevelopmentKey: false, modelName: 'claude-sonnet-4-6' };
 
 interface ModelOption { id: string; label: string; desc: string; provider: 'openai' | 'anthropic'; }
 const OPENAI_MODELS: ModelOption[] = [

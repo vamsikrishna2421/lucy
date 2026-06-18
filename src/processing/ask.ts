@@ -73,6 +73,7 @@ export interface LucyAnswer {
   citedSources?: CitedSource[];
   expenses?: ExpenseRow[];
   expenseTotal?: number;
+  needsApiKey?: boolean; // selected model's key is missing — UI should surface an "add your key" popup
   spendingCategories?: LucySpendingCategory[];
   llmResponse?: string;
   /** When LUCY proposes concrete task reorganizations the user can approve + apply. */
@@ -558,6 +559,16 @@ export async function askLucy(
       return { supported: true, answerKind: 'llm', title: '', message: flag.message, tasks: [], deadlines: [], recordedSignal: '', llmResponse: flag.message };
     }
   } catch { /* safety check is best-effort but should never throw */ }
+
+  // Interactive AI needs the SELECTED model's key. If it's a remote model with no key, tell the user
+  // to add it (actionable popup) — never silently fall back to a different model or on-device.
+  try {
+    const { getModelKeyStatus, modelKeyMissingMessage } = await import('../ai/provider');
+    const status = await getModelKeyStatus();
+    if (status.remote && !status.keyPresent) {
+      return { supported: true, answerKind: 'llm', title: 'Add your API key', message: modelKeyMissingMessage(status), tasks: [], deadlines: [], recordedSignal: '', llmResponse: modelKeyMissingMessage(status), needsApiKey: true };
+    }
+  } catch { /* if the check fails, continue normally */ }
 
   // Semantic tool router (dark-launched behind `semantic_router_enabled`, default OFF). Safety
   // red-flag stays ABOVE this. When the flag is on, route via the tool registry; on any miss/failure

@@ -333,12 +333,13 @@ export function ScheduleTab() {
       {HOURS.map((h) => <View key={h} style={[styles.hourLine, { top: (h * 60 - G_START) * PXM }]} />)}
       {dayItems(k).map((it, i) => {
         const top = Math.max(0, (localMin(it.start) - G_START) * PXM);
-        const ht = Math.max(18, ((it.end - it.start) / 60000) * PXM);
-        const c = it.habit ? '#8a8a8a' : it.device ? DEVICE_COLOR : catColor(it.title, describeResources(it.resources));
+        const ht = Math.max(20, ((it.end - it.start) / 60000) * PXM);
+        const c = it.habit ? LUCY_COLORS.textSubtle : it.device ? DEVICE_COLOR : catColor(it.title, describeResources(it.resources));
+        const tall = ht > 30;
         return (
-          <TouchableOpacity key={i} activeOpacity={0.82} onPress={() => onBlockPress(it)} style={[styles.gridEvent, { top, height: ht, backgroundColor: `${c}28`, borderLeftColor: c }, it.habit && styles.gridHabit]}>
-            <Text numberOfLines={1} style={styles.gridEventTitle}>{it.habit ? '✓ ' : it.device ? '📅 ' : ''}{it.title}</Text>
-            {ht > 28 ? <Text style={styles.gridEventTime}>{clock(it.start)}</Text> : null}
+          <TouchableOpacity key={i} activeOpacity={0.82} onPress={() => onBlockPress(it)} style={[styles.gridEvent, { top, height: ht, backgroundColor: `${c}1F`, borderColor: `${c}3A`, borderLeftColor: c }, it.habit && styles.gridHabit]}>
+            <Text numberOfLines={tall ? 2 : 1} style={[styles.gridEventTitle, { color: it.habit ? LUCY_COLORS.textMuted : LUCY_COLORS.textDark }]}>{it.habit ? '✓ ' : it.device ? '📅 ' : ''}{it.title}</Text>
+            {tall ? <Text style={styles.gridEventTime}>{clock(it.start)}</Text> : null}
           </TouchableOpacity>
         );
       })}
@@ -352,7 +353,11 @@ export function ScheduleTab() {
   );
   const HourLabels = () => (
     <View style={[styles.hourLabels, { height: G_H }]}>
-      {HOURS.map((h) => <Text key={h} style={[styles.hourLabel, { top: (h * 60 - G_START) * PXM - 6 }]}>{(h % 12) || 12}{h < 12 ? 'a' : 'p'}</Text>)}
+      {HOURS.map((h) => (
+        <Text key={h} style={[styles.hourLabel, { top: (h * 60 - G_START) * PXM - 6 }, h === new Date(nowMs).getHours() && dayKey(ref) === today && styles.hourLabelNow]}>
+          {(h % 12) || 12}{h < 12 ? ' AM' : ' PM'}
+        </Text>
+      ))}
     </View>
   );
 
@@ -422,7 +427,13 @@ export function ScheduleTab() {
     }
     const ds = [0, 1, 2, 3, 4, 5, 6].map((i) => today + i * 86400000);
     const any = ds.some((k) => dayItems(k).length);
-    if (!any) return <Text style={styles.emptyText}>Your schedule is open. Ask Lucy to place a task when you are ready.</Text>;
+    if (!any) return (
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyEmoji}>🌤️</Text>
+        <Text style={styles.emptyTitle}>The week ahead is clear</Text>
+        <Text style={styles.emptyBody}>Nothing scheduled for the next 7 days. Open “Plan with Lucy” below to place a task or auto-plan your day.</Text>
+      </View>
+    );
     return (
       <>
         {ds.map((k) => {
@@ -501,7 +512,7 @@ export function ScheduleTab() {
           <Text style={styles.headTitle} numberOfLines={1}>{nextBlock ? `Next: ${nextBlock.title}` : todayCount ? 'Your day has shape.' : 'Your day is open.'}</Text>
           <Text style={styles.headSub} numberOfLines={1}>{nextBlock ? `${dayLabel(nextBlock.start)} at ${clock(nextBlock.start)} · ${(focusMinutes / 60).toFixed(1)}h focus` : 'Nothing pressing right now.'}</Text>
         </View>
-        <Text style={styles.heroMeta}>{conflicts.length ? `${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}` : 'Conflict-free'}</Text>
+        <Text style={[styles.heroMeta, conflicts.length ? { color: LUCY_COLORS.error, borderColor: `${LUCY_COLORS.error}55`, backgroundColor: `${LUCY_COLORS.error}14` } : { color: LUCY_COLORS.success, borderColor: `${LUCY_COLORS.success}44`, backgroundColor: `${LUCY_COLORS.success}12` }]}>{conflicts.length ? `${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}` : 'Conflict-free'}</Text>
       </View>
 
       {calPerm === false ? (
@@ -775,7 +786,7 @@ const styles = StyleSheet.create({
   hero: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, borderRadius: 26, padding: 18, marginBottom: 12, shadowColor: LUCY_COLORS.primary, shadowOpacity: 0.10, shadowRadius: 18, elevation: 4 },
   heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   kicker: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
-  heroMeta: { color: LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '800', backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  heroMeta: { color: LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '800', backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6, overflow: 'hidden' },
   heroTitle: { color: LUCY_COLORS.textDark, fontSize: 25, fontWeight: '900', lineHeight: 31 },
   heroSub: { color: LUCY_COLORS.textMuted, fontSize: 13.5, lineHeight: 20, marginTop: 7 },
   heroStats: { flexDirection: 'row', gap: 8, marginTop: 16 },
@@ -789,16 +800,16 @@ const styles = StyleSheet.create({
   headTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '900', marginTop: 3, lineHeight: 25 },
   headSub: { color: LUCY_COLORS.textMuted, fontSize: 12.5, marginTop: 3 },
   navGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  weekStrip: { flexDirection: 'row', marginBottom: 12 },
-  wsDay: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 4 },
-  wsDow: { color: LUCY_COLORS.textSubtle, fontSize: 10.5, fontWeight: '800' },
-  wsDowSel: { color: LUCY_COLORS.primary },
-  wsNum: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  wsNumToday: { backgroundColor: LUCY_COLORS.primary },
-  wsNumSel: { borderWidth: 1.5, borderColor: LUCY_COLORS.primary },
-  wsNumT: { color: LUCY_COLORS.textDark, fontSize: 13.5, fontWeight: '800' },
+  weekStrip: { flexDirection: 'row', marginBottom: 14, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.borderSoft, borderRadius: 16, paddingVertical: 8, paddingHorizontal: 2 },
+  wsDay: { flex: 1, alignItems: 'center', gap: 5, paddingVertical: 2 },
+  wsDow: { color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
+  wsDowSel: { color: LUCY_COLORS.primaryGlow },
+  wsNum: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  wsNumToday: { backgroundColor: LUCY_COLORS.primary, shadowColor: LUCY_COLORS.primary, shadowOpacity: 0.45, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
+  wsNumSel: { borderWidth: 1.5, borderColor: LUCY_COLORS.primaryLine, backgroundColor: LUCY_COLORS.primaryMist },
+  wsNumT: { color: LUCY_COLORS.textMuted, fontSize: 14, fontWeight: '800' },
   wsNumTOn: { color: '#fff' },
-  wsDots: { flexDirection: 'row', gap: 2, height: 5 },
+  wsDots: { flexDirection: 'row', gap: 3, height: 5, alignItems: 'center' },
   wsDot: { width: 4, height: 4, borderRadius: 2 },
   planToggle: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 18, padding: 15, marginTop: 12 },
   planToggleT: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '900' },
@@ -814,8 +825,8 @@ const styles = StyleSheet.create({
   syncedPill: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12, paddingHorizontal: 5 },
   syncedDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#5B8CFF' },
   syncedText: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '700' },
-  nowLine: { position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: '#FF4D4D' },
-  nowDot: { position: 'absolute', left: -4, top: -3, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF4D4D' },
+  nowLine: { position: 'absolute', left: 0, right: 0, height: 1.5, backgroundColor: '#FF4D4D', opacity: 0.92 },
+  nowDot: { position: 'absolute', left: -4, top: -3.5, width: 9, height: 9, borderRadius: 5, backgroundColor: '#FF4D4D', borderWidth: 2, borderColor: LUCY_COLORS.surfaceRaised, shadowColor: '#FF4D4D', shadowOpacity: 0.6, shadowRadius: 4, shadowOffset: { width: 0, height: 0 } },
   plannerCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 22, padding: 16, marginBottom: 12 },
   panelEyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 10.5, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   panelTitle: { color: LUCY_COLORS.textDark, fontSize: 18, fontWeight: '900', marginTop: 4, marginBottom: 12 },
@@ -833,59 +844,64 @@ const styles = StyleSheet.create({
   rowT: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 14, lineHeight: 19 },
   rowD: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 3, lineHeight: 17 },
   emptyText: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 19, marginTop: 10 },
+  emptyState: { alignItems: 'center', paddingVertical: 34, paddingHorizontal: 18 },
+  emptyEmoji: { fontSize: 34, marginBottom: 12, opacity: 0.9 },
+  emptyTitle: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '900', textAlign: 'center' },
+  emptyBody: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 6, maxWidth: 300 },
   taskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: LUCY_COLORS.border },
   slotRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10, backgroundColor: LUCY_COLORS.surface, borderRadius: 15, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 12 },
   proposalWrap: { marginTop: 12 },
   conflictCard: { borderColor: LUCY_COLORS.error },
   conflictRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 9 },
-  timetableCard: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 24, padding: 15 },
-  timetableHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
+  timetableCard: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 24, padding: 16, shadowColor: LUCY_COLORS.primary, shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  timetableHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 },
   section: { color: LUCY_COLORS.textDark, fontWeight: '900', fontSize: 20, marginTop: 3 },
-  rangeL: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '700', textAlign: 'right', flexShrink: 1 },
-  viewRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, flexWrap: 'wrap' },
-  viewChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border },
-  viewChipOn: { backgroundColor: LUCY_COLORS.primary, borderColor: LUCY_COLORS.primary },
+  rangeL: { color: LUCY_COLORS.textDark, fontSize: 15.5, fontWeight: '900', flexShrink: 1, letterSpacing: 0.2 },
+  viewRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 999, padding: 4 },
+  viewChip: { flex: 1, alignItems: 'center', paddingHorizontal: 8, paddingVertical: 8, borderRadius: 999 },
+  viewChipOn: { backgroundColor: LUCY_COLORS.primary, shadowColor: LUCY_COLORS.primary, shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 3 },
   viewChipT: { color: LUCY_COLORS.textMuted, fontSize: 12.5, fontWeight: '800' },
   viewChipTOn: { color: '#fff' },
-  navBtn: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surfaceRaised },
-  navT: { color: LUCY_COLORS.textDark, fontSize: 12.5, fontWeight: '800' },
-  agendaDay: { marginBottom: 14 },
-  dayH: { color: LUCY_COLORS.primaryGlow, fontWeight: '900', marginBottom: 8, fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase' },
-  block: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderLeftWidth: 4, borderRadius: 16, padding: 12, marginBottom: 9 },
-  blockConflict: { borderColor: LUCY_COLORS.error },
-  blockHabit: { opacity: 0.68, borderStyle: 'dashed' },
-  blockTimeWrap: { width: 76 },
-  blockTime: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '900' },
+  navBtn: { minWidth: 38, alignItems: 'center', paddingHorizontal: 11, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surfaceRaised },
+  navT: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '800' },
+  agendaDay: { marginBottom: 18 },
+  dayH: { color: LUCY_COLORS.primaryGlow, fontWeight: '900', marginBottom: 10, fontSize: 11.5, letterSpacing: 1, textTransform: 'uppercase' },
+  block: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderLeftWidth: 3, borderRadius: 16, paddingVertical: 13, paddingHorizontal: 14, marginBottom: 8 },
+  blockConflict: { borderColor: `${LUCY_COLORS.error}88`, borderLeftColor: LUCY_COLORS.error },
+  blockHabit: { opacity: 0.72, borderStyle: 'dashed', backgroundColor: LUCY_COLORS.surface },
+  blockTimeWrap: { width: 64 },
+  blockTime: { color: LUCY_COLORS.textDark, fontSize: 13.5, fontWeight: '900' },
   blockTimeEnd: { color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '700', marginTop: 2 },
-  blockT: { color: LUCY_COLORS.textDark, fontWeight: '800', fontSize: 14, lineHeight: 20 },
+  blockT: { color: LUCY_COLORS.textDark, fontWeight: '800', fontSize: 14.5, lineHeight: 20 },
   x: { color: LUCY_COLORS.textSubtle, fontSize: 12, fontWeight: '800', paddingHorizontal: 4 },
   approveBtn: { backgroundColor: LUCY_COLORS.primaryMist, borderWidth: 1, borderColor: LUCY_COLORS.primary, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
   approveT: { color: LUCY_COLORS.primary, fontSize: 13, fontWeight: '900' },
-  gridWrap: { flexDirection: 'row', borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 18, padding: 10, backgroundColor: LUCY_COLORS.surfaceRaised },
-  weekScroll: { borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 18, backgroundColor: LUCY_COLORS.surfaceRaised },
-  weekContent: { padding: 10 },
+  gridWrap: { flexDirection: 'row', borderWidth: 1, borderColor: LUCY_COLORS.borderSoft, borderRadius: 18, paddingTop: 12, paddingBottom: 12, paddingRight: 10, backgroundColor: LUCY_COLORS.background },
+  weekScroll: { borderWidth: 1, borderColor: LUCY_COLORS.borderSoft, borderRadius: 18, backgroundColor: LUCY_COLORS.background },
+  weekContent: { paddingTop: 8, paddingBottom: 12, paddingRight: 10 },
   weekDay: { width: 116 },
-  weekDayText: { textAlign: 'center', fontSize: 11, fontWeight: '800', color: LUCY_COLORS.textMuted, marginBottom: 5 },
+  weekDayText: { textAlign: 'center', fontSize: 11, fontWeight: '800', color: LUCY_COLORS.textSubtle, marginBottom: 8, letterSpacing: 0.3 },
   weekDayTextToday: { color: LUCY_COLORS.primary },
-  dayCol: { position: 'relative', borderLeftWidth: 1, borderLeftColor: LUCY_COLORS.border },
-  hourLabels: { width: 36, position: 'relative' },
-  hourLabel: { position: 'absolute', fontSize: 9.5, color: LUCY_COLORS.textFaint },
-  hourLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: LUCY_COLORS.border, opacity: 0.45 },
-  gridEvent: { position: 'absolute', left: 3, right: 3, borderLeftWidth: 3, borderRadius: 9, padding: 4, overflow: 'hidden' },
-  gridHabit: { opacity: 0.6, borderStyle: 'dashed' },
-  gridEventTitle: { color: LUCY_COLORS.textDark, fontSize: 10.5, fontWeight: '800' },
-  gridEventTime: { color: LUCY_COLORS.textMuted, fontSize: 9.5 },
-  monthWrap: { gap: 6 },
-  monthDays: { flexDirection: 'row' },
-  monthDayText: { flex: 1, textAlign: 'center', color: LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '800' },
+  dayCol: { position: 'relative', borderLeftWidth: 1, borderLeftColor: LUCY_COLORS.borderSoft },
+  hourLabels: { width: 42, position: 'relative' },
+  hourLabel: { position: 'absolute', right: 8, fontSize: 9.5, fontWeight: '700', letterSpacing: 0.3, color: LUCY_COLORS.textFaint },
+  hourLabelNow: { color: '#FF4D4D', fontWeight: '900' },
+  hourLine: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: LUCY_COLORS.border, opacity: 0.5 },
+  gridEvent: { position: 'absolute', left: 4, right: 4, borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 4, overflow: 'hidden' },
+  gridHabit: { opacity: 0.7, borderStyle: 'dashed' },
+  gridEventTitle: { color: LUCY_COLORS.textDark, fontSize: 11, fontWeight: '800', lineHeight: 14 },
+  gridEventTime: { color: LUCY_COLORS.textMuted, fontSize: 9.5, fontWeight: '700', marginTop: 1 },
+  monthWrap: { gap: 8 },
+  monthDays: { flexDirection: 'row', marginBottom: 2 },
+  monthDayText: { flex: 1, textAlign: 'center', color: LUCY_COLORS.textSubtle, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.5 },
   monthGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   monthCellBlank: { width: `${100 / 7}%`, aspectRatio: 1 },
   monthCellOuter: { width: `${100 / 7}%`, aspectRatio: 1, padding: 3 },
-  monthCell: { flex: 1, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 11, padding: 5, alignItems: 'center', backgroundColor: LUCY_COLORS.surfaceRaised },
-  monthCellToday: { borderColor: LUCY_COLORS.primary, backgroundColor: LUCY_COLORS.primaryMist },
-  monthCellDate: { fontSize: 12, fontWeight: '700', color: LUCY_COLORS.textDark },
-  monthCellDateToday: { color: LUCY_COLORS.primary },
-  monthCellCount: { marginTop: 3, backgroundColor: LUCY_COLORS.primary, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1, color: '#fff', fontSize: 10, fontWeight: '900', overflow: 'hidden' },
+  monthCell: { flex: 1, borderWidth: 1, borderColor: LUCY_COLORS.borderSoft, borderRadius: 12, paddingTop: 6, alignItems: 'center', backgroundColor: LUCY_COLORS.surfaceRaised },
+  monthCellToday: { borderColor: LUCY_COLORS.primaryLine, backgroundColor: LUCY_COLORS.primaryMist },
+  monthCellDate: { fontSize: 12.5, fontWeight: '700', color: LUCY_COLORS.textMuted },
+  monthCellDateToday: { color: LUCY_COLORS.primaryGlow, fontWeight: '900' },
+  monthCellCount: { marginTop: 4, backgroundColor: LUCY_COLORS.primary, borderRadius: 999, minWidth: 18, textAlign: 'center', paddingHorizontal: 5, paddingVertical: 1, color: '#fff', fontSize: 10, fontWeight: '900', overflow: 'hidden' },
   busy: { paddingVertical: 16 },
   cardBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.62)', justifyContent: 'flex-end' },
   // ── Shared sheet family (event detail · habit suggestion · overlap resolver) ──

@@ -3,7 +3,7 @@
  * JSON parsing + fallbacks, and merge prose assembly. Run: npx tsx tests/toolRouter.ts
  */
 import { describeForSelector } from '../src/processing/tools/describe';
-import { parseSelection, buildSelectorPrompt } from '../src/processing/tools/selector';
+import { parseSelection, buildSelectorPrompt, fastRoute } from '../src/processing/tools/selector';
 import { assembleProse } from '../src/processing/tools/merge';
 import type { LucyTool } from '../src/processing/tools/types';
 
@@ -45,6 +45,15 @@ ok('parses JSON embedded in prose', parseSelection('Sure! {"tools":[{"name":"mem
   const multi = parseSelection('{"tools":[{"name":"spending"},{"name":"memory"}]}', 'what did I spend on the trip', all);
   ok('multi-tool compose', multi.tools.length === 2 && multi.tools[0].name === 'spending' && multi.tools[1].name === 'memory');
 }
+
+// fastRoute — single clear domain skips the LLM selector; multi/none defers to it
+ok('fastRoute spending', fastRoute('how much did I spend on food last week') === 'spending');
+ok('fastRoute tasks', fastRoute('what are my pending tasks') === 'tasks');
+ok('fastRoute health', fastRoute('how many calories left today') === 'health');
+ok('fastRoute reminders', fastRoute('what reminders do I have') === 'reminders');
+ok('fastRoute people', fastRoute('who is Monisha') === 'people');
+ok('fastRoute multi-domain → null (LLM decides)', fastRoute('how am I doing on health and money') === null);
+ok('fastRoute vague → null', fastRoute('what should I think about') === null);
 
 // assembleProse
 ok('assembleProse joins fragments', assembleProse([

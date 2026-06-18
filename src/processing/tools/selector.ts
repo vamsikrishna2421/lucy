@@ -31,8 +31,27 @@ export function parseSelection(raw: string, question: string, knownNames: string
   }
 }
 
+// Deterministic fast-route: when a question CLEARLY maps to exactly ONE domain, skip the LLM selector
+// call entirely (halves latency/cost for the common case). Returns null when 0 or 2+ domains match —
+// then the LLM selector decides (and can compose multiple tools, e.g. health + spending). Pure.
+const DOMAIN_PATTERNS: Array<{ tool: string; re: RegExp }> = [
+  { tool: 'spending', re: /\b(spend|spent|spending|paid|payment|payments|expense|expenses|how much.*(cost|spend)|budget)\b/i },
+  { tool: 'tasks', re: /\b(tasks?|to-?dos?|to do|pending|action items?|what.*(do i need|should i do))\b/i },
+  { tool: 'health', re: /\b(calorie|calories|kcal|weight|diet|nutrition|protein|carbs?|macro|steps?|sleep|workout|exercise|medication|medicine|meds?|dose|dosage|pill)\b/i },
+  { tool: 'reminders', re: /\b(reminders?|remind me of|what.*remind)\b/i },
+  { tool: 'people', re: /\b(who is|who'?s|tell me about|who have i|relationship with)\b/i },
+  { tool: 'knowledge', re: /\b(brain map|knowledge graph|how does .+ relate|what connects|keeps coming up|recurring (theme|topic))\b/i },
+];
+
+export function fastRoute(question: string): string | null {
+  const matched = DOMAIN_PATTERNS.filter((d) => d.re.test(question)).map((d) => d.tool);
+  return matched.length === 1 ? matched[0] : null; // 0 or 2+ → let the LLM selector decide / compose
+}
+
 export async function selectTools(ctx: ToolContext, question: string): Promise<SelectionResult> {
   void ctx;
+  const fast = fastRoute(question);
+  if (fast) return { tools: [{ name: fast, args: { question } }], reason: `fast-route: ${fast}` };
   const { TOOLS } = await import('./registry');
   try {
     const { resolveRemoteAvailability } = await import('../../ai/provider');

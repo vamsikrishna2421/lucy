@@ -86,6 +86,9 @@ export async function scheduleNag(input: NagInput): Promise<string | null> {
           data: { ...(input.data ?? {}), nagGroup: input.key },
           sound: true,
           vibrate: ALARM_VIBRATION,
+          // Collapse the whole burst into ONE grouped thread per event so a re-ringing alarm doesn't
+          // paint 14 separate rows in the tray (Android groups via the alarm channel).
+          threadIdentifier: input.key,
           // iOS: break through Focus/Do-Not-Disturb. 'timeSensitive' is honored once the Time-Sensitive
           // entitlement ships in a build; harmless (falls back to a normal alert) until then.
           interruptionLevel: 'timeSensitive',

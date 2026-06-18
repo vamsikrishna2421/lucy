@@ -31,6 +31,29 @@ async function nagForBlock(blockId: number, title: string, startMs: number): Pro
 async function cancelBlockNag(blockId: number): Promise<void> {
   try { const { cancelNag } = await import('../processing/persistentReminders'); await cancelNag(`blk-${blockId}`); } catch { /* ignore */ }
 }
+
+/**
+ * Remove exact-duplicate committed blocks — same title (case-insensitive) at the same start+end —
+ * keeping the earliest (lowest id) and cancelling the stale alarm bursts of the removed copies.
+ * Root cleanup for the "Gym session ×3 at one time" pileup that tripled the nag notifications.
+ * Returns the number of duplicate blocks removed. Wired into POST /api/cleanup.
+ */
+export async function dedupScheduledBlocks(db: SQLiteDatabase): Promise<number> {
+  const rows = await db.getAllAsync<{ id: number; title: string; start_at: number; end_at: number }>(
+    "SELECT id, title, start_at, end_at FROM scheduled_blocks WHERE status='committed' ORDER BY id ASC",
+  );
+  const seen = new Set<string>();
+  let removed = 0;
+  for (const r of rows) {
+    const key = `${(r.title || '').toLowerCase().trim()}|${r.start_at}|${r.end_at}`;
+    if (seen.has(key)) {
+      await cancelBlockNag(r.id);
+      await deleteScheduledBlock(db, r.id);
+      removed++;
+    } else { seen.add(key); }
+  }
+  return removed;
+}
 /** Re-point a block's nag burst at its current start (after an edit changes the time/title). */
 export async function rescheduleBlockNag(db: SQLiteDatabase, id: number): Promise<void> {
   const row = await getScheduledBlock(db, id);
@@ -152,6 +175,15 @@ export async function commitBlock(db: SQLiteDatabase, input: CommitInput, opts?:
     if (mine) return { ok: false, conflict: mine };
   }
 
+  // Dedup: never stack a second identical block (same title, case-insensitive, at the exact same slot).
+  // This is the root of the "Gym session ×3 at the same time" pileup + its tripled alarm bursts —
+  // commitBlock previously had no dedup at all, and callers (calendar UI, Ask, autoplan) could repeat.
+  const existing = await db.getFirstAsync<{ id: number }>(
+    "SELECT id FROM scheduled_blocks WHERE status='committed' AND lower(title)=lower(?) AND start_at=? AND end_at=? ORDER BY id LIMIT 1",
+    input.title, input.startMs, input.endMs,
+  );
+  if (existing) { await nagForBlock(existing.id, input.title, input.startMs); return { ok: true, blockId: existing.id }; }
+
   const blockId = await createScheduledBlock(db, {
     todoId: input.todoId ?? null, title: input.title, startMs: input.startMs, endMs: input.endMs,
     resources, energy: input.energy ?? null, location: resources.location ?? null, status: 'committed',
@@ -184,7 +216,7 @@ export async function commitSeries(
     const s = day + todStart; const e = s + dur;
     if (s < Date.now() - 60_000) continue;
     const dupe = await db.getFirstAsync<{ id: number }>(
-      "SELECT id FROM scheduled_blocks WHERE status='committed' AND title=? AND start_at<? AND end_at>?", input.title, e, s,
+      "SELECT id FROM scheduled_blocks WHERE status='committed' AND lower(title)=lower(?) AND start_at<? AND end_at>?", input.title, e, s,
     );
     if (dupe) continue;
     const id = await createScheduledBlock(db, { todoId: input.todoId ?? null, title: input.title, startMs: s, endMs: e, resources, energy: input.energy ?? null, location: resources.location ?? null, status: 'committed' });

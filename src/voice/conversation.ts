@@ -36,6 +36,20 @@ class ConversationManager {
   private subs: Array<{ remove(): void }> = [];
   private listeners = new Set<(s: ConvoSnapshot) => void>();
   private endTimer: ReturnType<typeof setTimeout> | null = null;
+  private convId: number | null = null; // persisted voice-conversation row (for review later)
+
+  /** Fire-and-forget persist of one turn so conversations are reviewable in-app + on the web. */
+  private logTurn(role: 'user' | 'lucy', text: string): void {
+    const id = this.convId;
+    if (!id || !text?.trim()) return;
+    void (async () => {
+      try {
+        const { getDatabase } = await import('../db');
+        const { addVoiceTurn } = await import('../db/voiceConversations');
+        await addVoiceTurn(await getDatabase(), id, role, text);
+      } catch { /* persistence is non-critical */ }
+    })();
+  }
 
   subscribe(fn: (s: ConvoSnapshot) => void): () => void {
     this.listeners.add(fn);
@@ -54,6 +68,15 @@ class ConversationManager {
     this.onNavigate = opts?.onNavigate ?? null;
     this.turns = []; this.partial = ''; this.error = null;
     this.active = true;
+    // Persist this conversation so it can be reviewed later (non-blocking).
+    this.convId = null;
+    void (async () => {
+      try {
+        const { getDatabase } = await import('../db');
+        const { startVoiceConversation } = await import('../db/voiceConversations');
+        this.convId = await startVoiceConversation(await getDatabase(), opts?.context ?? null);
+      } catch { /* non-critical */ }
+    })();
     acquireMic('conversation');
     this.set('thinking'); // brief "warming up" before the first listen
 
@@ -149,6 +172,7 @@ class ConversationManager {
     // the report, schedule a break" keeps the conversation going instead of hanging up mid-command.
     if (END_RE.test(text) && text.trim().split(/\s+/).length <= 5) {
       this.turns.push({ role: 'user', text });
+      this.logTurn('user', text);
       this.emit();
       const isThanks = /\b(thank you|thanks)\b/i.test(text);
       await this.speakAndEnd(isThanks ? "You're welcome — talk soon." : 'Okay — talk soon.');
@@ -160,6 +184,7 @@ class ConversationManager {
     // multi-step flow like a live demo walkthrough.
     const history = this.turns.map((t) => ({ role: t.role, content: t.text }));
     this.turns.push({ role: 'user', text });
+    this.logTurn('user', text);
     this.set('thinking');
     let reply = '';
     let navigate: string | null = null;
@@ -175,6 +200,7 @@ class ConversationManager {
     }
     if (!this.active) return;
     this.turns.push({ role: 'lucy', text: reply });
+    this.logTurn('lucy', reply);
     if (navigate && this.onNavigate) { try { this.onNavigate(navigate); } catch { /* non-critical */ } }
     this.set('speaking');
     await speak(reply);
@@ -197,6 +223,7 @@ class ConversationManager {
 
   private async speakAndEnd(text: string): Promise<void> {
     this.turns.push({ role: 'lucy', text });
+    this.logTurn('lucy', text);
     this.set('speaking');
     try { ExpoSpeechRecognitionModule.stop(); } catch { /* ignore */ }
     await speak(text);
@@ -211,6 +238,17 @@ class ConversationManager {
   async end(): Promise<void> {
     if (this.endTimer) { clearTimeout(this.endTimer); this.endTimer = null; }
     this.active = false;
+    // Finalize the persisted conversation (marks ended_at; drops it if nothing was said).
+    const finishId = this.convId; this.convId = null;
+    if (finishId) {
+      void (async () => {
+        try {
+          const { getDatabase } = await import('../db');
+          const { endVoiceConversation } = await import('../db/voiceConversations');
+          await endVoiceConversation(await getDatabase(), finishId);
+        } catch { /* non-critical */ }
+      })();
+    }
     try { ExpoSpeechRecognitionModule.abort(); } catch { /* ignore */ }
     this.clearListeners();
     try {

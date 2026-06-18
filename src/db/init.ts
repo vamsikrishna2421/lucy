@@ -721,6 +721,20 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_food_log_date ON food_log(date_key);
   `);
 
+  // Voice conversations ("Hey Lucy" / tap-the-face) — persisted so they can be reviewed in-app + web.
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS voice_conversations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      started_at DATETIME DEFAULT CURRENT_TIMESTAMP, ended_at DATETIME, screen_context TEXT
+    );
+    CREATE TABLE IF NOT EXISTS voice_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversation_id INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_voice_messages_conv ON voice_messages(conversation_id, id);
+  `);
+
   // Circuit breaker: if a device-calendar read was in-flight when the app last died, expo-calendar
   // likely crashed natively on a bad event. Auto-pause calendar sync so the app stops crash-looping
   // (the user can resume it from the calendar). Self-healing — runs once per startup.

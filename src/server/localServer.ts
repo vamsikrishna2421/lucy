@@ -139,6 +139,11 @@ async function route(req: ParsedRequest): Promise<string> {
       const [items, diag] = await Promise.all([listNotifLog(db, 'all', 200), getNotifDiagnostics(db)]);
       return json(200, { ok: true, diag, items });
     }
+    // Voice conversations (Hey Lucy / tap-the-face) — review past chats.
+    if (req.method === 'GET' && req.path === '/api/conversations') {
+      const { listVoiceConversations } = await import('../db/voiceConversations');
+      return json(200, { ok: true, conversations: await listVoiceConversations(db, 30) });
+    }
     // ── Health / nutrition ───────────────────────────────────────────────────
     if (req.method === 'GET' && req.path === '/api/health') {
       const { getHealthSummary } = await import('../processing/healthSummary');

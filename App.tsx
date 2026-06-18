@@ -36,6 +36,7 @@ import { LucyWrapped } from './src/components/LucyWrapped';
 import { ConnectorsScreen } from './src/screens/Connectors';
 import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
 import ConversationModal from './src/components/ConversationModal';
+import { AlarmOverlay } from './src/components/AlarmOverlay';
 import { wakeWord, type WakeWordStatus } from './src/voice/wakeWord';
 import { conversation, type ConvoState } from './src/voice/conversation';
 
@@ -516,6 +517,12 @@ export default function App() {
       const req = response.notification.request;
       const data = req.content.data as Record<string, unknown> | undefined;
       // Tapping any buzz of a persistent reminder/event silences the rest of its burst.
+      // Tapping a nag opens the in-app alarm so the user can Snooze/Dismiss properly (it also
+      // silences the remaining burst). For non-alarm notifications, open the detail as before.
+      const content = req.content;
+      void import('./src/audio/alarmManager')
+        .then(({ ringFromNotificationData }) => ringFromNotificationData(data, content.title ?? '', content.body ?? ''))
+        .catch(() => {});
       void import('./src/processing/persistentReminders')
         .then(({ acknowledgeNagFromResponse }) => acknowledgeNagFromResponse(data))
         .catch(() => {});
@@ -525,12 +532,17 @@ export default function App() {
         .then((db) => getTotalUnreadCount(db))
         .then(setUnreadNotifCount)
         .catch(() => {});
-      if (data?.kind && typeof data.kind === 'string') {
+      if (data?.kind && typeof data.kind === 'string' && typeof data.nagGroup !== 'string') {
         setNotificationDetail(data as unknown as NotificationDetailPayload);
       }
     });
-    // Notification fired while app is foregrounded → log it to the bell immediately.
+    // Notification fired while app is foregrounded → log it + raise the in-app alarm if it's a nag.
     const receivedSub = Notifications.addNotificationReceivedListener((notification) => {
+      const content = notification.request.content;
+      const data = content.data as Record<string, unknown> | undefined;
+      void import('./src/audio/alarmManager')
+        .then(({ ringFromNotificationData }) => ringFromNotificationData(data, content.title ?? '', content.body ?? ''))
+        .catch(() => {});
       void import('./src/processing/notifications')
         .then(({ logDeliveredNotification }) => logDeliveredNotification(notification.request))
         .then(() => getDatabase())
@@ -938,6 +950,7 @@ export default function App() {
         onDone={() => { setMeetingRecording(false); setMeetingVisible(false); }}
       />
       <LucyWrapped visible={wrappedVisible} onClose={() => setWrappedVisible(false)} />
+      <AlarmOverlay />
       <NotificationCenter
         visible={notifCenterVisible}
         onCountChange={setUnreadNotifCount}

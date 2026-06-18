@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import { ShieldedText, type ProtectedValueLite } from './ShieldedText';
@@ -11,6 +11,7 @@ interface CaptureDetail {
   extracted_title: string | null;
   structured_text: string | null;
   protected_values: string | null;
+  source_image_path: string | null;
 }
 
 /**
@@ -25,6 +26,7 @@ export function MemoryDetailSheet({ captureId, visible, onClose }: { captureId: 
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [asking, setAsking] = useState(false);
+  const [viewer, setViewer] = useState(false);
 
   useEffect(() => {
     if (!visible || captureId == null) return;
@@ -33,7 +35,7 @@ export function MemoryDetailSheet({ captureId, visible, onClose }: { captureId: 
       try {
         const db = await getDatabase();
         const row = await db.getFirstAsync<CaptureDetail>(
-          'SELECT id, created_at, raw_transcript, extracted_title, structured_text, protected_values FROM captures WHERE id = ?',
+          'SELECT id, created_at, raw_transcript, extracted_title, structured_text, protected_values, source_image_path FROM captures WHERE id = ?',
           captureId,
         );
         setDetail(row ?? null);
@@ -101,6 +103,12 @@ export function MemoryDetailSheet({ captureId, visible, onClose }: { captureId: 
                       </View>
                     ) : null}
 
+                    {detail.source_image_path ? (
+                      <TouchableOpacity style={s.viewOriginalBtn} onPress={() => setViewer(true)}>
+                        <Text style={s.viewOriginalText}>🖼  View original photo</Text>
+                      </TouchableOpacity>
+                    ) : null}
+
                     <Text style={s.sectionLabel}>SUMMARY</Text>
                     <ShieldedText style={s.body} text={body} protectedValues={protectedValues} />
 
@@ -149,6 +157,13 @@ export function MemoryDetailSheet({ captureId, visible, onClose }: { captureId: 
           )}
         </View>
       </View>
+      {/* Original source photo viewer */}
+      <Modal visible={viewer} transparent animationType="fade" onRequestClose={() => setViewer(false)}>
+        <Pressable style={s.viewerBackdrop} onPress={() => setViewer(false)}>
+          {detail?.source_image_path ? <Image source={{ uri: detail.source_image_path }} style={s.viewerImg} resizeMode="contain" /> : null}
+          <Text style={s.viewerHint}>Tap to close · original photo</Text>
+        </Pressable>
+      </Modal>
     </Modal>
   );
 }
@@ -163,6 +178,11 @@ const s = StyleSheet.create({
   date: { color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 4 },
   sectionLabel: { color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginTop: 20, marginBottom: 8 },
   body: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21 },
+  viewOriginalBtn: { marginTop: 14, alignSelf: 'flex-start', backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 14, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  viewOriginalText: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 13 },
+  viewerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', alignItems: 'center', justifyContent: 'center' },
+  viewerImg: { width: '100%', height: '82%' },
+  viewerHint: { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 14 },
   shieldNote: { backgroundColor: 'rgba(52,199,89,0.10)', borderRadius: 10, padding: 10, marginTop: 12, borderWidth: 1, borderColor: 'rgba(52,199,89,0.28)' },
   shieldNoteText: { color: '#2FBF71', fontSize: 12, fontWeight: '600', lineHeight: 17 },
   muted: { color: LUCY_COLORS.textSubtle, fontSize: 13, fontStyle: 'italic' },

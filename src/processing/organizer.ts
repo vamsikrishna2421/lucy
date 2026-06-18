@@ -250,16 +250,22 @@ export async function organizeMemory(db: SQLiteDatabase, trigger: string): Promi
   );
   if (freshlyConfirmed.length > 0) {
     const entityNames = freshlyConfirmed.map((entity) => entity.name);
-    // Don't notify just because a topic recurs ("you keep coming back to X — I connected the dots"
-    // is noise). Generate ONE genuinely useful, grounded, actionable insight — or stay silent.
-    const line = await actionableEntityInsight(db, entityNames);
-    if (line) {
-      try {
-        await sendGuardianNotification(line, { entityNames, evidenceCount: 3, kind: 'guardian', message: line });
-      } catch {
-        // Non-critical.
+    // Spam guard: if we already surfaced an insight for THIS exact topic (entity set) in the last
+    // 24h, skip — don't regenerate a reworded duplicate (and save the LLM call). Re-derivations of
+    // the same topic overwrite in place via sendGuardianNotification's stable identifier.
+    try {
+      const { guardianTopicIdentifier } = await import('./notifications');
+      const { recentNotifByIdentifierExists } = await import('../db/notificationLog');
+      const id = guardianTopicIdentifier('guardian', entityNames);
+      if (id && await recentNotifByIdentifierExists(db, id, 24 * 60 * 60 * 1000)) {
+        // already have a fresh insight for this topic — stay quiet
+      } else {
+        // Don't notify just because a topic recurs ("you keep coming back to X — I connected the dots"
+        // is noise). Generate ONE genuinely useful, grounded, actionable insight — or stay silent.
+        const line = await actionableEntityInsight(db, entityNames);
+        if (line) await sendGuardianNotification(line, { entityNames, evidenceCount: 3, kind: 'guardian', message: line });
       }
-    }
+    } catch { /* non-critical */ }
   }
 
   // Daily "learns about you" reflection — piggybacks the periodic background pass.

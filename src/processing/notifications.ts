@@ -193,13 +193,23 @@ async function requestNotificationPermission(): Promise<boolean> {
   return requested.granted;
 }
 
+/** Stable per-topic identifier for an entity-set insight, so re-derivations collapse to one row. */
+export function guardianTopicIdentifier(kind: string, names: string[]): string | undefined {
+  const topicKey = (names ?? []).map((n) => String(n).toLowerCase().trim()).filter(Boolean).sort().join('|');
+  return topicKey ? `lucy_${kind}_topic_${stableHash(topicKey)}` : undefined;
+}
+
 export async function sendGuardianNotification(
   message: string,
   extraData?: Record<string, unknown>,
 ): Promise<void> {
   const kind = (extraData?.kind as string | undefined) ?? 'guardian';
+  // Topic-stable identifier: an insight about the SAME entity set OVERWRITES the prior one in place
+  // (upsert) instead of stacking a reworded duplicate — the root of the insight spam.
+  const names = Array.isArray(extraData?.entityNames) ? (extraData!.entityNames as string[]) : [];
+  const identifier = guardianTopicIdentifier(kind, names);
   // Always log to in-app center (Tier 2 = no push interrupt for ambient insights)
-  await logToInApp(kind, 2, 'LUCY', message);
+  await logToInApp(kind, 2, 'LUCY', message, identifier);
   // Only push for urgent types; guardian-class insights stay in-app only
   if (kind === 'pre-meeting' || kind === 'post-meeting') {
     if (!(await requestNotificationPermission())) return;

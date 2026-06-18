@@ -195,6 +195,8 @@ export default function App() {
           await setSetting(db, 'todo_dedup_v1_done', 'true');
         }
         await organizeMemory(db, 'startup');
+        // Collapse any existing duplicate insight notifications (reworded copies of the same topic).
+        try { const { dedupInsightNotifications } = await import('./src/db/notificationLog'); await dedupInsightNotifications(db); } catch { /* non-critical */ }
         initializeVault();
         await initializeNotifications();
         const backgroundPreference = await getSetting(db, BACKGROUND_SETTING);

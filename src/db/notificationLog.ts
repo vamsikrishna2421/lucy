@@ -18,6 +18,42 @@ export interface NotifLogRow {
 
 export type NotifFilter = 'all' | 'urgent' | 'insights' | 'muted';
 
+/** True if a notification with this identifier was created within the window (any read/dismissed
+ *  state). Used to suppress regenerating the SAME topic insight over and over (spam guard). */
+export async function recentNotifByIdentifierExists(db: SQLiteDatabase, identifier: string, withinMs: number): Promise<boolean> {
+  const cutoff = new Date(Date.now() - withinMs).toISOString();
+  const row = await db.getFirstAsync<{ n: number }>(
+    'SELECT COUNT(*) n FROM lucy_notifications WHERE identifier = ? AND created_at >= ?',
+    identifier, cutoff,
+  );
+  return (row?.n ?? 0) > 0;
+}
+
+/** Collapse near-duplicate insight notifications (tier 2) that say essentially the same thing —
+ *  keeps the NEWEST per normalized-topic and deletes the older copies. Clears existing spam where
+ *  the same insight was re-worded across many organize runs (each got a different content hash). */
+export async function dedupInsightNotifications(db: SQLiteDatabase): Promise<number> {
+  const rows = await db.getAllAsync<{ id: number; body: string | null; title: string }>(
+    "SELECT id, body, title FROM lucy_notifications WHERE tier = 2 ORDER BY created_at DESC, id DESC",
+  );
+  const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+  const seen = new Set<string>();
+  const toDelete: number[] = [];
+  for (const r of rows) {
+    const key = norm(r.body || r.title);
+    if (!key) continue;
+    if (seen.has(key)) toDelete.push(r.id); else seen.add(key);
+  }
+  if (toDelete.length) {
+    // Delete in chunks to keep the SQL bind list small.
+    for (let i = 0; i < toDelete.length; i += 200) {
+      const chunk = toDelete.slice(i, i + 200);
+      await db.runAsync(`DELETE FROM lucy_notifications WHERE id IN (${chunk.map(() => '?').join(',')})`, ...chunk);
+    }
+  }
+  return toDelete.length;
+}
+
 export async function upsertNotifLog(
   db: SQLiteDatabase,
   row: Pick<NotifLogRow, 'identifier' | 'kind' | 'tier' | 'title' | 'body' | 'scheduled_for' | 'entity_id' | 'entity_kind'>,

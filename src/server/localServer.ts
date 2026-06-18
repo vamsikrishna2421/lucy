@@ -454,9 +454,11 @@ async function route(req: ParsedRequest): Promise<string> {
       const todosRecategorized = await recategorizeAllTodos(db);
       const { dedupScheduledBlocks } = await import('../scheduling');
       const duplicateBlocksRemoved = await dedupScheduledBlocks(db);
+      const { dedupInsightNotifications } = await import('../db/notificationLog');
+      const duplicateInsightsRemoved = await dedupInsightNotifications(db);
       const { organizeMemory } = await import('../processing/organizer');
       await organizeMemory(db, 'manual');
-      return json(200, { ok: true, peopleRemoved, loopsResolved, factsMerged, expensesFixed, todosArchived, todosRecategorized, duplicateBlocksRemoved });
+      return json(200, { ok: true, peopleRemoved, loopsResolved, factsMerged, expensesFixed, todosArchived, todosRecategorized, duplicateBlocksRemoved, duplicateInsightsRemoved });
     }
     if (req.method === 'DELETE' && req.path.startsWith('/api/fact/')) {
       const id = Number(req.path.split('/').pop());

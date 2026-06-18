@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 51 (voice fab + live redesign sync) */
+/* LUCY web - premium - dashboard rev 52 (Market/competitor comparison tab) */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -592,7 +592,7 @@ function toggleTheme(){applyTheme(document.documentElement.getAttribute('data-th
 applyTheme((()=>{try{return localStorage.getItem('lucy-theme')||'dark';}catch(e){return'dark';}})());
 
 const NAV=[['home','◉','Home'],['timeline','≣','Timeline'],['ask','✦','Ask Lucy'],['tasks','◇','Tasks'],
-  ['productivity','▦','Workspace'],['brain','❋','Brain'],['people','◐','People'],['health','♥','Health'],['money','▦','Money'],['about','☻','About You'],['guide','❔','Guide']];
+  ['productivity','▦','Workspace'],['brain','❋','Brain'],['people','◐','People'],['health','♥','Health'],['money','▦','Money'],['compare','⚖','Market'],['about','☻','About You'],['guide','❔','Guide']];
 let PROD_TAB='home', WS=null;
 function curView(){return ROUTE==='productivity'?PROD_TAB:ROUTE;}
 function setProdTab(t){PROD_TAB=t;draw();}
@@ -609,7 +609,7 @@ async function load(silent){
 }
 function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offsetWidth;v.classList.add('fade');
   if(!DATA){v.innerHTML='';return;}
-  v.innerHTML=({home:vHome,timeline:vTimeline,ask:vAsk,tasks:vTasks,productivity:vProductivity,brain:vBrain,people:vPeople,health:vHealth,money:vMoney,about:vAbout,guide:vGuide}[ROUTE]||vHome)();
+  v.innerHTML=({home:vHome,timeline:vTimeline,ask:vAsk,tasks:vTasks,productivity:vProductivity,brain:vBrain,people:vPeople,health:vHealth,money:vMoney,compare:vCompare,about:vAbout,guide:vGuide}[ROUTE]||vHome)();
   if(ROUTE==='guide')loadGuideContent();
   const view=curView();
   if(view==='home')loadWorkspace();
@@ -619,6 +619,78 @@ function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offset
   if(view==='projects')loadProjects();
   if(ROUTE==='about')loadGuard();
   if(ROUTE==='ask')afterAsk();}
+/* ─── MARKET (LUCY vs competitors — gap tracker, docs/COMPETITOR_COMPARISON.md) ─── */
+const CMP_MAP={'✅':'#22C55E','🟡':'#F5C451','❌':'#6b6b78','🔒':'#FF8C42'};
+function cmpCell(v){const c=CMP_MAP[v]||'#9aa';const w=v==='🔒'?'900':'800';return `<td style="text-align:center;color:${c};font-weight:${w};padding:9px 6px;border-top:1px solid rgba(255,255,255,.05)">${v}</td>`;}
+function cmpTable(cat){
+  const head=`<tr>${['Capability',...cat.cols].map((c,i)=>`<th style="text-align:${i?'center':'left'};padding:8px 6px;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:${i===1?'#FF8C42':'#8a8a98'};font-weight:800">${c}</th>`).join('')}</tr>`;
+  const body=cat.rows.map(r=>`<tr><td style="text-align:left;padding:9px 6px;border-top:1px solid rgba(255,255,255,.05);color:#d8d8e0;font-size:13px">${r[0]}</td>${r.slice(1).map(cmpCell).join('')}</tr>`).join('');
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:520px">${head}${body}</table></div>`;}
+const CMP_CATS=[
+  {name:'AI Second-Brain / Notes', cols:['LUCY','mymind','Mem','Reflect','Notion','Saner'], rows:[
+    ['One-tap capture (text/link/image)','✅','✅','✅','✅','✅','✅'],
+    ['Voice capture + on-device transcription','🔒','❌','🟡','🟡','❌','🟡'],
+    ['Auto-organize / auto-tag (no folders)','✅','✅','✅','🟡','🟡','✅'],
+    ['AI chat over your knowledge','✅','🟡','✅','✅','✅','✅'],
+    ['Knowledge graph / connections','✅','🟡','✅','✅','🟡','🟡'],
+    ['Image / handwriting OCR → memory','✅','✅','🟡','🟡','🟡','🟡'],
+    ['Web clipper / browser extension','❌','✅','✅','✅','✅','✅'],
+    ['Email / Slack / doc ingestion','❌','🟡','✅','🟡','✅','✅'],
+    ['Privacy: on-device / local-first','🔒','🟡','❌','❌','❌','❌'],
+    ['Cross-platform (web + mobile)','🟡','✅','✅','✅','✅','✅'],
+  ]},
+  {name:'AI Calendar / Time-Blocking', cols:['LUCY','Motion','Reclaim','Sunsama','Akiflow','Fantastical'], rows:[
+    ['Auto-schedule tasks into free slots','✅','✅','✅','🟡','🟡','❌'],
+    ['Conflict-free / resource-aware engine','🔒','🟡','🟡','❌','❌','❌'],
+    ['Two-way Google / Teams sync','🟡','✅','✅','✅','✅','✅'],
+    ['Habit / focus-time defense','✅','✅','✅','🟡','🟡','❌'],
+    ['Auto-rebuild day around meetings','🟡','✅','✅','❌','❌','❌'],
+    ['Natural-language entry','✅','🟡','🟡','🟡','✅','✅'],
+    ['Overlap resolution (you pick what moves)','🔒','🟡','🟡','❌','❌','❌'],
+    ['External task pull (Todoist/Jira/Gmail)','❌','🟡','🟡','✅','✅','❌'],
+  ]},
+  {name:'AI Calorie / Health', cols:['LUCY*','Cal AI','MacroFactor','MyFitnessPal','HealthifyMe'], rows:[
+    ['Photo → calories / macros','🟡','✅','🟡','✅','✅'],
+    ['Large food database','🟡','✅','✅','✅','✅'],
+    ['Indian food (katoris / pieces)','🟡','🟡','❌','🟡','✅'],
+    ['Adaptive calorie targets','🟡','🟡','✅','🟡','✅'],
+    ['Calorie spend (activity / HealthKit)','🟡','🟡','🟡','✅','✅'],
+    ['AI coach / guardian (Dr. Lucy)','🟡','🟡','✅','🟡','✅'],
+    ['Medication tracking','🟡','❌','❌','🟡','✅'],
+    ['Privacy: on-device','🔒','❌','❌','❌','❌'],
+  ]},
+  {name:'AI Finance / Expenses', cols:['LUCY','Rocket Money','Copilot','Cleo'], rows:[
+    ['Capture (manual / voice / receipt)','✅','🟡','🟡','🟡'],
+    ['Bank / card auto-sync','❌','✅','✅','✅'],
+    ['Auto-categorize transactions','🟡','✅','✅','✅'],
+    ['Spending insights / scope queries','✅','✅','✅','✅'],
+    ['Subscription detection / cancel','❌','✅','🟡','✅'],
+    ['Privacy: on-device, no bank login','🔒','❌','❌','❌'],
+  ]},
+];
+const CMP_MOAT=['All-in-one life OS','On-device / privacy-first','Voice-native (Hey Lucy)','Conflict-free calendar','BYO-key, no lock-in'];
+const CMP_GAPS=['Android parity + a real web/desktop app','Build the health/calorie vertical (Cal-AI-class + Indian DB + Dr. Lucy)','Ingestion: web clipper + email/Slack "AI inbox"','Calendar write-back + external task pull + auto-rebuild','Finance: decide opt-in bank sync vs privacy-pure','UI/UX polish to specialist standard','Bot-free meeting notes (Granola-style)'];
+function vCompare(){return `<div class="page">
+  <section class="page-hero">
+    <div class="page-kicker">Market</div>
+    <h1 class="page-title">LUCY vs the market.</h1>
+    <div class="page-sub">Every rival is a point solution — notes OR calendar OR calories OR money. LUCY is the only one doing it all, on-device, voice-first. Track where we lead and where we lag, then close the gaps one by one.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">${CMP_MOAT.map(m=>`<span style="background:rgba(255,140,0,.12);border:1px solid rgba(255,140,0,.35);color:#FFB570;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700">🔒 ${m}</span>`).join('')}</div>
+  </section>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;margin:4px 0 16px">
+    ${[['✅','Has it'],['🟡','Partial / basic'],['❌','Missing'],['🔒','LUCY-only edge']].map(([s,l])=>`<span style="color:#9aa;font-size:12px"><span style="color:${CMP_MAP[s]};font-weight:800">${s}</span> ${l}</span>`).join('')}
+  </div>
+  ${CMP_CATS.map(cat=>`<section class="section-card" style="margin-bottom:14px">
+    <h3 style="margin:0 0 4px">${cat.name}</h3>
+    ${cmpTable(cat)}
+  </section>`).join('')}
+  <div style="color:#8a8a98;font-size:11px;margin:-6px 2px 14px">* Health/calorie is researched + building next, not shipped yet.</div>
+  <section class="section-card">
+    <h3 style="margin:0 0 10px">Biggest gaps to close — path to #1</h3>
+    ${CMP_GAPS.map((g,i)=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:${i?'1px solid rgba(255,255,255,.05)':'none'}"><span style="background:#FF8C42;color:#1a1206;border-radius:999px;min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px">${i+1}</span><span style="color:#d8d8e0;font-size:13.5px;line-height:1.5">${g}</span></div>`).join('')}
+  </section>
+</div>`;}
+
 /* ─── GUIDE (What is LUCY? · Features · Manual + how-to help) ─── */
 function mdLite(s){return esc(s||'').replace(/^### (.*)$/gm,'<b>$1</b>').replace(/^## (.*)$/gm,'<b style="font-size:15px">$1</b>').replace(/^# (.*)$/gm,'<b style="font-size:17px">$1</b>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^- (.*)$/gm,'• $1').replace(/\n/g,'<br>');}
 function vGuide(){return `<div class="page guide-page">

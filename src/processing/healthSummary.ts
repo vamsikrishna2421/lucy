@@ -26,7 +26,7 @@ export interface HealthSummary {
 
 /** Detects a health/nutrition/fitness question so we only attach (sensitive) health context when relevant. */
 export function isHealthQuestion(q: string): boolean {
-  return /\b(weight|kg|lbs|calorie|kcal|lose|losing|gain|gaining|fat|diet|eat|eating|ate|nutrition|bmi|tdee|bmr|macro|protein|carb|fibre|fiber|sugar|meal|food|hydrat|water|fitness|workout|exercise|step|sleep|deficit|surplus|metabolism|burn(ed|ing)?)\b/i.test(q || '');
+  return /\b(weight|kg|lbs|calorie|kcal|lose|losing|gain|gaining|fat|diet|eat|eating|ate|nutrition|bmi|tdee|bmr|macro|protein|carb|fibre|fiber|sugar|meal|food|hydrat|water|fitness|workout|exercise|step|sleep|deficit|surplus|metabolism|burn(ed|ing)?|medication|medicine|meds?|pill|dose|dosage|prescription)\b/i.test(q || '');
 }
 
 /**
@@ -36,9 +36,20 @@ export function isHealthQuestion(q: string): boolean {
  */
 export async function buildHealthContextPrefix(db: SQLiteDatabase): Promise<string> {
   try {
+    // Active medications — answer "what meds am I on / when do I take X" from the user's own list.
+    let medsLine = '';
+    try {
+      const { listMedications, parseTimes } = await import('../db/medications');
+      const meds = await listMedications(db);
+      if (meds.length) {
+        medsLine = `- Medications (tracker only — never advise on drugs/doses): ${meds.map((m) => `${m.name}${m.dosage ? ` ${m.dosage}` : ''}${parseTimes(m.times).length ? ` at ${parseTimes(m.times).join(', ')}` : ''}`).join('; ')}.`;
+      }
+    } catch { /* meds optional */ }
+
     const s = await getHealthSummary(db);
     const p = await getBodyProfile(db);
-    if (!s.profileComplete || !p) return '';
+    // If there's no body profile but the user tracks meds, still answer from the meds list.
+    if (!s.profileComplete || !p) return medsLine ? `The user's health info (use this; do NOT say you lack their data):\n${medsLine}\n` : '';
     const age = p.birth_year ? new Date().getFullYear() - p.birth_year : null;
     const parts = [
       `The user's health profile (use this to answer; do NOT say you lack their data):`,
@@ -47,6 +58,7 @@ export async function buildHealthContextPrefix(db: SQLiteDatabase): Promise<stri
       s.goals ? `- Daily goal: ${s.goals.calorie_goal} kcal (P ${s.goals.protein_g} / C ${s.goals.carbs_g} / F ${s.goals.fat_g} g).` : '',
       `- Today so far: ${s.intake.calories} kcal eaten${s.remaining != null ? `, ${s.remaining} remaining` : ''}; steps ${s.activity.steps}${s.activity.sleep_hours ? `, slept ${s.activity.sleep_hours}h` : ''}.`,
       s.net_rolling_7 != null ? `- 7-day net average: ${s.net_rolling_7} kcal/day (trend only — frame gently, never as a verdict).` : '',
+      medsLine,
       `When estimating weight change: ~7700 kcal ≈ 1 kg. Use their TDEE + intake. Be encouraging and ED-safe; never suggest unsafe deficits.`,
       '',
     ].filter(Boolean);

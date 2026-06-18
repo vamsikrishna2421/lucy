@@ -161,10 +161,32 @@ export function shieldText(text: string, contacts: string[] = []): ShieldResult 
   return { redacted, map };
 }
 
-/** Swaps placeholder tokens back to their original values. */
+/**
+ * Swaps placeholder tokens back to their original values.
+ *
+ * Tolerant by design: LLMs frequently mangle the exact token form (drop the brackets,
+ * lowercase it, add a space, use a dash) — e.g. "[PERSON_1]" comes back as "PERSON 1",
+ * "person_1", or "[Person-1]". A brittle exact match would leak the raw token to the
+ * user. So we match any kind+number variant and look the value up. The greedy `\d+`
+ * also prevents PERSON_1 from clobbering inside PERSON_11.
+ */
 export function restoreText(text: string, map: ShieldEntry[]): string {
+  if (!map.length) return text;
+  // kind+number -> value (parsed from each token, which is always "[SECRET_n]" / "[PERSON_n]").
+  const byKey = new Map<string, ShieldEntry>();
+  for (const entry of map) {
+    const m = entry.token.match(/(SECRET|PERSON)_(\d+)/i);
+    if (m) byKey.set(`${m[1].toUpperCase()}_${m[2]}`, entry);
+  }
+  // Exact pass first (fast, lossless), then a tolerant pass for any mangled survivors.
   let out = text;
   for (const entry of map) out = out.split(entry.token).join(entry.value);
+  out = out.replace(/\[?\s*(SECRET|PERSON)[\s_-]*?(\d+)\s*\]?/gi, (full, kind: string, n: string) => {
+    const hit = byKey.get(`${kind.toUpperCase()}_${n}`);
+    if (hit) return hit.value;
+    // Unknown token (model hallucinated a number we never issued) — never show the raw token.
+    return kind.toUpperCase() === 'PERSON' ? 'them' : '(hidden)';
+  });
   return out;
 }
 

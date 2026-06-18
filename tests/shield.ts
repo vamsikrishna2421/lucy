@@ -85,4 +85,26 @@ import { findProtectedValues, shieldText, restoreText } from '../src/processing/
   assert.equal(restoreText(redacted, map), text, 'mixed round-trip restores exactly');
 }
 
+// --- Tolerant restore (LLMs mangle tokens — a brittle exact match leaks "[PERSON_1]") ---
+{
+  const { map } = shieldText('wifi password is Hunter2 and I met Srinivas today', []);
+  assert.ok(restoreText('met PERSON_1 today', map).includes('Srinivas'), 'no-bracket token restores');
+  assert.ok(restoreText('met [PERSON 1] today', map).includes('Srinivas'), 'space-variant token restores');
+  assert.ok(restoreText('code [secret-1]', map).includes('Hunter2'), 'dash + lowercase token restores');
+  assert.ok(restoreText('met person_1', map).includes('Srinivas'), 'lowercase no-bracket token restores');
+  assert.ok(!/PERSON|SECRET/i.test(restoreText('met [Person_1], pw SECRET_1', map)), 'no raw token survives');
+  // Hallucinated token we never issued must not leak the raw token to the user.
+  const hall = restoreText('met [PERSON_9]', map);
+  assert.ok(!/PERSON_9/i.test(hall) && hall.includes('them'), 'unknown person token → "them", not raw');
+  assert.equal(restoreText('met [PERSON_1]', []), 'met [PERSON_1]', 'empty map is a pass-through');
+}
+{
+  // PERSON_1 must not clobber inside PERSON_11 (greedy digit run).
+  const m2 = [
+    { token: '[PERSON_1]', value: 'Sam', kind: 'person' as const },
+    { token: '[PERSON_11]', value: 'Alex', kind: 'person' as const },
+  ];
+  assert.equal(restoreText('a [PERSON_11] b [PERSON_1]', m2), 'a Alex b Sam', 'PERSON_11 not clobbered by PERSON_1');
+}
+
 console.log('shield.ts: all assertions passed ✓');

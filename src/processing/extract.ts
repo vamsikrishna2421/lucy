@@ -201,6 +201,9 @@ export async function enqueueTranscript(
     }
   } catch { /* non-critical */ }
 
+  // Process right away so an open app never waits on the (throttled, ~iOS-controlled) background task.
+  // Fire-and-forget + idempotent (processQueue only picks up pending rows), so double-calls are safe.
+  void processQueue();
   return id;
 }
 

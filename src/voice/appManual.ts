@@ -179,12 +179,22 @@ on-device and private. You can drive LUCY from the phone or from a laptop over y
   separate "Brain" tab in the bottom bar. Website — the corresponding sidebar sections.
 - **How:** browse entities, open a person or term to see connected memories, review ideas/meetings.
 
-## 7. Health — mood
+## 7. Health — nutrition, activity, mood & Dr. Lucy
 
-- **What it does:** Log your **mood** and see your mood **distribution** over time. Peak-focus
-  windows in the Calendar are learned from this.
-- **Where:** Phone — **Home → Health**. Website — **Health**.
-- **How:** log how you feel ("I feel great", or pick a mood); review the distribution chart.
+- **What it does:** A two-sided health companion. **Nutrition (calorie intake):** log meals by photo,
+  voice, or text and see calories remaining + protein/carbs/fat against your goal, with a meal timeline.
+  **Activity & energy (calorie spend):** steps, sleep, resting heart rate, and your estimated BMR/TDEE.
+  **Mood:** log how you feel and see the trend (peak-focus calendar windows are learned from this).
+  **Dr. Lucy:** a caring guardian that gently flags patterns (short sleep, low movement, very-low intake)
+  — never a doctor, never a diet score.
+- **Where:** Phone — **Home → Health**. Website — **Health** (Dr. Lucy persona on this page).
+- **Log food:** say or type "I ate two rotis and a katori of dal", or tap **Snap a meal** to photograph
+  it — LUCY estimates the calories and macros (Indian portions like katori/roti/idli are supported).
+- **Set up:** add a quick body profile (sex, age, height, weight, activity, goal) so LUCY can compute
+  your calorie + macro targets. Targets are kept safe (never an unhealthy crash deficit).
+- **Mood:** "I feel great", or pick a mood; review the distribution.
+- **Safety:** LUCY is a companion, not a doctor — it won't diagnose or prescribe. If you mention an
+  emergency symptom it will urge you to get real medical help right away.
 
 ## 8. Money — expenses
 

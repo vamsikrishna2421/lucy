@@ -33,6 +33,8 @@ const VIEW_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   'Ask Lucy': 'chatbubble-ellipses-outline',
   'Health': 'heart-outline',
 };
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
+import { DR_LUCY_DISCLAIMER as DR_LUCY_DISCLAIMER_TEXT } from '../processing/drLucy';
 import { StoryView, type StorySubject } from './StoryView';
 import { StalenessReviewCard, ContextBatchCard } from '../components/StalenessReviewCard';
 import {
@@ -550,9 +552,359 @@ function HealthTrendBar({ label, value, maxValue, accent }: { label: string; val
   );
 }
 
+// ─── Health: nutrition + Dr. Lucy ───────────────────────────────────────────────
+// Premium calorie/macro rings + food logging + the caring guardian, wired to the
+// already-built data layer (healthSummary / foodNutrition / healthNutrition / drLucy).
+
+type HealthSummaryT = import('../processing/healthSummary').HealthSummary;
+type FoodLogRowT = import('../db/healthNutrition').FoodLogRow;
+type GuardianGuidanceT = import('../processing/drLucy').GuardianGuidance;
+
+const MACRO = { protein: '#5BA8FF', carbs: '#F5C451', fat: '#FB7185' } as const;
+
+/**
+ * A single SVG progress ring. Calm easing animation on the sweep. value/goal in
+ * the same unit; over-goal is clamped visually but never framed as "bad".
+ */
+function ProgressRing({
+  size, stroke, value, goal, color, track = LUCY_COLORS.border, children,
+}: { size: number; stroke: number; value: number; goal: number; color: string; track?: string; children?: React.ReactNode }) {
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const pct = goal > 0 ? Math.max(0, Math.min(1, value / goal)) : 0;
+  const anim = useRef(new Animated.Value(0)).current;
+  const [dash, setDash] = useState(circ);
+  useEffect(() => {
+    const id = anim.addListener(({ value: v }) => setDash(circ * (1 - v * pct)));
+    Animated.timing(anim, { toValue: 1, duration: 850, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    return () => anim.removeListener(id);
+  }, [pct, circ]);
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
+        <SvgCircle cx={size / 2} cy={size / 2} r={r} stroke={track} strokeWidth={stroke} fill="none" />
+        <SvgCircle
+          cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none"
+          strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={dash}
+        />
+      </Svg>
+      <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>{children}</View>
+    </View>
+  );
+}
+
+/** A small macro ring with a label + value beneath. */
+function MacroRing({ label, value, goal, color }: { label: string; value: number; goal: number; color: string }) {
+  return (
+    <View style={{ alignItems: 'center', gap: 6, flex: 1 }}>
+      <ProgressRing size={66} stroke={7} value={value} goal={goal} color={color}>
+        <Text style={{ color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '900' }}>{value}</Text>
+        <Text style={{ color: LUCY_COLORS.textFaint, fontSize: 9, fontWeight: '700' }}>g</Text>
+      </ProgressRing>
+      <Text style={{ color: color, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' }}>{label}</Text>
+      <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10.5 }}>{goal > 0 ? `of ${goal}g` : '—'}</Text>
+    </View>
+  );
+}
+
+const SEVERITY_STYLE: Record<GuardianGuidanceT['severity'], { color: string; label: string; icon: keyof typeof Ionicons.glyphMap }> = {
+  care: { color: LUCY_COLORS.primary, label: 'A gentle note', icon: 'heart-outline' },
+  gentle: { color: LUCY_COLORS.info, label: 'Something Lucy noticed', icon: 'leaf-outline' },
+  caution: { color: LUCY_COLORS.gold, label: 'Worth a glance', icon: 'alert-circle-outline' },
+  emergency: { color: LUCY_COLORS.error, label: 'Please take care', icon: 'medkit-outline' },
+};
+
+function DrLucyCard({ g }: { g: GuardianGuidanceT }) {
+  const s = SEVERITY_STYLE[g.severity] ?? SEVERITY_STYLE.gentle;
+  return (
+    <View style={{ backgroundColor: LUCY_COLORS.surface, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, borderLeftWidth: 3, borderLeftColor: s.color, gap: 6 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+        <Ionicons name={s.icon} size={14} color={s.color} />
+        <Text style={{ color: s.color, fontSize: 9.5, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' }}>{s.label}</Text>
+      </View>
+      <Text style={{ color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '600', lineHeight: 20 }}>{g.observation}</Text>
+      {g.suggestion ? <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 19 }}>{g.suggestion}</Text> : null}
+    </View>
+  );
+}
+
+/** Today's meal items grouped by meal_type, each deletable. */
+const MEAL_ORDER = ['breakfast', 'lunch', 'dinner', 'snack'];
+const MEAL_META: Record<string, { label: string; icon: string }> = {
+  breakfast: { label: 'Breakfast', icon: '🌅' },
+  lunch: { label: 'Lunch', icon: '🥗' },
+  dinner: { label: 'Dinner', icon: '🍽️' },
+  snack: { label: 'Snacks', icon: '🍎' },
+};
+
+function MealTimeline({ items, onDelete }: { items: FoodLogRowT[]; onDelete: (id: number) => void }) {
+  const groups = new Map<string, FoodLogRowT[]>();
+  for (const it of items) {
+    const key = (it.meal_type && MEAL_META[it.meal_type]) ? it.meal_type : 'snack';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(it);
+  }
+  const ordered = MEAL_ORDER.filter((k) => groups.has(k));
+  if (ordered.length === 0) return null;
+  return (
+    <View style={{ gap: 12 }}>
+      {ordered.map((key) => {
+        const rows = groups.get(key)!;
+        const meta = MEAL_META[key];
+        const cals = rows.reduce((s, r) => s + (r.calories ?? 0), 0);
+        return (
+          <View key={key} style={{ backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 16 }}>{meta.icon}</Text>
+                <Text style={{ color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '800', letterSpacing: 0.3 }}>{meta.label}</Text>
+              </View>
+              <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, fontWeight: '800' }}>{Math.round(cals)} kcal</Text>
+            </View>
+            {rows.map((r) => (
+              <View key={r.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13.5, fontWeight: '600' }} numberOfLines={1}>
+                    {r.name}{r.qty ? ` · ${r.qty}${r.unit ? ' ' + r.unit : ''}` : ''}
+                  </Text>
+                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>
+                    {r.calories ?? 0} kcal{r.protein_g != null ? ` · P ${r.protein_g}` : ''}{r.carbs_g != null ? ` · C ${r.carbs_g}` : ''}{r.fat_g != null ? ` · F ${r.fat_g}` : ''}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => onDelete(r.id)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="close-circle-outline" size={20} color={LUCY_COLORS.textSubtle} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+const ACTIVITY_OPTS: Array<{ key: import('../processing/calorieEngine').ActivityLevel; label: string; hint: string }> = [
+  { key: 'sedentary', label: 'Sedentary', hint: 'Little movement' },
+  { key: 'light', label: 'Light', hint: '1–2 days active' },
+  { key: 'moderate', label: 'Moderate', hint: '3–4 days active' },
+  { key: 'active', label: 'Active', hint: '5–6 days active' },
+  { key: 'very_active', label: 'Very active', hint: 'Daily / physical job' },
+];
+const GOAL_OPTS: Array<{ key: import('../processing/calorieEngine').GoalKind; label: string }> = [
+  { key: 'lose', label: 'Lose weight' },
+  { key: 'maintain', label: 'Maintain' },
+  { key: 'gain', label: 'Gain weight' },
+];
+
+/** Small onboarding sheet to capture the body profile → goals auto-derive on save. */
+function BodyProfileSheet({ visible, initial, onClose, onSaved }: {
+  visible: boolean;
+  initial: import('../db/healthNutrition').BodyProfileRow | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [sex, setSex] = useState<import('../processing/calorieEngine').Sex>(initial?.sex ?? 'female');
+  const [birthYear, setBirthYear] = useState(initial?.birth_year ? String(initial.birth_year) : '');
+  const [heightCm, setHeightCm] = useState(initial?.height_cm ? String(initial.height_cm) : '');
+  const [weightKg, setWeightKg] = useState(initial?.weight_kg ? String(initial.weight_kg) : '');
+  const [activity, setActivity] = useState<import('../processing/calorieEngine').ActivityLevel>(initial?.activity_level ?? 'moderate');
+  const [goal, setGoal] = useState<import('../processing/calorieEngine').GoalKind>(initial?.goal ?? 'maintain');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    setSex(initial?.sex ?? 'female');
+    setBirthYear(initial?.birth_year ? String(initial.birth_year) : '');
+    setHeightCm(initial?.height_cm ? String(initial.height_cm) : '');
+    setWeightKg(initial?.weight_kg ? String(initial.weight_kg) : '');
+    setActivity(initial?.activity_level ?? 'moderate');
+    setGoal(initial?.goal ?? 'maintain');
+  }, [visible, initial]);
+
+  const valid = !!birthYear && !!heightCm && !!weightKg
+    && Number(birthYear) > 1900 && Number(heightCm) > 50 && Number(weightKg) > 20;
+
+  const save = async () => {
+    if (!valid || saving) return;
+    setSaving(true);
+    try {
+      const db = await getDatabase();
+      const { upsertBodyProfile } = await import('../db/healthNutrition');
+      await upsertBodyProfile(db, {
+        sex, birth_year: Number(birthYear), height_cm: Number(heightCm), weight_kg: Number(weightKg),
+        activity_level: activity, goal,
+      });
+      onSaved();
+      onClose();
+    } catch (e) {
+      Alert.alert('Could not save', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const pill = (active: boolean) => ({
+    paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999, minHeight: 44, justifyContent: 'center' as const,
+    backgroundColor: active ? LUCY_COLORS.primarySoft : LUCY_COLORS.surfaceRaised,
+    borderWidth: 1, borderColor: active ? LUCY_COLORS.primary : LUCY_COLORS.border,
+  });
+  const pillText = (active: boolean) => ({ color: active ? LUCY_COLORS.primaryGlow : LUCY_COLORS.textMuted, fontSize: 13, fontWeight: '700' as const });
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }} onPress={onClose}>
+        <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: LUCY_COLORS.surfaceSheet, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderWidth: 1, borderColor: LUCY_COLORS.border, maxHeight: '90%' }}>
+          <View style={{ alignItems: 'center', paddingTop: 10 }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.border }} />
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
+            <View style={{ gap: 4 }}>
+              <Text style={{ color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 }}>SET UP YOUR PROFILE</Text>
+              <Text style={{ color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '900' }}>A few details, then I’ll tailor your day</Text>
+              <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 19 }}>This stays on your device. It lets me estimate your energy and set gentle, realistic goals.</Text>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 }}>SEX</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {(['female', 'male'] as const).map((s) => (
+                  <TouchableOpacity key={s} style={[pill(sex === s), { flex: 1, alignItems: 'center' }]} onPress={() => setSex(s)}>
+                    <Text style={pillText(sex === s)}>{s === 'female' ? 'Female' : 'Male'}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {[
+                { label: 'BIRTH YEAR', v: birthYear, set: setBirthYear, ph: '1995' },
+                { label: 'HEIGHT (CM)', v: heightCm, set: setHeightCm, ph: '170' },
+                { label: 'WEIGHT (KG)', v: weightKg, set: setWeightKg, ph: '65' },
+              ].map((f) => (
+                <View key={f.label} style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 }}>{f.label}</Text>
+                  <TextInput
+                    value={f.v} onChangeText={f.set} placeholder={f.ph} placeholderTextColor={LUCY_COLORS.textFaint}
+                    keyboardType="number-pad"
+                    style={{ backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12, color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '700' }}
+                  />
+                </View>
+              ))}
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 }}>ACTIVITY</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {ACTIVITY_OPTS.map((o) => (
+                  <TouchableOpacity key={o.key} style={pill(activity === o.key)} onPress={() => setActivity(o.key)}>
+                    <Text style={pillText(activity === o.key)}>{o.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 }}>GOAL</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {GOAL_OPTS.map((o) => (
+                  <TouchableOpacity key={o.key} style={[pill(goal === o.key), { flex: 1, alignItems: 'center' }]} onPress={() => setGoal(o.key)}>
+                    <Text style={pillText(goal === o.key)}>{o.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+              <TouchableOpacity onPress={onClose} style={{ flex: 1, paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center' }}>
+                <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 14, fontWeight: '700' }}>Later</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={save} disabled={!valid || saving} style={{ flex: 2, paddingVertical: 14, borderRadius: 14, backgroundColor: valid ? LUCY_COLORS.primary : LUCY_COLORS.surfaceElevated, alignItems: 'center', opacity: valid ? 1 : 0.6 }}>
+                {saving ? <ActivityIndicator color={LUCY_COLORS.background} /> : <Text style={{ color: valid ? LUCY_COLORS.background : LUCY_COLORS.textSubtle, fontSize: 14, fontWeight: '900' }}>Save & set my goals</Text>}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 function HealthView() {
   const [health7, setHealth7] = useState<import('../db/healthSnapshots').HealthSnapshot[]>([]);
   const [mood7, setMood7] = useState<Array<{ tone: string; created_at: string }>>([]);
+  // Nutrition + guardian state (additive to the original activity view).
+  const [summary, setSummary] = useState<HealthSummaryT | null>(null);
+  const [profileRow, setProfileRow] = useState<import('../db/healthNutrition').BodyProfileRow | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
+  const [mealText, setMealText] = useState('');
+  const [logging, setLogging] = useState(false);          // text/voice logging spinner
+  const [reading, setReading] = useState(false);          // photo vision spinner
+  const [netExpanded, setNetExpanded] = useState(false);  // ED-safe: net trend is opt-in
+
+  const refreshNutrition = async () => {
+    const db = await getDatabase();
+    const { getHealthSummary } = await import('../processing/healthSummary');
+    const { getBodyProfile } = await import('../db/healthNutrition');
+    const [s, p] = await Promise.all([getHealthSummary(db), getBodyProfile(db)]);
+    setSummary(s);
+    setProfileRow(p);
+  };
+
+  const logText = async () => {
+    const text = mealText.trim();
+    if (!text || logging) return;
+    setLogging(true);
+    try {
+      const db = await getDatabase();
+      const { logFoodFromText } = await import('../processing/foodNutrition');
+      const res = await logFoodFromText(db, text);
+      setMealText('');
+      if (res.logged === 0) {
+        Alert.alert("Couldn't read that", 'I couldn\'t estimate that meal. Try naming the foods and rough amounts — like "2 eggs and toast". (Remote intelligence is needed for estimates — add a key in Settings.)');
+      }
+      await refreshNutrition();
+    } catch (e) {
+      Alert.alert('Could not log', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setLogging(false);
+    }
+  };
+
+  const logPhoto = async () => {
+    if (reading) return;
+    try {
+      const { pickImage } = await import('../processing/imageCapture');
+      const uri = await pickImage('Snap a meal', 'I’ll read the photo and estimate the foods and calories.');
+      if (!uri) return;
+      const { resolveRemoteAvailability } = await import('../ai/provider');
+      const { available } = await resolveRemoteAvailability();
+      if (!available) {
+        Alert.alert('Remote intelligence needed', 'Reading a meal photo uses a vision model. Add an API key in Settings → Remote intelligence, then try again.');
+        return;
+      }
+      setReading(true);
+      const db = await getDatabase();
+      const { logFoodFromPhoto } = await import('../processing/foodNutrition');
+      const res = await logFoodFromPhoto(db, uri);
+      setReading(false);
+      if (res.logged === 0) {
+        Alert.alert("Couldn't read it", 'I couldn\'t make out the food. Try a clearer, well-lit photo from above.');
+      }
+      await refreshNutrition();
+    } catch (e) {
+      setReading(false);
+      Alert.alert('Could not read meal', e instanceof Error ? e.message : 'Please try again.');
+    }
+  };
+
+  const removeFood = async (id: number) => {
+    try {
+      const db = await getDatabase();
+      const { deleteFoodLog } = await import('../db/healthNutrition');
+      await deleteFoodLog(db, id);
+      await refreshNutrition();
+    } catch { /* non-critical */ }
+  };
 
   useEffect(() => {
     void (async () => {
@@ -566,6 +918,7 @@ function HealthView() {
       setHealth7(h);
       setMood7(m);
     })();
+    void refreshNutrition();
   }, []);
 
   const today = health7[0] ?? null;
@@ -592,10 +945,140 @@ function HealthView() {
   }
   const healthByDate = new Map(health7.map((h) => [h.date_key, h]));
 
+  const goals = summary?.goals ?? null;
+  const intake = summary?.intake ?? null;
+  const calGoal = goals?.calorie_goal ?? 0;
+  const calEaten = intake?.calories ?? 0;
+  const calRemaining = summary?.remaining;
+  const drLucy = summary?.drLucy ?? [];
+
   return (
     <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, gap: 16 }}>
-      {/* Today's metrics */}
-      <Text style={{ color: TEAL, fontSize: 10, fontWeight: '800', letterSpacing: 1.4, marginBottom: 4 }}>TODAY</Text>
+      {/* ── Today header: profile setup OR calories-remaining ring + macro rings ── */}
+      {summary && !summary.profileComplete ? (
+        <TouchableOpacity activeOpacity={0.9} onPress={() => setShowProfile(true)}
+          style={{ backgroundColor: LUCY_COLORS.surface, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: LUCY_COLORS.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="sparkles-outline" size={20} color={LUCY_COLORS.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 }}>LET’S PERSONALISE THIS</Text>
+              <Text style={{ color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '900' }}>Set up your profile</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={LUCY_COLORS.textSubtle} />
+          </View>
+          <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 19 }}>
+            A few details (kept on your device) let me estimate your energy and set gentle calorie + macro goals.
+          </Text>
+        </TouchableOpacity>
+      ) : summary ? (
+        <View style={{ backgroundColor: LUCY_COLORS.surface, borderRadius: 22, padding: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '900', letterSpacing: 1.4 }}>TODAY’S ENERGY</Text>
+            <TouchableOpacity onPress={() => setShowProfile(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="settings-outline" size={16} color={LUCY_COLORS.textSubtle} />
+            </TouchableOpacity>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+            <ProgressRing size={132} stroke={13} value={calEaten} goal={calGoal || 1} color={LUCY_COLORS.primary}>
+              <Text style={{ color: LUCY_COLORS.textDark, fontSize: 30, fontWeight: '900', letterSpacing: -1 }}>
+                {calGoal > 0 ? Math.max(0, calRemaining ?? 0) : calEaten}
+              </Text>
+              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '700' }}>{calGoal > 0 ? 'kcal left' : 'kcal eaten'}</Text>
+            </ProgressRing>
+            <View style={{ flex: 1, gap: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12 }}>Eaten</Text>
+                <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '800' }}>{calEaten} kcal</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12 }}>Goal</Text>
+                <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '800' }}>{calGoal > 0 ? `${calGoal} kcal` : '—'}</Text>
+              </View>
+              {summary.energy.tdee ? (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12 }}>Burned (est.)</Text>
+                  <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, fontWeight: '800' }}>{summary.energy.tdee} kcal</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          {/* Macro mini-rings */}
+          {goals ? (
+            <View style={{ flexDirection: 'row', gap: 6, paddingTop: 4, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider }}>
+              <MacroRing label="Protein" value={intake?.protein_g ?? 0} goal={goals.protein_g} color={MACRO.protein} />
+              <MacroRing label="Carbs" value={intake?.carbs_g ?? 0} goal={goals.carbs_g} color={MACRO.carbs} />
+              <MacroRing label="Fat" value={intake?.fat_g ?? 0} goal={goals.fat_g} color={MACRO.fat} />
+            </View>
+          ) : null}
+
+          {/* ED-safe net-calorie trend — quiet, opt-in, framed as a trend not a verdict */}
+          {summary.net_rolling_7 != null ? (
+            <View style={{ borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, paddingTop: 10 }}>
+              <TouchableOpacity onPress={() => setNetExpanded((v) => !v)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, fontWeight: '700' }}>Energy balance trend</Text>
+                <Ionicons name={netExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={LUCY_COLORS.textSubtle} />
+              </TouchableOpacity>
+              {netExpanded ? (
+                <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 12.5, lineHeight: 18, marginTop: 6 }}>
+                  Over the last 7 days you’ve averaged about {summary.net_rolling_7 >= 0 ? '+' : ''}{summary.net_rolling_7} kcal vs what you burn. This is a rough trend (±15–25%), not a daily score — a gentle direction, nothing to chase.
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <View style={{ backgroundColor: LUCY_COLORS.surface, borderRadius: 22, padding: 24, alignItems: 'center' }}>
+          <ActivityIndicator color={LUCY_COLORS.primary} />
+        </View>
+      )}
+
+      {/* ── Log food ── */}
+      {summary && summary.profileComplete ? (
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '900', letterSpacing: 1.4 }}>LOG A MEAL</Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity onPress={logPhoto} disabled={reading}
+              style={{ flex: 1, minHeight: 44, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 14, alignItems: 'center', gap: 6 }}>
+              {reading ? <ActivityIndicator color={LUCY_COLORS.primary} /> : <Ionicons name="camera-outline" size={22} color={LUCY_COLORS.primary} />}
+              <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '800' }}>{reading ? 'Reading…' : 'Snap a meal'}</Text>
+            </TouchableOpacity>
+            <View style={{ flex: 2, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 12, gap: 8 }}>
+              <TextInput
+                value={mealText} onChangeText={setMealText}
+                placeholder="Say or type a meal — “2 eggs and toast”"
+                placeholderTextColor={LUCY_COLORS.textFaint}
+                style={{ color: LUCY_COLORS.textDark, fontSize: 14, minHeight: 22 }}
+                onSubmitEditing={logText} returnKeyType="done" multiline
+              />
+              <TouchableOpacity onPress={logText} disabled={!mealText.trim() || logging}
+                style={{ minHeight: 40, borderRadius: 12, backgroundColor: mealText.trim() ? LUCY_COLORS.primary : LUCY_COLORS.surfaceElevated, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, opacity: mealText.trim() ? 1 : 0.6 }}>
+                {logging ? <ActivityIndicator color={LUCY_COLORS.background} /> : <Ionicons name="add" size={18} color={mealText.trim() ? LUCY_COLORS.background : LUCY_COLORS.textSubtle} />}
+                <Text style={{ color: mealText.trim() ? LUCY_COLORS.background : LUCY_COLORS.textSubtle, fontSize: 13, fontWeight: '900' }}>{logging ? 'Estimating…' : 'Log'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      {/* ── Meal timeline ── */}
+      {intake && intake.items.length > 0 ? (
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '900', letterSpacing: 1.4 }}>TODAY’S MEALS</Text>
+          <MealTimeline items={intake.items} onDelete={removeFood} />
+        </View>
+      ) : summary && summary.profileComplete ? (
+        <View style={{ backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', gap: 6 }}>
+          <Text style={{ fontSize: 24 }}>🍵</Text>
+          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700' }}>Nothing logged yet today</Text>
+          <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 12.5, textAlign: 'center', lineHeight: 18 }}>Snap or describe a meal above and I’ll keep a gentle running tally.</Text>
+        </View>
+      ) : null}
+
+      {/* ── Activity & energy (original metrics, expanded with BMR/TDEE) ── */}
+      <Text style={{ color: TEAL, fontSize: 10, fontWeight: '800', letterSpacing: 1.4, marginBottom: 4, marginTop: 4 }}>ACTIVITY & ENERGY</Text>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <HealthMetricCard
           icon="👟"
@@ -619,6 +1102,15 @@ function HealthView() {
           accent="#FB7185"
         />
       </View>
+
+      {/* Energy estimates (BMR / TDEE / active) — labelled estimated, never precise truth */}
+      {summary && summary.profileComplete && summary.energy.bmr ? (
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <HealthMetricCard icon="🔥" label="BMR" value={summary.energy.bmr} unit="kcal" sub="At rest" accent={LUCY_COLORS.primary} />
+          <HealthMetricCard icon="⚡" label="Burned" value={summary.energy.tdee ?? null} unit="kcal" sub="Estimated total" accent={LUCY_COLORS.gold} />
+          <HealthMetricCard icon="🏃" label="Active" value={summary.activity.active_energy_kcal ?? null} unit="kcal" sub={summary.activity.active_energy_source === 'measured' ? 'Measured' : 'Estimated'} accent={TEAL} />
+        </View>
+      ) : null}
 
       {/* Health tip */}
       {tip ? (
@@ -690,6 +1182,18 @@ function HealthView() {
         </View>
       ) : null}
 
+      {/* ── Dr. Lucy — the caring guardian ── */}
+      {drLucy.length > 0 ? (
+        <View style={{ gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+            <Ionicons name="medkit-outline" size={14} color={LUCY_COLORS.primary} />
+            <Text style={{ color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '900', letterSpacing: 1.4 }}>DR. LUCY</Text>
+          </View>
+          {drLucy.map((g, i) => <DrLucyCard key={`${g.category}-${i}`} g={g} />)}
+          <Text style={{ color: LUCY_COLORS.textFaint, fontSize: 11, lineHeight: 16, paddingHorizontal: 2 }}>{DR_LUCY_DISCLAIMER_TEXT}</Text>
+        </View>
+      ) : null}
+
       {/* No data empty state */}
       {!today && health7.length === 0 ? (
         <View style={{ alignItems: 'center', paddingVertical: 48, gap: 12 }}>
@@ -706,6 +1210,13 @@ function HealthView() {
       ) : null}
 
       <View style={{ height: 20 }} />
+
+      <BodyProfileSheet
+        visible={showProfile}
+        initial={profileRow}
+        onClose={() => setShowProfile(false)}
+        onSaved={() => { void refreshNutrition(); }}
+      />
     </ScrollView>
   );
 }

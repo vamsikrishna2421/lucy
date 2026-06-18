@@ -42,7 +42,20 @@ export function spendingWindow(question: string): SpendingWindow {
 }
 
 export function recognizesSchedulingQuestion(question: string): boolean {
-  return /\b(when (should|can|do|could) i|find (me )?(a )?time|best time|good time|what time should|schedule (a|an|some|this|that|my|the)|plan my day|fit (it|this|that|.+) (in|into)|book (time|a slot|me)|squeeze in|make time for|free time for|time to)\b/i.test(question);
+  // NOTE: "plan my day" is intentionally NOT here — that's an agenda request, best answered by the LLM
+  // (a prioritized plan from real tasks/captures), not the single-task slot finder.
+  return /\b(when (should|can|do|could) i|find (me )?(a )?time|best time|good time|what time should|schedule (a|an|some|this|that|my|the)|fit (it|this|that|.+) (in|into)|book (time|a slot|me)|squeeze in|make time for|free time for|time to)\b/i.test(question);
+}
+
+/**
+ * Long, multi-topic, or emotional/help-seeking messages must go to the LLM (LUCY's strongest mode) and
+ * NOT be hijacked by a keyword fast-path (e.g. a stressed rant containing "today" being answered with
+ * "22 pending tasks"). Keep the structured detectors for short, clearly-structured queries only.
+ */
+export function isComplexOrEmotionalQuery(question: string): boolean {
+  const q = question.trim();
+  if (q.split(/\s+/).length >= 28) return true; // long rant / brain-dump
+  return /\b(stress(ed|ing)?|overwhelm\w*|anxious|anxiety|exhaust\w*|burn(t|ed)?\s?out|don'?t know where|where (do|to) (i )?(even )?start|so much going on|a lot going on|too much (going|to)|honestly|i feel|i'?m feeling|feeling (low|down|off|tired|lost|stuck)|falling behind|can'?t keep up|drowning|all over the place|losing track|where do i begin)\b/i.test(q);
 }
 
 /** Strips the scheduling phrasing to recover the underlying task ("find time to call mom" → "call mom"). */

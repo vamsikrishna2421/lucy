@@ -9,7 +9,7 @@ import { parseDeadline, detectRecurrence } from '../src/scheduling/classify';
 import { overlaps } from '../src/scheduling/time';
 import { canCoexist, normalizeResources } from '../src/scheduling/resources';
 import { computeStart } from '../src/voice/timeResolve';
-import { spendingWindow } from '../src/processing/askIntent';
+import { spendingWindow, recognizesSchedulingQuestion, recognizesTodayPlanQuestion, isComplexOrEmotionalQuery } from '../src/processing/askIntent';
 import type { TaskResources } from '../src/scheduling/types';
 
 let pass = 0; let fail = 0;
@@ -117,6 +117,21 @@ ok('spend in total → all', spendingWindow('how much have I spent in total').ki
 ok('spend overall → all', spendingWindow('my overall spending').kind === 'all');
 ok('spend no-period defaults all', spendingWindow('how much did I spend on food').kind === 'all');
 ok('spendingWindow has a human label', spendingWindow('last week').label === 'the last 7 days');
+
+// ── Ask intent routing (gap-report fixes: don't hijack emotional/long messages) ───
+const RANT = 'ok so today was a lot, woke up late, the genie demo got pushed, laundry is piling up, chicago flight still not booked, stressed about money, need to call my mom, honestly i dont even know where to start';
+ok('long stressed rant → complex (LLM, not today-stats)', isComplexOrEmotionalQuery(RANT));
+// A rant that ALSO contains the today+task keywords must still go to the LLM — the complex guard runs
+// FIRST in askLucy, so it wins over recognizesTodayPlanQuestion. This is the core #1 fix.
+const RANT2 = `${RANT} and i have so many pending tasks for today`;
+ok('rant w/ today+task keywords trips the today detector', recognizesTodayPlanQuestion(RANT2) === true);
+ok('…but complex guard also fires (and runs first → LLM)', isComplexOrEmotionalQuery(RANT2) === true);
+ok('short "what are my tasks for today" → NOT complex', isComplexOrEmotionalQuery('what are my tasks for today') === false);
+ok('"i feel overwhelmed" → complex', isComplexOrEmotionalQuery('i feel overwhelmed with everything'));
+ok('"how much did I spend?" → not complex', isComplexOrEmotionalQuery('how much did I spend last week') === false);
+ok('"plan my day" NOT a single-task scheduling question', recognizesSchedulingQuestion('plan my day for me') === false);
+ok('"find time to call mom" still scheduling', recognizesSchedulingQuestion('find time to call mom') === true);
+ok('"schedule a dentist appointment" still scheduling', recognizesSchedulingQuestion('schedule a dentist appointment') === true);
 
 console.log(`\nhardening: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

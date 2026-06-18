@@ -8,7 +8,7 @@ import { listPendingTodos, type TodoRow } from '../db/todos';
 import { listRecentCaptures } from '../db/captures';
 import type { ExtractionResult, PrivacyLevel } from '../types/extraction';
 import { isInvalidDeadline, isInvalidPendingTask } from './artifactCleanup';
-import { normalizeMemoryLookupText, recognizesMemoryMapQuestion, recognizesMonthlySpendingQuestion, recognizesTodayPlanQuestion, requestedTaskContext, spendingWindow, type SpendingWindow, recognizesSchedulingQuestion, extractSchedulableTask } from './askIntent';
+import { normalizeMemoryLookupText, recognizesMemoryMapQuestion, recognizesMonthlySpendingQuestion, recognizesTodayPlanQuestion, requestedTaskContext, spendingWindow, type SpendingWindow, recognizesSchedulingQuestion, extractSchedulableTask, isComplexOrEmotionalQuery } from './askIntent';
 import { organizeMemory } from './organizer';
 import { promptAI } from '../ai/openai';
 import { resolveRemoteAvailability } from '../ai/provider';
@@ -573,6 +573,11 @@ export async function askLucy(
       recordedSignal: '',
       llmResponse: `Got it, ${name}. I've saved that to your memory and will organize it shortly.`,
     };
+  }
+  // Long / multi-topic / emotional messages → straight to the LLM (LUCY's strongest mode). Prevents a
+  // keyword like "today" in a stressed brain-dump from being hijacked into a canned stats answer.
+  if (isComplexOrEmotionalQuery(trimmed)) {
+    return answerWithLLM(trimmed, history, screenContext);
   }
   if (recognizesSchedulingQuestion(trimmed)) {
     return answerScheduling(trimmed);

@@ -108,7 +108,7 @@ function httpResponse(status: number, contentType: string, body: string): string
     + 'Connection: close\r\n\r\n'
     + body;
 }
-const json = (status: number, obj: unknown) => httpResponse(status, 'application/json', JSON.stringify(obj));
+const json = (status: number, obj: unknown) => httpResponse(status, 'application/json; charset=utf-8', JSON.stringify(obj));
 
 // ─── Routing ─────────────────────────────────────────────────────────────────
 async function route(req: ParsedRequest): Promise<string> {

@@ -432,22 +432,28 @@ export function ScheduleTab() {
     if (!x.id) return null;
     const dur = x.end - x.start;
     const afterS = o.end; const beforeS = o.start - dur;
+    const accent = catColor(x.title, describeResources(x.resources));
     return (
-      <View>
-        <Text style={styles.eventSection}>Move “{x.title}”</Text>
-        {resolveSugg.loading ? <Text style={styles.rowD}>Finding free times…</Text> : null}
+      <View style={styles.moveGroup}>
+        <View style={styles.moveHead}>
+          <View style={[styles.sheetTagDot, { backgroundColor: accent }]} />
+          <Text style={styles.moveHeadT} numberOfLines={1}>Move {x.title}</Text>
+        </View>
+        {resolveSugg.loading ? (
+          <View style={styles.moveLoadRow}><ActivityIndicator size="small" color={LUCY_COLORS.primary} /><Text style={styles.moveLoadT}>Finding free times…</Text></View>
+        ) : null}
         <View style={styles.eventChipRow}>
           {sugg.map((s, i) => (
-            <TouchableOpacity key={i} style={styles.eventChip} onPress={() => moveBlockTo(x, s.start, s.end)}>
-              <Text style={styles.eventChipT}>{dayLabel(s.start)} · {clock(s.start)}</Text>
+            <TouchableOpacity key={i} style={styles.moveChipBest} activeOpacity={0.7} onPress={() => moveBlockTo(x, s.start, s.end)}>
+              <Text style={styles.moveChipBestT}>{dayLabel(s.start)} · {clock(s.start)}</Text>
             </TouchableOpacity>
           ))}
           {/* Deterministic fallbacks (always valid even if no free slot was found). */}
-          <TouchableOpacity style={styles.eventChip} onPress={() => moveBlockTo(x, afterS, afterS + dur)}>
-            <Text style={styles.eventChipT}>After {o.title} · {clock(afterS)}</Text>
+          <TouchableOpacity style={styles.eventChip} activeOpacity={0.7} onPress={() => moveBlockTo(x, afterS, afterS + dur)}>
+            <Text style={styles.eventChipT}>After · {clock(afterS)}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.eventChip} onPress={() => moveBlockTo(x, beforeS, beforeS + dur)}>
-            <Text style={styles.eventChipT}>Before {o.title} · {clock(beforeS)}</Text>
+          <TouchableOpacity style={styles.eventChip} activeOpacity={0.7} onPress={() => moveBlockTo(x, beforeS, beforeS + dur)}>
+            <Text style={styles.eventChipT}>Before · {clock(beforeS)}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -585,39 +591,59 @@ export function ScheduleTab() {
       <Modal visible={!!detail} transparent animationType="slide" onRequestClose={() => setDetail(null)}>
         <Pressable style={styles.cardBackdrop} onPress={() => setDetail(null)}>
           <Pressable style={styles.eventCard} onPress={() => { /* swallow */ }}>
-            <View style={styles.cardGrip} />
-            <View style={[styles.eventBar, { backgroundColor: detail ? catColor(detail.title, describeResources(detail.resources)) : LUCY_COLORS.primary }]} />
-            <Text style={styles.eventWhen}>{detail ? `${dayLabel(detail.start)} · ${clock(detail.start)} – ${clock(detail.end)}` : ''}</Text>
-            <TextInput style={styles.eventTitleInput} value={nameEdit} onChangeText={setNameEdit} placeholder="Event name" placeholderTextColor={LUCY_COLORS.textFaint} />
-            {detail && nameEdit.trim() && nameEdit.trim() !== detail.title ? (
-              <TouchableOpacity style={styles.eventSave} onPress={saveName}><Text style={styles.eventSaveT}>Save name</Text></TouchableOpacity>
-            ) : null}
+            {(() => {
+              const accent = detail ? catColor(detail.title, describeResources(detail.resources)) : LUCY_COLORS.primary;
+              return (
+                <>
+                  <View style={styles.cardGrip} />
+                  <View style={[styles.accentHalo, { backgroundColor: `${accent}1A` }]} pointerEvents="none" />
+                  <View style={styles.sheetHeader}>
+                    <View style={[styles.sheetRail, { backgroundColor: accent }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.sheetEyebrow}>{detail ? dayLabel(detail.start).toUpperCase() : 'EVENT'}</Text>
+                      <Text style={styles.sheetWhenRow}>{detail ? `${clock(detail.start)} – ${clock(detail.end)}` : ''}</Text>
+                    </View>
+                    <View style={[styles.sheetTag, { backgroundColor: `${accent}22`, borderColor: `${accent}55` }]}>
+                      <View style={[styles.sheetTagDot, { backgroundColor: accent }]} />
+                      <Text style={[styles.sheetTagT, { color: accent }]}>{detail ? describeResources(detail.resources) : 'Lucy'}</Text>
+                    </View>
+                  </View>
 
-            <Text style={styles.eventSection}>Make recurring</Text>
-            <View style={styles.eventChipRow}>
-              {(['daily', 'weekdays', 'weekly'] as const).map((r) => (
-                <TouchableOpacity key={r} style={styles.eventChip} onPress={() => makeRecurring(r)}>
-                  <Text style={styles.eventChipT}>{r === 'weekdays' ? 'Weekdays' : r[0].toUpperCase() + r.slice(1)}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                  <View style={styles.eventTitleWrap}>
+                    <TextInput style={styles.eventTitleInput} value={nameEdit} onChangeText={setNameEdit} placeholder="Event name" placeholderTextColor={LUCY_COLORS.textFaint} />
+                    {detail && nameEdit.trim() && nameEdit.trim() !== detail.title ? (
+                      <TouchableOpacity style={styles.eventSave} onPress={saveName}><Text style={styles.eventSaveT}>Save</Text></TouchableOpacity>
+                    ) : null}
+                  </View>
 
-            <Text style={styles.eventSection}>Reschedule</Text>
-            <View style={styles.eventChipRow}>
-              <TouchableOpacity style={styles.eventChip} onPress={() => shiftEvent(-3600_000)}><Text style={styles.eventChipT}>−1h</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.eventChip} onPress={() => shiftEvent(-900_000)}><Text style={styles.eventChipT}>−15m</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.eventChip} onPress={() => shiftEvent(900_000)}><Text style={styles.eventChipT}>+15m</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.eventChip} onPress={() => shiftEvent(3600_000)}><Text style={styles.eventChipT}>+1h</Text></TouchableOpacity>
-            </View>
-            <View style={styles.eventChipRow}>
-              <TouchableOpacity style={styles.eventChip} onPress={() => shiftEvent(86400_000)}><Text style={styles.eventChipT}>+1 day</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.eventChip} onPress={() => shiftEvent(7 * 86400_000)}><Text style={styles.eventChipT}>+1 week</Text></TouchableOpacity>
-            </View>
+                  <Text style={styles.eventSection}>Repeat</Text>
+                  <View style={styles.eventChipRow}>
+                    {(['daily', 'weekdays', 'weekly'] as const).map((r) => (
+                      <TouchableOpacity key={r} style={styles.eventChip} activeOpacity={0.7} onPress={() => makeRecurring(r)}>
+                        <Text style={styles.eventChipT}>{r === 'weekdays' ? 'Weekdays' : r[0].toUpperCase() + r.slice(1)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
 
-            <View style={styles.eventActions}>
-              <TouchableOpacity style={styles.eventDelete} onPress={deleteEvent}><Text style={styles.eventDeleteT}>Delete event</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.eventDone} onPress={() => setDetail(null)}><Text style={styles.eventDoneT}>Done</Text></TouchableOpacity>
-            </View>
+                  <Text style={styles.eventSection}>Reschedule</Text>
+                  <View style={styles.eventChipRow}>
+                    <TouchableOpacity style={styles.eventChip} activeOpacity={0.7} onPress={() => shiftEvent(-3600_000)}><Text style={styles.eventChipT}>−1h</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.eventChip} activeOpacity={0.7} onPress={() => shiftEvent(-900_000)}><Text style={styles.eventChipT}>−15m</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.eventChip} activeOpacity={0.7} onPress={() => shiftEvent(900_000)}><Text style={styles.eventChipT}>+15m</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.eventChip} activeOpacity={0.7} onPress={() => shiftEvent(3600_000)}><Text style={styles.eventChipT}>+1h</Text></TouchableOpacity>
+                  </View>
+                  <View style={styles.eventChipRow}>
+                    <TouchableOpacity style={styles.eventChip} activeOpacity={0.7} onPress={() => shiftEvent(86400_000)}><Text style={styles.eventChipT}>+1 day</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.eventChip} activeOpacity={0.7} onPress={() => shiftEvent(7 * 86400_000)}><Text style={styles.eventChipT}>+1 week</Text></TouchableOpacity>
+                  </View>
+
+                  <View style={styles.eventActions}>
+                    <TouchableOpacity style={styles.eventDelete} activeOpacity={0.7} onPress={deleteEvent}><Text style={styles.eventDeleteT}>Delete</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.eventDone} activeOpacity={0.85} onPress={() => setDetail(null)}><Text style={styles.eventDoneT}>Done</Text></TouchableOpacity>
+                  </View>
+                </>
+              );
+            })()}
           </Pressable>
         </Pressable>
       </Modal>
@@ -626,22 +652,33 @@ export function ScheduleTab() {
       <Modal visible={!!habitSuggest} transparent animationType="slide" onRequestClose={() => setHabitSuggest(null)}>
         <Pressable style={styles.cardBackdrop} onPress={() => setHabitSuggest(null)}>
           <Pressable style={styles.eventCard} onPress={() => { /* swallow */ }}>
-            <View style={styles.cardGrip} />
-            <View style={styles.sheetHeader}>
-              <View style={[styles.sheetIcon, { backgroundColor: habitSuggest ? `${catColor(habitSuggest.title, describeResources(habitSuggest.resources))}22` : LUCY_COLORS.primaryMist }]}>
-                <Text style={styles.sheetIconText}>✶</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.sheetEyebrow}>Suggested from your routine</Text>
-                <Text style={styles.sheetTitle} numberOfLines={2}>{habitSuggest?.title ?? ''}</Text>
-              </View>
-            </View>
-            <Text style={styles.sheetWhen}>{habitSuggest ? `${clock(habitSuggest.start)} – ${clock(habitSuggest.end)}` : ''}</Text>
-            <Text style={styles.sheetBody}>Add this to today's schedule? It won't take up your time until you do.</Text>
-            <View style={styles.eventActions}>
-              <TouchableOpacity style={styles.sheetSecondary} onPress={() => setHabitSuggest(null)}><Text style={styles.sheetSecondaryT}>Not now</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.eventDone} onPress={() => { const h = habitSuggest; setHabitSuggest(null); if (h) void approveHabit(h); }}><Text style={styles.eventDoneT}>✓ Add</Text></TouchableOpacity>
-            </View>
+            {(() => {
+              const accent = habitSuggest ? catColor(habitSuggest.title, describeResources(habitSuggest.resources)) : LUCY_COLORS.primary;
+              return (
+                <>
+                  <View style={styles.cardGrip} />
+                  <View style={[styles.accentHalo, { backgroundColor: `${accent}1A` }]} pointerEvents="none" />
+                  <View style={styles.sheetHeader}>
+                    <View style={[styles.sheetIcon, { backgroundColor: `${accent}22`, borderColor: `${accent}55` }]}>
+                      <Text style={[styles.sheetIconText, { color: accent }]}>✦</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.sheetEyebrow}>Suggested from your routine</Text>
+                      <Text style={styles.sheetTitle} numberOfLines={2}>{habitSuggest?.title ?? ''}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.sheetWhenChip}>
+                    <View style={[styles.sheetTagDot, { backgroundColor: accent }]} />
+                    <Text style={styles.sheetWhen}>{habitSuggest ? `${clock(habitSuggest.start)} – ${clock(habitSuggest.end)}` : ''}</Text>
+                  </View>
+                  <Text style={styles.sheetBody}>Add this to today's schedule? It stays just a gentle nudge until you do — nothing takes up your time yet.</Text>
+                  <View style={styles.eventActions}>
+                    <TouchableOpacity style={styles.sheetSecondary} activeOpacity={0.7} onPress={() => setHabitSuggest(null)}><Text style={styles.sheetSecondaryT}>Not now</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.eventDone} activeOpacity={0.85} onPress={() => { const h = habitSuggest; setHabitSuggest(null); if (h) void approveHabit(h); }}><Text style={styles.eventDoneT}>Add to today</Text></TouchableOpacity>
+                  </View>
+                </>
+              );
+            })()}
           </Pressable>
         </Pressable>
       </Modal>
@@ -651,19 +688,38 @@ export function ScheduleTab() {
         <Pressable style={styles.cardBackdrop} onPress={() => setResolve(null)}>
           <Pressable style={styles.eventCard} onPress={() => { /* swallow */ }}>
             <View style={styles.cardGrip} />
-            <Text style={styles.resolveH}>Resolve overlap</Text>
+            <View style={[styles.accentHalo, { backgroundColor: `${LUCY_COLORS.error}1A` }]} pointerEvents="none" />
+            <View style={styles.sheetHeader}>
+              <View style={[styles.sheetIcon, { backgroundColor: `${LUCY_COLORS.error}22`, borderColor: `${LUCY_COLORS.error}55` }]}>
+                <Text style={[styles.sheetIconText, { color: LUCY_COLORS.error }]}>⇄</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.sheetEyebrow, { color: LUCY_COLORS.error }]}>Two things overlap</Text>
+                <Text style={styles.sheetTitle}>Resolve overlap</Text>
+              </View>
+            </View>
             {resolve ? (
-              <Text style={styles.eventWhen}>
-                “{resolve.a.title}” ({clock(resolve.a.start)}–{clock(resolve.a.end)}) overlaps “{resolve.b.title}” ({clock(resolve.b.start)}–{clock(resolve.b.end)}). Pick which to move:
-              </Text>
+              <View style={styles.overlapPair}>
+                <View style={styles.overlapRow}>
+                  <View style={[styles.sheetTagDot, { backgroundColor: catColor(resolve.a.title, describeResources(resolve.a.resources)) }]} />
+                  <Text style={styles.overlapName} numberOfLines={1}>{resolve.a.title}</Text>
+                  <Text style={styles.overlapTime}>{clock(resolve.a.start)}–{clock(resolve.a.end)}</Text>
+                </View>
+                <View style={styles.overlapRow}>
+                  <View style={[styles.sheetTagDot, { backgroundColor: catColor(resolve.b.title, describeResources(resolve.b.resources)) }]} />
+                  <Text style={styles.overlapName} numberOfLines={1}>{resolve.b.title}</Text>
+                  <Text style={styles.overlapTime}>{clock(resolve.b.start)}–{clock(resolve.b.end)}</Text>
+                </View>
+              </View>
             ) : null}
+            <Text style={styles.sheetBody}>Pick a new time for one of them and the overlap clears.</Text>
             {resolve ? <MoveOptions x={resolve.a} o={resolve.b} sugg={resolveSugg.a} /> : null}
             {resolve ? <MoveOptions x={resolve.b} o={resolve.a} sugg={resolveSugg.b} /> : null}
             {resolve && !resolve.a.id && !resolve.b.id ? (
-              <Text style={styles.emptyText}>Both events are from a connected calendar — change them in that calendar app.</Text>
+              <Text style={styles.emptyText}>Both events come from a connected calendar — change them in that calendar app.</Text>
             ) : null}
             <View style={styles.eventActions}>
-              <TouchableOpacity style={styles.eventDone} onPress={() => setResolve(null)}><Text style={styles.eventDoneT}>Close</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.sheetSecondaryFull} activeOpacity={0.7} onPress={() => setResolve(null)}><Text style={styles.sheetSecondaryT}>Close</Text></TouchableOpacity>
             </View>
           </Pressable>
         </Pressable>
@@ -741,16 +797,6 @@ const styles = StyleSheet.create({
   proposalWrap: { marginTop: 12 },
   conflictCard: { borderColor: LUCY_COLORS.error },
   conflictRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 9 },
-  resolveH: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '900', marginBottom: 6 },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: 13, marginBottom: 12 },
-  sheetIcon: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
-  sheetIconText: { fontSize: 20, color: LUCY_COLORS.primary },
-  sheetEyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 10.5, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
-  sheetTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '900', lineHeight: 26, marginTop: 3 },
-  sheetWhen: { color: LUCY_COLORS.textMuted, fontSize: 14, fontWeight: '700', marginBottom: 8 },
-  sheetBody: { color: LUCY_COLORS.textMuted, fontSize: 13.5, lineHeight: 19, marginBottom: 4 },
-  sheetSecondary: { flex: 1, alignItems: 'center', paddingVertical: 13, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surfaceRaised },
-  sheetSecondaryT: { color: LUCY_COLORS.textMuted, fontWeight: '800', fontSize: 14 },
   timetableCard: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 24, padding: 15 },
   timetableHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
   section: { color: LUCY_COLORS.textDark, fontWeight: '900', fontSize: 20, marginTop: 3 },
@@ -800,21 +846,59 @@ const styles = StyleSheet.create({
   monthCellDateToday: { color: LUCY_COLORS.primary },
   monthCellCount: { marginTop: 3, backgroundColor: LUCY_COLORS.primary, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1, color: '#fff', fontSize: 10, fontWeight: '900', overflow: 'hidden' },
   busy: { paddingVertical: 16 },
-  cardBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
-  eventCard: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 20, paddingBottom: 30, borderWidth: 1, borderColor: LUCY_COLORS.border },
-  cardGrip: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.border, marginBottom: 14 },
-  eventBar: { height: 4, borderRadius: 2, width: 44, marginBottom: 10 },
-  eventWhen: { color: LUCY_COLORS.textMuted, fontSize: 13, fontWeight: '700', marginBottom: 6 },
-  eventTitleInput: { color: LUCY_COLORS.textDark, fontSize: 22, fontWeight: '900', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.border },
-  eventSave: { alignSelf: 'flex-start', marginTop: 10, backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 9 },
+  cardBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.62)', justifyContent: 'flex-end' },
+  // ── Shared sheet family (event detail · habit suggestion · overlap resolver) ──
+  eventCard: {
+    backgroundColor: LUCY_COLORS.surfaceSheet, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 22, paddingTop: 12, paddingBottom: 30,
+    borderWidth: 1, borderColor: LUCY_COLORS.border, overflow: 'hidden',
+    shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.18, shadowRadius: 24, elevation: 16,
+  },
+  cardGrip: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.textFaint, opacity: 0.7, marginBottom: 16 },
+  // Soft accent halo bleeding from the top — gives each sheet its category-colored glow.
+  accentHalo: { position: 'absolute', top: -120, left: -40, right: -40, height: 240, borderRadius: 240 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: 13, marginBottom: 14 },
+  sheetRail: { width: 4, borderRadius: 2, alignSelf: 'stretch', minHeight: 38 },
+  sheetIcon: { width: 46, height: 46, borderRadius: 23, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  sheetIconText: { fontSize: 20, fontWeight: '900', color: LUCY_COLORS.primary },
+  sheetEyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
+  sheetTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '900', lineHeight: 26, marginTop: 3 },
+  sheetWhenRow: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '900', marginTop: 3 },
+  sheetTag: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6, maxWidth: 130 },
+  sheetTagDot: { width: 7, height: 7, borderRadius: 4 },
+  sheetTagT: { fontSize: 11.5, fontWeight: '800' },
+  sheetWhenChip: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8, marginBottom: 12 },
+  sheetWhen: { color: LUCY_COLORS.textDark, fontSize: 13.5, fontWeight: '800' },
+  sheetBody: { color: LUCY_COLORS.textMuted, fontSize: 13.5, lineHeight: 20, marginBottom: 4 },
+  // Event title with inline Save
+  eventTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 16, paddingLeft: 16, paddingRight: 8, paddingVertical: 4 },
+  eventTitleInput: { flex: 1, color: LUCY_COLORS.textDark, fontSize: 19, fontWeight: '900', paddingVertical: 10 },
+  eventSave: { backgroundColor: LUCY_COLORS.primary, borderRadius: 11, paddingHorizontal: 16, paddingVertical: 10 },
   eventSaveT: { color: '#fff', fontWeight: '900', fontSize: 13 },
-  eventSection: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase', marginTop: 20, marginBottom: 9 },
+  eventSection: { color: LUCY_COLORS.textSubtle, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase', marginTop: 22, marginBottom: 10 },
   eventChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  eventChip: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 13, paddingHorizontal: 15, paddingVertical: 11 },
+  eventChip: { minHeight: 44, justifyContent: 'center', backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11 },
   eventChipT: { color: LUCY_COLORS.textDark, fontSize: 13.5, fontWeight: '800' },
-  eventActions: { flexDirection: 'row', gap: 10, marginTop: 24 },
-  eventDelete: { flex: 1, alignItems: 'center', paddingVertical: 13, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.error },
-  eventDeleteT: { color: LUCY_COLORS.error, fontWeight: '900', fontSize: 14 },
-  eventDone: { flex: 1, alignItems: 'center', paddingVertical: 13, borderRadius: 14, backgroundColor: LUCY_COLORS.primary },
-  eventDoneT: { color: '#fff', fontWeight: '900', fontSize: 14 },
+  // Best-time chips (resolver) — amber-tinted to read as Lucy's recommendation
+  moveGroup: { marginTop: 18 },
+  moveHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  moveHeadT: { flex: 1, color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '900' },
+  moveLoadRow: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 10 },
+  moveLoadT: { color: LUCY_COLORS.textMuted, fontSize: 12.5, fontWeight: '700' },
+  moveChipBest: { minHeight: 44, justifyContent: 'center', backgroundColor: LUCY_COLORS.primaryMist, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11 },
+  moveChipBestT: { color: LUCY_COLORS.primaryGlow, fontSize: 13.5, fontWeight: '900' },
+  // Overlap summary pair
+  overlapPair: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 16, padding: 14, gap: 11, marginBottom: 14 },
+  overlapRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  overlapName: { flex: 1, color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '800' },
+  overlapTime: { color: LUCY_COLORS.textMuted, fontSize: 12.5, fontWeight: '700' },
+  // Footer actions
+  eventActions: { flexDirection: 'row', gap: 10, marginTop: 26 },
+  eventDelete: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 15, borderWidth: 1, borderColor: `${LUCY_COLORS.error}77`, backgroundColor: `${LUCY_COLORS.error}14` },
+  eventDeleteT: { color: LUCY_COLORS.error, fontWeight: '900', fontSize: 14.5 },
+  eventDone: { flex: 1.4, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: LUCY_COLORS.primary, shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 6 },
+  eventDoneT: { color: '#fff', fontWeight: '900', fontSize: 14.5 },
+  sheetSecondary: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 15, borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surfaceRaised },
+  sheetSecondaryFull: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 15, borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surfaceRaised },
+  sheetSecondaryT: { color: LUCY_COLORS.textMuted, fontWeight: '800', fontSize: 14.5 },
 });

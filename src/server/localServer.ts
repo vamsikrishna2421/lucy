@@ -297,6 +297,23 @@ async function route(req: ParsedRequest): Promise<string> {
         scheduleSuggestions: answer.scheduleSuggestions ?? [],
       });
     }
+    // Shadow-diff: run the LEGACY answer path and the SEMANTIC ROUTER on the same question and return
+    // both, so the new tool routing can be compared before flipping the default on (P2 dogfooding).
+    if (req.method === 'POST' && req.path === '/api/ask-compare') {
+      const question = String(payload.question ?? '').trim();
+      if (!question) return json(400, { error: 'Empty question' });
+      const { askLucy } = await import('../processing/ask');
+      const { runSemanticRouter } = await import('../processing/tools');
+      const [legacy, routed] = await Promise.all([
+        askLucy(question, undefined, [], undefined, { bypassRouter: true }),
+        runSemanticRouter(db, question).catch(() => null),
+      ]);
+      return json(200, {
+        ok: true, question,
+        legacy: { kind: legacy.answerKind, reply: (legacy.llmResponse || legacy.message || legacy.title || '').slice(0, 1200) },
+        router: routed ? { tools: routed.recordedSignal, reply: (routed.llmResponse || routed.message || '').slice(0, 1200) } : null,
+      });
+    }
     // Log a mood entry from the laptop.
     if (req.method === 'POST' && req.path === '/api/mood') {
       const tone = ['positive', 'neutral', 'low', 'negative'].includes(String(payload.tone)) ? String(payload.tone) : 'neutral';

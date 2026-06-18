@@ -17,6 +17,12 @@ export async function runSemanticRouter(
 ): Promise<LucyAnswer | null> {
   const ctx = { db, history, screenContext };
   const selection = await selectTools(ctx, question);
+  // Observability: log every routing decision so misroutes are visible in dev_log during dogfooding.
+  void import('../../db/devLog').then(({ insertDevLog }) => insertDevLog(db, {
+    category: 'router', model: selection.tools.map((t) => t.name).join('+') || 'none',
+    input_preview: question.slice(0, 200), output_preview: selection.reason.slice(0, 200),
+    duration_ms: 0, error: null,
+  })).catch(() => {});
   const results = await runSelected(ctx, selection);
   if (!results.length) return null; // nothing ran — let the caller fall back to the legacy path
   const merged = await mergeResults(question, results);

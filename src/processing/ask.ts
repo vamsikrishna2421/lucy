@@ -547,6 +547,7 @@ export async function askLucy(
   captureCallback?: (text: string) => Promise<void>,
   history: AskTurn[] = [],
   screenContext?: string,
+  opts?: { bypassRouter?: boolean },
 ): Promise<LucyAnswer> {
   const db = await getDatabase();
   const trimmed = question.trim();
@@ -569,18 +570,6 @@ export async function askLucy(
       return { supported: true, answerKind: 'llm', title: 'Add your API key', message: modelKeyMissingMessage(status), tasks: [], deadlines: [], recordedSignal: '', llmResponse: modelKeyMissingMessage(status), needsApiKey: true };
     }
   } catch { /* if the check fails, continue normally */ }
-
-  // Semantic tool router (dark-launched behind `semantic_router_enabled`, default OFF). Safety
-  // red-flag stays ABOVE this. When the flag is on, route via the tool registry; on any miss/failure
-  // fall through to the existing path so behavior is never worse than today.
-  try {
-    const { getSetting } = await import('../db/settings');
-    if ((await getSetting(db, 'semantic_router_enabled')) === 'on') {
-      const { runSemanticRouter } = await import('./tools');
-      const routed = await runSemanticRouter(db, trimmed, history, screenContext);
-      if (routed) return routed;
-    }
-  } catch { /* fall through to the legacy path */ }
 
   // Mid-conversation follow-ups (e.g. "yes", "do that", "the first one", "option 2")
   // must be answered WITH the prior turns as context — never treated as a brand-new
@@ -636,6 +625,17 @@ export async function askLucy(
   if (recognizesSchedulingQuestion(trimmed)) {
     return answerScheduling(trimmed);
   }
+  // Semantic tool router (dark-launched behind `semantic_router_enabled`, default OFF). Placed AFTER
+  // safety + the side-effecting/action paths (capture, reorganize, scheduling) so it only handles
+  // Q&A; on any miss/failure it falls through to the legacy detectors below — never worse than today.
+  try {
+    const { getSetting } = await import('../db/settings');
+    if (!opts?.bypassRouter && (await getSetting(db, 'semantic_router_enabled')) === 'on') {
+      const { runSemanticRouter } = await import('./tools');
+      const routed = await runSemanticRouter(db, trimmed, history, screenContext);
+      if (routed) return routed;
+    }
+  } catch { /* fall through to the legacy path */ }
   if (recognizesMonthlySpendingQuestion(trimmed)) {
     return answerMonthlySpending(trimmed);
   }

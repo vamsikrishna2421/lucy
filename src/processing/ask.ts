@@ -1,5 +1,6 @@
 import { getDatabase } from '../db';
 import { listExpenses, type ExpenseRow } from '../db/expenses';
+import { expenseInWindow, recordedAmount } from './expenseWindow';
 import { listLatestExtractionEvidence } from '../db/extractions';
 import { listKnowledgeConnections, listKnowledgeEntities, type KnowledgeConfidence } from '../db/knowledge';
 import { insertQuestionSignal } from '../db/questions';
@@ -104,28 +105,7 @@ function extractedNames(result: ExtractionResult): string[] {
 }
 
 /** Is an expense's UTC created_at within the asked-about window? (computed against local "now"). */
-function expenseInWindow(createdAt: string, win: SpendingWindow, now = new Date()): boolean {
-  if (win.kind === 'all') return true;
-  const t = new Date(`${createdAt.replace(' ', 'T')}Z`).getTime();
-  if (!Number.isFinite(t)) return false;
-  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
-  switch (win.kind) {
-    case 'today': return t >= startOfToday.getTime();
-    case 'week': return t >= now.getTime() - 7 * 86_400_000;
-    case 'month': return t >= new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    case 'lastMonth': {
-      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
-      const end = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-      return t >= start && t < end;
-    }
-    case 'year': return t >= new Date(now.getFullYear(), 0, 1).getTime();
-    default: return true;
-  }
-}
-
-function recordedAmount(expense: ExpenseRow): number {
-  return typeof expense.amount === 'number' && Number.isFinite(expense.amount) ? expense.amount : 0;
-}
+// expenseInWindow + recordedAmount moved to ./expenseWindow (shared with the spending tool).
 
 async function answerMonthlySpending(question: string): Promise<LucyAnswer> {
   const db = await getDatabase();
@@ -578,6 +558,18 @@ export async function askLucy(
       return { supported: true, answerKind: 'llm', title: '', message: flag.message, tasks: [], deadlines: [], recordedSignal: '', llmResponse: flag.message };
     }
   } catch { /* safety check is best-effort but should never throw */ }
+
+  // Semantic tool router (dark-launched behind `semantic_router_enabled`, default OFF). Safety
+  // red-flag stays ABOVE this. When the flag is on, route via the tool registry; on any miss/failure
+  // fall through to the existing path so behavior is never worse than today.
+  try {
+    const { getSetting } = await import('../db/settings');
+    if ((await getSetting(db, 'semantic_router_enabled')) === 'on') {
+      const { runSemanticRouter } = await import('./tools');
+      const routed = await runSemanticRouter(db, trimmed, history, screenContext);
+      if (routed) return routed;
+    }
+  } catch { /* fall through to the legacy path */ }
 
   // Mid-conversation follow-ups (e.g. "yes", "do that", "the first one", "option 2")
   // must be answered WITH the prior turns as context — never treated as a brand-new

@@ -1,0 +1,44 @@
+/**
+ * Semantic tool layer — pure-unit tests (no LLM/DB/RN). Covers description rendering, the selector's
+ * JSON parsing + fallbacks, and merge prose assembly. Run: npx tsx tests/toolRouter.ts
+ */
+import { describeForSelector } from '../src/processing/tools/describe';
+import { parseSelection, buildSelectorPrompt } from '../src/processing/tools/selector';
+import { assembleProse } from '../src/processing/tools/merge';
+import type { LucyTool } from '../src/processing/tools/types';
+
+let pass = 0; let fail = 0;
+function ok(name: string, cond: boolean) { if (cond) { pass++; } else { fail++; console.error('  ✗ FAIL:', name); } }
+
+const stub = (name: string, description: string): LucyTool => ({ name, description, run: async () => ({ kind: name, data: {}, prose: '' }) });
+const tools = [stub('spending', 'money you spent'), stub('memory', 'recall notes')];
+const names = tools.map((t) => t.name);
+
+// describe + prompt
+ok('describeForSelector lists both', /spending:/.test(describeForSelector(tools)) && /memory:/.test(describeForSelector(tools)));
+ok('selector prompt embeds tools + question', (() => { const p = buildSelectorPrompt('how much did I spend?', tools); return p.user === 'how much did I spend?' && /spending:/.test(p.system); })());
+
+// parseSelection — happy path
+{
+  const sel = parseSelection('{"tools":[{"name":"spending","args":{}}],"reason":"money"}', 'how much did I spend?', names);
+  ok('parses spending', sel.tools.length === 1 && sel.tools[0].name === 'spending');
+  ok('injects question into args', sel.tools[0].args.question === 'how much did I spend?');
+}
+ok('unknown tool → memory fallback', (() => { const s = parseSelection('{"tools":[{"name":"banana"}]}', 'x', names); return s.tools.length === 1 && s.tools[0].name === 'memory'; })());
+ok('empty tools → memory', parseSelection('{"tools":[]}', 'x', names).tools[0].name === 'memory');
+ok('garbage → memory fallback', parseSelection('not json at all', 'x', names).tools[0].name === 'memory');
+{
+  const sel = parseSelection('{"tools":[{"name":"spending"},{"name":"spending"},{"name":"memory"}]}', 'x', names);
+  ok('dedupes repeated tool', sel.tools.length === 2 && sel.tools[0].name === 'spending' && sel.tools[1].name === 'memory');
+}
+ok('parses JSON embedded in prose', parseSelection('Sure! {"tools":[{"name":"memory"}]} done', 'x', names).tools[0].name === 'memory');
+
+// assembleProse
+ok('assembleProse joins fragments', assembleProse([
+  { name: 'spending', result: { kind: 'spending', data: {}, prose: 'You spent 50.' } },
+  { name: 'memory', result: { kind: 'memory', data: {}, prose: 'Note: dinner.' } },
+]) === 'You spent 50.\n\nNote: dinner.');
+ok('assembleProse skips empty', assembleProse([{ name: 'memory', result: { kind: 'memory', data: {}, prose: '' } }]) === '');
+
+console.log(`\ntoolRouter: ${pass} passed, ${fail} failed`);
+if (fail > 0) process.exit(1);

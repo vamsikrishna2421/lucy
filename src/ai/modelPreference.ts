@@ -5,8 +5,15 @@
 let _model: string = '';
 export const MODEL_OVERRIDE_SETTING = 'ai_model_override';
 
+// The app must NEVER silently default to an OpenAI model (user directive). When there's no saved
+// override, route to Claude Sonnet — not gpt-4o-mini. The OpenAI default is only ever used if the
+// user EXPLICITLY picks an OpenAI model in Settings (which sets _model).
+export const DEFAULT_MODEL = 'claude-sonnet-4-6';
+
 export function getPreferredModel(fallback: string): string {
-  return _model || fallback;
+  if (_model) return _model;                       // user's explicit choice always wins
+  if (fallback && fallback.startsWith('claude-')) return fallback; // caller already wants Claude
+  return DEFAULT_MODEL;                            // never fall back to an OpenAI model
 }
 
 export function setPreferredModel(model: string): void {

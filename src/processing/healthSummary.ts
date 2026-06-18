@@ -21,6 +21,7 @@ export interface HealthSummary {
   remaining: number | null;        // goal − intake (calories)
   net: number | null;              // intake − tdee today
   net_rolling_7: number | null;    // 7-day rolling average net (trend, not a verdict)
+  drLucy: import('./drLucy').GuardianGuidance[]; // gentle, grounded guardian guidance (may be empty)
 }
 
 export async function getHealthSummary(db: SQLiteDatabase, dateKey = todayKey()): Promise<HealthSummary> {
@@ -86,13 +87,18 @@ export async function getHealthSummary(db: SQLiteDatabase, dateKey = todayKey())
   const remaining = goals ? Math.round(goals.calorie_goal - intake.calories) : null;
   const net = tdeeVal != null ? netCalorie(intake.calories, tdeeVal) : null;
 
+  // Personal baselines for Dr. Lucy (mean RHR/sleep over ~21 days).
+  const baseRow = await db.getFirstAsync<{ rhr: number | null; sleep: number | null }>(
+    `SELECT AVG(resting_hr) AS rhr, AVG(sleep_hours) AS sleep FROM health_snapshots WHERE date_key >= date('now','-21 days')`,
+  ).catch(() => null);
+
   // 7-day rolling net needs both intake and a per-day TDEE; we approximate TDEE as today's TDEE
   // (body profile is stable) and pair it with each day's logged intake (only days with food logged).
   const net7 = (tdeeVal != null)
     ? rollingAverage(intakeDays.filter((d) => d.calories > 0).map((d) => netCalorie(d.calories, tdeeVal!)))
     : null;
 
-  return {
+  const summary: HealthSummary = {
     date: dateKey,
     profileComplete,
     activity: {
@@ -107,5 +113,14 @@ export async function getHealthSummary(db: SQLiteDatabase, dateKey = todayKey())
     remaining,
     net,
     net_rolling_7: net7,
+    drLucy: [],
   };
+
+  // Dr. Lucy's grounded, gentle guidance (deterministic; may be empty).
+  try {
+    const { evaluateGuardian } = await import('./drLucy');
+    summary.drLucy = evaluateGuardian(summary, { resting_hr: baseRow?.rhr ?? null, sleep_hours: baseRow?.sleep ?? null });
+  } catch { /* guidance is non-critical */ }
+
+  return summary;
 }

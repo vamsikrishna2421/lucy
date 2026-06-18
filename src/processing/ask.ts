@@ -509,6 +509,15 @@ export async function askLucy(
   const db = await getDatabase();
   const trimmed = question.trim();
 
+  // SAFETY FIRST: emergency/crisis symptoms override everything — never run normal answering on these.
+  try {
+    const { detectRedFlag } = await import('./drLucy');
+    const flag = detectRedFlag(trimmed);
+    if (flag) {
+      return { supported: true, answerKind: 'llm', title: '', message: flag.message, tasks: [], deadlines: [], recordedSignal: '', llmResponse: flag.message };
+    }
+  } catch { /* safety check is best-effort but should never throw */ }
+
   // Mid-conversation follow-ups (e.g. "yes", "do that", "the first one", "option 2")
   // must be answered WITH the prior turns as context — never treated as a brand-new
   // capture or matched against the standalone structured detectors.

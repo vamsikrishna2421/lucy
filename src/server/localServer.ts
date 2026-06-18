@@ -122,6 +122,20 @@ async function route(req: ParsedRequest): Promise<string> {
       const { buildMemoryExport } = await import('../processing/memoryExport');
       return json(200, await buildMemoryExport(db));
     }
+    // Notification/insight log — for the bell view + debugging junk at its source.
+    if (req.method === 'GET' && req.path === '/api/notifications') {
+      const { listNotifLog, getNotifDiagnostics } = await import('../db/notificationLog');
+      const [items, diag] = await Promise.all([listNotifLog(db, 'all', 200), getNotifDiagnostics(db)]);
+      return json(200, { ok: true, diag, items });
+    }
+    // Clear junk: dismiss all insights (tier>=2) or everything.
+    if (req.method === 'POST' && req.path === '/api/notifications/clear') {
+      const scope = String(payload.scope ?? 'insights');
+      const r = await db.runAsync(scope === 'all'
+        ? 'UPDATE lucy_notifications SET dismissed_at = CURRENT_TIMESTAMP WHERE dismissed_at IS NULL'
+        : 'UPDATE lucy_notifications SET dismissed_at = CURRENT_TIMESTAMP WHERE tier >= 2 AND dismissed_at IS NULL');
+      return json(200, { ok: true, cleared: r.changes });
+    }
     if (req.method === 'POST' && req.path === '/api/capture') {
       const text = String(payload.text ?? '').trim();
       if (!text) return json(400, { error: 'Empty text' });

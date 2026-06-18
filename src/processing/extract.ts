@@ -345,7 +345,11 @@ async function persistExtraction(
     } catch {
       // Non-critical; guardian note is supplementary.
     }
-    const notification = resolvedGaps[0].notification ?? resolvedGaps[0].answer ?? '';
+    // Only PUSH a bell notification for a HIGH-confidence gap with a real notification line. Medium/low
+    // gaps still get stored as a guardian note (above) but don't spam the bell — over-eager gap
+    // detection on ordinary captures was a top source of notification junk.
+    const topGap = resolvedGaps[0];
+    const notification = (topGap.confidence === 'high' && topGap.notification) ? topGap.notification : '';
     if (notification) {
       try {
         await sendGuardianNotification(notification);

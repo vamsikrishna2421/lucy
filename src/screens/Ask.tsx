@@ -233,6 +233,14 @@ export function AskScreen({ initialQuestion }: { initialQuestion?: string } = {}
       const answer = await askLucy(trimmed, captureCallback, history);
       await insertLucyAskMessage(db, currentThreadId, answer);
       setMessages((existing) => [...existing, { id: `lucy-${messageId}`, role: 'lucy', answer }]);
+    } catch {
+      // Never leave the user with no reply (esp. a cold first-ask). Degrade to a calm, non-scary
+      // bubble that invites a retry — no red error, no failed state.
+      const fallback: LucyAnswer = {
+        supported: true, answerKind: 'llm', title: '', message: '', tasks: [], deadlines: [],
+        recordedSignal: '', llmResponse: 'I had a brief hiccup reaching that just now — give me another try in a moment and I’ll get it.',
+      };
+      setMessages((existing) => [...existing, { id: `lucy-${messageId}`, role: 'lucy', answer: fallback }]);
     } finally {
       setAsking(false);
       scrollToLatest();

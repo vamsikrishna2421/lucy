@@ -426,7 +426,12 @@ async function answerWithLLM(question: string, history: AskTurn[] = [], screenCo
       }
       const { redacted, map } = shieldText(input, [...contacts, ...llmNames, ...knownSecrets]);
       const shieldedSystem = systemPrompt + (map.length ? PLACEHOLDER_NOTE : '');
-      llmResponse = restoreText(await promptAI(shieldedSystem, redacted, openAIKey), map);
+      // One quiet retry: the FIRST remote call after launch can fail on a cold socket/DNS warmup —
+      // a silent retry beats showing the user an error on their very first question.
+      let raw: string;
+      try { raw = await promptAI(shieldedSystem, redacted, openAIKey); }
+      catch { await new Promise((r) => setTimeout(r, 600)); raw = await promptAI(shieldedSystem, redacted, openAIKey); }
+      llmResponse = restoreText(raw, map);
     } else {
       llmResponse = await promptDevice(`${systemPrompt}\n${input}\n/no_think`);
     }
@@ -440,7 +445,13 @@ async function answerWithLLM(question: string, history: AskTurn[] = [], screenCo
       duration_ms: Date.now() - t0, error: null,
     }).catch(() => {});
   } catch (e) {
-    llmResponse = 'I had trouble answering this. Try enabling remote intelligence in Settings.';
+    // Never show a scary failure. Tailor the gentle fallback: if remote intelligence simply isn't
+    // set up, guide them there; otherwise it was a transient hiccup — invite a retry, don't alarm.
+    let remoteOn = false;
+    try { remoteOn = (await resolveRemoteAvailability()).available; } catch { /* assume off */ }
+    llmResponse = remoteOn
+      ? 'I couldn’t quite reach my cloud brain just then — give me one more try in a moment and I’ll pick this right up.'
+      : 'I can answer this best with remote intelligence turned on (Settings → Remote intelligence). Add a key and I’ll dig into your memory for you.';
     const { getPreferredModel } = await import('../ai/modelPreference');
     const { config } = await import('../config');
     const { insertDevLog } = await import('../db/devLog');

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Easing, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { PrivacyBadge } from '../components/PrivacyBadge';
+import { ReviewCardDeck, type ReviewCard } from '../components/ReviewCardDeck';
 import { MeetingShareBar } from '../components/MeetingShareBar';
 import { formatMeetingRowText } from '../processing/meetingFormat';
 import { LUCY_COLORS } from '../config/colors';
@@ -1584,73 +1585,81 @@ function NeedsContextView({
     onAnswered();
   };
 
-  return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 140 : 80}>
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={false}>
-        <View style={styles.contextIntro}>
-          <Text style={styles.eyebrow}>CONNECT</Text>
-          <Text style={styles.tonightTitle}>Needs Context</Text>
-          <Text style={styles.tonightDetail}>
-            Optional questions that help LUCY connect memories more accurately. Your answers stay in encrypted local memory.
-          </Text>
-        </View>
-        {/* Self-improving brain: proposals to update an EARLIER note from a newer related one. */}
-        {proposals.map((p) => (
-          <View style={[styles.contextCard, { borderColor: LUCY_COLORS.primarySoft }]} key={`prop-${p.id}`}>
-            <Text style={styles.contextLucyLabel}>{p.kind === 'correction' ? 'i think this corrects an earlier note —' : 'i can enrich an earlier note —'}</Text>
-            <Text style={styles.contextQuestion}>{p.summary}</Text>
-            {(p.old_created_at || p.old_title) ? (
-              <Text style={styles.contextSource}>
-                Earlier note{p.old_created_at ? ` · ${new Date(`${String(p.old_created_at).replace(' ', 'T')}Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}{p.old_title ? ` · ${p.old_title}` : ''}
-              </Text>
-            ) : null}
-            {p.old_excerpt ? <Text style={styles.contextSnippet} numberOfLines={3}>Old: "{protectedPreview(p.old_excerpt)}"</Text> : null}
-            <Text style={[styles.contextSnippet, { color: LUCY_COLORS.primaryGlow }]} numberOfLines={3}>Add: {protectedPreview(p.suggested_context)}</Text>
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-              <TouchableOpacity style={[styles.contextButton, { flex: 1 }]} onPress={() => void applyProposal(p.id)}>
-                <Text style={styles.contextButtonText}>Apply to memory</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.contextButton, styles.contextButtonDisabled, { flex: 0, paddingHorizontal: 18 }]} onPress={() => void dismissProposal(p.id)}>
-                <Text style={styles.contextButtonText}>Dismiss</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
-        {requests.map((request) => (
-          <View style={styles.contextCard} key={request.id}>
-            <Text style={styles.contextLucyLabel}>hey, quick question —</Text>
-            <Text style={styles.contextQuestion}>
-              {request.question || 'Can you add any context that might help me organize this memory?'}
+  // One card per item, rendered one-at-a-time in a full-screen swipeable deck (proposals first).
+  const deckCards: ReviewCard[] = [
+    ...proposals.map((p) => ({
+      key: `prop-${p.id}`,
+      render: () => (
+        <View>
+          <Text style={styles.contextLucyLabel}>{p.kind === 'correction' ? 'i think this corrects an earlier note —' : 'i can enrich an earlier note —'}</Text>
+          <Text style={styles.contextQuestion}>{p.summary}</Text>
+          {(p.old_created_at || p.old_title) ? (
+            <Text style={styles.contextSource}>
+              Earlier note{p.old_created_at ? ` · ${new Date(`${String(p.old_created_at).replace(' ', 'T')}Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}{p.old_title ? ` · ${p.old_title}` : ''}
             </Text>
-            {/* Ground the question in the source note so it's recognizable (a 3-4 word snippet wasn't
-                enough to recall what it was about). */}
-            {(request.source_created_at || request.source_title) ? (
-              <Text style={styles.contextSource}>
-                From your note{request.source_created_at ? ` · ${new Date(`${String(request.source_created_at).replace(' ', 'T')}Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}{request.source_title ? ` · ${request.source_title}` : ''}
-              </Text>
-            ) : null}
-            {(request.source_excerpt || request.snippet) ? (
-              <Text style={styles.contextSnippet} numberOfLines={4}>You said: "{protectedPreview(request.source_excerpt || request.snippet || '')}"</Text>
-            ) : null}
-            <TextInput
-              multiline
-              placeholder="Your answer here..."
-              placeholderTextColor={LUCY_COLORS.textSubtle}
-              style={styles.contextInput}
-              value={answers[request.id] ?? ''}
-              onChangeText={(value) => setAnswers((existing) => ({ ...existing, [request.id]: value }))}
-            />
-            <TouchableOpacity
-              style={[styles.contextButton, !(answers[request.id] ?? '').trim() && styles.contextButtonDisabled]}
-              disabled={!(answers[request.id] ?? '').trim()}
-              onPress={() => void rememberContext(request)}
-            >
-              <Text style={styles.contextButtonText}>Tell LUCY</Text>
+          ) : null}
+          {p.old_excerpt ? <Text style={styles.contextSnippet} numberOfLines={4}>Old: "{protectedPreview(p.old_excerpt)}"</Text> : null}
+          <Text style={[styles.contextSnippet, { color: LUCY_COLORS.primaryGlow }]} numberOfLines={4}>Add: {protectedPreview(p.suggested_context)}</Text>
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+            <TouchableOpacity style={[styles.contextButton, { flex: 1 }]} onPress={() => void applyProposal(p.id)}>
+              <Text style={styles.contextButtonText}>Apply to memory</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.contextButton, styles.contextButtonDisabled, { flex: 0, paddingHorizontal: 18 }]} onPress={() => void dismissProposal(p.id)}>
+              <Text style={styles.contextButtonText}>Dismiss</Text>
             </TouchableOpacity>
           </View>
-        ))}
-        {!requests.length && !proposals.length ? <EmptyLine text="Nothing needs clarification right now. LUCY will ask only when extra context can help." /> : null}
-      </ScrollView>
+        </View>
+      ),
+    })),
+    ...requests.map((request) => ({
+      key: `req-${request.id}`,
+      render: () => (
+        <View>
+          <Text style={styles.contextLucyLabel}>hey, quick question —</Text>
+          <Text style={styles.contextQuestion}>
+            {request.question || 'Can you add any context that might help me organize this memory?'}
+          </Text>
+          {(request.source_created_at || request.source_title) ? (
+            <Text style={styles.contextSource}>
+              From your note{request.source_created_at ? ` · ${new Date(`${String(request.source_created_at).replace(' ', 'T')}Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}{request.source_title ? ` · ${request.source_title}` : ''}
+            </Text>
+          ) : null}
+          {(request.source_excerpt || request.snippet) ? (
+            <Text style={styles.contextSnippet} numberOfLines={5}>You said: "{protectedPreview(request.source_excerpt || request.snippet || '')}"</Text>
+          ) : null}
+          <TextInput
+            multiline
+            placeholder="Your answer here..."
+            placeholderTextColor={LUCY_COLORS.textSubtle}
+            style={styles.contextInput}
+            value={answers[request.id] ?? ''}
+            onChangeText={(value) => setAnswers((existing) => ({ ...existing, [request.id]: value }))}
+          />
+          <TouchableOpacity
+            style={[styles.contextButton, !(answers[request.id] ?? '').trim() && styles.contextButtonDisabled]}
+            disabled={!(answers[request.id] ?? '').trim()}
+            onPress={() => void rememberContext(request)}
+          >
+            <Text style={styles.contextButtonText}>Tell LUCY</Text>
+          </TouchableOpacity>
+        </View>
+      ),
+    })),
+  ];
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 140 : 80}>
+      <ReviewCardDeck
+        cards={deckCards}
+        emptyText="Nothing needs clarification right now. LUCY will ask only when extra context can help."
+        header={(
+          <View style={[styles.contextIntro, { paddingHorizontal: 18 }]}>
+            <Text style={styles.eyebrow}>CONNECT</Text>
+            <Text style={styles.tonightTitle}>Needs Context</Text>
+            <Text style={styles.tonightDetail}>One at a time — swipe through. Your answers stay in encrypted local memory.</Text>
+          </View>
+        )}
+      />
     </KeyboardAvoidingView>
   );
 }

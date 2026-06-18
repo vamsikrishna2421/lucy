@@ -70,22 +70,25 @@ pull (Todoist/Jira/Gmail), ④ web/desktop calendar.
 ## 4. AI Calorie / Health
 Competitors: **Cal AI (now MyFitnessPal-owned), MacroFactor, MyFitnessPal, HealthifyMe, Bearable**.
 
-| Capability | LUCY (planned) | Cal AI | MacroFactor | MyFitnessPal | HealthifyMe |
+| Capability | LUCY (v1 SHIPPED 6-17) | Cal AI | MacroFactor | MyFitnessPal | HealthifyMe |
 |---|---|---|---|---|---|
-| Photo → calories/macros | 🔜 (planned) | ✅ (USP) | 🟡 | ✅ | ✅ (SNAP) |
-| Large food database | 🔜 | ✅ (MFP db) | ✅ (26.5k research) | ✅ (18M) | ✅ (1L+ Indian) |
-| Indian food (katoris/pieces) | 🔜 (planned focus) | 🟡 | ❌ | 🟡 | ✅ (best) |
-| Adaptive calorie targets | 🔜 | 🟡 | ✅ (best) | 🟡 | ✅ |
-| Calorie SPEND (activity/HealthKit) | 🔜 (planned) | 🟡 | 🟡 | ✅ | ✅ |
-| AI coach / guardian | 🔜 (Dr. Lucy) | 🟡 | ✅ | 🟡 | ✅ (Ria) |
+| Photo → calories/macros | ✅ (remote vision) | ✅ (USP) | 🟡 | ✅ | ✅ (SNAP) |
+| Large food database | 🟡 (LLM-estimated) | ✅ (MFP db) | ✅ (26.5k research) | ✅ (18M) | ✅ (1L+ Indian) |
+| Indian food (katoris/pieces) | ✅ (LLM, portion-aware) | 🟡 | ❌ | 🟡 | ✅ (best) |
+| Adaptive calorie targets | 🟡 (TDEE goal, safe-clamped) | 🟡 | ✅ (best) | 🟡 | ✅ |
+| Calorie SPEND (activity/HealthKit) | 🟡 (TDEE; steps-est active) | 🟡 | 🟡 | ✅ | ✅ |
+| Voice/text food logging | 🔒✅ ("I ate…" intent) | 🟡 | 🟡 | ✅ | 🟡 |
+| AI coach / guardian | ✅ (Dr. Lucy, ED-safe) | 🟡 | ✅ | 🟡 | ✅ (Ria) |
+| Barcode logging | ❌ (native, deferred) | 🟡 | ✅ | ✅ | ✅ |
 | Wearable / HealthKit / Health Connect | 🟡 (HealthKit wired) | 🟡 | 🟡 | ✅ | ✅ |
-| Voice / barcode logging | 🔜 (voice native) | 🟡 | 🟡 | ✅ | 🟡 |
 | Medication tracking | 🔜 (planned) | ❌ | ❌ | 🟡 | ✅ |
-| Privacy: on-device | 🔒 (planned) | ❌ | ❌ | ❌ | ❌ |
+| Privacy: on-device | 🔒✅ | ❌ | ❌ | ❌ | ❌ |
 
-**Status:** LUCY hasn't built this yet (researched — docs/HEALTH_STRATEGY.md, docs/INDIA_HEALTH_RESEARCH.md).
-**To win:** photo-logging parity with Cal AI + adaptive targets like MacroFactor + the **Indian-food DB
-(katoris/pieces)** gap HealthifyMe partly owns + privacy/voice as differentiators + Dr. Lucy guardian.
+**Status (v1 SHIPPED 2026-06-17):** calorie engine (BMR/TDEE/net, ED-safe clamps, 27 tests), food_log +
+nutrition data model, photo/voice/text food logging (Indian-portion aware), Dr. Lucy guardian (red-flag
+override + ED-safe, 21 tests), health summary + LAN APIs; Health UI (in-app + web) in progress.
+**Remaining to fully win:** curated food DB (vs LLM estimate), weight-trend ADAPTIVE targets (MacroFactor),
+deep HealthKit active-energy read, barcode (native), medication tracking.
 
 ---
 
@@ -121,7 +124,7 @@ privacy stance). Decision needed: stay manual-but-private, or add opt-in bank sy
 
 ## 7. Biggest gaps to close (prioritized path to #1)
 1. **Android parity + a real web/desktop app** (today: iOS + LAN companion). Cross-platform is table-stakes.
-2. **Health/calorie vertical** (build the researched feature — Cal-AI-class photo log + Indian DB + Dr. Lucy).
+2. **Health/calorie vertical** — ✅ v1 SHIPPED 2026-06-17 (engine + food logging + Dr. Lucy + APIs + UI). Next: curated food DB, adaptive targets, deep HealthKit, barcode, meds.
 3. **Ingestion breadth**: web clipper/extension + email/Slack/doc "AI inbox" (Saner/Mem parity).
 4. **Calendar write-back + external task pull** (Todoist/Jira/Gmail) + Motion-level auto-rebuild.
 5. **Finance**: decide on opt-in bank sync (Plaid) vs privacy-pure manual.

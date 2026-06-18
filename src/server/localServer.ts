@@ -27,12 +27,14 @@ const PORT = 8088;
 // cached, so refresh is instant. The baked-in DASHBOARD_HTML is the offline/first-run fallback.
 const DASHBOARD_API_URL = 'https://api.github.com/repos/vamsikrishna2421/lucy/contents/web/dashboard.html?ref=master';
 let dashboardCache: string | null = null;
+let lastDashboardFetchAt = 0; // for the auto-refresh debounce on page load
 
 interface TcpServer { close: () => void; listen?: (opts: unknown) => void; on?: (e: string, cb: (a: unknown) => void) => void; }
 let server: TcpServer | null = null;
 
 /** Pulls the latest dashboard from the repo and caches it. Returns bytes (0 on failure). */
 async function fetchRemoteDashboard(): Promise<number> {
+  lastDashboardFetchAt = Date.now(); // mark the attempt up front so concurrent loads don't stampede
   try {
     const res = await fetch(`${DASHBOARD_API_URL}&t=${Date.now()}`, {
       // GitHub API requires a User-Agent; Accept: raw returns the file content directly.
@@ -102,6 +104,7 @@ function httpResponse(status: number, contentType: string, body: string): string
     + 'Access-Control-Allow-Origin: *\r\n'
     + 'Access-Control-Allow-Headers: Content-Type, X-LUCY-PIN\r\n'
     + 'Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS\r\n'
+    + 'Cache-Control: no-store, must-revalidate\r\n'
     + 'Connection: close\r\n\r\n'
     + body;
 }
@@ -110,7 +113,15 @@ const json = (status: number, obj: unknown) => httpResponse(status, 'application
 // ─── Routing ─────────────────────────────────────────────────────────────────
 async function route(req: ParsedRequest): Promise<string> {
   if (req.method === 'OPTIONS') return httpResponse(204, 'text/plain', '');
-  if (req.method === 'GET' && req.path === '/') return httpResponse(200, 'text/html; charset=utf-8', dashboardCache ?? DASHBOARD_HTML);
+  if (req.method === 'GET' && req.path === '/') {
+    // Auto-refresh from the repo on page load (debounced ~15s so rapid reloads stay instant and we
+    // don't hammer GitHub's rate limit). Combined with the no-store header below, a browser refresh
+    // always shows the latest dashboard — no manual force-pull needed.
+    if (Date.now() - lastDashboardFetchAt > 15000) {
+      try { await fetchRemoteDashboard(); } catch { /* keep cache */ }
+    }
+    return httpResponse(200, 'text/html; charset=utf-8', dashboardCache ?? DASHBOARD_HTML);
+  }
 
   if (req.path.startsWith('/api/')) {
     // No auth at this stage — LAN-only, security comes later.

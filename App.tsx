@@ -197,6 +197,9 @@ export default function App() {
         await organizeMemory(db, 'startup');
         // Collapse any existing duplicate insight notifications (reworded copies of the same topic).
         try { const { dedupInsightNotifications } = await import('./src/db/notificationLog'); await dedupInsightNotifications(db); } catch { /* non-critical */ }
+        // Remove duplicate calendar blocks (e.g. "Morning walk" ×N) + cancel their stale alarm bursts,
+        // which were flooding the bell with repeated "still waiting" buzzes.
+        try { const { dedupScheduledBlocks } = await import('./src/scheduling'); await dedupScheduledBlocks(db); } catch { /* non-critical */ }
         initializeVault();
         await initializeNotifications();
         const backgroundPreference = await getSetting(db, BACKGROUND_SETTING);

@@ -74,13 +74,24 @@ export async function logDeliveredNotification(
     const content = request.content;
     const data = (content.data ?? {}) as Record<string, unknown>;
     const kind = typeof data.kind === 'string' ? data.kind : 'guardian';
-    const title = content.title ?? 'LUCY';
-    const body = content.body ?? '';
-    // Per-occurrence dedup key: a DAILY check-in fires every day with the same
-    // request.identifier, so we append today's date to keep one entry per day while
-    // still de-duplicating the received-listener vs foreground-reconcile double-log.
-    const base = request.identifier || `lucy_${kind}`;
+    let title = content.title ?? 'LUCY';
+    let body = content.body ?? '';
+    // An alarm-grade nag fires a BURST (nag-<key>#0..13). Collapse the whole burst to ONE bell entry
+    // per event (key off nagGroup, not the per-buzz identifier) and clean the "now — / · still
+    // waiting — tap to dismiss" wording so the bell shows just the event once.
+    const nagGroup = typeof data.nagGroup === 'string' ? data.nagGroup : null;
     const day = new Date().toISOString().slice(0, 10);
+    let base: string;
+    if (nagGroup) {
+      base = `nag_${nagGroup}`;
+      const cleanEvent = body.replace(/\s*·\s*still waiting.*$/i, '').trim();
+      title = cleanEvent || title.replace(/^now\s*—\s*$/i, 'Reminder');
+      body = '';
+    } else {
+      // Per-occurrence dedup: a DAILY check-in reuses request.identifier, so append the day to keep one
+      // entry per day while still de-duping the received-listener vs foreground-reconcile double-log.
+      base = request.identifier || `lucy_${kind}`;
+    }
     const dedupKey = `${base}_${day}`;
     const { getDatabase } = await import('../db');
     const { insertDeliveredNotifLog } = await import('../db/notificationLog');

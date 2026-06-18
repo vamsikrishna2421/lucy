@@ -48,13 +48,13 @@ import {
 } from '../processing/stalenessEngine';
 
 type ViewMode = 'Focus Now' | 'Timeline' | 'Ask Lucy' | 'Health' | 'Brain';
-type LibraryTab = 'Home' | 'Galaxy' | 'Documents' | 'Calendar' | 'Resources' | 'Projects' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen';
+type LibraryTab = 'Home' | 'Galaxy' | 'Documents' | 'Calendar' | 'Resources' | 'Projects' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen' | 'Reminders';
 
 // Display names (internal keys kept stable).
 const TAB_LABEL: Record<LibraryTab, string> = {
   Home: 'Workspace', Calendar: 'Calendar', Documents: 'Documents', Resources: 'Online resources', Galaxy: 'Glossary',
   Meetings: 'Meetings', Listen: 'Listen data', Projects: 'Projects', Ideas: 'Ideas', Expenses: 'Expenses',
-  People: 'People', Todos: 'Todos',
+  People: 'People', Todos: 'Todos', Reminders: 'Reminders',
 };
 
 function displayTimestamp(value: string): string {
@@ -2470,8 +2470,60 @@ function LibraryView({
         {tab === 'Resources' && <ResourcesTab />}
         {tab === 'Meetings' && <MeetingsTab />}
         {tab === 'Listen' && <ListenTab />}
+        {tab === 'Reminders' && <RemindersTab />}
       </ScrollView>
     </View>
+  );
+}
+
+function RemindersTab() {
+  const [rows, setRows] = useState<Array<{ id: number; text: string; remind_at: string | null; urgency: string | null; recurrence: string | null }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    try {
+      const db = await getDatabase();
+      const { listReminders } = await import('../db/reminders');
+      const list = await listReminders(db);
+      setRows(list.map((r) => ({ id: r.id, text: r.text, remind_at: r.remind_at ?? null, urgency: (r as { urgency?: string | null }).urgency ?? null, recurrence: (r as { recurrence?: string | null }).recurrence ?? null })));
+    } catch { /* ignore */ } finally { setLoading(false); }
+  };
+  useEffect(() => { void load(); }, []);
+
+  const dismiss = async (id: number) => {
+    setRows((r) => r.filter((x) => x.id !== id));
+    try {
+      const db = await getDatabase();
+      const { archiveReminder } = await import('../db/reminders');
+      await archiveReminder(db, id, 'dismissed from workspace');
+    } catch { /* ignore */ }
+  };
+
+  const whenLabel = (iso: string | null) => {
+    if (!iso) return 'No time set';
+    const d = new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`);
+    if (Number.isNaN(d.getTime())) return 'No time set';
+    return d.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  };
+
+  if (loading) return <View style={{ paddingVertical: 30 }}><ActivityIndicator color={LUCY_COLORS.primary} /></View>;
+  if (!rows.length) return <EmptyLine text="No reminders yet. Say or type “remind me to…” and they'll show up here." />;
+  return (
+    <>
+      {rows.map((r) => (
+        <View key={r.id} style={styles.reminderRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.reminderText}>{protectedPreview(r.text)}</Text>
+            <Text style={styles.reminderMeta}>
+              {whenLabel(r.remind_at)}{r.recurrence ? ` · repeats ${r.recurrence}` : ''}{r.urgency ? ` · ${r.urgency}` : ''}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={() => void dismiss(r.id)} style={styles.reminderDone}>
+            <Text style={styles.reminderDoneText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      ))}
+    </>
   );
 }
 
@@ -3026,6 +3078,11 @@ const styles = StyleSheet.create({
   sectionTitleBadge: { backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
   sectionTitleBadgeText: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '800' },
   empty: { color: LUCY_COLORS.textMuted, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, padding: 17, marginBottom: 17, lineHeight: 20 },
+  reminderRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, marginBottom: 10 },
+  reminderText: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '600', lineHeight: 20 },
+  reminderMeta: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 4 },
+  reminderDone: { backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 14 },
+  reminderDoneText: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 13 },
   pendingHint: { color: LUCY_COLORS.textMuted, fontSize: 13, marginBottom: 17, paddingHorizontal: 3 },
   library: { flex: 1 },
   wsBack: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 4, marginBottom: 8 },

@@ -65,6 +65,7 @@ export function ScheduleTab() {
   const [resolve, setResolve] = useState<{ a: Block; b: Block } | null>(null); // conflict being resolved
   const [resolveSugg, setResolveSugg] = useState<{ a: SlotSuggestion[]; b: SlotSuggestion[]; loading: boolean }>({ a: [], b: [], loading: false });
   const [habitSuggest, setHabitSuggest] = useState<{ title: string; start: number; end: number; resources: TaskResources } | null>(null);
+  const [learned, setLearned] = useState<Array<{ title: string; startMin: number; endMin: number; days: number[] }>>([]);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -81,6 +82,10 @@ export function ScheduleTab() {
     setUnsched(us.slice(0, 12));
     setCalPerm(perm);
     try { setCalSync((await getSetting(db, 'device_calendar_sync')) !== 'off'); } catch { /* default on */ }
+    try {
+      const { deriveLearnedHabits } = await import('../scheduling/learnedHabits');
+      setLearned(await deriveLearnedHabits(db));
+    } catch { /* suggestions optional */ }
     setLoading(false);
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -203,8 +208,11 @@ export function ScheduleTab() {
   type Item = { id?: number; title: string; start: number; end: number; resources: Block['resources']; habit: boolean; device?: boolean };
   const habitsFor = (k: number): Item[] => {
     const dow = new Date(k).getDay();
-    return (av?.protectedWindows || []).filter((h) => !h.days || h.days.includes(dow)).map((h) => ({
-      title: h.label, start: k + h.startMin * 60000, end: k + h.endMin * 60000, habit: true, resources: { axes: [], location: null },
+    // Suggestions now come from the user's OWN learned routine (deriveLearnedHabits), not hardcoded
+    // windows — proposed for the days/time they usually do each activity. Past days get no suggestion.
+    if (k < dayKey(Date.now())) return [];
+    return learned.filter((h) => h.days.includes(dow)).map((h) => ({
+      title: h.title, start: k + h.startMin * 60000, end: k + h.endMin * 60000, habit: true, resources: { axes: [], location: null },
     }));
   };
   const dayItems = (k: number): Item[] => {

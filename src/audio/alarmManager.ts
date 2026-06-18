@@ -8,6 +8,7 @@
  * Live Activity via push — see docs/ALARM_NOTIFICATIONS.md.
  */
 import * as Haptics from 'expo-haptics';
+import { startAlarmLiveActivity, stopAlarmLiveActivity } from './liveActivity';
 
 export interface ActiveAlarm { key: string; title: string; body: string }
 
@@ -15,6 +16,7 @@ class AlarmManager {
   private current: ActiveAlarm | null = null;
   private listeners = new Set<(a: ActiveAlarm | null) => void>();
   private buzzTimer: ReturnType<typeof setInterval> | null = null;
+  private activityId: string | null = null; // Dynamic Island / lock-screen Live Activity
 
   subscribe(fn: (a: ActiveAlarm | null) => void): () => void {
     this.listeners.add(fn);
@@ -28,6 +30,8 @@ class AlarmManager {
     if (this.current?.key === alarm.key) return;
     this.current = alarm;
     this.startBuzz();
+    // Persist it onto the Dynamic Island + lock screen (best-effort; no-op pre-build/Android).
+    this.activityId = startAlarmLiveActivity(alarm.body || alarm.title, "Tap to dismiss in LUCY");
     this.emit();
   }
 
@@ -45,6 +49,7 @@ class AlarmManager {
   async dismiss(): Promise<void> {
     const key = this.current?.key;
     this.stopBuzz();
+    this.endActivity();
     this.current = null;
     this.emit();
     if (key) {
@@ -52,10 +57,15 @@ class AlarmManager {
     }
   }
 
+  private endActivity(): void {
+    if (this.activityId) { stopAlarmLiveActivity(this.activityId); this.activityId = null; }
+  }
+
   /** Snooze: silence now, cancel the current burst, and re-ring in `minutes`. */
   async snooze(minutes = 10): Promise<void> {
     const alarm = this.current;
     this.stopBuzz();
+    this.endActivity();
     this.current = null;
     this.emit();
     if (!alarm) return;

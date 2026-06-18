@@ -73,8 +73,18 @@ export async function scheduleNag(input: NagInput): Promise<string | null> {
   await ensureAlarmChannel();
   await cancelNag(input.key); // replace, never stack
   const now = Date.now();
+  // User consent: alarm-style (the buzzing, re-ringing burst) only when the user has turned it ON.
+  // Off (default) → a SINGLE gentle notification at the time, no nagging. This is the "ask before
+  // adding an alarm" control — alarms are opt-in, set in Settings → Reminders & alarms.
+  let alarmStyle = false;
+  try {
+    const { getDatabase } = await import('../db');
+    const { getSetting } = await import('../db/settings');
+    alarmStyle = (await getSetting(await getDatabase(), 'alarm_style_enabled')) === 'on';
+  } catch { /* default: gentle */ }
+  const maxBuzzes = alarmStyle ? NAG_MAX : 1;
   let scheduled = 0;
-  for (let i = 0; i < NAG_MAX; i++) {
+  for (let i = 0; i < maxBuzzes; i++) {
     const fireAt = input.fireAtMs + i * NAG_INTERVAL_MS;
     if (fireAt <= now + 5_000) continue; // skip past/imminent slots
     try {

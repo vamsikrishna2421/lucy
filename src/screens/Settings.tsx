@@ -87,6 +87,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [profileDraft, setProfileDraft] = useState<UserProfile>({ name: '', about: '', languages: [] });
   const [savingProfile, setSavingProfile] = useState(false);
   const [checkInEnabled, setCheckInEnabled] = useState(false);
+  const [alarmStyle, setAlarmStyle] = useState(false);
   const [aiModel, setAiModel] = useState('gpt-4o-mini');
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [claudeKey, setClaudeKey] = useState('');
@@ -136,10 +137,18 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       setProfileDraft(userProfile);
       setCheckInEnabled(!!(await getSetting(db, 'progress_checkin_notification_id')));
       setShieldLlm((await getSetting(db, 'shield_use_local_llm')) === 'true');
+      setAlarmStyle((await getSetting(db, 'alarm_style_enabled')) === 'on');
     })();
   }, [backgroundEnabled, localRefresh, refreshToken]);
 
   useEffect(() => subscribeToDeviceModel(setDeviceModel), []);
+
+  const toggleAlarmStyle = async () => {
+    const next = !alarmStyle;
+    setAlarmStyle(next);
+    const db = await getDatabase();
+    await setSetting(db, 'alarm_style_enabled', next ? 'on' : 'off');
+  };
 
   const changeBackground = async () => {
     setChangingBackground(true);
@@ -430,6 +439,13 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           badge={checkInEnabled ? 'On' : 'Off'}
           active={checkInEnabled}
           onInfo={() => setCheckInSchedulerVisible(true)}
+        />
+        <SettingsRow
+          title="Ring like an alarm"
+          value={alarmStyle ? 'On — reminders buzz and re-ring until you react' : 'Off — reminders give one gentle notification'}
+          badge={alarmStyle ? 'On' : 'Off'}
+          active={alarmStyle}
+          onInfo={() => void toggleAlarmStyle()}
         />
         <SettingsRow
           title="Scheduled reminders"

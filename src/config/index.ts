@@ -13,7 +13,9 @@ export const config = {
   tier1IntervalMinutes: 5,
   tier2IntervalMinutes: 120,
   tier3Time: '22:00',
-  backgroundProcessingIntervalMinutes: 120,
+  // iOS clamps BGTaskScheduler to ~15 min minimum and still runs it opportunistically; 15 gives the
+  // OS the earliest chance rather than forcing a 2-hour floor. Foreground captures process immediately.
+  backgroundProcessingIntervalMinutes: 15,
   defaultIdeaPrivacy: 'private' as const,
   defaultExpensePrivacy: 'normal' as const,
   defaultTodoPrivacy: 'normal' as const,

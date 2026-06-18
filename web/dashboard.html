@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 58 (Ask scheduling: "Add to calendar" buttons on schedule suggestions — commits via /api/schedule/commit, so the calendar flow isn't a dead-end from chat) */
+/* LUCY web - premium - dashboard rev 59 (Desktop alerts: browser notifications for new LUCY notifications, polled over LAN — nudges the user at their laptop while busy at work; no backend/push needed) */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -1886,8 +1886,41 @@ async function saveAbout(){const v=$('aboutbox').value;await api('/api/profile',
 async function sendFeedback(){const i=$('fb');const v=i.value.trim();if(!v)return;i.value='';await api('/api/feedback',{method:'POST',body:JSON.stringify({text:v})});toast('LUCY learned it ✓');await load();}
 async function reflect(){const b=$('reflectBtn');if(b){b.textContent='Reflecting…';b.disabled=true;}try{const r=await api('/api/reflect',{method:'POST',body:'{}'});const n=(r&&r.learned)||0;toast(n>0?('Learned '+n+' new thing'+(n===1?'':'s')+' ✓'):'Nothing new to learn right now');}catch(e){toast('Reflection failed');}await load();}
 
+/* Desktop alerts: while the dashboard is open on the laptop, pop a browser notification for any NEW
+   LUCY notification on the phone — so the user gets nudged at their desk without touching the phone.
+   No backend/push needed: we poll /api/notifications over the LAN and use the browser Notification API.
+   (Works while this tab is open; true closed-tab web push would need a push server.) */
+let _notifSeen = Number(localStorage.getItem('lucyNotifSeen')||'0');
+let _notifPollT=null;
+async function pollDesktopNotifs(){
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  try{
+    const r=await api('/api/notifications'); const items=(r&&r.items)||[];
+    const ids=items.map(x=>Number(x.id)||0);
+    const maxId=ids.length?Math.max(...ids):0;
+    if(_notifSeen===0){ _notifSeen=maxId; localStorage.setItem('lucyNotifSeen',String(maxId)); return; } // seed, don't blast old
+    const fresh=items.filter(x=>(Number(x.id)||0)>_notifSeen).sort((a,b)=>(a.id-b.id));
+    for(const n of fresh.slice(-5)){
+      try{ const note=new Notification((n.title||'LUCY'),{body:(n.body||n.message||''),icon:'',tag:'lucy-'+n.id}); note.onclick=()=>window.focus(); }catch(e){}
+    }
+    if(maxId>_notifSeen){ _notifSeen=maxId; localStorage.setItem('lucyNotifSeen',String(maxId)); }
+  }catch(e){}
+}
+function startNotifPoll(){ if(_notifPollT)return; pollDesktopNotifs(); _notifPollT=setInterval(pollDesktopNotifs,25000); }
+function desktopAlertsInit(){
+  if(!('Notification' in window))return;
+  if(Notification.permission==='granted'){ startNotifPoll(); return; }
+  if(Notification.permission==='denied')return;
+  // Show a small pill to opt in (browsers require a user gesture to grant).
+  const pill=document.createElement('button');
+  pill.textContent='🔔 Enable laptop alerts';
+  pill.style.cssText='position:fixed;right:16px;bottom:16px;z-index:9999;background:var(--primary,#FF8C42);color:#0B0B0F;border:none;border-radius:20px;padding:10px 16px;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.35)';
+  pill.onclick=async()=>{ try{ const p=await Notification.requestPermission(); if(p==='granted'){ pill.remove(); startNotifPoll(); } }catch(e){} };
+  document.body.appendChild(pill);
+}
+
 setOrbPersona(ROUTE);applyOrbAmbient();setInterval(applyOrbAmbient,60000);
-renderNav();load();
+renderNav();load();desktopAlertsInit();
 setInterval(()=>{if(ROUTE!=='ask'&&!busy)load(true);},20000);
 </script>
 </body>

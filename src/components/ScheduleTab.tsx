@@ -86,6 +86,8 @@ export function ScheduleTab() {
       const { deriveLearnedHabits } = await import('../scheduling/learnedHabits');
       setLearned(await deriveLearnedHabits(db));
     } catch { /* suggestions optional */ }
+    // Keep the Dynamic Island countdown in sync with the latest schedule (foreground-only).
+    void import('../audio/liveActivity').then(({ syncNextEventLiveActivity }) => syncNextEventLiveActivity()).catch(() => {});
     setLoading(false);
   }, []);
   useEffect(() => { void load(); }, [load]);

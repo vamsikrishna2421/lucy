@@ -419,6 +419,8 @@ export default function App() {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         void drainQueue();
+        // Refresh the Dynamic Island countdown for the next event (foreground-only per iOS).
+        void import('./src/audio/liveActivity').then(({ syncNextEventLiveActivity }) => syncNextEventLiveActivity()).catch(() => {});
         // Reconcile OS-delivered notifications into the in-app bell, then refresh badge.
         void (async () => {
           try {

@@ -40,3 +40,46 @@ export function stopAlarmLiveActivity(id: string | null, title = 'Alarm'): void 
     m?.stopActivity?.(id, { title });
   } catch { /* ignore */ }
 }
+
+// ── Upcoming calendar event Live Activity (countdown on the Dynamic Island) ──────────────────────
+let _eventActivityId: string | null = null;
+let _eventKey: string | null = null;
+
+/**
+ * Show the user's next upcoming committed block on the Dynamic Island + lock screen with a live
+ * countdown, ending it once it passes (or replacing it when a nearer event appears). Gated by the
+ * "Ring like an alarm" opt-in so the Island isn't used without consent. Must be called from the
+ * foreground (iOS won't start a Live Activity from a closed app without push). Best-effort + guarded.
+ */
+export async function syncNextEventLiveActivity(): Promise<void> {
+  const m = mod();
+  if (!m?.startActivity) return;
+  try {
+    const { getDatabase } = await import('../db');
+    const { getSetting } = await import('../db/settings');
+    const db = await getDatabase();
+    if ((await getSetting(db, 'alarm_style_enabled')) !== 'on') { endNextEventLiveActivity(); return; }
+    const now = Date.now();
+    const horizon = now + 6 * 60 * 60 * 1000; // only surface events within the next 6 hours
+    const row = await db.getFirstAsync<{ id: number; title: string; start_at: number }>(
+      "SELECT id, title, start_at FROM scheduled_blocks WHERE status='committed' AND start_at > ? AND start_at < ? ORDER BY start_at ASC LIMIT 1",
+      now, horizon,
+    );
+    if (!row) { endNextEventLiveActivity(); return; }
+    const key = `evt-${row.id}-${row.start_at}`;
+    if (key === _eventKey && _eventActivityId) return; // already showing this one
+    endNextEventLiveActivity();
+    const id = m.startActivity(
+      { title: row.title || 'Upcoming', subtitle: 'Starting soon', progressBar: { date: row.start_at } },
+      { backgroundColor: '#0B0B0F', titleColor: '#FFFFFF', subtitleColor: '#FFA05C' },
+    );
+    if (typeof id === 'string') { _eventActivityId = id; _eventKey = key; }
+  } catch { /* ignore */ }
+}
+
+export function endNextEventLiveActivity(): void {
+  if (_eventActivityId) {
+    try { mod()?.stopActivity?.(_eventActivityId, { title: 'Upcoming' }); } catch { /* ignore */ }
+    _eventActivityId = null; _eventKey = null;
+  }
+}

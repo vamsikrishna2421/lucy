@@ -4,8 +4,10 @@ import { LUCY_COLORS } from '../config/colors';
 
 type Mood = 'awake' | 'sleeping';
 type DayPhase = 'morning' | 'day' | 'evening' | 'night';
-type FaceExpression = 'calm' | 'peek' | 'sleeping' | 'listening' | 'speaking' | 'organizing' | 'saving' | 'thinking' | 'reading';
-export type LucyStatus = 'idle' | 'organizing' | 'listening' | 'speaking' | 'saving' | 'sleeping' | 'thinking' | 'reading';
+type FaceExpression = 'calm' | 'peek' | 'sleeping' | 'listening' | 'speaking' | 'organizing' | 'saving' | 'thinking' | 'reading' | 'music';
+// Public API: the original 8 values are preserved; 'music' is an ADDITIVE optional value.
+// Unknown/unspecified statuses fall back to 'idle' geometry, so existing callers are safe.
+export type LucyStatus = 'idle' | 'organizing' | 'listening' | 'speaking' | 'saving' | 'sleeping' | 'thinking' | 'reading' | 'music';
 
 function phaseForHour(hour: number): DayPhase {
   if (hour >= 22 || hour < 6) return 'night';
@@ -26,6 +28,7 @@ const STATUS_META: Record<Exclude<LucyStatus, 'idle'>, { marker: string; label: 
   sleeping: { marker: 'quiet', label: 'Resting' },
   thinking: { marker: 'ask', label: 'Thinking' },
   reading: { marker: 'brief', label: 'Reading' },
+  music: { marker: 'tune', label: 'Listening' },
 };
 
 const PHASE_PALETTE: Record<DayPhase, { orb: string; glow: string; highlight: string; cloud: string; ring: string }> = {
@@ -101,6 +104,13 @@ export function AnimatedFace({
   const gaze = useRef(new Animated.Value(0)).current;      // iris horizontal drift / scan
   const gazeUp = useRef(new Animated.Value(0)).current;    // iris vertical glance (thinking)
   const pulse = useRef(new Animated.Value(0)).current;     // attentive pulse (listening) / talk (speaking)
+  const snore = useRef(new Animated.Value(0)).current;     // slow breath cycle for the snore puff bubble
+  const bob = useRef(new Animated.Value(0)).current;       // gentle head-bob (music) / nod cadence
+  const propIn = useRef(new Animated.Value(0)).current;    // accessory (glasses/headphones/bubble) entrance
+  const sparkle = useRef(new Animated.Value(0)).current;   // celebrate sparkle burst
+  const note0 = useRef(new Animated.Value(0)).current;     // floating music notes
+  const note1 = useRef(new Animated.Value(0)).current;
+  const note2 = useRef(new Animated.Value(0)).current;
 
   const expression: FaceExpression = useMemo(() => {
     if (peeked && effectiveStatus !== 'listening' && effectiveStatus !== 'organizing') return 'peek';
@@ -111,6 +121,7 @@ export function AnimatedFace({
     if (effectiveStatus === 'saving') return 'saving';
     if (effectiveStatus === 'thinking') return 'thinking';
     if (effectiveStatus === 'reading') return 'reading';
+    if (effectiveStatus === 'music') return 'music';
     return 'calm';
   }, [effectiveStatus, peeked]);
 
@@ -245,6 +256,13 @@ export function AnimatedFace({
         Animated.delay(1400),
         Animated.timing(gaze, { toValue: 0.5, duration: 600, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
       ]));
+    } else if (effectiveStatus === 'music') {
+      // Music: eyes relaxed/centered, sway gently side to side with the beat.
+      Animated.timing(gazeUp, { toValue: 0, duration: 300, useNativeDriver: true }).start();
+      loop = Animated.loop(Animated.sequence([
+        Animated.timing(gaze, { toValue: 0.66, duration: 720, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(gaze, { toValue: 0.34, duration: 720, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]));
     } else {
       // listening / speaking / peek / sleeping: centered, attentive.
       Animated.timing(gaze, { toValue: 0.5, duration: 300, useNativeDriver: true }).start();
@@ -289,14 +307,75 @@ export function AnimatedFace({
     return () => { loop.stop(); zDrift.setValue(0); };
   }, [mood, zDrift]);
 
+  // Snore breath cycle — slow inflate→hold→deflate for the sleeping puff bubble.
+  useEffect(() => {
+    if (mood !== 'sleeping') { snore.setValue(0); return; }
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(snore, { toValue: 1, duration: 1700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.delay(160),
+      Animated.timing(snore, { toValue: 0, duration: 1500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.delay(420),
+    ]));
+    loop.start();
+    return () => { loop.stop(); snore.setValue(0); };
+  }, [mood, snore]);
+
+  // Gentle head-bob: lively for music, soft nod while listening; still otherwise.
+  useEffect(() => {
+    bob.stopAnimation();
+    bob.setValue(0);
+    let loop: Animated.CompositeAnimation | null = null;
+    if (effectiveStatus === 'music') {
+      loop = Animated.loop(Animated.sequence([
+        Animated.timing(bob, { toValue: 1, duration: 360, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: -1, duration: 360, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]));
+    } else if (effectiveStatus === 'listening') {
+      loop = Animated.loop(Animated.sequence([
+        Animated.timing(bob, { toValue: 0.5, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: -0.4, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]));
+    }
+    loop?.start();
+    return () => loop?.stop();
+  }, [effectiveStatus, bob]);
+
+  // Accessory entrance — glasses/headphones/thought-bubble pop in when their state begins.
+  useEffect(() => {
+    const wantsProp = expression === 'reading' || expression === 'music' || expression === 'thinking';
+    Animated.spring(propIn, {
+      toValue: wantsProp ? 1 : 0,
+      tension: 80,
+      friction: 9,
+      useNativeDriver: true,
+    }).start();
+  }, [expression, propIn]);
+
+  // Floating musical notes rise while in the music state.
+  useEffect(() => {
+    if (effectiveStatus !== 'music') return;
+    const make = (v: Animated.Value, delay: number) => Animated.loop(Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(v, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
+    ]));
+    const loops = [make(note0, 0), make(note1, 600), make(note2, 1200)];
+    loops.forEach(l => l.start());
+    return () => { loops.forEach(l => l.stop()); note0.setValue(0); note1.setValue(0); note2.setValue(0); };
+  }, [effectiveStatus, note0, note1, note2]);
+
   useEffect(() => {
     if (celebrateKey === undefined) return;
-    Animated.sequence([
-      Animated.timing(happy, { toValue: 1, duration: 200, easing: Easing.out(Easing.back(2)), useNativeDriver: true }),
-      Animated.delay(750),
-      Animated.timing(happy, { toValue: 0, duration: 300, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+    sparkle.setValue(0);
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(happy, { toValue: 1, duration: 200, easing: Easing.out(Easing.back(2)), useNativeDriver: true }),
+        Animated.delay(750),
+        Animated.timing(happy, { toValue: 0, duration: 300, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+      ]),
+      Animated.timing(sparkle, { toValue: 1, duration: 1050, easing: Easing.out(Easing.quad), useNativeDriver: true }),
     ]).start();
-  }, [celebrateKey, happy]);
+  }, [celebrateKey, happy, sparkle]);
 
   const scale = breathe.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.06] });
   const glowOpacity = glow.interpolate({
@@ -318,6 +397,7 @@ export function AnimatedFace({
     saving: { w: 8.5, h: 9.5, radius: 4.5, gap: 8, offsetY: 0, irisScale: 1 },
     thinking: { w: 8.5, h: 9, radius: 4.2, gap: 8, offsetY: -0.5, irisScale: 0.95 },
     reading: { w: 9, h: 9, radius: 4.5, gap: 8, offsetY: 0.5, irisScale: 0.95 },
+    music: { w: 8.5, h: 9.5, radius: 4.5, gap: 8, offsetY: 0, irisScale: 1 },
   }[expression];
 
   // Blink + happy both squeeze eye height — but only momentarily. Resting = fully open.
@@ -343,6 +423,48 @@ export function AnimatedFace({
   const mouthSpeakScale = effectiveStatus === 'speaking'
     ? pulse.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.25] })
     : 1;
+
+  // Gentle head-bob (music = lively, listening = soft) nudges the whole face.
+  const bobY = bob.interpolate({ inputRange: [-1, 0, 1], outputRange: [1.6, 0, -1.6] });
+  const bobTilt = bob.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-3deg', '0deg', '3deg'] });
+
+  // The warm idle smile widens on celebrate; held as a curved arc (see styles.smile*).
+  const smileScale = happy.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] });
+  const smileLift = happy.interpolate({ inputRange: [0, 1], outputRange: [0, -0.5] });
+
+  // Snore puff: a small bubble that inflates/deflates on the breath cycle while asleep.
+  const puffScale = snore.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] });
+  const puffOpacity = snore.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0, 0.5, 0.85] });
+
+  // Accessory entrance transforms (glasses/headphones/thought bubble).
+  const propScale = propIn.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
+  const propDrop = propIn.interpolate({ inputRange: [0, 1], outputRange: [-3, 0] });
+
+  // A warm visible smile is Lucy's resting mouth for the calm/peek/saving/music states.
+  const smilingExpr = expression === 'calm' || expression === 'peek' || expression === 'saving' || expression === 'music';
+
+  // Celebrate sparkles — four little stars that fly out and fade on celebrateKey.
+  const SPARKLES = [
+    { dx: -20, dy: -18 }, { dx: 22, dy: -14 }, { dx: -16, dy: 16 }, { dx: 18, dy: 18 },
+  ];
+  const sparkleNodes = SPARKLES.map((s, i) => (
+    <Animated.View
+      key={i}
+      pointerEvents="none"
+      style={[
+        styles.sparkle,
+        {
+          opacity: sparkle.interpolate({ inputRange: [0, 0.2, 0.7, 1], outputRange: [0, 1, 1, 0] }),
+          transform: [
+            { translateX: sparkle.interpolate({ inputRange: [0, 1], outputRange: [0, s.dx] }) },
+            { translateY: sparkle.interpolate({ inputRange: [0, 1], outputRange: [0, s.dy] }) },
+            { scale: sparkle.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.2, 1.1, 0.4] }) },
+            { rotate: sparkle.interpolate({ inputRange: [0, 1], outputRange: ['0deg', i % 2 ? '90deg' : '-90deg'] }) },
+          ],
+        },
+      ]}
+    />
+  ));
 
   function renderEye(side: 'left' | 'right') {
     if (isSleeping) {
@@ -386,6 +508,70 @@ export function AnimatedFace({
     );
   }
 
+  // ── Mouth ────────────────────────────────────────────────────────────────
+  // A real, warm smile is the default. The arc is drawn from a circle with only
+  // its bottom border showing (rounded → curved line), so it reads as a grin even
+  // at ~40px. Per-state mouths override it where a different shape is more truthful.
+  function renderMouth() {
+    if (expression === 'speaking') {
+      return <Animated.View style={[styles.mouth, styles.mouthSpeaking, { transform: [{ scaleY: mouthSpeakScale }] }]} />;
+    }
+    if (expression === 'listening') {
+      // Small attentive "o".
+      return <View style={[styles.mouth, styles.mouthListening]} />;
+    }
+    if (expression === 'sleeping') {
+      // Tiny calm mouth, slightly parted on the breath (the puff bubble does the rest).
+      return (
+        <Animated.View style={[styles.mouth, styles.mouthSleeping, { transform: [{ scaleX: puffScale.interpolate({ inputRange: [0.45, 1], outputRange: [1, 1.3] }) }] }]} />
+      );
+    }
+    if (expression === 'organizing') {
+      return <View style={[styles.mouth, styles.mouthFocused]} />;
+    }
+    if (expression === 'thinking') {
+      return <View style={[styles.mouth, styles.mouthThinking]} />;
+    }
+    if (expression === 'reading') {
+      return <View style={[styles.mouth, styles.mouthReading]} />;
+    }
+    // calm / peek / saving / music → warm visible smile (widens on celebrate).
+    return (
+      <Animated.View
+        style={[
+          styles.smileWrap,
+          { transform: [{ translateY: smileLift }, { scale: smilingExpr ? smileScale : 1 }] },
+        ]}
+      >
+        <View style={styles.smileArc} />
+      </Animated.View>
+    );
+  }
+
+  // Floating musical note (built from a stem + note-head) used in the music state.
+  function MusicNote({ delay, x, anim }: { delay: number; x: number; anim: Animated.Value }) {
+    return (
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.note,
+          {
+            left: 23 + x,
+            opacity: anim.interpolate({ inputRange: [0, 0.15, 0.8, 1], outputRange: [0, 0.95, 0.6, 0] }),
+            transform: [
+              { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -26] }) },
+              { translateX: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, x > 0 ? 5 : -5, x > 0 ? 2 : -2] }) },
+              { rotate: anim.interpolate({ inputRange: [0, 1], outputRange: ['-8deg', '10deg'] }) },
+            ],
+          },
+        ]}
+      >
+        <View style={styles.noteStem} />
+        <View style={styles.noteHead} />
+      </Animated.View>
+    );
+  }
+
   return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -419,26 +605,62 @@ export function AnimatedFace({
             style={[styles.shimmer, { transform: [{ rotate: shimmer.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }]}
           />
           <View style={[styles.specular, { backgroundColor: palette.highlight }]} />
-          <View style={styles.face}>
+          <Animated.View style={[styles.face, { transform: [{ translateY: bobY }, { rotate: bobTilt }] }]}>
             <View style={[styles.eyesRow, { gap: eyeShape.gap }]}>
               {renderEye('left')}
               {renderEye('right')}
             </View>
-            {expression === 'speaking' ? (
-              <Animated.View style={[styles.mouth, styles.mouthSpeaking, { transform: [{ scaleY: mouthSpeakScale }] }]} />
-            ) : (
-              <View style={[
-                styles.mouth,
-                expression === 'sleeping' && styles.mouthSleeping,
-                expression === 'listening' && styles.mouthListening,
-                expression === 'organizing' && styles.mouthFocused,
-                expression === 'thinking' && styles.mouthThinking,
-                expression === 'saving' && styles.mouthSaving,
-                expression === 'reading' && styles.mouthReading,
-              ]} />
-            )}
-          </View>
+            {renderMouth()}
+
+            {/* Reading glasses — two soft lenses + a bridge sit over the eyes. */}
+            {expression === 'reading' ? (
+              <Animated.View pointerEvents="none" style={[styles.glasses, { opacity: propIn, transform: [{ translateY: propDrop }, { scale: propScale }] }]}>
+                <View style={styles.lens} />
+                <View style={styles.glassBridge} />
+                <View style={styles.lens} />
+              </Animated.View>
+            ) : null}
+          </Animated.View>
         </Animated.View>
+
+        {/* Headphones — a top band + two ear cups frame the orb during music. */}
+        {expression === 'music' ? (
+          <Animated.View pointerEvents="none" style={[styles.headphones, { opacity: propIn, transform: [{ translateY: propDrop }, { scale: propScale }] }]}>
+            <View style={styles.hpBand} />
+            <View style={[styles.hpCup, styles.hpCupLeft]} />
+            <View style={[styles.hpCup, styles.hpCupRight]} />
+          </Animated.View>
+        ) : null}
+
+        {/* Floating musical notes drift up while listening to music. */}
+        {expression === 'music' ? (
+          <>
+            <MusicNote delay={0} x={-9} anim={note0} />
+            <MusicNote delay={0} x={8} anim={note1} />
+            <MusicNote delay={0} x={-1} anim={note2} />
+          </>
+        ) : null}
+
+        {/* Thought bubble — a small trail of dots + a rounded bubble for thinking. */}
+        {expression === 'thinking' ? (
+          <Animated.View pointerEvents="none" style={[styles.thought, { opacity: propIn, transform: [{ scale: propScale }, { translateY: propDrop }] }]}>
+            <View style={styles.thoughtBubble}>
+              <Animated.View style={[styles.thoughtDot, { opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) }]} />
+              <Animated.View style={[styles.thoughtDot, { opacity: pulse.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 0.3, 1] }) }]} />
+              <Animated.View style={[styles.thoughtDot, { opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.3] }) }]} />
+            </View>
+            <View style={styles.thoughtTail2} />
+            <View style={styles.thoughtTail1} />
+          </Animated.View>
+        ) : null}
+
+        {/* Snore puff — a soft bubble that inflates/deflates on the breath cycle. */}
+        {mood === 'sleeping' ? (
+          <Animated.View pointerEvents="none" style={[styles.snorePuff, { opacity: puffOpacity, transform: [{ scale: puffScale }] }]} />
+        ) : null}
+
+        {/* Celebrate sparkles — a quick warm burst around Lucy. */}
+        {sparkleNodes}
 
         {mood === 'sleeping' ? (
           <Animated.Text
@@ -571,6 +793,48 @@ const styles = StyleSheet.create({
   mouthThinking: { width: 8, height: 5, borderLeftWidth: 0, borderRightWidth: 2, borderTopWidth: 0, borderBottomWidth: 2, borderColor: LID, borderRadius: 5, transform: [{ rotate: '-12deg' }] },
   mouthSaving: { width: 13, height: 6, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, borderWidth: 2, borderTopWidth: 0, borderColor: LID, marginTop: 0 },
   mouthReading: { width: 10, height: 2, borderRadius: 1, borderWidth: 0, backgroundColor: LID, opacity: 0.8, marginTop: 3 },
+
+  // Warm visible smile — a wide circle showing only its bottom border = a curved grin.
+  smileWrap: { width: 16, height: 9, marginTop: 1.5, alignItems: 'center', justifyContent: 'flex-start', overflow: 'hidden' },
+  smileArc: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: LID,
+    backgroundColor: 'transparent',
+    marginTop: -8,
+  },
+
+  // Reading glasses — two lenses + a bridge, drawn over the eyes.
+  glasses: { position: 'absolute', top: 0, flexDirection: 'row', alignItems: 'center', gap: 1 },
+  lens: { width: 11, height: 11, borderRadius: 5.5, borderWidth: 1.6, borderColor: LID, backgroundColor: 'rgba(255,255,255,0.06)' },
+  glassBridge: { width: 4, height: 1.6, backgroundColor: LID, marginTop: -2 },
+
+  // Headphones — band over the top, ear cups on the sides of the orb.
+  headphones: { position: 'absolute', width: 46, height: 46, alignItems: 'center' },
+  hpBand: { position: 'absolute', top: 1, width: 30, height: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderWidth: 2.4, borderBottomWidth: 0, borderColor: LID },
+  hpCup: { position: 'absolute', top: 15, width: 6, height: 11, borderRadius: 3, backgroundColor: LID },
+  hpCupLeft: { left: 6 },
+  hpCupRight: { right: 6 },
+
+  // Floating music note — stem + filled head.
+  note: { position: 'absolute', bottom: 12, width: 8, height: 10, alignItems: 'flex-end' },
+  noteStem: { width: 1.6, height: 8, backgroundColor: LUCY_COLORS.primaryGlow, borderRadius: 1 },
+  noteHead: { position: 'absolute', bottom: 0, left: 0, width: 4.5, height: 3.5, borderRadius: 2, backgroundColor: LUCY_COLORS.primaryGlow, transform: [{ rotate: '-18deg' }] },
+
+  // Thought bubble — rounded bubble with three dots + a two-dot tail.
+  thought: { position: 'absolute', top: -10, right: -10, alignItems: 'center' },
+  thoughtBubble: { flexDirection: 'row', gap: 2.5, alignItems: 'center', backgroundColor: LUCY_COLORS.surfaceElevated, borderRadius: 9, paddingHorizontal: 5, paddingVertical: 3.5, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine },
+  thoughtDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: LUCY_COLORS.primaryGlow },
+  thoughtTail1: { width: 4, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.surfaceElevated, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, marginTop: 1, marginRight: 6 },
+  thoughtTail2: { width: 2.5, height: 2.5, borderRadius: 1.5, backgroundColor: LUCY_COLORS.surfaceElevated, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, marginTop: 1, marginRight: 9 },
+
+  // Snore puff — soft pale bubble at the mouth that breathes.
+  snorePuff: { position: 'absolute', bottom: 9, right: 9, width: 9, height: 9, borderRadius: 5, backgroundColor: 'rgba(255,235,200,0.55)', borderWidth: 1, borderColor: 'rgba(255,235,200,0.35)' },
+
+  // Celebrate sparkle — small warm diamond.
+  sparkle: { position: 'absolute', width: 5, height: 5, borderRadius: 1, backgroundColor: LUCY_COLORS.gold, transform: [{ rotate: '45deg' }] },
   sleepMark: { position: 'absolute', top: -8, right: 4, color: LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '900' },
   cloud: {
     position: 'absolute',

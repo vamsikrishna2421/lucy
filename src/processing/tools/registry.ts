@@ -4,10 +4,16 @@
 import type { LucyTool } from './types';
 import { spendingTool } from './impl/spending';
 import { memoryTool } from './impl/memory';
+import { tasksTool } from './impl/tasks';
+import { healthTool } from './impl/health';
+import { remindersTool } from './impl/reminders';
+import { peopleTool } from './impl/people';
+import { knowledgeTool } from './impl/knowledge';
 import { describeForSelector } from './describe';
 
-// P0: spending + memory. P1 adds schedule/health/tasks/people/reminders/knowledge.
-export const TOOLS: LucyTool[] = [spendingTool, memoryTool];
+// P1: read tools wrapping existing engines. memory stays the catch-all (last). Action intents
+// (commit a calendar block, create a reminder, log food) remain on the legacy path for now — P2.
+export const TOOLS: LucyTool[] = [spendingTool, tasksTool, healthTool, remindersTool, peopleTool, knowledgeTool, memoryTool];
 
 export function getTool(name: string): LucyTool | undefined {
   return TOOLS.find((t) => t.name === name);

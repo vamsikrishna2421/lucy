@@ -88,7 +88,8 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [savingProfile, setSavingProfile] = useState(false);
   const [checkInEnabled, setCheckInEnabled] = useState(false);
   const [alarmStyle, setAlarmStyle] = useState(false);
-  const [aiModel, setAiModel] = useState('gpt-4o-mini');
+  const [semanticRouter, setSemanticRouter] = useState(false);
+  const [aiModel, setAiModel] = useState('claude-sonnet-4-6');
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [claudeKey, setClaudeKey] = useState('');
   const [hasClaudeKey, setHasClaudeKey] = useState(false);
@@ -138,6 +139,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       setCheckInEnabled(!!(await getSetting(db, 'progress_checkin_notification_id')));
       setShieldLlm((await getSetting(db, 'shield_use_local_llm')) === 'true');
       setAlarmStyle((await getSetting(db, 'alarm_style_enabled')) === 'on');
+      setSemanticRouter((await getSetting(db, 'semantic_router_enabled')) === 'on');
     })();
   }, [backgroundEnabled, localRefresh, refreshToken]);
 
@@ -148,6 +150,13 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
     setAlarmStyle(next);
     const db = await getDatabase();
     await setSetting(db, 'alarm_style_enabled', next ? 'on' : 'off');
+  };
+
+  const toggleSemanticRouter = async () => {
+    const next = !semanticRouter;
+    setSemanticRouter(next);
+    const db = await getDatabase();
+    await setSetting(db, 'semantic_router_enabled', next ? 'on' : 'off');
   };
 
   const changeBackground = async () => {
@@ -446,6 +455,13 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           badge={alarmStyle ? 'On' : 'Off'}
           active={alarmStyle}
           onInfo={() => void toggleAlarmStyle()}
+        />
+        <SettingsRow
+          title="Smarter answers (beta)"
+          value={semanticRouter ? 'On — LUCY routes questions through focused tools' : 'Off — using the standard answer engine'}
+          badge={semanticRouter ? 'On' : 'Off'}
+          active={semanticRouter}
+          onInfo={() => void toggleSemanticRouter()}
         />
         <SettingsRow
           title="Scheduled reminders"

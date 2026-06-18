@@ -33,6 +33,19 @@ ok('garbage → memory fallback', parseSelection('not json at all', 'x', names).
 }
 ok('parses JSON embedded in prose', parseSelection('Sure! {"tools":[{"name":"memory"}]} done', 'x', names).tools[0].name === 'memory');
 
+// P1 tools: parseSelection validates against the full 7-tool name set
+{
+  const all = ['spending', 'tasks', 'health', 'reminders', 'people', 'knowledge', 'memory'];
+  ok('routes to tasks', parseSelection('{"tools":[{"name":"tasks"}]}', 'what are my tasks today', all).tools[0].name === 'tasks');
+  ok('routes to health', parseSelection('{"tools":[{"name":"health"}]}', 'how many calories left', all).tools[0].name === 'health');
+  ok('routes to people', parseSelection('{"tools":[{"name":"people"}]}', 'who is Priya', all).tools[0].name === 'people');
+  ok('routes to knowledge', parseSelection('{"tools":[{"name":"knowledge"}]}', 'how does Genie relate to Sales', all).tools[0].name === 'knowledge');
+  ok('routes to reminders', parseSelection('{"tools":[{"name":"reminders"}]}', 'what reminders do I have', all).tools[0].name === 'reminders');
+  // multi-tool compose (spending + memory) preserved + order kept
+  const multi = parseSelection('{"tools":[{"name":"spending"},{"name":"memory"}]}', 'what did I spend on the trip', all);
+  ok('multi-tool compose', multi.tools.length === 2 && multi.tools[0].name === 'spending' && multi.tools[1].name === 'memory');
+}
+
 // assembleProse
 ok('assembleProse joins fragments', assembleProse([
   { name: 'spending', result: { kind: 'spending', data: {}, prose: 'You spent 50.' } },

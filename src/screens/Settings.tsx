@@ -1752,8 +1752,8 @@ function Metric({ label, value, warm }: { label: string; value: number; warm?: b
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  listContent: { paddingBottom: 48 },
-  title: { fontSize: 30, letterSpacing: -0.8, fontWeight: '700', color: LUCY_COLORS.textDark },
+  listContent: { paddingTop: 18, paddingBottom: 48 },
+  title: { fontSize: 30, letterSpacing: -0.8, fontWeight: '700', color: LUCY_COLORS.textDark, marginBottom: 6 },
   subtitle: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 4, marginBottom: 18, lineHeight: 20 },
   list: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 21, borderWidth: 1, borderColor: LUCY_COLORS.border, overflow: 'hidden' },
   // ─── Collapsible group (accordion) ──────────────────────────────────────

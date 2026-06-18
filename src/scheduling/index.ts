@@ -58,12 +58,16 @@ async function buildBusy(db: SQLiteDatabase, fromMs: number, toMs: number, av: A
   const schedRows = await listScheduledBlocks(db, fromMs, toMs, ['committed']);
   const resourceBlocks: Block[] = schedRows.map(rowToBlock);
   // Merge the user's REAL device-calendar events (Google / Outlook-Teams / iCloud, synced to the phone)
-  // so LUCY schedules AROUND actual meetings and surfaces them. No-op unless calendar permission is
-  // granted (the user opts in via "Connect calendars"). Lazy import to avoid a heavy static cycle.
+  // so LUCY schedules AROUND actual meetings and surfaces them. Gated by a kill-switch setting
+  // (device_calendar_sync) AND calendar permission — reading certain device events can crash
+  // expo-calendar natively, so the user can turn this off from the calendar if it misbehaves.
   try {
-    const { calendarBusyBlocks } = await import('../processing/calendarConnector');
-    const events = await calendarBusyBlocks(fromMs, toMs);
-    if (events.length) resourceBlocks.push(...events);
+    const { getSetting } = await import('../db/settings');
+    if ((await getSetting(db, 'device_calendar_sync')) !== 'off') {
+      const { calendarBusyBlocks } = await import('../processing/calendarConnector');
+      const events = await calendarBusyBlocks(fromMs, toMs);
+      if (events.length) resourceBlocks.push(...events);
+    }
   } catch { /* device calendar is optional */ }
   const hardBlocks = nonWorkingBlocks(av, fromMs, toMs);
   return { resourceBlocks, hardBlocks };

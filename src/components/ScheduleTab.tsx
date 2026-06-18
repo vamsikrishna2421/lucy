@@ -13,6 +13,7 @@ import {
 import { updateScheduledBlock } from '../db/schedule';
 import { getAvailability } from '../scheduling/availability';
 import { hasCalendarPermission, requestCalendarPermission } from '../processing/calendarConnector';
+import { getSetting, setSetting } from '../db/settings';
 import type { AvailabilityProfile, Block, SlotSuggestion, TaskResources } from '../scheduling/types';
 
 function clock(ms: number): string { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
@@ -56,6 +57,7 @@ export function ScheduleTab() {
   const [view, setView] = useState<'agenda' | 'day' | 'week' | 'month'>('day');
   const [ref, setRef] = useState<number>(dayKey(Date.now()));
   const [calPerm, setCalPerm] = useState<boolean | null>(null);
+  const [calSync, setCalSync] = useState(true); // device-calendar sync kill-switch
   const [nowMs, setNowMs] = useState<number>(Date.now());
   const [planOpen, setPlanOpen] = useState(false); // "Plan with Lucy" collapsible (calendar-first)
   const [detail, setDetail] = useState<{ id: number; title: string; start: number; end: number; resources: TaskResources } | null>(null);
@@ -78,6 +80,7 @@ export function ScheduleTab() {
     setAv(a);
     setUnsched(us.slice(0, 12));
     setCalPerm(perm);
+    try { setCalSync((await getSetting(db, 'device_calendar_sync')) !== 'off'); } catch { /* default on */ }
     setLoading(false);
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -87,13 +90,25 @@ export function ScheduleTab() {
   const connectCalendars = async () => {
     const granted = await requestCalendarPermission();
     setCalPerm(granted);
-    if (granted) { await load(); }
+    if (granted) {
+      try { const db = await getDatabase(); await setSetting(db, 'device_calendar_sync', 'on'); } catch { /* ignore */ }
+      setCalSync(true);
+      await load();
+    }
     else {
       Alert.alert(
         'Connect Google / Teams / Outlook',
         'To show those events here, add the account to your phone first:\n\niPhone: Settings → Calendar → Accounts → Add Account (Google or Outlook), then turn Calendars ON.\nAndroid: Settings → Accounts → add Google/Outlook with Calendar sync.\n\nThen allow LUCY calendar access when asked.',
       );
     }
+  };
+
+  // Kill-switch: turn device-calendar sync on/off (reading some device events can crash expo-calendar).
+  const toggleCalSync = async () => {
+    const next = !calSync;
+    setCalSync(next);
+    try { const db = await getDatabase(); await setSetting(db, 'device_calendar_sync', next ? 'on' : 'off'); } catch { /* ignore */ }
+    await load();
   };
 
   const doSuggest = async (text: string, todoId?: number) => {
@@ -491,7 +506,10 @@ export function ScheduleTab() {
           <Text style={styles.connectChevron}>›</Text>
         </TouchableOpacity>
       ) : calPerm ? (
-        <View style={styles.syncedPill}><View style={styles.syncedDot} /><Text style={styles.syncedText}>Synced with your connected calendars</Text></View>
+        <TouchableOpacity style={styles.syncedPill} activeOpacity={0.7} onPress={toggleCalSync}>
+          <View style={[styles.syncedDot, !calSync && { backgroundColor: LUCY_COLORS.textSubtle }]} />
+          <Text style={styles.syncedText}>{calSync ? 'Synced with your calendars · tap to pause' : 'Device calendar paused · tap to resume'}</Text>
+        </TouchableOpacity>
       ) : null}
 
       {/* Calendar — leads the screen */}

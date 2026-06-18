@@ -8,6 +8,7 @@ import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TextInpu
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import { listProjects, createProject, deleteProject, projectActivity, type ProjectRow } from '../db/projects';
+import { deriveProjectSuggestions, dismissProjectSuggestion, type ProjectSuggestion } from '../processing/projectAutopilot';
 
 export function ProjectsTab() {
   const [projects, setProjects] = useState<ProjectRow[]>([]);
@@ -17,12 +18,26 @@ export function ProjectsTab() {
   const [desc, setDesc] = useState('');
   const [open, setOpen] = useState<ProjectRow | null>(null);
   const [activity, setActivity] = useState<{ tasks: number; blocks: number } | null>(null);
+  const [suggestions, setSuggestions] = useState<ProjectSuggestion[]>([]);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
     setProjects(await listProjects(db));
+    try { setSuggestions(await deriveProjectSuggestions(db)); } catch { /* optional */ }
     setLoading(false);
   }, []);
+
+  const createSuggested = async (s: ProjectSuggestion) => {
+    setSuggestions((list) => list.filter((x) => x.name !== s.name));
+    const db = await getDatabase();
+    await createProject(db, s.name, `Auto-gathered from ${s.evidence} related notes.`);
+    await load();
+  };
+  const dismissSuggested = async (s: ProjectSuggestion) => {
+    setSuggestions((list) => list.filter((x) => x.name !== s.name));
+    const db = await getDatabase();
+    await dismissProjectSuggestion(db, s.name);
+  };
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
@@ -55,6 +70,22 @@ export function ProjectsTab() {
           <TouchableOpacity style={styles.btn} onPress={() => setAdding(true)}><Text style={styles.btnT}>＋ New project</Text></TouchableOpacity>
         </View>
         <Text style={styles.sub}>A dedicated space for each personal project.</Text>
+
+        {suggestions.length > 0 && (
+          <View style={styles.sgBox}>
+            <Text style={styles.sgHead}>✦ LUCY noticed these</Text>
+            {suggestions.map((s) => (
+              <View key={s.name} style={styles.sgRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sgName}>{s.name}</Text>
+                  <Text style={styles.sgMeta}>{s.evidence} related notes — make it a project?</Text>
+                </View>
+                <TouchableOpacity style={styles.sgCreate} onPress={() => void createSuggested(s)}><Text style={styles.sgCreateT}>＋ Create</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.sgDismiss} onPress={() => void dismissSuggested(s)}><Text style={styles.sgDismissT}>✕</Text></TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
 
         {projects.length === 0 && <Text style={styles.empty}>No projects yet. Create one to give it a home.</Text>}
         {projects.map((p) => (
@@ -125,4 +156,13 @@ const styles = StyleSheet.create({
   statN: { color: LUCY_COLORS.primary, fontWeight: '900', fontSize: 23 },
   statL: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 2 },
   note: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 14, lineHeight: 17 },
+  sgBox: { backgroundColor: 'rgba(255,140,66,0.07)', borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, borderRadius: 16, padding: 12, marginBottom: 14 },
+  sgHead: { color: LUCY_COLORS.primaryGlow, fontWeight: '800', fontSize: 12, marginBottom: 8, letterSpacing: 0.4 },
+  sgRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
+  sgName: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 14 },
+  sgMeta: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 1 },
+  sgCreate: { backgroundColor: LUCY_COLORS.primary, borderRadius: 11, paddingHorizontal: 12, paddingVertical: 7 },
+  sgCreateT: { color: '#fff', fontWeight: '800', fontSize: 12 },
+  sgDismiss: { paddingHorizontal: 6, paddingVertical: 6 },
+  sgDismissT: { color: LUCY_COLORS.textFaint, fontSize: 15 },
 });

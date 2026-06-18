@@ -139,6 +139,44 @@ async function route(req: ParsedRequest): Promise<string> {
       const [items, diag] = await Promise.all([listNotifLog(db, 'all', 200), getNotifDiagnostics(db)]);
       return json(200, { ok: true, diag, items });
     }
+    // ── Health / nutrition ───────────────────────────────────────────────────
+    if (req.method === 'GET' && req.path === '/api/health') {
+      const { getHealthSummary } = await import('../processing/healthSummary');
+      return json(200, { ok: true, summary: await getHealthSummary(db) });
+    }
+    if (req.method === 'GET' && req.path === '/api/food') {
+      const { listFoodLog } = await import('../db/healthNutrition');
+      return json(200, { ok: true, items: await listFoodLog(db) });
+    }
+    if (req.method === 'POST' && req.path === '/api/food') {
+      const text = String(payload.text ?? '').trim();
+      if (!text) return json(400, { error: 'Empty food text' });
+      const { logFoodFromText } = await import('../processing/foodNutrition');
+      const result = await logFoodFromText(db, text, typeof payload.mealType === 'string' ? payload.mealType : null);
+      const { getHealthSummary } = await import('../processing/healthSummary');
+      return json(200, { ok: true, ...result, summary: await getHealthSummary(db) });
+    }
+    if (req.method === 'DELETE' && req.path.startsWith('/api/food/')) {
+      const id = Number(req.path.split('/').pop());
+      const { deleteFoodLog } = await import('../db/healthNutrition');
+      const done = id ? await deleteFoodLog(db, id) : false;
+      return json(done ? 200 : 404, { ok: done });
+    }
+    if (req.method === 'GET' && req.path === '/api/body-profile') {
+      const { getBodyProfile, getNutritionGoals } = await import('../db/healthNutrition');
+      return json(200, { ok: true, profile: await getBodyProfile(db), goals: await getNutritionGoals(db) });
+    }
+    if (req.method === 'POST' && req.path === '/api/body-profile') {
+      const { upsertBodyProfile } = await import('../db/healthNutrition');
+      await upsertBodyProfile(db, {
+        sex: payload.sex as 'male' | 'female' | undefined, birth_year: payload.birthYear ? Number(payload.birthYear) : undefined,
+        height_cm: payload.heightCm ? Number(payload.heightCm) : undefined, weight_kg: payload.weightKg ? Number(payload.weightKg) : undefined,
+        body_fat_pct: payload.bodyFatPct ? Number(payload.bodyFatPct) : undefined,
+        activity_level: payload.activityLevel as never, goal: payload.goal as never,
+      });
+      const { getHealthSummary } = await import('../processing/healthSummary');
+      return json(200, { ok: true, summary: await getHealthSummary(db) });
+    }
     // Clear junk: dismiss all insights (tier>=2) or everything.
     if (req.method === 'POST' && req.path === '/api/notifications/clear') {
       const scope = String(payload.scope ?? 'insights');

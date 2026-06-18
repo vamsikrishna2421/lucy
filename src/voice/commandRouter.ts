@@ -12,7 +12,7 @@ import { logVoiceActionToTimeline } from '../db/captures';
 import { computeStart } from './timeResolve';
 import type { AskTurn } from '../processing/ask';
 
-export type VoiceIntent = 'schedule' | 'capture' | 'task' | 'mood' | 'link' | 'project' | 'navigate' | 'ask';
+export type VoiceIntent = 'schedule' | 'capture' | 'task' | 'mood' | 'link' | 'project' | 'navigate' | 'ask' | 'food';
 
 export interface VoiceResult {
   ok: boolean;
@@ -23,7 +23,7 @@ export interface VoiceResult {
 }
 
 const VOICE_SYSTEM = `You are LUCY's voice command interpreter. Convert the user's spoken request into ONE structured action. Return STRICT JSON only — no markdown:
-{"intent":"schedule|capture|task|mood|link|project|navigate|ask",
+{"intent":"schedule|capture|task|mood|link|project|navigate|ask|food",
  "title":"<concise title/content>",
  "durationMin":<integer or null>,
  "time":"<HH:MM 24-hour, or null>",
@@ -37,6 +37,7 @@ Rules:
 - "schedule/book/block/add … at <time>" or "find time for …" → intent "schedule" (title = the activity; durationMin default 30 if unsaid; fill time+day when given).
 - "remember/note/capture/save that …" → "capture" (text = the thing to remember).
 - "add a task/todo/remind me to …" → "task" (title = the task).
+- "I ate/had …", "log my breakfast/lunch/dinner …", "log food/meal …" → "food" (text = the foods eaten, verbatim).
 - "I feel …/log my mood …" → "mood" (tone).
 - "save this link/add bookmark <url>" → "link" (url + title).
 - "create/start a project …" → "project" (title).
@@ -168,6 +169,16 @@ export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, cont
       await db.runAsync("INSERT INTO mood_entries (tone, energy) VALUES (?, 'medium')", tone);
       await logVoiceActionToTimeline(db, 'voice', text, `Mood: feeling ${tone}`);
       return { ok: true, intent: 'mood', speak: cmd.speak || `Logged that you’re feeling ${tone}.`, navigate: 'health' };
+    }
+    case 'food': {
+      const meal = (cmd.text || cmd.title || text || '').trim();
+      if (!meal) return { ok: false, intent: 'food', speak: 'What did you eat?' };
+      const { logFoodFromText } = await import('../processing/foodNutrition');
+      const r = await logFoodFromText(db, meal);
+      await logVoiceActionToTimeline(db, 'voice', text, `Ate: ${meal}`);
+      if (!r.logged) return { ok: true, intent: 'food', speak: cmd.speak || 'Noted — I couldn’t estimate the calories, but I logged it.', navigate: 'health' };
+      const kcal = r.items.reduce((s, i) => s + (i.calories ?? 0), 0);
+      return { ok: true, intent: 'food', speak: cmd.speak || `Logged ${r.logged} item${r.logged === 1 ? '' : 's'} — about ${kcal} calories.`, navigate: 'health' };
     }
     case 'link': {
       const url = (cmd.url || '').trim();

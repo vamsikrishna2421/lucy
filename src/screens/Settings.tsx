@@ -139,7 +139,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       setCheckInEnabled(!!(await getSetting(db, 'progress_checkin_notification_id')));
       setShieldLlm((await getSetting(db, 'shield_use_local_llm')) === 'true');
       setAlarmStyle((await getSetting(db, 'alarm_style_enabled')) === 'on');
-      setSemanticRouter((await getSetting(db, 'semantic_router_enabled')) === 'on');
+      setSemanticRouter((await getSetting(db, 'semantic_router_enabled')) !== 'off');
     })();
   }, [backgroundEnabled, localRefresh, refreshToken]);
 
@@ -457,7 +457,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           onInfo={() => void toggleAlarmStyle()}
         />
         <SettingsRow
-          title="Smarter answers (beta)"
+          title="Smarter answers"
           value={semanticRouter ? 'On — LUCY routes questions through focused tools' : 'Off — using the standard answer engine'}
           badge={semanticRouter ? 'On' : 'Off'}
           active={semanticRouter}

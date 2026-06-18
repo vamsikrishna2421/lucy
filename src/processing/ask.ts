@@ -630,7 +630,9 @@ export async function askLucy(
   // Q&A; on any miss/failure it falls through to the legacy detectors below — never worse than today.
   try {
     const { getSetting } = await import('../db/settings');
-    if (!opts?.bypassRouter && (await getSetting(db, 'semantic_router_enabled')) === 'on') {
+    // P2: default ON (validated by shadow-diff to match/beat legacy). Users can disable in
+    // Settings → "Smarter answers" (sets 'off'). Falls through to legacy on any miss.
+    if (!opts?.bypassRouter && (await getSetting(db, 'semantic_router_enabled')) !== 'off') {
       const { runSemanticRouter } = await import('./tools');
       const routed = await runSemanticRouter(db, trimmed, history, screenContext);
       if (routed) return routed;

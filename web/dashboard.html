@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 59 (Desktop alerts: browser notifications for new LUCY notifications, polled over LAN — nudges the user at their laptop while busy at work; no backend/push needed) */
+/* LUCY web - premium - dashboard rev 60 (Medications mirror in Health section via /api/medications; desktop alerts from rev 59) */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -1208,11 +1208,17 @@ function vPeople(){const ppl=(DATA.people||[]);const hero=`<section class="page-
 /* ─── HEALTH (Dr. Lucy: nutrition + activity, backed by /api/health) ─── */
 let HEALTH=null;            // last summary from /api/health
 let HEALTH_LOADING=false;   // first-load shimmer
+let MEDS=[];                // medications mirror from /api/medications
 async function loadHealth(force){
   if(HEALTH_LOADING)return;HEALTH_LOADING=true;
   if(!HEALTH||force)redrawHealth();
   try{const r=await api('/api/health');if(r&&r.ok)HEALTH=r.summary||{};}catch(e){/* keep last; vHealth shows a soft note */}
+  try{const rm=await api('/api/medications');if(rm&&rm.ok)MEDS=rm.items||[];}catch(e){/* optional */}
   HEALTH_LOADING=false;if(ROUTE==='health')redrawHealth();
+}
+function hlMeds(){
+  if(!MEDS||!MEDS.length)return '';
+  return `<div class="sec"><h2>Medications</h2></div><div class="col">`+MEDS.map(m=>`<div class="card"><span style="font-size:18px">💊</span><div style="flex:1"><span class="ttl">${esc(m.name)}${m.dosage?' · '+esc(m.dosage):''}</span><div class="sub">${(m.times&&m.times.length)?esc(m.times.join(', ')):'no times set'}</div></div></div>`).join('')+`</div><div class="subtle-line" style="font-size:11.5px;color:var(--subtle);margin-top:6px">Reminders are managed in the app. LUCY only tracks what you enter — check doses with your doctor.</div>`;
 }
 /* Re-render only the health body container so other views aren't disturbed. */
 function redrawHealth(){const host=$('hlBody');if(host)host.innerHTML=hlDashboard();}
@@ -1254,7 +1260,7 @@ function hlDashboard(){
   const remaining=(H.remaining!=null)?Math.round(H.remaining):(calGoal?calGoal-eaten:null);
   let h='';
   // 1) Profile gate (only the form when incomplete) — still let them log food + mood below.
-  if(!prof){h+=hlProfileForm();h+=logger;h+=hlMealTimeline(intake);h+=hlActivityCards(act,en);h+=hlDrLucy(H.drLucy);h+=moodSec;return h;}
+  if(!prof){h+=hlProfileForm();h+=logger;h+=hlMealTimeline(intake);h+=hlActivityCards(act,en);h+=hlDrLucy(H.drLucy);h+=hlMeds();h+=moodSec;return h;}
   // 1b) Calories-remaining ring + macro rings.
   const ringCenter=(remaining!=null)
     ? `<div class="num">${hlNum(Math.abs(remaining))}</div><div class="cap">${remaining>=0?'kcal left':'kcal over'}</div>`
@@ -1285,6 +1291,8 @@ function hlDashboard(){
   h+=hlActivityCards(act,en);
   // 5) Dr. Lucy guidance
   h+=hlDrLucy(H.drLucy);
+  // 6) Medications
+  h+=hlMeds();
   // mood (existing) at the bottom
   h+=moodSec;
   return h;}

@@ -153,6 +153,11 @@ async function route(req: ParsedRequest): Promise<string> {
       const { listFoodLog } = await import('../db/healthNutrition');
       return json(200, { ok: true, items: await listFoodLog(db) });
     }
+    if (req.method === 'GET' && req.path === '/api/medications') {
+      const { listMedications, parseTimes } = await import('../db/medications');
+      const meds = (await listMedications(db)).map((m) => ({ id: m.id, name: m.name, dosage: m.dosage, times: parseTimes(m.times), notes: m.notes }));
+      return json(200, { ok: true, items: meds });
+    }
     if (req.method === 'POST' && req.path === '/api/food') {
       const text = String(payload.text ?? '').trim();
       if (!text) return json(400, { error: 'Empty food text' });

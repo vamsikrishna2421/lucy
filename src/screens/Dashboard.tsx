@@ -859,8 +859,8 @@ function HealthView() {
       const { logFoodFromText } = await import('../processing/foodNutrition');
       const res = await logFoodFromText(db, text);
       setMealText('');
-      if (res.logged === 0) {
-        Alert.alert("Couldn't read that", 'I couldn\'t estimate that meal. Try naming the foods and rough amounts — like "2 eggs and toast". (Remote intelligence is needed for estimates — add a key in Settings.)');
+      if (!res.estimated) {
+        Alert.alert('Logged ✓', 'I saved the meal, but couldn\'t estimate the calories from that. Name the foods and rough amounts — like "2 eggs and toast" — and I\'ll add a calorie count. (Estimates use remote intelligence — add a key in Settings.)');
       }
       await refreshNutrition();
     } catch (e) {
@@ -887,8 +887,8 @@ function HealthView() {
       const { logFoodFromPhoto } = await import('../processing/foodNutrition');
       const res = await logFoodFromPhoto(db, uri);
       setReading(false);
-      if (res.logged === 0) {
-        Alert.alert("Couldn't read it", 'I couldn\'t make out the food. Try a clearer, well-lit photo from above.');
+      if (!res.estimated) {
+        Alert.alert('Logged ✓', 'I saved the meal, but couldn\'t make out the food well enough to estimate calories. Try a clearer, well-lit photo from above, or type what it was.');
       }
       await refreshNutrition();
     } catch (e) {

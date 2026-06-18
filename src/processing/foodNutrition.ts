@@ -86,9 +86,22 @@ export async function estimateNutritionFromPhoto(uri: string): Promise<Estimated
   } catch { return []; }
 }
 
-export interface FoodLogResult { logged: number; items: EstimatedFoodItem[]; }
+export interface FoodLogResult {
+  logged: number;
+  items: EstimatedFoodItem[];
+  /** True when we recorded the meal but couldn't estimate calories — caller should offer to refine. */
+  estimated: boolean;
+}
 
-/** Estimate + persist a text/voice meal into food_log. mealType inferred from time if not given. */
+/** A short, clean meal label for a placeholder row when estimation fails (no AI / too vague). */
+function mealLabel(text: string): string {
+  const t = (text || '').trim().replace(/\s+/g, ' ');
+  return (t.length > 60 ? `${t.slice(0, 57)}…` : t) || 'Meal';
+}
+
+/** Estimate + persist a text/voice meal into food_log. mealType inferred from time if not given.
+ *  Never drops the meal: if estimation is empty (vague description or no remote AI), a placeholder
+ *  row is logged with unknown calories so the meal still appears and totals stay honest. */
 export async function logFoodFromText(db: SQLiteDatabase, text: string, mealType?: string | null, dateKey?: string): Promise<FoodLogResult> {
   const items = await estimateNutritionFromText(text);
   const meal = mealType ?? inferMealType();
@@ -100,10 +113,17 @@ export async function logFoodFromText(db: SQLiteDatabase, text: string, mealType
     };
     await insertFoodLog(db, row);
   }
-  return { logged: items.length, items };
+  if (items.length === 0 && (text || '').trim()) {
+    await insertFoodLog(db, {
+      dateKey, mealType: meal, name: mealLabel(text), qty: null, unit: null,
+      calories: null, protein_g: null, carbs_g: null, fat_g: null, source: 'text', confidence: 'low',
+    });
+    return { logged: 1, items, estimated: false };
+  }
+  return { logged: items.length, items, estimated: items.length > 0 };
 }
 
-/** Estimate + persist a photographed meal. */
+/** Estimate + persist a photographed meal. Logs a placeholder if the photo can't be estimated. */
 export async function logFoodFromPhoto(db: SQLiteDatabase, uri: string, mealType?: string | null): Promise<FoodLogResult> {
   const items = await estimateNutritionFromPhoto(uri);
   const meal = mealType ?? inferMealType();
@@ -114,7 +134,14 @@ export async function logFoodFromPhoto(db: SQLiteDatabase, uri: string, mealType
       source: 'photo', confidence: it.confidence,
     });
   }
-  return { logged: items.length, items };
+  if (items.length === 0) {
+    await insertFoodLog(db, {
+      mealType: meal, name: 'Meal (from photo)', qty: null, unit: null,
+      calories: null, protein_g: null, carbs_g: null, fat_g: null, source: 'photo', confidence: 'low',
+    });
+    return { logged: 1, items, estimated: false };
+  }
+  return { logged: items.length, items, estimated: true };
 }
 
 function inferMealType(d = new Date()): string {

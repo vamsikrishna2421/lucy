@@ -176,7 +176,7 @@ export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, cont
       const { logFoodFromText } = await import('../processing/foodNutrition');
       const r = await logFoodFromText(db, meal);
       await logVoiceActionToTimeline(db, 'voice', text, `Ate: ${meal}`);
-      if (!r.logged) return { ok: true, intent: 'food', speak: cmd.speak || 'Noted — I couldn’t estimate the calories, but I logged it.', navigate: 'health' };
+      if (!r.estimated) return { ok: true, intent: 'food', speak: cmd.speak || 'Logged it. I couldn’t estimate the calories from that — tell me roughly what and how much and I’ll add them.', navigate: 'health' };
       const kcal = r.items.reduce((s, i) => s + (i.calories ?? 0), 0);
       return { ok: true, intent: 'food', speak: cmd.speak || `Logged ${r.logged} item${r.logged === 1 ? '' : 's'} — about ${kcal} calories.`, navigate: 'health' };
     }

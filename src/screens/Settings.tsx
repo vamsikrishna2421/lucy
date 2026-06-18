@@ -1,8 +1,8 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { DevLogViewer } from '../components/DevLogViewer';
 import { shareAsync } from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
-import { Alert, Linking, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Linking, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { clearDownloadedDeviceModels, getDeviceModelState, prepareDeviceModel, selectDeviceModel, subscribeToDeviceModel, type DeviceModelState } from '../ai/device';
 import { localModelOptions, type LocalModelId } from '../ai/modelCatalog';
 import { getRemoteAccessState, removeRemoteOpenAIKey, setRemoteEnabled, storeRemoteOpenAIKey, type RemoteAccessState } from '../ai/remoteAccess';
@@ -410,8 +410,20 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       <Text style={styles.title}>Settings</Text>
       <Text style={styles.subtitle}>Quiet controls for your memory.</Text>
 
-      <View style={styles.list}>
-        <SettingsSectionLabel label="Capture & Notifications" />
+      {/* ─── You & profile ─────────────────────────────────────────────── */}
+      <SettingsGroup
+        icon="🪞"
+        title="You & profile"
+        summary="Who you are, learned profile, check-ins & reminders"
+        pill={profile.name ? 'Set' : 'Set up'}
+      >
+        <SettingsRow
+          title="About you"
+          value={profile.name ? `${profile.name}${profile.about ? ' · ' + profile.about.slice(0, 30) + (profile.about.length > 30 ? '…' : '') : ''}` : 'Tell LUCY who you are'}
+          badge={profile.name ? '✓' : 'Set up'}
+          active={!!profile.name}
+          onInfo={() => { setProfileDraft({ ...profile }); setActivePanel('profile'); }}
+        />
         <SettingsRow
           title="Progress check-ins"
           value={checkInEnabled ? 'Reminders on — tap to edit your times' : 'Off — set your own reminder times'}
@@ -426,17 +438,25 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           onAction={() => setRemindersManagerVisible(true)}
           onInfo={() => setRemindersManagerVisible(true)}
         />
-        <SettingsSectionLabel label="Profile" />
-        <SettingsRow
-          title="About you"
-          value={profile.name ? `${profile.name}${profile.about ? ' · ' + profile.about.slice(0, 30) + (profile.about.length > 30 ? '…' : '') : ''}` : 'Tell LUCY who you are'}
-          badge={profile.name ? '✓' : 'Set up'}
-          active={!!profile.name}
-          onInfo={() => { setProfileDraft({ ...profile }); setActivePanel('profile'); }}
-        />
+        {onStartTour ? (
+          <SettingsRow
+            title="Guided tour with Lucy"
+            value="Lucy walks you through the app out loud — try each feature live as she explains"
+            actionLabel="Start"
+            onAction={onStartTour}
+          />
+        ) : null}
+      </SettingsGroup>
 
+      {/* ─── AI & intelligence ─────────────────────────────────────────── */}
+      <SettingsGroup
+        icon="✨"
+        title="AI & intelligence"
+        summary="Model, remote & on-device intelligence, organizing"
+        pill={remote.enabled ? 'On' : undefined}
+      >
         {/* AI Model Picker */}
-        <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider }}>
+        <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
           <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700', marginBottom: 4 }}>AI extraction model</Text>
           <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginBottom: 6 }}>
             Select which model LUCY uses to understand your captures. Claude models require an Anthropic API key.
@@ -550,7 +570,6 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           </View>
         </View>
 
-        <SettingsSectionLabel label="Intelligence" />
         <SettingsRow
           title="On-device intelligence"
           value={modelStatus}
@@ -573,6 +592,30 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           onInfo={() => setActivePanel('background')}
         />
         <SettingsRow
+          title="Re-organize now"
+          value={runSummary}
+          actionLabel={organizingNow ? 'Working...' : 'Run'}
+          actionDisabled={organizingNow}
+          onAction={() => void organizeNow()}
+          onInfo={() => setActivePanel('organization')}
+        />
+        <SettingsRow
+          title="Processing queue"
+          value={waiting ? `${waiting} waiting for attention` : 'All caught up'}
+          badge={waiting ? `${waiting}` : undefined}
+          active={waiting === 0}
+          onInfo={() => setActivePanel('queue')}
+        />
+      </SettingsGroup>
+
+      {/* ─── Voice ─────────────────────────────────────────────────────── */}
+      <SettingsGroup
+        icon="🎙️"
+        title="Voice"
+        summary="Hey Lucy wake word, Lucy's voice, hands-free"
+        pill={wakeWordEnabled && wakeStatus === 'listening' ? 'Listening' : undefined}
+      >
+        <SettingsRow
           title="Hey Lucy wake word"
           value={
             !wakeWordEnabled ? 'Off — say “Hey Lucy” hands-free (uses more battery)'
@@ -594,37 +637,22 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           onAction={() => setVoicePickerVisible(true)}
           onInfo={() => setVoicePickerVisible(true)}
         />
-        {onStartTour ? (
+        {Platform.OS === 'ios' && (
           <SettingsRow
-            title="Guided tour with Lucy"
-            value="Lucy walks you through the app out loud — try each feature live as she explains"
-            actionLabel="Start"
-            onAction={onStartTour}
+            title="Set up Siri Shortcut"
+            value={'Say "Hey Siri, [your phrase]" to send notes to LUCY hands-free'}
+            onAction={() => setSiriGuideVisible(true)}
+            actionLabel="Set up"
           />
-        ) : null}
-        <SettingsRow
-          title="Re-organize now"
-          value={runSummary}
-          actionLabel={organizingNow ? 'Working...' : 'Run'}
-          actionDisabled={organizingNow}
-          onAction={() => void organizeNow()}
-          onInfo={() => setActivePanel('organization')}
-        />
-        <SettingsRow
-          title="Processing queue"
-          value={waiting ? `${waiting} waiting for attention` : 'All caught up'}
-          badge={waiting ? `${waiting}` : undefined}
-          active={waiting === 0}
-          onInfo={() => setActivePanel('queue')}
-        />
-        <SettingsRow
-          title="Privacy"
-          value="Original private thoughts stay local"
-          onInfo={() => setActivePanel('privacy')}
-        />
-      </View>
+        )}
+      </SettingsGroup>
 
-      <View style={styles.list}>
+      {/* ─── Connections ───────────────────────────────────────────────── */}
+      <SettingsGroup
+        icon="🔗"
+        title="Connections"
+        summary="Permissions, calendar & laptop access"
+      >
         <SettingsRow
           title="Connectors & permissions"
           value="Calendar, location, passive listening, meeting mode"
@@ -648,10 +676,22 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           }}
           actionLabel="Grant access"
         />
-        <SettingsSectionLabel label="Your Data" />
-        <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+        <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
           <LaptopAccessPanel />
         </View>
+      </SettingsGroup>
+
+      {/* ─── Privacy & data ────────────────────────────────────────────── */}
+      <SettingsGroup
+        icon="🔒"
+        title="Privacy & data"
+        summary="Privacy shield, export, import & your story"
+      >
+        <SettingsRow
+          title="Privacy"
+          value="Original private thoughts stay local"
+          onInfo={() => setActivePanel('privacy')}
+        />
         <SettingsRow
           title="🎁 LUCY Wrapped"
           value="Your quarterly story — captures, tasks, people, mood"
@@ -727,15 +767,21 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           }}
           actionLabel="Import"
         />
-        <SettingsSectionLabel label="App" />
-        {Platform.OS === 'ios' && (
-          <SettingsRow
-            title="Set up Siri Shortcut"
-            value={'Say "Hey Siri, [your phrase]" to send notes to LUCY hands-free'}
-            onAction={() => setSiriGuideVisible(true)}
-            actionLabel="Set up"
-          />
-        )}
+        <SettingsRow
+          title="Delete all memories"
+          value="Permanently erase everything LUCY knows"
+          onAction={deleteAllData}
+          actionLabel="Delete"
+          actionDestructive
+        />
+      </SettingsGroup>
+
+      {/* ─── About & updates ───────────────────────────────────────────── */}
+      <SettingsGroup
+        icon="ℹ️"
+        title="About & updates"
+        summary="Keep LUCY up to date"
+      >
         <SettingsRow
           title="Check for updates"
           value="Fetch the latest LUCY improvements and restart into them"
@@ -762,22 +808,21 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           }}
           actionLabel="Check"
         />
-        <SettingsSectionLabel label="Danger Zone" />
-        <SettingsRow
-          title="Delete all memories"
-          value="Permanently erase everything LUCY knows"
-          onAction={deleteAllData}
-          actionLabel="Delete"
-          actionDestructive
-        />
-        <SettingsSectionLabel label="Developer" />
+      </SettingsGroup>
+
+      {/* ─── Developer ─────────────────────────────────────────────────── */}
+      <SettingsGroup
+        icon="🛠️"
+        title="Developer"
+        summary="Diagnostics & AI call log"
+      >
         <SettingsRow
           title="AI call log"
           value="View all AI requests, responses, and errors"
           actionLabel="Open"
           onAction={() => setDevLogVisible(true)}
         />
-      </View>
+      </SettingsGroup>
 
       <DevLogViewer visible={devLogVisible} onClose={() => setDevLogVisible(false)} />
       <SiriShortcutGuide visible={siriGuideVisible} onClose={() => setSiriGuideVisible(false)} />
@@ -1298,6 +1343,70 @@ function SettingsSectionLabel({ label }: { label: string }) {
   );
 }
 
+/**
+ * Collapsible settings group — a calm accordion card. Header shows an icon +
+ * title + one-line summary + a status pill + a chevron that rotates on expand.
+ * Collapsed by default so the screen presents one focal area at a time.
+ */
+function SettingsGroup({
+  icon,
+  title,
+  summary,
+  pill,
+  defaultExpanded = false,
+  children,
+}: {
+  icon: string;
+  title: string;
+  summary: string;
+  pill?: string;
+  defaultExpanded?: boolean;
+  children: ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const chevron = useRef(new Animated.Value(defaultExpanded ? 1 : 0)).current;
+
+  const toggle = () => {
+    const next = !expanded;
+    setExpanded(next);
+    Animated.timing(chevron, {
+      toValue: next ? 1 : 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const rotate = chevron.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+
+  return (
+    <View style={[styles.group, expanded && styles.groupExpanded]}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={`${title}. ${summary}`}
+        activeOpacity={0.78}
+        onPress={toggle}
+        style={styles.groupHeader}
+      >
+        <View style={styles.groupIcon}>
+          <Text style={styles.groupIconText}>{icon}</Text>
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.groupTitle}>{title}</Text>
+          <Text style={styles.groupSummary} numberOfLines={1}>{summary}</Text>
+        </View>
+        {pill ? (
+          <View style={styles.groupPill}>
+            <Text style={styles.groupPillText}>{pill}</Text>
+          </View>
+        ) : null}
+        <Animated.Text style={[styles.groupChevron, { transform: [{ rotate }] }]}>⌄</Animated.Text>
+      </TouchableOpacity>
+      {expanded ? <View style={styles.groupBody}>{children}</View> : null}
+    </View>
+  );
+}
+
 function SettingsRow({
   title,
   value,
@@ -1647,6 +1756,18 @@ const styles = StyleSheet.create({
   title: { fontSize: 30, letterSpacing: -0.8, fontWeight: '700', color: LUCY_COLORS.textDark },
   subtitle: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 4, marginBottom: 18, lineHeight: 20 },
   list: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 21, borderWidth: 1, borderColor: LUCY_COLORS.border, overflow: 'hidden' },
+  // ─── Collapsible group (accordion) ──────────────────────────────────────
+  group: { backgroundColor: LUCY_COLORS.surface, borderRadius: 20, borderWidth: 1, borderColor: LUCY_COLORS.border, marginBottom: 12, overflow: 'hidden' },
+  groupExpanded: { borderColor: LUCY_COLORS.primaryLine, backgroundColor: LUCY_COLORS.surfaceRaised },
+  groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 16, minHeight: 64 },
+  groupIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: LUCY_COLORS.primaryMist, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, alignItems: 'center', justifyContent: 'center' },
+  groupIconText: { fontSize: 18 },
+  groupTitle: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+  groupSummary: { color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 3 },
+  groupPill: { borderRadius: 999, backgroundColor: LUCY_COLORS.primarySoft, paddingHorizontal: 10, paddingVertical: 5 },
+  groupPillText: { color: LUCY_COLORS.primaryGlow, fontWeight: '800', fontSize: 11 },
+  groupChevron: { color: LUCY_COLORS.textMuted, fontSize: 18, fontWeight: '800', width: 20, textAlign: 'center' },
+  groupBody: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, backgroundColor: LUCY_COLORS.surfaceRaised, overflow: 'hidden' },
   settingRow: { minHeight: 66, paddingLeft: 15, paddingRight: 11, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.border, flexDirection: 'row', alignItems: 'center', gap: 9 },
   rowDetails: { flex: 1, minHeight: 66, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 9 },
   flex: { flex: 1 },

@@ -28,6 +28,15 @@ React Native (no mockups-only).
 - Run `npx tsc --noEmit` and fix any errors before finishing. Note that UI needs on-device visual
   verification (it ships via OTA), so call that out.
 
+## Be genuinely creative — mine real inspiration
+Don't settle for safe/plain. The animated face + cards are LUCY's signature charm. Before designing
+something visual, briefly look at how the best on the web do it — use WebSearch/WebFetch for techniques
+and inspiration (CodePen, Awwwards, dribbble, Apple/Linear/Notion/Amie/Things, mascot animations like
+Duolingo, CSS-tricks). Borrow concrete techniques (catchlights, spring/secondary motion, particle/float
+loops, glassmorphism, micro-interactions, easing curves) and adapt them — calm-futuristic, never
+gimmicky. Aim for "wow, that feels alive," not generic. The user explicitly wants bolder, more inventive
+expression work (their words: find cool animations online, learn, and use such things for real).
+
 ## Output
 End with: which files changed, what design decisions you made (and which top-app pattern they draw from),
 how to test on device, and anything that needs the user's visual sign-off. Keep diffs small and reviewable.

@@ -699,6 +699,28 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     if (!vc.has('orig_mime')) await db.execAsync('ALTER TABLE vault_items ADD COLUMN orig_mime TEXT;');
   }
 
+  // Health / nutrition vertical (calorie intake + body profile + goals).
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS body_profile (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      sex TEXT, birth_year INTEGER, height_cm REAL, weight_kg REAL, body_fat_pct REAL,
+      activity_level TEXT DEFAULT 'moderate', goal TEXT DEFAULT 'maintain',
+      gentle_mode INTEGER DEFAULT 0, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS nutrition_goals (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      calorie_goal INTEGER, protein_g INTEGER, carbs_g INTEGER, fat_g INTEGER, water_ml INTEGER,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS food_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date_key TEXT NOT NULL, meal_type TEXT, name TEXT NOT NULL, qty REAL, unit TEXT,
+      calories REAL, protein_g REAL, carbs_g REAL, fat_g REAL, fiber_g REAL, sugar_g REAL, sodium_mg REAL,
+      source TEXT, confidence TEXT, photo_uri TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_food_log_date ON food_log(date_key);
+  `);
+
   // Circuit breaker: if a device-calendar read was in-flight when the app last died, expo-calendar
   // likely crashed natively on a bad event. Auto-pause calendar sync so the app stops crash-looping
   // (the user can resume it from the calendar). Self-healing — runs once per startup.

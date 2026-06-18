@@ -8,7 +8,7 @@ import { listPendingTodos, type TodoRow } from '../db/todos';
 import { listRecentCaptures } from '../db/captures';
 import type { ExtractionResult, PrivacyLevel } from '../types/extraction';
 import { isInvalidDeadline, isInvalidPendingTask } from './artifactCleanup';
-import { normalizeMemoryLookupText, recognizesMemoryMapQuestion, recognizesMonthlySpendingQuestion, recognizesTodayPlanQuestion, requestedTaskContext, spendingWindow, type SpendingWindow, recognizesSchedulingQuestion, extractSchedulableTask, isComplexOrEmotionalQuery } from './askIntent';
+import { normalizeMemoryLookupText, recognizesMemoryMapQuestion, recognizesMonthlySpendingQuestion, recognizesTodayPlanQuestion, requestedTaskContext, spendingWindow, type SpendingWindow, recognizesSchedulingQuestion, extractSchedulableTask, isComplexOrEmotionalQuery, parseExplicitDateTime } from './askIntent';
 import { organizeMemory } from './organizer';
 import { promptAI } from '../ai/openai';
 import { resolveRemoteAvailability } from '../ai/provider';
@@ -478,9 +478,49 @@ async function answerWithLLM(question: string, history: AskTurn[] = [], screenCo
 async function answerScheduling(question: string): Promise<LucyAnswer> {
   const db = await getDatabase();
   const task = extractSchedulableTask(question);
-  const { suggestForText } = await import('../scheduling');
+  const { suggestForText, commitBlock, commitSeries } = await import('../scheduling');
   const { describeResources } = await import('../scheduling/resources');
+  const { detectRecurrence } = await import('../scheduling/classify');
+  const { computeStart } = await import('../voice/timeResolve');
   const r = await suggestForText(db, task, { maxResults: 3 });
+  const fmtWhen = (ms: number): string =>
+    new Date(ms).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  // EXPLICIT time given ("schedule gym at 6:30am tomorrow") → commit it directly (conflict-checked),
+  // consistent with the voice command path. No explicit time → fall through to suggest + confirm.
+  const explicit = parseExplicitDateTime(question);
+  const startMs = explicit ? computeStart(explicit.day, explicit.time, Date.now()) : null;
+  if (startMs) {
+    const endMs = startMs + r.meta.durationMin * 60_000;
+    const recurrence = detectRecurrence(question);
+    const common = { title: r.meta.title, startMs, endMs, resources: r.meta.resources, energy: r.meta.energy, location: r.meta.resources.location ?? null, todoId: null };
+    if (recurrence) {
+      const { count } = await commitSeries(db, common, recurrence);
+      const message = count > 0
+        ? `Added "${r.meta.title}" to your calendar — ${recurrence}, starting ${fmtWhen(startMs)} (${count} occurrence${count === 1 ? '' : 's'}).`
+        : `"${r.meta.title}" is already on your calendar for those times — nothing to add.`;
+      await insertQuestionSignal(db, question, 'schedule_committed', message, 'Committed a recurring block at the user-specified time.');
+      return { supported: true, answerKind: 'schedule', scheduleSuggestions: [], title: `Scheduled ${r.meta.title}`, message, tasks: [], deadlines: [], recordedSignal: message };
+    }
+    const res = await commitBlock(db, common);
+    if (res.ok) {
+      const message = `Added "${r.meta.title}" to your calendar at ${fmtWhen(startMs)} (${r.meta.durationMin} min).`;
+      await insertQuestionSignal(db, question, 'schedule_committed', message, 'Committed a block at the user-specified time.');
+      return { supported: true, answerKind: 'schedule', scheduleSuggestions: [], title: `Scheduled ${r.meta.title}`, message, tasks: [], deadlines: [], recordedSignal: message };
+    }
+    // The requested time clashes — explain the conflict and offer the conflict-free alternatives.
+    const clash = res.conflict?.b?.title ? ` It clashes with "${res.conflict.b.title}".` : (res.conflict?.reason ? ` ${res.conflict.reason}` : '');
+    const alts = r.suggestions.slice(0, 3).map((s) => fmtWhen(s.start)).join('  ·  ');
+    const message = `I couldn't put "${r.meta.title}" at ${fmtWhen(startMs)}.${clash}`
+      + (alts ? `\nOpen instead: ${alts}` : '\nNo nearby free slot — want to shorten it or free up that time?');
+    await insertQuestionSignal(db, question, 'schedule_suggestion', message, 'Requested time conflicted; offered alternatives.');
+    return {
+      supported: true, answerKind: 'schedule',
+      scheduleSuggestions: r.suggestions.map((s) => ({ title: r.meta.title, start: s.start, end: s.end, rationale: s.rationale, resourceLabel: describeResources(r.meta.resources), durationMin: r.meta.durationMin })),
+      title: `That time is taken`, message, tasks: [], deadlines: [], recordedSignal: message,
+    };
+  }
+
   const suggestions: ScheduleSuggestionDTO[] = r.suggestions.map((s) => ({
     title: r.meta.title, start: s.start, end: s.end, rationale: s.rationale,
     resourceLabel: describeResources(r.meta.resources), durationMin: r.meta.durationMin,
@@ -494,7 +534,7 @@ async function answerScheduling(question: string): Promise<LucyAnswer> {
     const alts = suggestions.slice(1).map((s) => s.rationale).join('  ·  ');
     message = `Best time for "${r.meta.title}" (${r.meta.durationMin} min, ${top.resourceLabel}): ${top.rationale}`
       + (alts ? `\nAlso open: ${alts}` : '')
-      + `\nOpen Calendar to confirm and add it to your schedule.`;
+      + `\nTell me which works (or say the exact time) and I'll add it.`;
   }
 
   await insertQuestionSignal(db, question, 'schedule_suggestion', message, 'Help the user find conflict-free time for new work.');

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 57 (Health vertical: Dr. Lucy nutrition + activity dashboard — calorie/macro rings, food logging via /api/food, meal timeline, activity & energy cards, body-profile setup, ED-safe trend; living orb + section personas) */
+/* LUCY web - premium - dashboard rev 58 (Ask scheduling: "Add to calendar" buttons on schedule suggestions — commits via /api/schedule/commit, so the calendar flow isn't a dead-end from chat) */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -1195,7 +1195,7 @@ function vTasks(){const tasks=DATA.todos.filter(pending);const groups={high:[],m
   if(!tasks.length)return h+empty('◇','No open tasks','You are all caught up.')+'</div>';
   for(const[g,label]of[['high','Urgent'],['medium','Soon'],['low','Whenever']]){if(!groups[g].length)continue;h+=`<div class="sec"><h2>${label}</h2></div><div class="col">`+groups[g].map(taskCard).join('')+'</div>';}return h+'</div>';}
 function vAsk(){let h='<div class="page"><section class="page-hero compact"><div class="page-kicker">Ask Lucy</div><h1 class="page-title">Ask your memory, not the internet.</h1><div class="page-sub">Use this when you want Lucy to connect your own notes, tasks, people, spending, and plans.</div></section><div id="chat"><div id="stream">';
-  if(!CHAT.length)h+=`<div class="empty"><div class="big">✦</div>Ask LUCY anything about your memory.</div>`;else h+=CHAT.map(bubble).join('');
+  if(!CHAT.length)h+=`<div class="empty"><div class="big">✦</div>Ask LUCY anything about your memory.</div>`;else h+=CHAT.map((m,i)=>bubble(m,i)).join('');
   h+='</div>';if(!CHAT.length)h+=`<div class="suggest"><button onclick="quick('What should I focus on today?')">Focus today?</button><button onclick="quick('How much did I spend this month?')">Spending?</button><button onclick="quick('What have I been thinking about lately?')">Recent themes?</button><button onclick="quick('Summarize what you know about me')">About me?</button></div>`;
   h+=`<div id="askbar"><textarea id="q" rows="1" placeholder="Message LUCY…" oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAsk();}"></textarea><button class="btn" onclick="sendAsk()">Send</button></div></div></div>`;return h;}
 function vBrain(){const k=DATA.knowledge||{};const ents=(k.entities||[]).slice(0,40);const cons=(k.connections||[]).slice(0,30);
@@ -1383,7 +1383,10 @@ async function handleImport(file){if(!file)return;toast('Reading export…');let
 function stat(n,l){return `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;}
 function heroMetric(n,l){return `<div class="hero-metric"><b>${n}</b><span>${l}</span></div>`;}
 function taskCard(t){return `<div class="card"><div style="flex:1"><span class="ttl">${esc(t.task)}</span>${t.context?`<div class="sub">${esc(t.context)}</div>`:''}</div><span class="pill ${esc((t.urgency||'medium').toLowerCase())}">${esc(t.urgency||'')}</span><button class="ico-btn good" onclick="task(${t.id},'complete')">✓</button><button class="ico-btn danger" onclick="task(${t.id},'delete')">✕</button></div>`;}
-function bubble(m){if(m.role==='user')return `<div class="msg me">${esc(m.content)}</div>`;let s='';if(m.sources&&m.sources.length)s=`<div class="srcs"><b>From your memory:</b> ${m.sources.slice(0,4).map(x=>`<span class="chip">${esc(x.title||x.snippet||'note')}</span>`).join('')}</div>`;return `<div class="msg lucy">${esc(m.content)}${s}</div>`;}
+function bubble(m,mi){if(m.role==='user')return `<div class="msg me">${esc(m.content)}</div>`;let s='';if(m.sources&&m.sources.length)s=`<div class="srcs"><b>From your memory:</b> ${m.sources.slice(0,4).map(x=>`<span class="chip">${esc(x.title||x.snippet||'note')}</span>`).join('')}</div>`;
+  let sg='';if(m.sched&&m.sched.length){sg=`<div class="srcs"><b>Add to calendar:</b><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${m.sched.slice(0,3).map((x,i)=>`<button class="chip" style="cursor:pointer;border:1px solid var(--primary);color:var(--primary)" onclick="addSched(${mi},${i})">＋ ${esc(new Date(x.start).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}))}</button>`).join('')}</div></div>`;}
+  return `<div class="msg lucy">${esc(m.content)}${s}${sg}</div>`;}
+async function addSched(mi,i){const m=CHAT[mi];if(!m||!m.sched||!m.sched[i])return;const x=m.sched[i];try{const r=await api('/api/schedule/commit',{method:'POST',body:JSON.stringify({title:x.title,startMs:x.start,endMs:x.end})});if(r&&r.ok){toast('Added to calendar ✓');setOrbMood('save',1200);}else{toast('That time just filled up');}}catch(e){toast('Could not add');}}
 function greet(){const h=new Date().getHours();return h<12?'Good morning':h<18?'Good afternoon':'Good evening';}
 function empty(ic,t,s){return `<div class="empty"><div class="big">${ic}</div><div style="font-size:15px;color:var(--muted);margin-bottom:4px">${t}</div>${s||''}</div>`;}
 
@@ -1392,7 +1395,7 @@ function afterAsk(){const s=$('stream');if(s)s.scrollTop=s.scrollHeight;const q=
 function quick(t){$('q').value=t;sendAsk();}
 async function sendAsk(){const q=$('q');if(!q)return;const text=q.value.trim();if(!text||busy)return;q.value='';autoGrow(q);CHAT.push({role:'user',content:text});busy=true;draw();setOrbMood('think');
   const s=$('stream');s.insertAdjacentHTML('beforeend','<div class="typing"><i></i><i></i><i></i></div>');s.scrollTop=s.scrollHeight;
-  let ok=true;try{const hist=CHAT.slice(0,-1).map(m=>({role:m.role,content:m.content}));const r=await api('/api/ask',{method:'POST',body:JSON.stringify({question:text,history:hist})});CHAT.push({role:'lucy',content:r.reply||'…',sources:r.sources||[]});}
+  let ok=true;try{const hist=CHAT.slice(0,-1).map(m=>({role:m.role,content:m.content}));const r=await api('/api/ask',{method:'POST',body:JSON.stringify({question:text,history:hist})});CHAT.push({role:'lucy',content:r.reply||'…',sources:r.sources||[],sched:r.scheduleSuggestions||[]});}
   catch(e){ok=false;CHAT.push({role:'lucy',content:'I could not reach the phone just now. Keep LUCY open and try again.'});setOrbMood('confused',1800);}busy=false;if(ok)setOrbMood('save',900);draw();}
 
 async function addCapture(){const v=$('cap').value.trim();if(!v)return;$('cap').value='';setOrbMood('save',900);toast('Captured ✓');await api('/api/capture',{method:'POST',body:JSON.stringify({text:v})});setOrbMood('organize',1600);setTimeout(()=>load(),1600);}

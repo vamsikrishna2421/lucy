@@ -58,12 +58,50 @@ export function isComplexOrEmotionalQuery(question: string): boolean {
   return /\b(stress(ed|ing)?|overwhelm\w*|anxious|anxiety|exhaust\w*|burn(t|ed)?\s?out|don'?t know where|where (do|to) (i )?(even )?start|so much going on|a lot going on|too much (going|to)|honestly|i feel|i'?m feeling|feeling (low|down|off|tired|lost|stuck)|falling behind|can'?t keep up|drowning|all over the place|losing track|where do i begin)\b/i.test(q);
 }
 
+const WEEKDAYS_RE = '(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day';
+
+/**
+ * Pull an EXPLICIT clock time out of a scheduling request ("schedule gym at 6:30am tomorrow") so it
+ * can be committed directly instead of merely suggested. Returns the day phrase + "HH:MM" (24h) for
+ * computeStart, or null when no concrete time is present ("find me time for X" → suggest, don't commit).
+ * Deterministic + pure (testable). Conservative: requires am/pm, a colon, or noon/midnight so a bare
+ * number ("call 3 people") is never mistaken for a time.
+ */
+export function parseExplicitDateTime(question: string): { day: string | null; time: string } | null {
+  const q = question.toLowerCase();
+  let hh: number | null = null;
+  let mm = 0;
+  let m: RegExpMatchArray | null;
+  if (/\bnoon\b|\bmidday\b/.test(q)) { hh = 12; mm = 0; }
+  else if (/\bmidnight\b/.test(q)) { hh = 0; mm = 0; }
+  else if ((m = q.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/))) {
+    hh = Number(m[1]) % 12; mm = m[2] ? Number(m[2]) : 0;
+    if (m[3] === 'pm') hh += 12;
+  } else if ((m = q.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/))) {
+    hh = Number(m[1]); mm = Number(m[2]);
+  }
+  if (hh === null || hh > 23 || mm > 59) return null;
+
+  let day: string | null = null;
+  let dm: RegExpMatchArray | null;
+  if (/\btomorrow\b/.test(q)) day = 'tomorrow';
+  else if (/\btonight\b|\btoday\b/.test(q)) day = 'today';
+  else if ((dm = q.match(/\b(\d{4}-\d{2}-\d{2})\b/))) day = dm[1];
+  else if ((dm = q.match(new RegExp(`\\b(?:next\\s+)?(${WEEKDAYS_RE})\\b`)))) day = dm[1];
+
+  return { day, time: `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}` };
+}
+
 /** Strips the scheduling phrasing to recover the underlying task ("find time to call mom" → "call mom"). */
 export function extractSchedulableTask(question: string): string {
   let t = question.trim();
   t = t.replace(/^\s*(hey )?lucy[,\s]+/i, '');
   t = t.replace(/\b(when (should|can|do|could) i|what time should i|find (me )?(a )?time (to|for)?|best time (to|for)?|good time (to|for)?|schedule|book (time )?(to|for)?|make time (to|for)?|squeeze in|fit (in )?|free time for|i need to|i want to|i have to|time to)\b/gi, ' ');
-  t = t.replace(/\b(today|tomorrow|this week|next week|please|sometime|some time)\b/gi, ' ');
+  t = t.replace(/\b(today|tonight|tomorrow|this week|next week|please|sometime|some time)\b/gi, ' ');
+  // Strip an explicit time + weekday so the committed/suggested title is clean ("gym", not "gym at 6:30am monday").
+  t = t.replace(/\b(?:at\s+)?(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)|(?:[01]?\d|2[0-3]):[0-5]\d|noon|midday|midnight)\b/gi, ' ');
+  t = t.replace(new RegExp(`\\b(?:on\\s+|next\\s+)?(?:${WEEKDAYS_RE})\\b`, 'gi'), ' ');
+  t = t.replace(/\b(\d{4}-\d{2}-\d{2})\b/g, ' ');
   t = t.replace(/[?.!]+$/g, '').replace(/\s+/g, ' ').trim();
   return t || question.trim();
 }

@@ -9,7 +9,7 @@ import { parseDeadline, detectRecurrence } from '../src/scheduling/classify';
 import { overlaps } from '../src/scheduling/time';
 import { canCoexist, normalizeResources } from '../src/scheduling/resources';
 import { computeStart } from '../src/voice/timeResolve';
-import { spendingWindow, recognizesSchedulingQuestion, recognizesTodayPlanQuestion, isComplexOrEmotionalQuery } from '../src/processing/askIntent';
+import { spendingWindow, recognizesSchedulingQuestion, recognizesTodayPlanQuestion, isComplexOrEmotionalQuery, parseExplicitDateTime, extractSchedulableTask } from '../src/processing/askIntent';
 import type { TaskResources } from '../src/scheduling/types';
 
 let pass = 0; let fail = 0;
@@ -132,6 +132,21 @@ ok('"how much did I spend?" → not complex', isComplexOrEmotionalQuery('how muc
 ok('"plan my day" NOT a single-task scheduling question', recognizesSchedulingQuestion('plan my day for me') === false);
 ok('"find time to call mom" still scheduling', recognizesSchedulingQuestion('find time to call mom') === true);
 ok('"schedule a dentist appointment" still scheduling', recognizesSchedulingQuestion('schedule a dentist appointment') === true);
+
+// ── parseExplicitDateTime (commit-on-explicit-time, the #2 calendar fix) ─────────
+ok('"at 6:30am tomorrow" → 06:30 tomorrow', (() => { const r = parseExplicitDateTime('schedule gym at 6:30am tomorrow'); return !!r && r.time === '06:30' && r.day === 'tomorrow'; })());
+ok('"5pm" → 17:00', (() => { const r = parseExplicitDateTime('schedule a call at 5pm'); return !!r && r.time === '17:00'; })());
+ok('"at noon" → 12:00', parseExplicitDateTime('lunch at noon today')?.time === '12:00');
+ok('"midnight" → 00:00', parseExplicitDateTime('deploy at midnight')?.time === '00:00');
+ok('24h "18:00" → 18:00', parseExplicitDateTime('block 18:00 for review')?.time === '18:00');
+ok('weekday "monday" captured', parseExplicitDateTime('schedule standup at 9am monday')?.day === 'monday');
+ok('"find time to call mom" → no explicit time (suggest, not commit)', parseExplicitDateTime('find time to call mom') === null);
+ok('bare number "call 3 people" → no time', parseExplicitDateTime('schedule time to call 3 people') === null);
+ok('"12am" → 00:00', parseExplicitDateTime('wake at 12am')?.time === '00:00');
+ok('"12pm" → 12:00', parseExplicitDateTime('eat at 12pm')?.time === '12:00');
+// extractSchedulableTask must strip the time/day so the committed title is clean.
+ok('task title strips time+day', (() => { const t = extractSchedulableTask('schedule gym at 6:30am tomorrow'); return /gym/i.test(t) && !/6:30|am|tomorrow/i.test(t); })());
+ok('task title strips weekday', (() => { const t = extractSchedulableTask('schedule standup at 9am monday'); return /standup/i.test(t) && !/monday|9am/i.test(t); })());
 
 console.log(`\nhardening: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

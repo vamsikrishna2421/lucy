@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Easing,
   Keyboard,
@@ -714,6 +715,9 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   if (answer.answerKind === 'spending') {
     return <SpendingAnswerBubble answer={answer} />;
   }
+  if (answer.answerKind === 'schedule') {
+    return <ScheduleAnswerBubble answer={answer} />;
+  }
   const tasks = answer.tasks.filter((task) => !isInvalidPendingTask(task));
   const deadlines = answer.deadlines.filter((deadline) => !isInvalidDeadline(deadline));
   const taskScopeLabel = answer.taskScope ? ` for ${answer.taskScope}` : '';
@@ -834,8 +838,50 @@ function SpendingAnswerBubble({ answer }: { answer: LucyAnswer }) {
   );
 }
 
+function ScheduleAnswerBubble({ answer }: { answer: LucyAnswer }) {
+  const suggestions = answer.scheduleSuggestions ?? [];
+  const [added, setAdded] = useState<number[]>([]);
+  const [busyIdx, setBusyIdx] = useState<number | null>(null);
+  const fmt = (ms: number) => new Date(ms).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const add = async (i: number, s: NonNullable<LucyAnswer['scheduleSuggestions']>[number]) => {
+    if (busyIdx !== null || added.includes(i)) return;
+    setBusyIdx(i);
+    try {
+      const db = await getDatabase();
+      const { commitBlock } = await import('../scheduling');
+      const r = await commitBlock(db, { title: s.title, startMs: s.start, endMs: s.end });
+      if (r.ok) { setAdded((a) => [...a, i]); }
+      else { Alert.alert('That time just filled up', r.conflict?.b?.title ? `It clashes with "${r.conflict.b.title}". Pick another slot.` : 'Pick another slot.'); }
+    } catch { Alert.alert('Could not add', 'Please try again.'); }
+    finally { setBusyIdx(null); }
+  };
+  return (
+    <View style={[styles.bubble, styles.lucyBubble]}>
+      <Text style={styles.responseLabel}>LUCY</Text>
+      {answer.title ? <Text style={styles.answerTitle}>{answer.title}</Text> : null}
+      <Text style={styles.answerMessage}>{answer.message}</Text>
+      {suggestions.length ? (
+        <>
+          <Text style={styles.section}>Add to calendar</Text>
+          {suggestions.map((s, i) => (
+            <TouchableOpacity key={`${s.start}-${i}`} style={styles.schedRow} disabled={busyIdx !== null || added.includes(i)} onPress={() => add(i, s)}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowText}>{protectedPreview(s.title)}</Text>
+                <Text style={styles.time}>{fmt(s.start)} · {s.durationMin} min</Text>
+              </View>
+              <Text style={[styles.actionText, added.includes(i) && { color: LUCY_COLORS.textMuted }]}>{added.includes(i) ? 'Added ✓' : busyIdx === i ? '…' : '＋ Add'}</Text>
+            </TouchableOpacity>
+          ))}
+        </>
+      ) : null}
+      {answer.recordedSignal ? <Text style={styles.signal}>{answer.recordedSignal}</Text> : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  schedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: LUCY_COLORS.border },
   heading: { marginBottom: 12 },
   headingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
   headingActions: { flexDirection: 'row', gap: 7 },

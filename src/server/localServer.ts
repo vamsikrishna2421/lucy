@@ -271,6 +271,7 @@ async function route(req: ParsedRequest): Promise<string> {
         expenses: answer.expenses ?? [],
         expenseTotal: answer.expenseTotal,
         spendingCategories: answer.spendingCategories ?? [],
+        scheduleSuggestions: answer.scheduleSuggestions ?? [],
       });
     }
     // Log a mood entry from the laptop.

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 55 (living orb: default smile, props — glasses/headphones/notes/thought-bubble/sparkle/snore — + ambient idle expression cycle) */
+/* LUCY web - premium - dashboard rev 56 (living orb + section personas: Lucy dresses for the job — doctor/finance/scholar/tasks/planner/people/timeline costumes layered over the smile + idle cycle) */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -284,6 +284,76 @@ nav{display:flex;flex-direction:column;gap:1px}
 /* speaking: the default smile gently "talks" (open/close) while replying */
 .orb.talk .mouth{opacity:1;animation:talkMouth .42s ease-in-out infinite}
 @keyframes talkMouth{0%,100%{height:5px;border-radius:0 0 24px 24px}50%{height:13px;border-radius:0 0 14px 14px}}
+
+/* ── PERSONA / COSTUMES (Lucy dresses for the section) ─────────────────────
+   Pure-CSS props, theme-safe via --eye/--glow/--card/--primary. Each persona-*
+   class on .orb reveals one costume; they layer on top of any mood/idle face.  */
+.orb .costume{position:absolute;inset:0;pointer-events:none}
+.orb .pp{position:absolute;opacity:0;transition:opacity .3s ease;pointer-events:none}
+
+/* DOCTOR (health): stethoscope around the orb + red medical cross */
+.orb.persona-doctor .pp-steth{opacity:1}
+.orb .pp-steth .ear{position:absolute;top:6px;width:4px;height:18px;border-radius:3px;background:var(--eye)}
+.orb .pp-steth .ear.l{left:40px;transform:rotate(20deg)}.orb .pp-steth .ear.r{right:40px;transform:rotate(-20deg)}
+.orb .pp-steth .tube{position:absolute;top:14px;left:42px;right:42px;height:74px;border:4px solid var(--eye);border-top:0;border-radius:0 0 40px 40px;opacity:.92}
+.orb .pp-steth .bell{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:18px;height:18px;border-radius:50%;background:var(--eye);box-shadow:inset 0 0 0 3px rgba(255,250,242,.25)}
+.orb.persona-doctor .pp-cross{opacity:1}
+.orb .pp-cross{top:18px;right:18px;width:18px;height:18px;border-radius:5px;background:#FF4D4D;box-shadow:0 0 10px rgba(255,77,77,.55)}
+.orb .pp-cross::before,.orb .pp-cross::after{content:"";position:absolute;background:#fff;border-radius:1px}
+.orb .pp-cross::before{top:4px;left:7.5px;width:3px;height:10px}.orb .pp-cross::after{left:4px;top:7.5px;width:10px;height:3px}
+
+/* FINANCE (money): bow-tie + monocle + floating coins */
+.orb.persona-finance .pp-bowtie,.orb.persona-finance .pp-monocle,.orb.persona-finance .pp-coin{opacity:1}
+.orb .pp-bowtie{bottom:14px;left:50%;transform:translateX(-50%);width:30px;height:14px;
+  background:var(--eye);clip-path:polygon(0 0,42% 50%,0 100%,100% 100%,58% 50%,100% 0);}
+.orb .pp-bowtie::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:7px;height:9px;border-radius:2px;background:var(--orb-b)}
+.orb .pp-monocle{top:52px;right:30px;width:24px;height:24px;border:3px solid var(--eye);border-radius:50%;background:rgba(255,250,242,.12)}
+.orb .pp-monocle .chain{position:absolute;top:20px;right:6px;width:2px;height:22px;background:var(--eye);transform:rotate(12deg);border-radius:2px}
+.orb .pp-coin{font-size:13px;font-weight:900;color:var(--eye);text-shadow:0 0 6px var(--glow)}
+.orb.persona-finance .pp-coin.c1{top:18px;left:14px;animation:coinFloat 2.4s ease-in-out infinite}
+.orb.persona-finance .pp-coin.c2{top:26px;right:10px;animation:coinFloat 2.8s ease-in-out infinite .6s}
+@keyframes coinFloat{0%{opacity:0;transform:translateY(8px) scale(.7)}40%{opacity:1}100%{opacity:0;transform:translateY(-20px) scale(1.05)}}
+
+/* SCHOLAR (brain): mortarboard cap + swinging tassel + a soft halo */
+.orb.persona-scholar .pp-cap{opacity:1}
+.orb .pp-cap{top:-12px;left:50%;transform:translateX(-50%);width:78px;height:30px}
+.orb .pp-cap .base{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:40px;height:14px;border-radius:0 0 14px 14px;background:var(--eye)}
+.orb .pp-cap .board{position:absolute;top:6px;left:50%;transform:translateX(-50%) rotate(0);width:78px;height:14px;border-radius:3px;background:var(--eye);box-shadow:0 3px 0 rgba(0,0,0,.18)}
+.orb .pp-cap .tassel{position:absolute;top:12px;left:50%;width:2px;height:20px;background:var(--orb-a);transform-origin:top center;animation:tasselSwing 2.6s ease-in-out infinite}
+.orb .pp-cap .tassel::after{content:"";position:absolute;bottom:-4px;left:-2px;width:6px;height:8px;border-radius:0 0 4px 4px;background:var(--orb-a)}
+@keyframes tasselSwing{0%,100%{transform:rotate(8deg)}50%{transform:rotate(-8deg)}}
+.orb.persona-scholar::before{opacity:.9;animation-duration:8s}
+
+/* PRODUCTIVITY (tasks): reading glasses (reuse) + pencil + tiny checklist */
+.orb.persona-tasks .glasses{opacity:1}
+.orb.persona-tasks .pp-pencil,.orb.persona-tasks .pp-list{opacity:1}
+.orb .pp-pencil{top:30px;right:6px;width:5px;height:34px;background:var(--eye);border-radius:1px;transform:rotate(32deg)}
+.orb .pp-pencil::before{content:"";position:absolute;top:-7px;left:0;border-left:2.5px solid transparent;border-right:2.5px solid transparent;border-bottom:7px solid var(--orb-a)}
+.orb .pp-pencil::after{content:"";position:absolute;bottom:0;left:0;width:5px;height:3px;background:#FF4D4D;border-radius:0 0 1px 1px}
+.orb .pp-list{top:24px;left:8px;width:20px;height:24px;border-radius:3px;background:var(--card,#fff);border:1.5px solid var(--eye);padding:3px;display:flex;flex-direction:column;justify-content:space-around}
+.orb .pp-list i{height:2px;background:var(--eye);border-radius:2px;margin-left:5px;opacity:.7}
+.orb .pp-list i:first-child{margin-left:0;width:3px;height:3px;border-radius:1px;background:var(--primary)}
+
+/* PLANNER (calendar/productivity space): little calendar page */
+.orb.persona-planner .pp-cal{opacity:1}
+.orb .pp-cal{top:20px;right:12px;width:22px;height:22px;border-radius:4px;background:var(--card,#fff);border:1.5px solid var(--eye)}
+.orb .pp-cal .hdr{position:absolute;top:0;left:0;right:0;height:6px;background:var(--primary);border-radius:3px 3px 0 0}
+.orb .pp-cal::after{content:"";position:absolute;left:5px;bottom:4px;width:11px;height:2px;background:var(--eye);border-radius:2px;box-shadow:0 4px 0 var(--eye)}
+
+/* PEOPLE: a friendly floating heart */
+.orb.persona-people .pp-heart{opacity:1;animation:heartPulse 1.8s ease-in-out infinite}
+.orb .pp-heart{top:16px;right:18px;width:14px;height:14px;background:#FF6B81;transform:rotate(-45deg);border-radius:0 0 3px 0}
+.orb .pp-heart::before,.orb .pp-heart::after{content:"";position:absolute;width:14px;height:14px;background:#FF6B81;border-radius:50%}
+.orb .pp-heart::before{top:-7px;left:0}.orb .pp-heart::after{top:0;right:-7px}
+@keyframes heartPulse{0%,100%{transform:rotate(-45deg) scale(1);opacity:.85}50%{transform:rotate(-45deg) scale(1.18);opacity:1}}
+
+/* TIMELINE: a memory film-strip shimmer */
+.orb.persona-timeline .pp-film{opacity:1}
+.orb .pp-film{top:20px;left:50%;transform:translateX(-50%);width:62px;height:14px;border-radius:3px;
+  background:var(--eye);display:flex;align-items:center;justify-content:space-around;opacity:.9;overflow:hidden}
+.orb .pp-film i{width:7px;height:7px;border-radius:1.5px;background:var(--card,#fff);opacity:.85;animation:filmShimmer 1.6s ease-in-out infinite}
+.orb .pp-film i:nth-child(2){animation-delay:.2s}.orb .pp-film i:nth-child(3){animation-delay:.4s}.orb .pp-film i:nth-child(4){animation-delay:.6s}
+@keyframes filmShimmer{0%,100%{opacity:.35}50%{opacity:1}}
 
 .spark-dot{position:absolute;border-radius:50%;background:var(--primary-glow);opacity:.7;animation:twinkle 3s infinite}
 @keyframes twinkle{0%,100%{opacity:.2;transform:scale(.7)}50%{opacity:.9;transform:scale(1.1)}}
@@ -641,6 +711,28 @@ nav{display:flex;flex-direction:column;gap:1px}
         <span class="spark s1"></span><span class="spark s2"></span><span class="spark s3"></span>
         <span class="snore"></span>
         <span class="zzz">z</span>
+        <!-- ── PERSONA / COSTUME LAYER (Lucy dresses for the section) ──
+             Separate DOM + .pp-* classes so mood/idle class-clearing never strips the costume. -->
+        <div class="costume">
+          <!-- doctor (health): stethoscope + a red medical cross badge -->
+          <span class="pp pp-steth"><i class="tube"></i><i class="bell"></i><i class="ear l"></i><i class="ear r"></i></span>
+          <span class="pp pp-cross"></span>
+          <!-- finance (money): bow-tie + monocle + floating coins -->
+          <span class="pp pp-bowtie"></span>
+          <span class="pp pp-monocle"><i class="chain"></i></span>
+          <span class="pp pp-coin c1">$</span><span class="pp pp-coin c2">$</span>
+          <!-- scholar (brain): mortarboard cap + tassel -->
+          <span class="pp pp-cap"><i class="board"></i><i class="base"></i><i class="tassel"></i></span>
+          <!-- productivity (tasks): pencil + a tiny checklist card -->
+          <span class="pp pp-pencil"></span>
+          <span class="pp pp-list"><i></i><i></i><i></i></span>
+          <!-- planner (calendar): little calendar page prop -->
+          <span class="pp pp-cal"><i class="hdr"></i></span>
+          <!-- people: a friendly floating heart -->
+          <span class="pp pp-heart"></span>
+          <!-- timeline: a memory shimmer / film strip -->
+          <span class="pp pp-film"><i></i><i></i><i></i><i></i></span>
+        </div>
       </div></div>
     </div>
     <div class="profile-chip"><div class="avatar" id="pavatar">V</div><div><div class="nm" id="pname">You</div><div class="pl">Pro Plan</div></div><span class="cv">⌄</span></div>
@@ -693,7 +785,7 @@ function applyOrbAmbient(){const o=$('orb');if(!o)return;['morning','evening','n
   if(p==='night'){stopOrbIdleCycle();}                          // night = sleeping, no cycle
   else if(!_orbActive&&!_orbIdleT){startOrbIdleCycle();}        // day & idle → keep her alive
   // don't clobber the cloud while a real mood OR the idle cycle is driving it
-  const c=$('orbCloud');if(c&&!_orbActive&&!_orbIdleT)c.textContent=p==='night'?'resting':p==='morning'?'morning':'Lucy';}
+  const c=$('orbCloud');if(c&&!_orbActive&&!_orbIdleT)c.textContent=p==='night'?'resting':(typeof _orbPersonaName!=='undefined'?_orbPersonaName:'Lucy');}
 const ORB_CLOUD_TXT={idle:'Lucy',think:'thinking...',listen:'listening...',organize:'organizing',save:'saved',read:'reading',rest:'resting',happy:'nice',celebrate:'woohoo',confused:'hmm?',music:'vibing',talk:'mm-hmm'};
 /* setOrbMood = a REAL mood from a call site. It pauses the ambient idle cycle,
    shows the expression, and (if hold given) auto-returns to idle/ambient after. */
@@ -722,10 +814,36 @@ function orbIdleTick(){const o=$('orb');if(!o)return;
   if(_orbActive||orbPhase()==='night'){stopOrbIdleCycle();return;} // safety: never fight a real mood / sleep
   const step=ORB_IDLE_SEQ[_orbIdleStep%ORB_IDLE_SEQ.length];_orbIdleStep++;
   ORB_MOODS_V2.forEach(x=>o.classList.remove(x));o.classList.add(step.m);
-  const c=$('orbCloud');if(c)c.textContent=step.cloud;}
+  // on the calm beat, show the section persona name (e.g. "Dr. Lucy") instead of plain "Lucy"
+  const c=$('orbCloud');if(c)c.textContent=(step.m==='idle')?_orbPersonaName:step.cloud;}
 function startOrbIdleCycle(){if(_orbIdleT||_orbActive||orbPhase()==='night')return; // not while a real mood is up / at night
   _orbIdleStep=0;orbIdleTick();_orbIdleT=setInterval(orbIdleTick,5000);}
 function stopOrbIdleCycle(){if(_orbIdleT){clearInterval(_orbIdleT);_orbIdleT=null;}}
+/* ── PERSONA / COSTUMES ────────────────────────────────────────────────────
+   Lucy dresses for the active section. The costume is its own class layer
+   (persona-*) on the orb, so it persists across mood/idle changes — the face
+   still reacts (idle cycle + real setOrbMood) while wearing the costume.      */
+const ORB_PERSONAS=['persona-doctor','persona-finance','persona-scholar','persona-tasks','persona-planner','persona-people','persona-timeline'];
+/* route (and a few sub-views) → {cls, name} */
+const ORB_PERSONA_MAP={
+  health:{cls:'persona-doctor',name:'Dr. Lucy'},
+  money:{cls:'persona-finance',name:'on the books'},
+  brain:{cls:'persona-scholar',name:'Prof. Lucy'},
+  tasks:{cls:'persona-tasks',name:'on it'},
+  productivity:{cls:'persona-planner',name:'planning'},
+  calendar:{cls:'persona-planner',name:'planning'},
+  people:{cls:'persona-people',name:'with you'},
+  timeline:{cls:'persona-timeline',name:'remembering'}
+  // home / ask / about / guide / library / links / projects → no costume (default expressive idle)
+};
+let _orbPersona=null,_orbPersonaName='Lucy';
+function setOrbPersona(route){const o=$('orb');if(!o)return;
+  const p=ORB_PERSONA_MAP[route]||null;
+  ORB_PERSONAS.forEach(x=>o.classList.remove(x));
+  _orbPersona=p?p.cls:null;_orbPersonaName=p?p.name:'Lucy';
+  if(p)o.classList.add(p.cls);
+  // refresh the resting cloud label so the persona reads at rest (mood text still wins during reactions)
+  if(!_orbActive&&!_orbIdleT){const c=$('orbCloud');if(c)c.textContent=_orbPersonaName;}}
 const _lucyToastBase=toast;toast=function(m){_lucyToastBase(m);if(/✓|done|saved|scheduled|added|captured/i.test(m))setOrbMood('save',1600);};
 function toggleSide(o){$('side').classList.toggle('open',o);$('scrim').classList.toggle('on',o);}
 async function api(path,opts={}){opts.headers=Object.assign({'Content-Type':'application/json'},opts.headers||{});const r=await fetch(path,opts);const ct=r.headers.get('content-type')||'';return ct.includes('json')?r.json():r.text();}
@@ -766,7 +884,7 @@ function setProdTab(t){PROD_TAB=t;draw();}
 function renderNav(){$('nav').innerHTML=NAV.map(([k,ic,label])=>{
   let badge='';if(DATA){if(k==='tasks')badge=DATA.todos.filter(pending).length||'';if(k==='timeline')badge=(DATA.captures||[]).length||'';if(k==='people')badge=(DATA.people||[]).length||'';}
   return `<div class="nav-i ${ROUTE===k?'on':''}" onclick="go('${k}')"><span class="ic">${ic}</span>${label}${badge?`<span class="badge">${badge}</span>`:''}</div>`;}).join('');}
-function go(k){ROUTE=k;toggleSide(false);renderNav();draw();}
+function go(k){ROUTE=k;toggleSide(false);renderNav();draw();setOrbPersona(k);}
 
 async function load(silent){
   if(!silent)setOrbMood('read');
@@ -1573,7 +1691,7 @@ async function saveAbout(){const v=$('aboutbox').value;await api('/api/profile',
 async function sendFeedback(){const i=$('fb');const v=i.value.trim();if(!v)return;i.value='';await api('/api/feedback',{method:'POST',body:JSON.stringify({text:v})});toast('LUCY learned it ✓');await load();}
 async function reflect(){const b=$('reflectBtn');if(b){b.textContent='Reflecting…';b.disabled=true;}try{const r=await api('/api/reflect',{method:'POST',body:'{}'});const n=(r&&r.learned)||0;toast(n>0?('Learned '+n+' new thing'+(n===1?'':'s')+' ✓'):'Nothing new to learn right now');}catch(e){toast('Reflection failed');}await load();}
 
-applyOrbAmbient();setInterval(applyOrbAmbient,60000);
+setOrbPersona(ROUTE);applyOrbAmbient();setInterval(applyOrbAmbient,60000);
 renderNav();load();
 setInterval(()=>{if(ROUTE!=='ask'&&!busy)load(true);},20000);
 </script>

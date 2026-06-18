@@ -1523,7 +1523,7 @@ function NowView({
   );
 }
 
-function NeedsContextView({
+export function NeedsContextView({
   requests,
   onAnswered,
 }: {

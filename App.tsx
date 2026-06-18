@@ -37,6 +37,7 @@ import { ConnectorsScreen } from './src/screens/Connectors';
 import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
 import ConversationModal from './src/components/ConversationModal';
 import { AlarmOverlay } from './src/components/AlarmOverlay';
+import { ApprovalInbox } from './src/components/ApprovalInbox';
 import { wakeWord, type WakeWordStatus } from './src/voice/wakeWord';
 import { conversation, type ConvoState } from './src/voice/conversation';
 
@@ -91,6 +92,7 @@ export default function App() {
   const [startupError, setStartupError] = useState('');
   const [backgroundEnabled, setBackgroundEnabled] = useState(false);
   const [notificationDetail, setNotificationDetail] = useState<NotificationDetailPayload | null>(null);
+  const [approvalTrigger, setApprovalTrigger] = useState(0);
   const [passiveState, setPassiveState] = useState<PassiveListenerState>(passiveListener.getState());
   const [meetingVisible, setMeetingVisible] = useState(false);
   const [meetingRecording, setMeetingRecording] = useState(false);
@@ -510,6 +512,14 @@ export default function App() {
       void passiveListener.stop();
     }
   }, [passiveState.status]);
+
+  // Once the app is ready (past splash + not onboarding), surface the approval-cards inbox a beat
+  // after Home renders, so pending review items greet the user when they open the app.
+  useEffect(() => {
+    if (!ready || showSplash || onboardingVisible || approvalTrigger > 0) return;
+    const t = setTimeout(() => setApprovalTrigger(Date.now()), 1800);
+    return () => clearTimeout(t);
+  }, [ready, showSplash, onboardingVisible, approvalTrigger]);
 
   useEffect(() => {
     // Tapped a notification → open its detail AND ensure it's logged in the bell.
@@ -951,6 +961,7 @@ export default function App() {
       />
       <LucyWrapped visible={wrappedVisible} onClose={() => setWrappedVisible(false)} />
       <AlarmOverlay />
+      <ApprovalInbox trigger={approvalTrigger} />
       <NotificationCenter
         visible={notifCenterVisible}
         onCountChange={setUnreadNotifCount}

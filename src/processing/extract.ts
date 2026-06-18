@@ -235,6 +235,18 @@ async function persistExtraction(
       await insertPlace(db, capture.id, place, extraction.privacy_level);
     }
     for (const reminder of extraction.reminders) {
+      // Reminder-time safety net (#7): if the model didn't return a time but the user clearly stated
+      // one ("remind me at 8am to take meds"), recover it deterministically on-device. Only FILLS a
+      // missing time — never overrides what the model already parsed.
+      if (!reminder.time) {
+        try {
+          const { parseExplicitDateTime } = await import('./askIntent');
+          const { computeStart } = await import('../voice/timeResolve');
+          const explicit = parseExplicitDateTime(reminder.text) ?? parseExplicitDateTime(capture.raw_transcript ?? '');
+          const ms = explicit ? computeStart(explicit.day, explicit.time, Date.now()) : null;
+          if (ms) reminder.time = new Date(ms).toISOString();
+        } catch { /* best-effort recovery */ }
+      }
       const isDupe = await reminderAlreadyExists(db, reminder.text, reminder.time);
       if (isDupe) continue;
       // Recurring reminders: detect "every day / weekly / every month / on the 5th" from the reminder

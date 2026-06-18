@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 52 (Market/competitor comparison tab) */
+/* LUCY web - premium - dashboard rev 53 (Market tab theme-aware colors) */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -621,10 +621,10 @@ function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offset
   if(ROUTE==='ask')afterAsk();}
 /* ─── MARKET (LUCY vs competitors — gap tracker, docs/COMPETITOR_COMPARISON.md) ─── */
 const CMP_MAP={'✅':'#22C55E','🟡':'#F5C451','❌':'#6b6b78','🔒':'#FF8C42'};
-function cmpCell(v){const c=CMP_MAP[v]||'#9aa';const w=v==='🔒'?'900':'800';return `<td style="text-align:center;color:${c};font-weight:${w};padding:9px 6px;border-top:1px solid rgba(255,255,255,.05)">${v}</td>`;}
+function cmpCell(v){const c=CMP_MAP[v]||'var(--muted)';const w=v==='🔒'?'900':'800';return `<td style="text-align:center;color:${c};font-weight:${w};padding:9px 6px;border-top:1px solid var(--border)">${v}</td>`;}
 function cmpTable(cat){
-  const head=`<tr>${['Capability',...cat.cols].map((c,i)=>`<th style="text-align:${i?'center':'left'};padding:8px 6px;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:${i===1?'#FF8C42':'#8a8a98'};font-weight:800">${c}</th>`).join('')}</tr>`;
-  const body=cat.rows.map(r=>`<tr><td style="text-align:left;padding:9px 6px;border-top:1px solid rgba(255,255,255,.05);color:#d8d8e0;font-size:13px">${r[0]}</td>${r.slice(1).map(cmpCell).join('')}</tr>`).join('');
+  const head=`<tr>${['Capability',...cat.cols].map((c,i)=>`<th style="text-align:${i?'center':'left'};padding:8px 6px;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:${i===1?'var(--primary)':'var(--subtle)'};font-weight:800">${c}</th>`).join('')}</tr>`;
+  const body=cat.rows.map(r=>`<tr><td style="text-align:left;padding:9px 6px;border-top:1px solid var(--border);color:var(--text);font-size:13px">${r[0]}</td>${r.slice(1).map(cmpCell).join('')}</tr>`).join('');
   return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:520px">${head}${body}</table></div>`;}
 const CMP_CATS=[
   {name:'AI Second-Brain / Notes', cols:['LUCY','mymind','Mem','Reflect','Notion','Saner'], rows:[
@@ -675,19 +675,19 @@ function vCompare(){return `<div class="page">
     <div class="page-kicker">Market</div>
     <h1 class="page-title">LUCY vs the market.</h1>
     <div class="page-sub">Every rival is a point solution — notes OR calendar OR calories OR money. LUCY is the only one doing it all, on-device, voice-first. Track where we lead and where we lag, then close the gaps one by one.</div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">${CMP_MOAT.map(m=>`<span style="background:rgba(255,140,0,.12);border:1px solid rgba(255,140,0,.35);color:#FFB570;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700">🔒 ${m}</span>`).join('')}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">${CMP_MOAT.map(m=>`<span style="background:rgba(255,140,0,.12);border:1px solid rgba(255,140,0,.35);color:var(--primary);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700">🔒 ${m}</span>`).join('')}</div>
   </section>
   <div style="display:flex;gap:14px;flex-wrap:wrap;margin:4px 0 16px">
-    ${[['✅','Has it'],['🟡','Partial / basic'],['❌','Missing'],['🔒','LUCY-only edge']].map(([s,l])=>`<span style="color:#9aa;font-size:12px"><span style="color:${CMP_MAP[s]};font-weight:800">${s}</span> ${l}</span>`).join('')}
+    ${[['✅','Has it'],['🟡','Partial / basic'],['❌','Missing'],['🔒','LUCY-only edge']].map(([s,l])=>`<span style="color:var(--muted);font-size:12px"><span style="color:${CMP_MAP[s]};font-weight:800">${s}</span> ${l}</span>`).join('')}
   </div>
   ${CMP_CATS.map(cat=>`<section class="section-card" style="margin-bottom:14px">
     <h3 style="margin:0 0 4px">${cat.name}</h3>
     ${cmpTable(cat)}
   </section>`).join('')}
-  <div style="color:#8a8a98;font-size:11px;margin:-6px 2px 14px">* Health/calorie is researched + building next, not shipped yet.</div>
+  <div style="color:var(--subtle);font-size:11px;margin:-6px 2px 14px">* Health/calorie is researched + building next, not shipped yet.</div>
   <section class="section-card">
     <h3 style="margin:0 0 10px">Biggest gaps to close — path to #1</h3>
-    ${CMP_GAPS.map((g,i)=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:${i?'1px solid rgba(255,255,255,.05)':'none'}"><span style="background:#FF8C42;color:#1a1206;border-radius:999px;min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px">${i+1}</span><span style="color:#d8d8e0;font-size:13.5px;line-height:1.5">${g}</span></div>`).join('')}
+    ${CMP_GAPS.map((g,i)=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:${i?'1px solid var(--border)':'none'}"><span style="background:#FF8C42;color:#1a1206;border-radius:999px;min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px">${i+1}</span><span style="color:var(--text);font-size:13.5px;line-height:1.5">${g}</span></div>`).join('')}
   </section>
 </div>`;}
 

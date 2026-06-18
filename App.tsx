@@ -696,7 +696,7 @@ export default function App() {
         </View>
       ) : null}
       <AnimatedFace
-        unreadCount={unreadNotifCount}
+        unreadCount={0}
         celebrateKey={refreshToken}
         status={
           voiceStatus === 'transcribing' ? 'saving'
@@ -709,7 +709,7 @@ export default function App() {
           : (screen === 'dashboard' && dashCurrentView === 'Ask Lucy') ? 'thinking'
           : 'idle'
         }
-        onPress={() => setNotifCenterVisible(true)}
+        onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setConvoOpen(true); }}
       />
     </View>
   );
@@ -765,6 +765,26 @@ export default function App() {
                   so it stays in the same fixed spot on every screen and the pills stay clear. */}
             </View>
           </View>
+          {/* Notifications + insights live behind this bell, pinned top-right. Tapping Lucy's face
+              opens the conversation instead; the two entry points are now distinct. */}
+          <TouchableOpacity
+            style={styles.bellBtn}
+            activeOpacity={0.7}
+            onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setNotifCenterVisible(true); }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={unreadNotifCount > 0 ? `Notifications, ${unreadNotifCount} unread` : 'Notifications'}
+          >
+            <Ionicons
+              name={unreadNotifCount > 0 ? 'notifications' : 'notifications-outline'}
+              size={22}
+              color={unreadNotifCount > 0 ? LUCY_COLORS.primary : LUCY_COLORS.textMuted}
+            />
+            {unreadNotifCount > 0 ? (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>{unreadNotifCount > 9 ? '9+' : String(unreadNotifCount)}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
         </View>
         {/* No-key warning banner — shows when Listen is active but transcription can't run */}
         {listenActive && passiveState.noApiKey ? (
@@ -897,14 +917,8 @@ export default function App() {
             <Text style={[styles.bottomTabLabel, a && styles.bottomTabLabelActive]}>Settings</Text></>); })()}
           </TouchableOpacity>
         </View>
-        {/* Conversation FAB — hands-free spoken chat with LUCY (also triggered by "Hey Lucy"). */}
-        <TouchableOpacity
-          style={styles.convoFab}
-          activeOpacity={0.85}
-          onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setConvoOpen(true); }}
-        >
-          <Ionicons name="chatbubbles" size={22} color={LUCY_COLORS.white} />
-        </TouchableOpacity>
+        {/* The conversation entry point now lives on Lucy's face itself (tap the face to talk).
+            The old floating chat FAB was removed — face = talk to Lucy, bell = notifications. */}
         {/* LUCY's animated face — a single global overlay pinned just below the header so it sits in
             the same fixed spot on every screen (over the Home greeting card on the dashboard). */}
         <View style={styles.globalFace} pointerEvents="box-none">
@@ -966,11 +980,6 @@ export default function App() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: LUCY_COLORS.background },
-  convoFab: {
-    position: 'absolute', right: 16, bottom: 92, width: 52, height: 52, borderRadius: 26,
-    backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center',
-    shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 7,
-  },
   brand: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.borderSoft, zIndex: 5 },
   brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 42, position: 'relative' },
   logoWrap: { position: 'relative', alignSelf: 'flex-start', marginTop: 8, paddingLeft: 2 },
@@ -995,10 +1004,11 @@ const styles = StyleSheet.create({
   brandNameAccent: { color: LUCY_COLORS.primary },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
   meetingPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', flexDirection: 'row', alignItems: 'center', gap: 5 },
-  bellBtn: { position: 'relative', width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  bellIcon: { fontSize: 22, color: LUCY_COLORS.textMuted },
-  bellBadge: { position: 'absolute', top: 2, right: 2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: LUCY_COLORS.primary, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: LUCY_COLORS.background },
-  bellBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
+  // Notifications bell — pinned to the top-right of the header, sitting in the reserved gap
+  // (headerPillRow has paddingRight: 48) so it never overlaps the Meeting/Listen pills.
+  bellBtn: { position: 'absolute', top: 8, right: 0, width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+  bellBadge: { position: 'absolute', top: 6, right: 4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: LUCY_COLORS.primary, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: LUCY_COLORS.background },
+  bellBadgeText: { color: LUCY_COLORS.white, fontSize: 9, fontWeight: '800' },
   listenPill: { minHeight: 34, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 17, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, flexDirection: 'row', alignItems: 'center', gap: 6 },
   listenPillActive: { backgroundColor: LUCY_COLORS.primaryMist, borderColor: LUCY_COLORS.primaryLine },
   listenDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: LUCY_COLORS.textSubtle },

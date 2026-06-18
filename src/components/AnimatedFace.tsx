@@ -644,7 +644,7 @@ export function AnimatedFace({
       onPressOut={() => setPeeked(false)}
       style={styles.touch}
       hitSlop={{ top: 10, bottom: 16, left: 16, right: 16 }}
-      accessibilityLabel="LUCY - open notifications"
+      accessibilityLabel="LUCY - talk to Lucy"
     >
       <View style={styles.wrap} pointerEvents="none">
         <Animated.View style={[styles.glowOuter, { backgroundColor: palette.glow, opacity: glowOpacity, transform: [{ scale }] }]} />

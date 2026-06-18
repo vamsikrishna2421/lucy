@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 60 (Medications mirror in Health section via /api/medications; desktop alerts from rev 59) */
+/* LUCY web - premium - dashboard rev 61 (Scans & photos gallery served over LAN + Medications mirror in Health section via /api/medications; desktop alerts from rev 59) */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -485,6 +485,9 @@ nav{display:flex;flex-direction:column;gap:1px}
 .vchip:hover{border-color:var(--primary);color:var(--text)}
 .vchip.on{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-deep)}
 /* Workspace live tiles */
+.scanGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px;margin-top:14px}
+.scanCell{aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--card);border:1px solid var(--border)}
+.scanCell img{width:100%;height:100%;object-fit:cover;cursor:pointer;display:block}
 .wtiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0}
 @media(max-width:760px){.wtiles{grid-template-columns:repeat(2,1fr)}}
 .wtile{text-align:left;border-radius:20px;padding:18px;min-height:138px;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;transition:.15s;
@@ -1064,11 +1067,12 @@ const WS_TILES=[
   ['library','📄','Documents','#4DA3FF'],
   ['links','🌐','Resources','#34D399'],
   ['projects','📂','Projects','#A78BFA'],
+  ['scans','🖼️','Scans & photos','#2DD4BF'],
   ['suggested','✦','Lucy Suggested','#F5C451'],
 ];
 function vProductivity(){
   if(PROD_TAB!=='home'){
-    const body=PROD_TAB==='library'?vLibrary():PROD_TAB==='links'?vLinks():PROD_TAB==='projects'?vProjects():PROD_TAB==='reminders'?vReminders():vCalendar();
+    const body=PROD_TAB==='library'?vLibrary():PROD_TAB==='links'?vLinks():PROD_TAB==='projects'?vProjects():PROD_TAB==='reminders'?vReminders():PROD_TAB==='scans'?vScans():vCalendar();
     return `<button class="btn ghost sm" onclick="setProdTab('home')" style="margin-bottom:12px">← Workspace</button>${body}`;}
   return `<div class="date">Workspace</div><div class="greet"><h1 style="font-size:25px">Command center</h1></div>
     <div class="subtle-line">Everything you manage, at a glance.</div>
@@ -1115,6 +1119,16 @@ function vReminders(){const rem=((DATA&&DATA.reminders)||[]).filter(r=>r.status=
       <button class="btn ghost sm" onclick="delReminder(${r.id})">✕</button></div>`;}).join('');
   return `<div class="page"><section class="page-hero compact"><div class="page-kicker">Reminders</div><h1 class="page-title">Things Lucy should bring back.</h1><div class="page-sub">A clean list of time-sensitive promises, return dates, errands, and nudges.</div><div class="hero-metrics">${heroMetric(rem.length,'pending')}</div></section><div>${body}</div></div>`;}
 async function delReminder(id){await api('/api/reminder/'+id,{method:'DELETE'});toast('Reminder removed ✓');await load(true);if(curView()==='reminders')draw();}
+/* ─── SCANS & PHOTOS (Workspace → Scans) — original capture images served over LAN ─── */
+function vScans(){setTimeout(loadGallery,30);return `<div class="page"><section class="page-hero compact"><div class="page-kicker">Scans & photos</div><h1 class="page-title">Every image you captured.</h1><div class="page-sub">Receipts, notes, whiteboards — the source of truth behind your memories.</div></section><div id="scansGrid" class="scanGrid">Loading…</div></div>`;}
+async function loadGallery(){
+  const host=$('scansGrid');if(!host)return;
+  let items=[];try{const r=await api('/api/gallery');items=(r&&r.items)||[];}catch(e){host.innerHTML=empty('🖼️','Can\'t reach the phone','Keep LUCY open on the same Wi-Fi.');return;}
+  if(!items.length){host.innerHTML=empty('🖼️','No photos yet','Snap a note or receipt and the original shows up here.');return;}
+  host.innerHTML=items.map(it=>`<div class="scanCell" id="scan-${it.id}"></div>`).join('');
+  for(const it of items){try{const im=await api('/api/gallery/item/'+it.id);const cell=$('scan-'+it.id);if(cell&&im&&im.dataUrl)cell.innerHTML=`<img src="${im.dataUrl}" loading="lazy" onclick="openScan(this.src)"/>`;}catch(e){}}
+}
+function openScan(u){const o=document.createElement('div');o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';o.onclick=()=>o.remove();o.innerHTML=`<img src="${u}" style="max-width:96%;max-height:92%;object-fit:contain;border-radius:8px"/>`;document.body.appendChild(o);}
 async function loadLinks(){let r=null;try{r=await api('/api/resources');}catch(e){}const w=$('linksWrap');if(!w)return;
   const items=(r&&r.items)||[];
   if(!items.length){w.innerHTML=empty('🔗','No links yet','Add links & resources from the LUCY app — they will show here.');return;}

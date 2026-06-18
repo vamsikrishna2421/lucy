@@ -153,6 +153,24 @@ async function route(req: ParsedRequest): Promise<string> {
       const { listFoodLog } = await import('../db/healthNutrition');
       return json(200, { ok: true, items: await listFoodLog(db) });
     }
+    // Scans & photos gallery — list captures that have an original source image.
+    if (req.method === 'GET' && req.path === '/api/gallery') {
+      const rows = await db.getAllAsync<{ id: number; extracted_title: string | null; created_at: string }>(
+        "SELECT id, extracted_title, created_at FROM captures WHERE source_image_path IS NOT NULL AND source_image_path != '' ORDER BY created_at DESC LIMIT 200",
+      );
+      return json(200, { ok: true, items: rows.map((r) => ({ id: r.id, title: r.extracted_title, created_at: r.created_at })) });
+    }
+    if (req.method === 'GET' && req.path.startsWith('/api/gallery/item/')) {
+      const id = Number(req.path.split('/').pop());
+      const row = id ? await db.getFirstAsync<{ source_image_path: string }>('SELECT source_image_path FROM captures WHERE id = ?', id) : null;
+      if (!row?.source_image_path) return json(404, { error: 'Not found' });
+      try {
+        const { readAsStringAsync, EncodingType } = await import('expo-file-system/legacy');
+        const b64 = await readAsStringAsync(row.source_image_path, { encoding: EncodingType.Base64 });
+        const mime = /\.png$/i.test(row.source_image_path) ? 'image/png' : 'image/jpeg';
+        return json(200, { ok: true, dataUrl: `data:${mime};base64,${b64}` });
+      } catch { return json(404, { error: 'Unreadable' }); }
+    }
     if (req.method === 'GET' && req.path === '/api/medications') {
       const { listMedications, parseTimes } = await import('../db/medications');
       const meds = (await listMedications(db)).map((m) => ({ id: m.id, name: m.name, dosage: m.dosage, times: parseTimes(m.times), notes: m.notes }));

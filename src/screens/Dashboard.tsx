@@ -48,13 +48,13 @@ import {
 } from '../processing/stalenessEngine';
 
 type ViewMode = 'Focus Now' | 'Timeline' | 'Ask Lucy' | 'Health' | 'Brain';
-type LibraryTab = 'Home' | 'Galaxy' | 'Documents' | 'Calendar' | 'Resources' | 'Projects' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen' | 'Reminders' | 'Gallery';
+type LibraryTab = 'Home' | 'Galaxy' | 'Documents' | 'Calendar' | 'Resources' | 'Projects' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen' | 'Reminders' | 'Gallery' | 'Medications';
 
 // Display names (internal keys kept stable).
 const TAB_LABEL: Record<LibraryTab, string> = {
   Home: 'Workspace', Calendar: 'Calendar', Documents: 'Documents', Resources: 'Online resources', Galaxy: 'Glossary',
   Meetings: 'Meetings', Listen: 'Listen data', Projects: 'Projects', Ideas: 'Ideas', Expenses: 'Expenses',
-  People: 'People', Todos: 'Todos', Reminders: 'Reminders', Gallery: 'Scans & photos',
+  People: 'People', Todos: 'Todos', Reminders: 'Reminders', Gallery: 'Scans & photos', Medications: 'Medications',
 };
 
 function displayTimestamp(value: string): string {
@@ -2516,8 +2516,107 @@ function LibraryView({
         {tab === 'Listen' && <ListenTab />}
         {tab === 'Reminders' && <RemindersTab />}
         {tab === 'Gallery' && <GalleryTab />}
+        {tab === 'Medications' && <MedicationsTab />}
       </ScrollView>
     </View>
+  );
+}
+
+function MedicationsTab() {
+  type Med = import('../db/medications').MedicationRow;
+  const [meds, setMeds] = useState<Med[]>([]);
+  const [taken, setTaken] = useState<Record<number, string[]>>({});
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState(''); const [dosage, setDosage] = useState(''); const [times, setTimes] = useState('');
+  const dateKey = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+
+  const load = async () => {
+    try {
+      const db = await getDatabase();
+      const { listMedications, takenTimesToday } = await import('../db/medications');
+      const list = await listMedications(db);
+      setMeds(list);
+      const t: Record<number, string[]> = {};
+      for (const m of list) t[m.id] = await takenTimesToday(db, m.id, dateKey);
+      setTaken(t);
+    } catch { /* ignore */ } finally { setLoading(false); }
+  };
+  useEffect(() => { void load(); }, []);
+
+  const add = async () => {
+    if (!name.trim()) return;
+    const parsed = times.split(/[,\s]+/).map((s) => s.trim()).filter((s) => /^\d{1,2}:\d{2}$/.test(s));
+    const db = await getDatabase();
+    const { addMedication, listMedications } = await import('../db/medications');
+    const id = await addMedication(db, name, dosage, parsed, null);
+    const { scheduleMedReminders } = await import('../processing/medicationReminders');
+    const fresh = (await listMedications(db)).find((m) => m.id === id);
+    if (fresh) await scheduleMedReminders(fresh);
+    setName(''); setDosage(''); setTimes(''); setAdding(false);
+    await load();
+  };
+  const markTaken = async (m: Med, t: string) => {
+    setTaken((prev) => ({ ...prev, [m.id]: [...(prev[m.id] ?? []), t] }));
+    const db = await getDatabase();
+    const { logMedicationTaken } = await import('../db/medications');
+    await logMedicationTaken(db, m.id, dateKey, t);
+  };
+  const remove = (m: Med) => {
+    Alert.alert('Stop tracking?', `"${m.name}" and its reminders will be removed.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: async () => {
+        const db = await getDatabase();
+        const { deactivateMedication } = await import('../db/medications');
+        const { cancelMedReminders } = await import('../processing/medicationReminders');
+        await cancelMedReminders(m); await deactivateMedication(db, m.id); await load();
+      } },
+    ]);
+  };
+
+  if (loading) return <View style={{ paddingVertical: 30 }}><ActivityIndicator color={LUCY_COLORS.primary} /></View>;
+  const parse = (s: string | null) => { try { return s ? (JSON.parse(s) as string[]) : []; } catch { return []; } };
+  return (
+    <>
+      <TouchableOpacity style={styles.medAddBtn} onPress={() => setAdding((v) => !v)}>
+        <Text style={styles.medAddBtnText}>{adding ? 'Close' : '＋ Add medication'}</Text>
+      </TouchableOpacity>
+      {adding && (
+        <View style={styles.medForm}>
+          <TextInput style={styles.medInput} placeholder="Name (e.g. Metformin)" placeholderTextColor={LUCY_COLORS.textSubtle} value={name} onChangeText={setName} />
+          <TextInput style={styles.medInput} placeholder="Dosage (e.g. 500mg)" placeholderTextColor={LUCY_COLORS.textSubtle} value={dosage} onChangeText={setDosage} />
+          <TextInput style={styles.medInput} placeholder="Times — 08:00, 21:00" placeholderTextColor={LUCY_COLORS.textSubtle} value={times} onChangeText={setTimes} />
+          <TouchableOpacity style={[styles.medAddBtn, !name.trim() && { opacity: 0.4 }]} disabled={!name.trim()} onPress={() => void add()}>
+            <Text style={styles.medAddBtnText}>Save & set reminders</Text>
+          </TouchableOpacity>
+          <Text style={styles.medNote}>LUCY only reminds you to take what you enter — it never advises on drugs or doses. Check with your doctor.</Text>
+        </View>
+      )}
+      {!meds.length ? <EmptyLine text="No medications tracked. Add one and LUCY will remind you at each dose time." /> : null}
+      {meds.map((m) => {
+        const ts = parse(m.times); const done = taken[m.id] ?? [];
+        return (
+          <View key={m.id} style={styles.medCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <Text style={styles.medName}>{m.name}{m.dosage ? <Text style={styles.medDose}>  ·  {m.dosage}</Text> : null}</Text>
+              <TouchableOpacity onPress={() => remove(m)}><Text style={styles.medRemove}>Remove</Text></TouchableOpacity>
+            </View>
+            {ts.length ? (
+              <View style={styles.medTimes}>
+                {ts.map((t) => {
+                  const isDone = done.includes(t);
+                  return (
+                    <TouchableOpacity key={t} disabled={isDone} style={[styles.medTimeChip, isDone && styles.medTimeChipDone]} onPress={() => void markTaken(m, t)}>
+                      <Text style={[styles.medTimeText, isDone && styles.medTimeTextDone]}>{isDone ? `✓ ${t}` : t}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : <Text style={styles.medNote}>No times set — add some to get reminders.</Text>}
+          </View>
+        );
+      })}
+    </>
   );
 }
 
@@ -3169,6 +3268,20 @@ const styles = StyleSheet.create({
   galleryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   galleryCell: { width: '32%', aspectRatio: 1, borderRadius: 12, overflow: 'hidden', backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border },
   galleryThumb: { width: '100%', height: '100%' },
+  medAddBtn: { backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 13, paddingVertical: 11, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine },
+  medAddBtnText: { color: LUCY_COLORS.primaryGlow, fontWeight: '800', fontSize: 14 },
+  medForm: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 14, marginBottom: 14, gap: 10 },
+  medInput: { backgroundColor: LUCY_COLORS.surface, borderRadius: 12, paddingHorizontal: 13, paddingVertical: 11, color: LUCY_COLORS.textDark, fontSize: 14, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  medNote: { color: LUCY_COLORS.textSubtle, fontSize: 11, lineHeight: 16, fontStyle: 'italic' },
+  medCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, marginBottom: 10 },
+  medName: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '800', flex: 1 },
+  medDose: { color: LUCY_COLORS.textMuted, fontSize: 14, fontWeight: '600' },
+  medRemove: { color: LUCY_COLORS.textSubtle, fontSize: 12, fontWeight: '700' },
+  medTimes: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  medTimeChip: { backgroundColor: LUCY_COLORS.surface, borderRadius: 11, paddingVertical: 8, paddingHorizontal: 14, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine },
+  medTimeChipDone: { backgroundColor: 'rgba(52,199,89,0.12)', borderColor: 'rgba(52,199,89,0.4)' },
+  medTimeText: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 13 },
+  medTimeTextDone: { color: '#2FBF71' },
   pendingHint: { color: LUCY_COLORS.textMuted, fontSize: 13, marginBottom: 17, paddingHorizontal: 3 },
   library: { flex: 1 },
   wsBack: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 4, marginBottom: 8 },

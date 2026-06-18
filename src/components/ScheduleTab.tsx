@@ -62,6 +62,7 @@ export function ScheduleTab() {
   const [nameEdit, setNameEdit] = useState('');
   const [resolve, setResolve] = useState<{ a: Block; b: Block } | null>(null); // conflict being resolved
   const [resolveSugg, setResolveSugg] = useState<{ a: SlotSuggestion[]; b: SlotSuggestion[]; loading: boolean }>({ a: [], b: [], loading: false });
+  const [habitSuggest, setHabitSuggest] = useState<{ title: string; start: number; end: number; resources: TaskResources } | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -214,10 +215,7 @@ export function ScheduleTab() {
   const DEVICE_COLOR = '#5B8CFF'; // connected Google/Teams/Outlook events
   const onBlockPress = (it: Item) => {
     if (it.habit) {
-      Alert.alert(it.title, `Suggested ${clock(it.start)} – ${clock(it.end)} based on your routine. Add it to your schedule?`, [
-        { text: 'Not now', style: 'cancel' },
-        { text: 'Add ✓', onPress: () => approveHabit(it) },
-      ]);
+      setHabitSuggest({ title: it.title, start: it.start, end: it.end, resources: it.resources });
       return;
     }
     if (it.device) {
@@ -624,6 +622,30 @@ export function ScheduleTab() {
         </Pressable>
       </Modal>
 
+      {/* Habit suggestion — designed sheet (was a plain OS alert) */}
+      <Modal visible={!!habitSuggest} transparent animationType="slide" onRequestClose={() => setHabitSuggest(null)}>
+        <Pressable style={styles.cardBackdrop} onPress={() => setHabitSuggest(null)}>
+          <Pressable style={styles.eventCard} onPress={() => { /* swallow */ }}>
+            <View style={styles.cardGrip} />
+            <View style={styles.sheetHeader}>
+              <View style={[styles.sheetIcon, { backgroundColor: habitSuggest ? `${catColor(habitSuggest.title, describeResources(habitSuggest.resources))}22` : LUCY_COLORS.primaryMist }]}>
+                <Text style={styles.sheetIconText}>✶</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetEyebrow}>Suggested from your routine</Text>
+                <Text style={styles.sheetTitle} numberOfLines={2}>{habitSuggest?.title ?? ''}</Text>
+              </View>
+            </View>
+            <Text style={styles.sheetWhen}>{habitSuggest ? `${clock(habitSuggest.start)} – ${clock(habitSuggest.end)}` : ''}</Text>
+            <Text style={styles.sheetBody}>Add this to today's schedule? It won't take up your time until you do.</Text>
+            <View style={styles.eventActions}>
+              <TouchableOpacity style={styles.sheetSecondary} onPress={() => setHabitSuggest(null)}><Text style={styles.sheetSecondaryT}>Not now</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.eventDone} onPress={() => { const h = habitSuggest; setHabitSuggest(null); if (h) void approveHabit(h); }}><Text style={styles.eventDoneT}>✓ Add</Text></TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Conflict resolution — pick which event to move out of the overlap */}
       <Modal visible={!!resolve} transparent animationType="slide" onRequestClose={() => setResolve(null)}>
         <Pressable style={styles.cardBackdrop} onPress={() => setResolve(null)}>
@@ -720,6 +742,15 @@ const styles = StyleSheet.create({
   conflictCard: { borderColor: LUCY_COLORS.error },
   conflictRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 9 },
   resolveH: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '900', marginBottom: 6 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: 13, marginBottom: 12 },
+  sheetIcon: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  sheetIconText: { fontSize: 20, color: LUCY_COLORS.primary },
+  sheetEyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 10.5, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  sheetTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '900', lineHeight: 26, marginTop: 3 },
+  sheetWhen: { color: LUCY_COLORS.textMuted, fontSize: 14, fontWeight: '700', marginBottom: 8 },
+  sheetBody: { color: LUCY_COLORS.textMuted, fontSize: 13.5, lineHeight: 19, marginBottom: 4 },
+  sheetSecondary: { flex: 1, alignItems: 'center', paddingVertical: 13, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surfaceRaised },
+  sheetSecondaryT: { color: LUCY_COLORS.textMuted, fontWeight: '800', fontSize: 14 },
   timetableCard: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 24, padding: 15 },
   timetableHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
   section: { color: LUCY_COLORS.textDark, fontWeight: '900', fontSize: 20, marginTop: 3 },

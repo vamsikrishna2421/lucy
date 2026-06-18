@@ -32,6 +32,9 @@ const VOICE_SYSTEM = `You are LUCY's voice command interpreter. Convert the user
  "tone":"positive|neutral|low|negative|null",
  "section":"home|timeline|ask|tasks|calendar|documents|resources|projects|brain|people|health|money|null",
  "text":"<raw text for capture/ask>",
+ "projectOp":"create|rename|append|null",
+ "projectTarget":"<the EXISTING project being referred to, for rename/append, or null>",
+ "projectDetail":"<for append: the detail to add; for rename: the new name; else null>",
  "speak":"<one short friendly first-person confirmation, under 18 words>"}
 Rules:
 - "schedule/book/block/add … at <time>" or "find time for …" → intent "schedule" (title = the activity; durationMin default 30 if unsaid; fill time+day when given).
@@ -40,7 +43,9 @@ Rules:
 - "I ate/had …", "log my breakfast/lunch/dinner …", "log food/meal …" → "food" (text = the foods eaten, verbatim).
 - "I feel …/log my mood …" → "mood" (tone).
 - "save this link/add bookmark <url>" → "link" (url + title).
-- "create/start a project …" → "project" (title).
+- "create/start a project …" → "project" (projectOp "create", title = name).
+- "rename/name that/the <X> project to <Y>" or "call the <X> project <Y>" → "project" (projectOp "rename", projectTarget = X, projectDetail = Y). If they say "name THAT project Y" without X, set projectTarget null (LUCY uses the most recent project).
+- "add to the <X> project: <detail>" / "for the <X> project, also …" → "project" (projectOp "append", projectTarget = X, projectDetail = the detail).
 - "open/go to/show me <section>" → "navigate" (section).
 - Any question or anything else → "ask" (text = the full question).
 - speak is natural, first-person as LUCY, confirms what you did or will do.`;
@@ -49,6 +54,7 @@ Rules:
 interface ParsedCommand {
   intent: VoiceIntent; title?: string; durationMin?: number | null; time?: string | null; day?: string | null;
   url?: string | null; tone?: string | null; section?: string | null; text?: string | null; speak?: string;
+  projectOp?: 'create' | 'rename' | 'append' | null; projectTarget?: string | null; projectDetail?: string | null;
 }
 
 async function interpret(text: string, context?: string): Promise<ParsedCommand> {
@@ -191,9 +197,42 @@ export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, cont
       return { ok: true, intent: 'link', speak: cmd.speak || 'Saved that link to your resources.', navigate: 'resources' };
     }
     case 'project': {
+      const { createProject, listProjects, updateProject } = await import('../db/projects');
+      const op = cmd.projectOp ?? 'create';
+      // Resolve which EXISTING project the user means (fuzzy by name; fall back to the most recent).
+      const findTarget = async (hint: string | null) => {
+        const projects = await listProjects(db);
+        if (!projects.length) return null;
+        const h = (hint ?? '').toLowerCase().replace(/\bproject\b/g, '').trim();
+        if (!h) return projects[0]; // most recent (listProjects is created_at DESC)
+        const norm = (s: string) => s.toLowerCase().replace(/\bproject\b/g, '').trim();
+        return projects.find((p) => norm(p.name) === h)
+          || projects.find((p) => norm(p.name).includes(h) || h.includes(norm(p.name)))
+          || null;
+      };
+
+      if (op === 'rename') {
+        const newName = (cmd.projectDetail || cmd.title || '').trim();
+        if (!newName) return { ok: false, intent: 'project', speak: 'What should I rename it to?' };
+        const target = await findTarget(cmd.projectTarget ?? null);
+        if (!target) return { ok: false, intent: 'project', speak: `I couldn't find that project to rename.` };
+        await updateProject(db, target.id, { name: newName });
+        await logVoiceActionToTimeline(db, 'voice', text, `Renamed project "${target.name}" → "${newName}"`);
+        return { ok: true, intent: 'project', speak: cmd.speak || `Renamed "${target.name}" to "${newName}".`, navigate: 'projects' };
+      }
+      if (op === 'append') {
+        const detail = (cmd.projectDetail || cmd.text || '').trim();
+        if (!detail) return { ok: false, intent: 'project', speak: 'What should I add to the project?' };
+        const target = await findTarget(cmd.projectTarget ?? null);
+        if (!target) return { ok: false, intent: 'project', speak: `I couldn't find that project.` };
+        const merged = `${target.description ? `${target.description}\n` : ''}${detail}`.trim();
+        await updateProject(db, target.id, { description: merged });
+        await logVoiceActionToTimeline(db, 'voice', text, `Updated project "${target.name}": ${detail}`);
+        return { ok: true, intent: 'project', speak: cmd.speak || `Added that to "${target.name}".`, navigate: 'projects' };
+      }
+      // create (default)
       const name = (cmd.title || '').trim();
       if (!name) return { ok: false, intent: 'project', speak: 'What should I name the project?' };
-      const { createProject } = await import('../db/projects');
       await createProject(db, name, null);
       await logVoiceActionToTimeline(db, 'voice', text, `Project: ${name}`);
       return { ok: true, intent: 'project', speak: cmd.speak || `Created the "${name}" project.`, navigate: 'projects' };

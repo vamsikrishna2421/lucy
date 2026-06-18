@@ -226,6 +226,10 @@ async function persistExtraction(
       }
     }
     for (const expense of extraction.expenses) {
+      // Guard against savings/income/hypotheticals slipping in as expenses (#13): an expense is money
+      // actually SPENT. Skip anything whose description signals the opposite.
+      const desc = `${expense.description ?? ''}`.toLowerCase();
+      if (/\b(saving|savings|saved|cost[- ]?saving|discount|refund|cashback|rebate|income|revenue|salary|earned|budget|quote|estimate|projected|could cost|would cost)\b/.test(desc)) continue;
       await insertExpense(db, capture.id, expense, extraction.privacy_level);
     }
     for (const idea of extraction.ideas) {

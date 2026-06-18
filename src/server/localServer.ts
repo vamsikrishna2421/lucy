@@ -623,6 +623,19 @@ export async function startServer(): Promise<ServerState> {
   }
 }
 
+/**
+ * Re-reads the phone's current IP and updates the displayed address. On office/DHCP networks the IP
+ * can change while the server is running (it's bound to 0.0.0.0 so it still works on the new IP) — but
+ * the Settings screen would otherwise keep showing the stale address the user can no longer reach.
+ */
+export async function refreshServerIp(): Promise<void> {
+  if (!state.running) return;
+  try {
+    const ip = await Network.getIpAddressAsync();
+    if (ip && ip !== state.ip) setState({ ip });
+  } catch { /* ignore */ }
+}
+
 export function stopServer(): void {
   try { server?.close(); } catch { /* ignore */ }
   server = null;

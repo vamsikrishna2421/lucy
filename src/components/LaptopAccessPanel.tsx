@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
-import { subscribeServer, startServer, stopServer, type ServerState } from '../server/localServer';
+import { subscribeServer, startServer, stopServer, refreshServerIp, type ServerState } from '../server/localServer';
 
 /**
  * "Laptop access (local network)" — toggles the LAN companion server so a laptop on
@@ -12,6 +12,13 @@ export function LaptopAccessPanel() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => subscribeServer(setSrv), []);
+  // Keep the shown address current — the phone's IP can change on the network while the server runs.
+  useEffect(() => {
+    if (!srv.running) return;
+    void refreshServerIp();
+    const t = setInterval(() => void refreshServerIp(), 8000);
+    return () => clearInterval(t);
+  }, [srv.running]);
 
   const toggle = async () => {
     setBusy(true);
@@ -44,6 +51,7 @@ export function LaptopAccessPanel() {
           <Text style={s.infoLabel}>Open this on your laptop browser</Text>
           <Text style={s.url}>http://{srv.ip ?? '<phone-ip>'}:{srv.port}</Text>
           <Text style={s.note}>Same WiFi only · keep LUCY open. No PIN for now — anyone on this WiFi can access it.</Text>
+          <Text style={s.trouble}>Can't connect? 1) Keep this app open + phone awake (iOS pauses the server when backgrounded). 2) Laptop on the SAME WiFi — turn OFF any VPN. 3) Use the exact address above (it changes between networks). 4) Office WiFi may block device-to-device — try your phone's hotspot.</Text>
         </View>
       ) : null}
 
@@ -66,5 +74,6 @@ const s = StyleSheet.create({
   url: { color: LUCY_COLORS.primary, fontSize: 18, fontWeight: '800', marginTop: 2 },
   pin: { color: LUCY_COLORS.textDark, fontSize: 26, fontWeight: '900', letterSpacing: 6, marginTop: 2 },
   note: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 10, lineHeight: 16 },
+  trouble: { color: LUCY_COLORS.textMuted, fontSize: 11.5, marginTop: 8, lineHeight: 17 },
   error: { color: '#ff6b6b', fontSize: 13, marginTop: 6 },
 });

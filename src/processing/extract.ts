@@ -25,7 +25,7 @@ import { getSetting } from '../db/settings';
 import { insertPlace } from '../db/places';
 import { insertOpenLoop } from '../db/openLoops';
 import { insertFollowUp } from '../db/followUps';
-import { insertReminder, markReminderScheduled, reminderAlreadyExists } from '../db/reminders';
+import { insertReminder, markReminderScheduled, reminderAlreadyExists, recurringReminderExists } from '../db/reminders';
 import { deleteTodo, insertTodo, listPendingTodos } from '../db/todos';
 import type { CaptureSource, ExtractionResult } from '../types/extraction';
 import { extractExplicitEnglishFact } from './explicitEnglish';
@@ -251,12 +251,15 @@ async function persistExtraction(
           if (ms) reminder.time = new Date(ms).toISOString();
         } catch { /* best-effort recovery */ }
       }
-      const isDupe = await reminderAlreadyExists(db, reminder.text, reminder.time);
-      if (isDupe) continue;
       // Recurring reminders: detect "every day / weekly / every month / on the 5th" from the reminder
       // text (falling back to the raw transcript) so it regenerates instead of firing once.
       const { detectReminderRecurrence } = await import('./reminderRecurrence');
       const recurrence = detectReminderRecurrence(reminder.text) ?? detectReminderRecurrence(capture.raw_transcript ?? '');
+      // Dedup: recurring → by text+recurrence (timestamp varies by capture day); one-shot → by text+time.
+      const isDupe = recurrence
+        ? await recurringReminderExists(db, reminder.text, recurrence)
+        : await reminderAlreadyExists(db, reminder.text, reminder.time);
+      if (isDupe) continue;
       const id = await insertReminder(db, capture.id, reminder, extraction.privacy_level, recurrence);
       reminderRows.push({ id, reminder });
     }

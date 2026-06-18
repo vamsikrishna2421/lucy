@@ -22,15 +22,30 @@ export interface ReminderRow extends ExtractedReminder {
  * multi-date reminders into one and false-matched unrelated reminders, so extracted reminders
  * silently never persisted.)
  */
+const normaliseReminderText = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
 export async function reminderAlreadyExists(db: SQLiteDatabase, text: string, time?: string | null): Promise<boolean> {
-  const normalise = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  const needle = normalise(text);
+  const needle = normaliseReminderText(text);
   if (!needle) return false;
   const want = time ?? null;
   const existing = await db.getAllAsync<{ text: string; remind_at: string | null }>(
     "SELECT text, remind_at FROM reminders WHERE status = 'pending' ORDER BY id DESC LIMIT 80",
   );
-  return existing.some((row) => normalise(row.text) === needle && (row.remind_at ?? null) === want);
+  return existing.some((row) => normaliseReminderText(row.text) === needle && (row.remind_at ?? null) === want);
+}
+
+/**
+ * Recurrence-aware dedup (#12): a recurring reminder is "the same" by text + recurrence regardless of
+ * which day's next-occurrence timestamp it currently holds — otherwise re-capturing "take meds every
+ * day at 8am" on a different day makes a second copy (different remind_at).
+ */
+export async function recurringReminderExists(db: SQLiteDatabase, text: string, recurrence: string): Promise<boolean> {
+  const needle = normaliseReminderText(text);
+  if (!needle) return false;
+  const existing = await db.getAllAsync<{ text: string; recurrence: string | null }>(
+    "SELECT text, recurrence FROM reminders WHERE status = 'pending' AND recurrence IS NOT NULL ORDER BY id DESC LIMIT 80",
+  );
+  return existing.some((row) => row.recurrence === recurrence && normaliseReminderText(row.text) === needle);
 }
 
 export async function insertReminder(

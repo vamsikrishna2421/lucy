@@ -295,6 +295,7 @@ async function route(req: ParsedRequest): Promise<string> {
         expenseTotal: answer.expenseTotal,
         spendingCategories: answer.spendingCategories ?? [],
         scheduleSuggestions: answer.scheduleSuggestions ?? [],
+        recordedSignal: answer.recordedSignal ?? '',
       });
     }
     // Shadow-diff: run the LEGACY answer path and the SEMANTIC ROUTER on the same question and return

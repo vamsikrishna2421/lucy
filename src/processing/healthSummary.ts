@@ -24,6 +24,36 @@ export interface HealthSummary {
   drLucy: import('./drLucy').GuardianGuidance[]; // gentle, grounded guardian guidance (may be empty)
 }
 
+/** Detects a health/nutrition/fitness question so we only attach (sensitive) health context when relevant. */
+export function isHealthQuestion(q: string): boolean {
+  return /\b(weight|kg|lbs|calorie|kcal|lose|losing|gain|gaining|fat|diet|eat|eating|ate|nutrition|bmi|tdee|bmr|macro|protein|carb|fibre|fiber|sugar|meal|food|hydrat|water|fitness|workout|exercise|step|sleep|deficit|surplus|metabolism|burn(ed|ing)?)\b/i.test(q || '');
+}
+
+/**
+ * Compact health-context prefix for the Ask/voice LLM so Lucy can answer health questions using the
+ * user's OWN profile + today's data (weight, goal, BMR/TDEE, intake) instead of claiming it has none.
+ * Returns '' when there's no body profile. (The user is asking a health question + has remote AI on.)
+ */
+export async function buildHealthContextPrefix(db: SQLiteDatabase): Promise<string> {
+  try {
+    const s = await getHealthSummary(db);
+    const p = await getBodyProfile(db);
+    if (!s.profileComplete || !p) return '';
+    const age = p.birth_year ? new Date().getFullYear() - p.birth_year : null;
+    const parts = [
+      `The user's health profile (use this to answer; do NOT say you lack their data):`,
+      `- Body: ${p.sex ?? '?'}, ${age ?? '?'}y, ${p.height_cm ?? '?'}cm, ${p.weight_kg ?? '?'}kg, activity ${p.activity_level}, goal "${p.goal}"${p.body_fat_pct ? `, ${p.body_fat_pct}% body fat` : ''}.`,
+      `- Energy: BMR ${s.energy.bmr ?? '?'} kcal, TDEE ${s.energy.tdee ?? '?'} kcal (${s.energy.tdee_source ?? 'n/a'}).`,
+      s.goals ? `- Daily goal: ${s.goals.calorie_goal} kcal (P ${s.goals.protein_g} / C ${s.goals.carbs_g} / F ${s.goals.fat_g} g).` : '',
+      `- Today so far: ${s.intake.calories} kcal eaten${s.remaining != null ? `, ${s.remaining} remaining` : ''}; steps ${s.activity.steps}${s.activity.sleep_hours ? `, slept ${s.activity.sleep_hours}h` : ''}.`,
+      s.net_rolling_7 != null ? `- 7-day net average: ${s.net_rolling_7} kcal/day (trend only — frame gently, never as a verdict).` : '',
+      `When estimating weight change: ~7700 kcal ≈ 1 kg. Use their TDEE + intake. Be encouraging and ED-safe; never suggest unsafe deficits.`,
+      '',
+    ].filter(Boolean);
+    return parts.join('\n');
+  } catch { return ''; }
+}
+
 export async function getHealthSummary(db: SQLiteDatabase, dateKey = todayKey()): Promise<HealthSummary> {
   const [profileRow, goalsRow, foods, intakeDays] = await Promise.all([
     getBodyProfile(db),

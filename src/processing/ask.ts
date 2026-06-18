@@ -339,7 +339,17 @@ async function answerWithLLM(question: string, history: AskTurn[] = [], screenCo
     })
     .join('\n---\n');
 
-  if (!context.trim()) {
+  // For health/nutrition/weight questions, attach the user's own body profile + today's data so LUCY
+  // answers from it instead of claiming it has no data (the user explicitly asked + set up a profile).
+  let healthPrefix = '';
+  try {
+    const { isHealthQuestion, buildHealthContextPrefix } = await import('./healthSummary');
+    if (isHealthQuestion(question)) healthPrefix = await buildHealthContextPrefix(db);
+  } catch { /* health context optional */ }
+
+  // No captures AND no health context to answer from → ask for input. (Health questions answer from the
+  // profile, so they're allowed through even with an empty note history.)
+  if (!context.trim() && !healthPrefix) {
     return {
       supported: true,
       answerKind: 'llm',
@@ -353,7 +363,7 @@ async function answerWithLLM(question: string, history: AskTurn[] = [], screenCo
   }
 
   const userPrefix = buildUserContextPrefix(profile);
-  const systemPrompt = `${userPrefix}${memoryAnswerSystemPrompt}`;
+  const systemPrompt = `${userPrefix}${healthPrefix}${memoryAnswerSystemPrompt}`;
   const deviceInfo = await enrichWithUsagePatterns(deviceCtx);
   const calendarInfo = formatCalendarContext(calEvents);
 

@@ -43,6 +43,26 @@ const BRAIN: BrainTile[] = [
 
 export function WorkspaceHome({ onOpen, onPlanDay }: { onOpen: (tab: string) => void; onPlanDay: () => void }) {
   const [tiles, setTiles] = useState<Tile[] | null>(null);
+  const [brainCounts, setBrainCounts] = useState<Record<string, number>>({});
+
+  // Live counts for the "Brain & knowledge" tiles so the workspace feels alive (best-effort).
+  const loadBrainCounts = useCallback(async () => {
+    const db = await getDatabase();
+    const one = async (sql: string): Promise<number> => {
+      try { const r = await db.getFirstAsync<{ n: number }>(sql); return r?.n ?? 0; } catch { return 0; }
+    };
+    const [people, meetings, ideas, reminders, gallery, meds, expenses] = await Promise.all([
+      one('SELECT COUNT(*) n FROM people'),
+      one('SELECT COUNT(*) n FROM meeting_summaries'),
+      one('SELECT COUNT(*) n FROM ideas'),
+      one("SELECT COUNT(*) n FROM reminders WHERE status='pending'"),
+      one("SELECT COUNT(*) n FROM captures WHERE source_image_path IS NOT NULL AND source_image_path != ''"),
+      one('SELECT COUNT(*) n FROM medications WHERE active = 1'),
+      one('SELECT COUNT(*) n FROM expenses'),
+    ]);
+    setBrainCounts({ People: people, Meetings: meetings, Ideas: ideas, Reminders: reminders, Gallery: gallery, Medications: meds, Expenses: expenses });
+  }, []);
+  useEffect(() => { void loadBrainCounts(); }, [loadBrainCounts]);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -218,7 +238,7 @@ export function WorkspaceHome({ onOpen, onPlanDay }: { onOpen: (tab: string) => 
               <Ionicons name={b.icon} size={18} color={b.color} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.brainName}>{b.label}</Text>
+              <Text style={styles.brainName}>{b.label}{typeof brainCounts[b.key] === 'number' && brainCounts[b.key] > 0 ? <Text style={[styles.brainCount, { color: b.color }]}>  {brainCounts[b.key]}</Text> : null}</Text>
               <Text style={styles.brainHint} numberOfLines={1}>{b.hint}</Text>
             </View>
           </TouchableOpacity>
@@ -263,5 +283,6 @@ const styles = StyleSheet.create({
   brainTile: { width: '48.5%', minHeight: 80, borderRadius: 16, borderWidth: 1, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 11 },
   brainIconWrap: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   brainName: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 14 },
+  brainCount: { fontWeight: '800', fontSize: 13 },
   brainHint: { color: LUCY_COLORS.textMuted, fontSize: 11, marginTop: 3, lineHeight: 15 },
 });

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 56 (living orb + section personas: Lucy dresses for the job — doctor/finance/scholar/tasks/planner/people/timeline costumes layered over the smile + idle cycle) */
+/* LUCY web - premium - dashboard rev 57 (Health vertical: Dr. Lucy nutrition + activity dashboard — calorie/macro rings, food logging via /api/food, meal timeline, activity & energy cards, body-profile setup, ED-safe trend; living orb + section personas) */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -540,6 +540,53 @@ nav{display:flex;flex-direction:column;gap:1px}
 .split-toolbar .grow{flex:1}
 @media(max-width:900px){.manual-layout{grid-template-columns:1fr}.manual-toc{position:static}.workflow{grid-template-columns:1fr 1fr}}
 @media(max-width:560px){.page-title{font-size:25px}.workflow{grid-template-columns:1fr}.page-hero{padding:18px}}
+/* ─── HEALTH (Dr. Lucy nutrition + activity) ─── */
+.hl-rings{display:grid;grid-template-columns:1.2fr 1fr;gap:14px;align-items:stretch}
+.hl-energy{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.hl-bigring{position:relative;width:148px;height:148px;flex:0 0 148px}
+.hl-bigring .ctr{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.hl-bigring .ctr .num{font-size:30px;font-weight:850;line-height:1;font-variant-numeric:tabular-nums;color:var(--text)}
+.hl-bigring .ctr .cap{font-size:11px;color:var(--subtle);margin-top:4px;letter-spacing:.4px}
+.hl-energy-meta{display:flex;flex-direction:column;gap:7px;min-width:140px}
+.hl-energy-meta .row{display:flex;justify-content:space-between;gap:14px;font-size:13px}
+.hl-energy-meta .row .k{color:var(--subtle)}
+.hl-energy-meta .row .v{color:var(--text);font-weight:650;font-variant-numeric:tabular-nums}
+.hl-macros{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.hl-macro{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:13px 8px}
+.hl-macro .mr{position:relative;width:62px;height:62px}
+.hl-macro .mr .pct{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;font-weight:750;color:var(--text);font-variant-numeric:tabular-nums}
+.hl-macro .ml{font-size:12px;color:var(--muted);font-weight:600}
+.hl-macro .mv{font-size:11px;color:var(--subtle);font-variant-numeric:tabular-nums}
+.hl-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.hl-stat{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:var(--shadow-sm)}
+.hl-stat .ic{font-size:18px;opacity:.9}
+.hl-stat .n{font-size:22px;font-weight:800;line-height:1.1;margin-top:7px;font-variant-numeric:tabular-nums;color:var(--text)}
+.hl-stat .l{font-size:12px;color:var(--subtle);margin-top:3px}
+.hl-tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:2px 8px;border-radius:20px;margin-top:8px}
+.hl-tag.measured{background:rgba(74,222,128,.12);color:#4ADE80}
+.hl-tag.estimated{background:var(--raised);color:var(--subtle)}
+.hl-meal-group{margin-top:6px}
+.hl-meal-head{display:flex;align-items:baseline;gap:10px;margin:14px 0 8px}
+.hl-meal-head b{font-size:13px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+.hl-meal-head .kcal{margin-left:auto;font-size:12.5px;color:var(--subtle);font-variant-numeric:tabular-nums}
+.hl-food{display:flex;align-items:center;gap:12px;background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:14px;padding:11px 14px;box-shadow:var(--shadow-sm)}
+.hl-food .nm{font-weight:600;font-size:14px;color:var(--text)}
+.hl-food .mac{font-size:11.5px;color:var(--subtle);margin-top:2px}
+.hl-food .fc{margin-left:auto;font-weight:700;font-size:14px;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
+.hl-drlucy{display:flex;gap:13px;align-items:flex-start;background:linear-gradient(145deg,color-mix(in srgb,var(--primary) 9%,var(--card)),var(--card2));border:1px solid var(--border);border-top-color:color-mix(in srgb,var(--primary) 30%,var(--border));border-radius:16px;padding:15px;box-shadow:var(--shadow-sm)}
+.hl-drlucy .av{flex:0 0 34px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:16px;background:var(--primary-soft)}
+.hl-drlucy .obs{color:var(--text);font-size:14px;line-height:1.5}
+.hl-drlucy .sug{color:var(--muted);font-size:13px;line-height:1.5;margin-top:5px}
+.hl-form{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.hl-form .fld{display:flex;flex-direction:column;gap:5px}
+.hl-form label{font-size:12px;color:var(--subtle);font-weight:600;letter-spacing:.2px}
+.hl-form input,.hl-form select{background:var(--card);border:1px solid var(--border);border-radius:12px;color:var(--text);padding:10px 12px;font-size:14px;outline:none;box-shadow:var(--shadow-sm)}
+.hl-form input:focus,.hl-form select:focus{border-color:var(--primary)}
+.hl-form .full{grid-column:1/-1}
+.hl-disclaimer{font-size:11.5px;color:var(--faint);text-align:center;margin-top:6px}
+.hl-skel{height:148px;border-radius:20px;background:linear-gradient(100deg,var(--card) 30%,var(--raised) 50%,var(--card) 70%);background-size:200% 100%;animation:hlsh 1.3s infinite}
+@keyframes hlsh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media(max-width:640px){.hl-rings{grid-template-columns:1fr}.hl-form{grid-template-columns:1fr}}
 /* Calendar workspace */
 .cal-shell{display:flex;flex-direction:column;gap:18px}
 .cal-hero{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:24px;padding:22px;background:linear-gradient(140deg,color-mix(in srgb,var(--primary) 18%,var(--card)),var(--card2) 58%,var(--bg2));box-shadow:var(--shadow-sm)}
@@ -903,6 +950,7 @@ function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offset
   if(view==='links')loadLinks();
   if(view==='projects')loadProjects();
   if(ROUTE==='about')loadGuard();
+  if(ROUTE==='health')loadHealth(false);
   if(ROUTE==='ask')afterAsk();}
 /* ─── MARKET (LUCY vs competitors — gap tracker, docs/COMPETITOR_COMPARISON.md) ─── */
 const CMP_MAP={'✅':'#22C55E','🟡':'#F5C451','❌':'#6b6b78','🔒':'#FF8C42'};
@@ -1157,13 +1205,157 @@ function vBrain(){const k=DATA.knowledge||{};const ents=(k.entities||[]).slice(0
 function vPeople(){const ppl=(DATA.people||[]);const hero=`<section class="page-hero compact"><div class="page-kicker">People</div><h1 class="page-title">The people Lucy notices.</h1><div class="page-sub">Names and relationship context gathered from your notes, calls, plans, and follow-ups.</div><div class="hero-metrics">${heroMetric(ppl.length,'people')}${heroMetric(ppl.filter(p=>p.last_mentioned).length,'with history')}</div></section>`;
   if(!ppl.length)return `<div class="page">${hero}`+empty('◐','No people yet','LUCY remembers people as you mention them.')+'</div>';
   return `<div class="page">${hero}<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">`+ppl.map(p=>`<div class="card" style="flex-direction:column;gap:7px"><div style="display:flex;width:100%;align-items:center;gap:9px"><div class="avatar">${esc((p.name||'?')[0].toUpperCase())}</div><span class="ttl" style="font-size:15.5px">${esc(p.name)}</span></div>${p.context?`<div class="sub">${esc(p.context)}</div>`:''}<div class="when" style="margin:0">${p.last_mentioned?'Last mentioned '+fmt(p.last_mentioned):''}</div></div>`).join('')+'</div></div>';}
-function vHealth(){const m=(DATA.mood_entries||[]);const h0=computeHealth();const tones={positive:'😊',excited:'🤩',calm:'😌',neutral:'😐',low:'😔',frustrated:'😤',stressed:'😰',negative:'😣'};
-  let h=`<div class="page"><section class="page-hero compact"><div class="page-kicker">Health</div><h1 class="page-title">Mood and energy, in context.</h1><div class="page-sub">A lightweight check-in space for seeing patterns without turning wellbeing into a spreadsheet.</div><div class="hero-metrics">${heroMetric(h0.score,'score')}${heroMetric(m.length,'check-ins')}</div></section>
-    <div class="panel" style="margin-bottom:16px"><div class="health">${ring(h0.score)}<div class="lbl"><div class="big">${h0.label} · ${h0.score}</div><div class="sm">${h0.note}</div></div>${barsHtml(h0.bars)}</div></div>
-    <div class="sec"><h2>Log how you feel</h2></div><div class="card" style="gap:10px;flex-wrap:wrap">`;
-  for(const[t,e]of Object.entries(tones))h+=`<button class="btn ghost" onclick="logMood('${t}')" style="font-size:20px">${e}<span style="font-size:12px;margin-left:6px">${t}</span></button>`;h+='</div>';
-  if(m.length){h+=`<div class="sec"><h2>Recent</h2></div><div class="col">`+m.slice(0,20).map(x=>`<div class="card"><span style="font-size:20px">${tones[x.tone]||'😐'}</span><div style="flex:1"><span class="ttl">${esc(x.tone)}</span><div class="sub">energy: ${esc(x.energy||'medium')}</div></div><span class="when">${fmt(x.created_at)}</span></div>`).join('')+'</div>';}
-  return h+'</div>';}
+/* ─── HEALTH (Dr. Lucy: nutrition + activity, backed by /api/health) ─── */
+let HEALTH=null;            // last summary from /api/health
+let HEALTH_LOADING=false;   // first-load shimmer
+async function loadHealth(force){
+  if(HEALTH_LOADING)return;HEALTH_LOADING=true;
+  if(!HEALTH||force)redrawHealth();
+  try{const r=await api('/api/health');if(r&&r.ok)HEALTH=r.summary||{};}catch(e){/* keep last; vHealth shows a soft note */}
+  HEALTH_LOADING=false;if(ROUTE==='health')redrawHealth();
+}
+/* Re-render only the health body container so other views aren't disturbed. */
+function redrawHealth(){const host=$('hlBody');if(host)host.innerHTML=hlDashboard();}
+/* Macro/calorie ring (svg). value vs goal → arc; tinted by accent. */
+function hlRing(val,goal,size,stroke,color){
+  const r=(size-stroke)/2,c=2*Math.PI*r;const pct=goal>0?Math.min(val/goal,1):0;const off=c*(1-pct);const half=size/2;color=color||'var(--primary)';
+  return `<svg width="${size}" height="${size}" style="transform:rotate(-90deg)"><circle cx="${half}" cy="${half}" r="${r}" fill="none" stroke="var(--divider)" stroke-width="${stroke}"/><circle cx="${half}" cy="${half}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg>`;}
+function hlNum(v){v=Math.round(+v||0);return v.toLocaleString();}
+function hlMacro(label,val,goal,color){
+  const pct=goal>0?Math.round(Math.min(val/goal,1)*100):0;
+  return `<div class="hl-macro"><div class="mr">${hlRing(val,goal||1,62,7,color)}<div class="pct">${goal>0?pct+'%':'–'}</div></div><div class="ml">${label}</div><div class="mv">${hlNum(val)}${goal>0?' / '+hlNum(goal)+'g':'g'}</div></div>`;}
+function hlProfileForm(){
+  return `<div class="panel"><div class="sec" style="margin-top:0"><h2>Set up your profile</h2></div>
+    <div class="page-sub" style="margin:0 0 14px">A few basics let Lucy estimate your energy needs and daily targets. Stays on your device.</div>
+    <div class="hl-form">
+      <div class="fld"><label>Sex</label><select id="hlSex"><option value="female">Female</option><option value="male">Male</option></select></div>
+      <div class="fld"><label>Birth year</label><input id="hlBirth" type="number" inputmode="numeric" placeholder="1995" min="1920" max="2020"/></div>
+      <div class="fld"><label>Height (cm)</label><input id="hlHeight" type="number" inputmode="numeric" placeholder="170"/></div>
+      <div class="fld"><label>Weight (kg)</label><input id="hlWeight" type="number" inputmode="decimal" placeholder="68"/></div>
+      <div class="fld"><label>Activity level</label><select id="hlActivity"><option value="sedentary">Sedentary</option><option value="light">Lightly active</option><option value="moderate" selected>Moderately active</option><option value="active">Very active</option><option value="athlete">Athlete</option></select></div>
+      <div class="fld"><label>Goal</label><select id="hlGoal"><option value="maintain" selected>Maintain</option><option value="lose">Gradual loss</option><option value="gain">Gradual gain</option><option value="muscle">Build muscle</option></select></div>
+      <div class="full" style="display:flex;justify-content:flex-end;margin-top:4px"><button class="btn" onclick="hlSaveProfile()">Save profile</button></div>
+    </div></div>`;}
+/* Main dashboard body (assumes HEALTH loaded). */
+function hlDashboard(){
+  if(HEALTH_LOADING&&!HEALTH)return `<div class="hl-skel"></div><div class="hl-skel" style="height:120px;margin-top:14px"></div>`;
+  const m=(DATA.mood_entries||[]);const tones={positive:'😊',excited:'🤩',calm:'😌',neutral:'😐',low:'😔',frustrated:'😤',stressed:'😰',negative:'😣'};
+  const moodSec=`<div class="sec"><h2>How you feel</h2></div><div class="card" style="gap:10px;flex-wrap:wrap">`+
+    Object.entries(tones).map(([t,e])=>`<button class="btn ghost" onclick="logMood('${t}')" style="font-size:20px">${e}<span style="font-size:12px;margin-left:6px">${t}</span></button>`).join('')+`</div>`+
+    (m.length?`<div class="sec"><h2>Recent check-ins</h2></div><div class="col">`+m.slice(0,8).map(x=>`<div class="card"><span style="font-size:20px">${tones[x.tone]||'😐'}</span><div style="flex:1"><span class="ttl">${esc(x.tone)}</span><div class="sub">energy: ${esc(x.energy||'medium')}</div></div><span class="when">${fmt(x.created_at)}</span></div>`).join('')+'</div>':'');
+  // Food logger is always available so anyone can log a meal.
+  const logger=`<div class="sec"><h2>Log food</h2></div>
+    <div class="composer"><input id="hlFood" placeholder="e.g. 2 eggs, toast and black coffee" onkeydown="if(event.key==='Enter')hlLogFood()"/><button class="btn" id="hlFoodBtn" onclick="hlLogFood()">Log</button></div>`;
+  if(!HEALTH){return logger+`<div class="empty"><div class="big">♥</div><div style="font-size:15px;color:var(--muted);margin-bottom:4px">Lucy can't reach the phone right now</div>Keep the app open and this will fill in.</div>`+moodSec;}
+  const H=HEALTH;const prof=!!H.profileComplete;
+  const intake=H.intake||{};const goals=H.goals||null;const act=H.activity||{};const en=H.energy||{};
+  const calGoal=goals&&goals.calorie_goal?goals.calorie_goal:0;
+  const eaten=Math.round(+intake.calories||0);
+  const remaining=(H.remaining!=null)?Math.round(H.remaining):(calGoal?calGoal-eaten:null);
+  let h='';
+  // 1) Profile gate (only the form when incomplete) — still let them log food + mood below.
+  if(!prof){h+=hlProfileForm();h+=logger;h+=hlMealTimeline(intake);h+=hlActivityCards(act,en);h+=hlDrLucy(H.drLucy);h+=moodSec;return h;}
+  // 1b) Calories-remaining ring + macro rings.
+  const ringCenter=(remaining!=null)
+    ? `<div class="num">${hlNum(Math.abs(remaining))}</div><div class="cap">${remaining>=0?'kcal left':'kcal over'}</div>`
+    : `<div class="num">${hlNum(eaten)}</div><div class="cap">kcal eaten</div>`;
+  const overColor=(remaining!=null&&remaining<0)?'var(--primary-deep)':'var(--primary)';
+  h+=`<div class="hl-rings">
+    <div class="panel hl-energy">
+      <div class="hl-bigring">${hlRing(eaten,calGoal||eaten||1,148,12,overColor)}<div class="ctr">${ringCenter}</div></div>
+      <div class="hl-energy-meta">
+        <div class="row"><span class="k">Goal</span><span class="v">${calGoal?hlNum(calGoal)+' kcal':'—'}</span></div>
+        <div class="row"><span class="k">Eaten</span><span class="v">${hlNum(eaten)} kcal</span></div>
+        ${act.active_energy_kcal?`<div class="row"><span class="k">Active burn</span><span class="v">${hlNum(act.active_energy_kcal)} kcal</span></div>`:''}
+      </div>
+    </div>
+    <div class="panel"><div class="hl-macros">
+      ${hlMacro('Protein',intake.protein_g||0,goals&&goals.protein_g||0,'#4ADE80')}
+      ${hlMacro('Carbs',intake.carbs_g||0,goals&&goals.carbs_g||0,'#60A5FA')}
+      ${hlMacro('Fat',intake.fat_g||0,goals&&goals.fat_g||0,'#F5C451')}
+    </div></div>
+  </div>`;
+  // Quiet, non-judgmental net trend (never a score).
+  if(H.net_rolling_7!=null){const n=Math.round(H.net_rolling_7);h+=`<div class="subtle-line" style="margin:14px 0 0;text-align:center;color:var(--subtle);font-size:12.5px">7-day energy balance is trending ${n>0?'+':''}${hlNum(n)} kcal/day — just context, not a target.</div>`;}
+  // 2) Food logger
+  h+=logger;
+  // 3) Meal timeline
+  h+=hlMealTimeline(intake);
+  // 4) Activity & energy
+  h+=hlActivityCards(act,en);
+  // 5) Dr. Lucy guidance
+  h+=hlDrLucy(H.drLucy);
+  // mood (existing) at the bottom
+  h+=moodSec;
+  return h;}
+function hlMealTimeline(intake){
+  const items=(intake&&intake.items)||[];
+  if(!items.length)return `<div class="sec"><h2>Today's meals</h2></div><div class="empty"><div class="big">🍽</div><div style="font-size:15px;color:var(--muted);margin-bottom:4px">Nothing logged yet</div>Type a meal above and Lucy will estimate the calories.</div>`;
+  const order=['breakfast','lunch','dinner','snack'];
+  const groups={};items.forEach(it=>{const k=(it.meal_type||'snack').toLowerCase();(groups[k]=groups[k]||[]).push(it);});
+  const keys=Object.keys(groups).sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);return (ia<0?9:ia)-(ib<0?9:ib);});
+  let h=`<div class="sec"><h2>Today's meals</h2></div>`;
+  for(const k of keys){const g=groups[k];const kcal=g.reduce((s,x)=>s+(+x.calories||0),0);
+    h+=`<div class="hl-meal-group"><div class="hl-meal-head"><b>${esc(k)}</b><span class="kcal">${hlNum(kcal)} kcal</span></div><div class="col">`;
+    h+=g.map(it=>{const macs=[it.protein_g!=null?`P ${hlNum(it.protein_g)}`:'',it.carbs_g!=null?`C ${hlNum(it.carbs_g)}`:'',it.fat_g!=null?`F ${hlNum(it.fat_g)}`:''].filter(Boolean).join(' · ');
+      return `<div class="hl-food"><div style="flex:1;min-width:0"><div class="nm">${esc(it.name||it.text||'Food')}</div>${macs?`<div class="mac">${macs}</div>`:''}</div><span class="fc">${hlNum(it.calories)} kcal</span>${it.id!=null?`<button class="ico-btn danger" title="Remove" onclick="hlDelFood('${esc(String(it.id))}')">✕</button>`:''}</div>`;}).join('');
+    h+=`</div></div>`;}
+  return h;}
+function hlActivityCards(act,en){
+  act=act||{};en=en||{};
+  const cards=[];
+  if(act.steps!=null)cards.push(`<div class="hl-stat"><div class="ic">👟</div><div class="n">${hlNum(act.steps)}</div><div class="l">steps</div><span class="hl-tag measured">measured</span></div>`);
+  if(act.active_minutes!=null)cards.push(`<div class="hl-stat"><div class="ic">⚡</div><div class="n">${hlNum(act.active_minutes)}</div><div class="l">active minutes</div><span class="hl-tag measured">measured</span></div>`);
+  if(act.sleep_hours!=null)cards.push(`<div class="hl-stat"><div class="ic">🌙</div><div class="n">${(+act.sleep_hours).toFixed(1)}</div><div class="l">hours slept</div><span class="hl-tag measured">measured</span></div>`);
+  if(act.resting_hr!=null)cards.push(`<div class="hl-stat"><div class="ic">❤</div><div class="n">${hlNum(act.resting_hr)}</div><div class="l">resting HR</div><span class="hl-tag measured">measured</span></div>`);
+  const src=(en.tdee_source||'').toLowerCase();const tag=src.includes('meas')?'measured':'estimated';
+  if(en.bmr!=null)cards.push(`<div class="hl-stat"><div class="ic">🔥</div><div class="n">${hlNum(en.bmr)}</div><div class="l">BMR · base burn</div><span class="hl-tag estimated">estimated</span></div>`);
+  if(en.tdee!=null)cards.push(`<div class="hl-stat"><div class="ic">🔆</div><div class="n">${hlNum(en.tdee)}</div><div class="l">TDEE · daily burn</div><span class="hl-tag ${tag}">${tag}</span></div>`);
+  if(!cards.length)return '';
+  return `<div class="sec"><h2>Activity &amp; energy</h2></div><div class="hl-stat-grid">${cards.join('')}</div>`;}
+function hlDrLucy(cards){
+  cards=(cards||[]).filter(Boolean);
+  let h=`<div class="sec"><h2>Dr. Lucy</h2></div>`;
+  if(!cards.length){h+=`<div class="empty"><div class="big">🩺</div><div style="font-size:15px;color:var(--muted);margin-bottom:4px">Nothing to flag today</div>Log a few meals and Lucy will share gentle, useful observations.</div>`;}
+  else{h+=cards.map(c=>{const obs=esc(c.observation||c.title||'');const sug=esc(c.suggestion||c.action||'');return `<div class="hl-drlucy" style="margin-bottom:10px"><div class="av">🩺</div><div style="flex:1">${obs?`<div class="obs">${obs}</div>`:''}${sug?`<div class="sug">${sug}</div>`:''}</div></div>`;}).join('');}
+  h+=`<div class="hl-disclaimer">Lucy offers general wellbeing guidance, not medical advice. For health concerns, talk to a doctor.</div>`;
+  return h;}
+function vHealth(){const m=(DATA.mood_entries||[]);
+  const H=HEALTH;const intake=(H&&H.intake)||{};const goals=(H&&H.goals)||null;
+  const calGoal=goals&&goals.calorie_goal?goals.calorie_goal:0;const eaten=Math.round(+intake.calories||0);
+  const remaining=H&&H.remaining!=null?Math.round(H.remaining):(calGoal?calGoal-eaten:null);
+  const heroMetrics=H&&H.profileComplete
+    ? `${heroMetric(remaining!=null?(remaining>=0?hlNum(remaining):'−'+hlNum(-remaining)):hlNum(eaten),remaining!=null?'kcal left':'kcal eaten')}${heroMetric(hlNum((intake.items||[]).length),'meals logged')}${heroMetric(m.length,'check-ins')}`
+    : `${heroMetric(hlNum((intake.items||[]).length),'meals logged')}${heroMetric(m.length,'check-ins')}`;
+  return `<div class="page"><section class="page-hero compact"><div class="page-kicker">Health</div><h1 class="page-title">Nutrition and energy, gently tracked.</h1><div class="page-sub">Log meals, see your macros and activity, and get calm guidance from Dr. Lucy — without turning food into a scoreboard.</div><div class="hero-metrics">${heroMetrics}</div></section>
+    <div id="hlBody">${hlDashboard()}</div></div>`;}
+/* Log a meal → POST /api/food → refresh summary in place. */
+async function hlLogFood(){const inp=$('hlFood');if(!inp)return;const text=inp.value.trim();if(!text)return;
+  const btn=$('hlFoodBtn');inp.value='';if(btn){btn.disabled=true;btn.textContent='Logging…';}setOrbMood('think');
+  try{const r=await api('/api/food',{method:'POST',body:JSON.stringify({text})});
+    if(r&&r.ok){if(r.summary)HEALTH=r.summary;const n=r.summary&&r.summary.intake&&(r.summary.intake.items||[]).length;toast('Logged ✓');setOrbMood('organize',1200);}
+    else{toast('Lucy needs the latest update to log food');setOrbMood('confused',1400);}
+  }catch(e){toast('Could not reach the phone — try again');setOrbMood('confused',1400);}
+  if(ROUTE==='health')redrawHealth();
+  // pull a fresh summary in case the estimate updated server-side
+  loadHealth(false);
+  const f=$('hlFood');if(f)f.focus();}
+/* Remove a logged food item → DELETE /api/food/:id → refresh. */
+async function hlDelFood(id){if(id==null||id==='')return;
+  try{const r=await api('/api/food/'+encodeURIComponent(id),{method:'DELETE'});
+    if(r&&r.summary)HEALTH=r.summary;toast('Removed');}
+  catch(e){toast('Could not reach the phone — try again');}
+  if(ROUTE==='health')redrawHealth();loadHealth(false);}
+/* Save body profile → POST /api/body-profile → goals/TDEE compute, refresh. */
+async function hlSaveProfile(){
+  const sex=($('hlSex')||{}).value,birthYear=+($('hlBirth')||{}).value,heightCm=+($('hlHeight')||{}).value,weightKg=+($('hlWeight')||{}).value,activityLevel=($('hlActivity')||{}).value,goal=($('hlGoal')||{}).value;
+  if(!birthYear||!heightCm||!weightKg){toast('Add birth year, height and weight');return;}
+  toast('Saving profile…');setOrbMood('think');
+  try{const r=await api('/api/body-profile',{method:'POST',body:JSON.stringify({sex,birthYear,heightCm,weightKg,activityLevel,goal})});
+    if(r&&r.ok){if(r.summary)HEALTH=r.summary;toast('Profile saved ✓');setOrbMood('organize',1400);}
+    else{toast('Lucy needs the latest update for this');setOrbMood('confused',1400);}
+  }catch(e){toast('Could not reach the phone — try again');setOrbMood('confused',1400);}
+  if(ROUTE==='health')redrawHealth();loadHealth(true);}
 function vMoney(){const ex=(DATA.expenses||[]);const now=new Date();const month=ex.filter(e=>{const ts=parseTs(e.created_at);if(isNaN(ts))return false;const t=new Date(ts);return t.getMonth()===now.getMonth()&&t.getFullYear()===now.getFullYear();});
   const total=month.reduce((s,e)=>s+(+e.amount||0),0);const cats={};month.forEach(e=>{cats[e.category||'other']=(cats[e.category||'other']||0)+(+e.amount||0);});const catArr=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
   let h=`<div class="page"><section class="page-hero compact"><div class="page-kicker">Money</div><h1 class="page-title">Spending Lucy found in your notes.</h1><div class="page-sub">Receipts and expense mentions become a simple monthly view.</div><div class="hero-metrics">${heroMetric(total.toFixed(2),'this month')}${heroMetric(month.length,'payments')}${heroMetric(ex.length,'all time')}</div></section>`;

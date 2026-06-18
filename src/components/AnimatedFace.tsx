@@ -35,7 +35,10 @@ const PHASE_PALETTE: Record<DayPhase, { orb: string; glow: string; highlight: st
   night: { orb: '#8A5A2B', glow: '#D69A5B', highlight: 'rgba(245,210,170,0.42)', cloud: '#17120D', ring: '#A87949' },
 };
 
-const FACE = '#1A1206';
+// Deep warm-brown for the eye whites/lids — reads as a friendly dark eye on the amber orb.
+const EYE_WHITE = '#FBF1E2';   // warm cream "sclera"
+const IRIS = '#241606';        // deep espresso iris
+const LID = '#1A1206';         // closed-lid / sleeping stroke
 
 function Particle({ delay, x }: { delay: number; x: number }) {
   const t = useRef(new Animated.Value(0)).current;
@@ -89,12 +92,15 @@ export function AnimatedFace({
 
   const cloudAnim = useRef(new Animated.Value(0)).current;
   const breathe = useRef(new Animated.Value(0)).current;
-  const blink = useRef(new Animated.Value(1)).current;
+  const blink = useRef(new Animated.Value(1)).current;     // 1 = eyes fully open, 0 = closed
   const glow = useRef(new Animated.Value(0)).current;
   const zDrift = useRef(new Animated.Value(0)).current;
-  const happy = useRef(new Animated.Value(0)).current;
+  const happy = useRef(new Animated.Value(0)).current;     // 0 = neutral, 1 = warm smile reaction
   const shimmer = useRef(new Animated.Value(0)).current;
   const orbit = useRef(new Animated.Value(0)).current;
+  const gaze = useRef(new Animated.Value(0)).current;      // iris horizontal drift / scan
+  const gazeUp = useRef(new Animated.Value(0)).current;    // iris vertical glance (thinking)
+  const pulse = useRef(new Animated.Value(0)).current;     // attentive pulse (listening) / talk (speaking)
 
   const expression: FaceExpression = useMemo(() => {
     if (peeked && effectiveStatus !== 'listening' && effectiveStatus !== 'organizing') return 'peek';
@@ -170,25 +176,106 @@ export function AnimatedFace({
     return () => { breatheLoop.stop(); glowLoop.stop(); };
   }, [breathe, glow, mood, effectiveStatus]);
 
+  // Natural blink — quick close→open with a roomy random gap. Eyes default OPEN (blink resting at 1).
   useEffect(() => {
     if (mood === 'sleeping') {
-      blink.setValue(1);
+      // Sleeping: gently settle lids shut and keep them peacefully closed.
+      Animated.timing(blink, { toValue: 0, duration: 600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }).start();
       return;
     }
+    blink.setValue(1);
     let cancelled = false;
     const scheduleBlink = () => {
-      const delay = 2200 + Math.random() * 2600;
+      const delay = 2600 + Math.random() * 3200;
       setTimeout(() => {
         if (cancelled) return;
-        Animated.sequence([
-          Animated.timing(blink, { toValue: 0, duration: 90, useNativeDriver: true }),
-          Animated.timing(blink, { toValue: 1, duration: 110, useNativeDriver: true }),
-        ]).start(() => { if (!cancelled) scheduleBlink(); });
+        // Occasional double-blink for life.
+        const doubles = Math.random() < 0.22;
+        const seq: Animated.CompositeAnimation[] = [
+          Animated.timing(blink, { toValue: 0, duration: 85, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+          Animated.timing(blink, { toValue: 1, duration: 130, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        ];
+        if (doubles) {
+          seq.push(Animated.delay(90));
+          seq.push(Animated.timing(blink, { toValue: 0, duration: 80, easing: Easing.in(Easing.quad), useNativeDriver: true }));
+          seq.push(Animated.timing(blink, { toValue: 1, duration: 120, easing: Easing.out(Easing.quad), useNativeDriver: true }));
+        }
+        Animated.sequence(seq).start(() => { if (!cancelled) scheduleBlink(); });
       }, delay);
     };
     scheduleBlink();
     return () => { cancelled = true; };
   }, [blink, mood]);
+
+  // Iris life: idle = slow curious drift; reading = steady left↔right scan; thinking = glance up.
+  useEffect(() => {
+    gaze.stopAnimation();
+    gazeUp.stopAnimation();
+    let loop: Animated.CompositeAnimation | null = null;
+
+    if (effectiveStatus === 'reading') {
+      loop = Animated.loop(Animated.sequence([
+        Animated.timing(gaze, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+        Animated.delay(120),
+        Animated.timing(gaze, { toValue: 0, duration: 360, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.delay(220),
+      ]));
+      Animated.timing(gazeUp, { toValue: 0.15, duration: 300, useNativeDriver: true }).start();
+    } else if (effectiveStatus === 'thinking') {
+      Animated.timing(gazeUp, { toValue: 1, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      loop = Animated.loop(Animated.sequence([
+        Animated.timing(gaze, { toValue: 0.7, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(gaze, { toValue: 0.3, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]));
+    } else if (effectiveStatus === 'organizing' || effectiveStatus === 'saving') {
+      Animated.timing(gazeUp, { toValue: 0, duration: 300, useNativeDriver: true }).start();
+      loop = Animated.loop(Animated.sequence([
+        Animated.timing(gaze, { toValue: 0.85, duration: 700, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(gaze, { toValue: 0.15, duration: 700, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+      ]));
+    } else if (effectiveStatus === 'idle' && mood !== 'sleeping') {
+      Animated.timing(gazeUp, { toValue: 0, duration: 400, useNativeDriver: true }).start();
+      loop = Animated.loop(Animated.sequence([
+        Animated.delay(1800),
+        Animated.timing(gaze, { toValue: 0.72, duration: 700, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+        Animated.delay(1400),
+        Animated.timing(gaze, { toValue: 0.5, duration: 600, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+        Animated.delay(1600),
+        Animated.timing(gaze, { toValue: 0.28, duration: 700, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+        Animated.delay(1400),
+        Animated.timing(gaze, { toValue: 0.5, duration: 600, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+      ]));
+    } else {
+      // listening / speaking / peek / sleeping: centered, attentive.
+      Animated.timing(gaze, { toValue: 0.5, duration: 300, useNativeDriver: true }).start();
+      Animated.timing(gazeUp, { toValue: 0, duration: 300, useNativeDriver: true }).start();
+    }
+
+    loop?.start();
+    return () => loop?.stop();
+  }, [effectiveStatus, mood, gaze, gazeUp]);
+
+  // Attentive pulse (listening) and talk cadence (speaking).
+  useEffect(() => {
+    pulse.stopAnimation();
+    pulse.setValue(0);
+    let loop: Animated.CompositeAnimation | null = null;
+    if (effectiveStatus === 'listening') {
+      loop = Animated.loop(Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 620, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 620, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]));
+    } else if (effectiveStatus === 'speaking') {
+      loop = Animated.loop(Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 200, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.7, duration: 150, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      ]));
+    }
+    loop?.start();
+    return () => loop?.stop();
+  }, [effectiveStatus, pulse]);
 
   useEffect(() => {
     if (mood !== 'sleeping') return;
@@ -205,9 +292,9 @@ export function AnimatedFace({
   useEffect(() => {
     if (celebrateKey === undefined) return;
     Animated.sequence([
-      Animated.timing(happy, { toValue: 1, duration: 160, useNativeDriver: true }),
-      Animated.delay(700),
-      Animated.timing(happy, { toValue: 0, duration: 240, useNativeDriver: true }),
+      Animated.timing(happy, { toValue: 1, duration: 200, easing: Easing.out(Easing.back(2)), useNativeDriver: true }),
+      Animated.delay(750),
+      Animated.timing(happy, { toValue: 0, duration: 300, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
     ]).start();
   }, [celebrateKey, happy]);
 
@@ -217,21 +304,87 @@ export function AnimatedFace({
     outputRange: mood === 'sleeping' ? [0.10, 0.22] : effectiveStatus === 'speaking' ? [0.45, 0.75] : [0.25, 0.5],
   });
   const orbitRotate = orbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+
+  // ── Eye geometry per expression ──────────────────────────────────────────
+  // All states keep a real, OPEN, rounded eye except `sleeping` (lids drawn separately).
+  // base = how round/tall the open eye sits; the iris rides inside it.
   const eyeShape = {
-    calm: { w: 4, h: 8, radius: 2, leftTilt: '0deg', rightTilt: '0deg', offsetY: 0 },
-    peek: { w: 5, h: 10, radius: 3, leftTilt: '0deg', rightTilt: '0deg', offsetY: -1 },
-    sleeping: { w: 11, h: 3, radius: 2, leftTilt: '-8deg', rightTilt: '8deg', offsetY: 1 },
-    listening: { w: 6, h: 11, radius: 4, leftTilt: '0deg', rightTilt: '0deg', offsetY: -1 },
-    speaking: { w: 5, h: 7, radius: 3, leftTilt: '-5deg', rightTilt: '5deg', offsetY: 0 },
-    organizing: { w: 10, h: 4, radius: 3, leftTilt: '-10deg', rightTilt: '10deg', offsetY: 1 },
-    saving: { w: 9, h: 4, radius: 4, leftTilt: '0deg', rightTilt: '0deg', offsetY: 0 },
-    thinking: { w: 5, h: 9, radius: 3, leftTilt: '-7deg', rightTilt: '12deg', offsetY: 0 },
-    reading: { w: 9, h: 5, radius: 3, leftTilt: '0deg', rightTilt: '0deg', offsetY: 1 },
+    calm: { w: 8.5, h: 9.5, radius: 4.5, gap: 8, offsetY: 0, irisScale: 1 },
+    peek: { w: 9.5, h: 11, radius: 5.5, gap: 8, offsetY: -0.5, irisScale: 1.05 },
+    sleeping: { w: 10, h: 9, radius: 4.5, gap: 8, offsetY: 0.5, irisScale: 1 },
+    listening: { w: 9.5, h: 11.5, radius: 5.5, gap: 8.5, offsetY: -0.5, irisScale: 1.08 },
+    speaking: { w: 8.5, h: 10, radius: 4.5, gap: 8, offsetY: 0, irisScale: 1 },
+    organizing: { w: 8, h: 9, radius: 4, gap: 7.5, offsetY: 0, irisScale: 0.92 },
+    saving: { w: 8.5, h: 9.5, radius: 4.5, gap: 8, offsetY: 0, irisScale: 1 },
+    thinking: { w: 8.5, h: 9, radius: 4.2, gap: 8, offsetY: -0.5, irisScale: 0.95 },
+    reading: { w: 9, h: 9, radius: 4.5, gap: 8, offsetY: 0.5, irisScale: 0.95 },
   }[expression];
-  const eyeScaleY = expression === 'sleeping' || expression === 'organizing' || expression === 'saving' || expression === 'reading'
-    ? 1
-    : Animated.multiply(blink, happy.interpolate({ inputRange: [0, 1], outputRange: [1, 0.35] }));
+
+  // Blink + happy both squeeze eye height — but only momentarily. Resting = fully open.
+  // happy adds a gentle squint (warm smile crinkle), never a flat line.
+  const eyeScaleY: Animated.AnimatedInterpolation<number> = Animated.multiply(
+    blink,
+    happy.interpolate({ inputRange: [0, 1], outputRange: [1, 0.55] })
+  ) as unknown as Animated.AnimatedInterpolation<number>;
+
+  // Iris travel within the eye (px). gaze 0→1 = look left→right; gazeUp 0→1 = look up.
+  const irisX = gaze.interpolate({ inputRange: [0, 1], outputRange: [-2.1, 2.1] });
+  const irisY = gazeUp.interpolate({ inputRange: [0, 1], outputRange: [0.5, -2.6] });
+
+  // Listening: gentle attentive scale on the eye; speaking handled by mouth.
+  const attentiveScale = effectiveStatus === 'listening'
+    ? pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] })
+    : 1;
+
+  const isSleeping = expression === 'sleeping';
   const meta = STATUS_META[effectiveStatus as Exclude<LucyStatus, 'idle'>];
+
+  // Mouth talk motion for speaking (height + slight scale).
+  const mouthSpeakScale = effectiveStatus === 'speaking'
+    ? pulse.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.25] })
+    : 1;
+
+  function renderEye(side: 'left' | 'right') {
+    if (isSleeping) {
+      // Peaceful closed lid: a soft downward curve. Tilt mirrors per side for a content arc.
+      return (
+        <View style={[styles.lid, { transform: [{ rotate: side === 'left' ? '8deg' : '-8deg' }] }]} />
+      );
+    }
+    return (
+      <Animated.View
+        style={[
+          styles.eyeWhite,
+          {
+            width: eyeShape.w,
+            height: eyeShape.h,
+            borderRadius: eyeShape.radius,
+            transform: [
+              { translateY: eyeShape.offsetY },
+              { scale: attentiveScale },
+              { scaleY: eyeScaleY },
+            ],
+          },
+        ]}
+      >
+        {/* Iris + pupil ride inside; catch-light highlight sells "alive". */}
+        <Animated.View
+          style={[
+            styles.iris,
+            {
+              transform: [
+                { translateX: irisX },
+                { translateY: irisY },
+                { scale: eyeShape.irisScale },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.catchLight} />
+        </Animated.View>
+      </Animated.View>
+    );
+  }
 
   return (
     <TouchableOpacity
@@ -267,30 +420,23 @@ export function AnimatedFace({
           />
           <View style={[styles.specular, { backgroundColor: palette.highlight }]} />
           <View style={styles.face}>
-            <View style={styles.eyesRow}>
-              <Animated.View style={[styles.eye, {
-                width: eyeShape.w,
-                height: eyeShape.h,
-                borderRadius: eyeShape.radius,
-                transform: [{ translateY: eyeShape.offsetY }, { rotate: eyeShape.leftTilt }, { scaleY: eyeScaleY as unknown as number }],
-              }]} />
-              <Animated.View style={[styles.eye, {
-                width: eyeShape.w,
-                height: eyeShape.h,
-                borderRadius: eyeShape.radius,
-                transform: [{ translateY: eyeShape.offsetY }, { rotate: eyeShape.rightTilt }, { scaleY: eyeScaleY as unknown as number }],
-              }]} />
+            <View style={[styles.eyesRow, { gap: eyeShape.gap }]}>
+              {renderEye('left')}
+              {renderEye('right')}
             </View>
-            <View style={[
-              styles.mouth,
-              expression === 'sleeping' && styles.mouthSleeping,
-              expression === 'listening' && styles.mouthListening,
-              expression === 'speaking' && styles.mouthSpeaking,
-              expression === 'organizing' && styles.mouthFocused,
-              expression === 'thinking' && styles.mouthThinking,
-              expression === 'saving' && styles.mouthSaving,
-              expression === 'reading' && styles.mouthReading,
-            ]} />
+            {expression === 'speaking' ? (
+              <Animated.View style={[styles.mouth, styles.mouthSpeaking, { transform: [{ scaleY: mouthSpeakScale }] }]} />
+            ) : (
+              <View style={[
+                styles.mouth,
+                expression === 'sleeping' && styles.mouthSleeping,
+                expression === 'listening' && styles.mouthListening,
+                expression === 'organizing' && styles.mouthFocused,
+                expression === 'thinking' && styles.mouthThinking,
+                expression === 'saving' && styles.mouthSaving,
+                expression === 'reading' && styles.mouthReading,
+              ]} />
+            )}
           </View>
         </Animated.View>
 
@@ -370,10 +516,44 @@ const styles = StyleSheet.create({
     shadowRadius: 9,
   },
   shimmer: { position: 'absolute', width: 56, height: 12, backgroundColor: 'rgba(255,235,200,0.35)', top: 14, left: -8 },
-  specular: { position: 'absolute', top: 6, left: 8, width: 10, height: 7, borderRadius: 5 },
-  face: { alignItems: 'center', justifyContent: 'center', gap: 3 },
-  eyesRow: { flexDirection: 'row', gap: 7, minHeight: 12, alignItems: 'center' },
-  eye: { backgroundColor: FACE },
+  specular: { position: 'absolute', top: 5, left: 7, width: 9, height: 6, borderRadius: 4.5 },
+  face: { alignItems: 'center', justifyContent: 'center', gap: 2.5 },
+  eyesRow: { flexDirection: 'row', minHeight: 12, alignItems: 'center' },
+  // Open, rounded "white" of the eye — the base that makes Lucy look awake.
+  eyeWhite: {
+    backgroundColor: EYE_WHITE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  // Dark iris/pupil that sits inside and tracks gaze.
+  iris: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: IRIS,
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+  },
+  // Tiny specular highlight on the iris = the "alive" catch-light.
+  catchLight: {
+    width: 1.8,
+    height: 1.8,
+    borderRadius: 1,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    marginTop: 0.6,
+    marginLeft: 0.6,
+  },
+  // Peaceful closed lid for the only genuinely-asleep state.
+  lid: {
+    width: 10,
+    height: 3,
+    borderTopLeftRadius: 6,
+    borderTopRightRadius: 6,
+    borderTopWidth: 2,
+    borderColor: LID,
+    backgroundColor: 'transparent',
+  },
   mouth: {
     width: 12,
     height: 6,
@@ -381,16 +561,16 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 8,
     borderWidth: 2,
     borderTopWidth: 0,
-    borderColor: FACE,
+    borderColor: LID,
     marginTop: 1,
   },
-  mouthSleeping: { width: 7, height: 2, borderRadius: 1, borderWidth: 0, backgroundColor: FACE },
-  mouthListening: { width: 7, height: 8, borderRadius: 5, borderWidth: 2, borderColor: FACE, marginTop: 1 },
-  mouthSpeaking: { width: 13, height: 7, borderBottomLeftRadius: 10, borderBottomRightRadius: 10, borderTopLeftRadius: 2, borderTopRightRadius: 2, borderWidth: 2, borderTopWidth: 0, borderColor: FACE, marginTop: 1 },
-  mouthFocused: { width: 11, height: 2, borderRadius: 1, borderWidth: 0, backgroundColor: FACE, marginTop: 3 },
-  mouthThinking: { width: 8, height: 5, borderLeftWidth: 0, borderRightWidth: 2, borderTopWidth: 0, borderBottomWidth: 2, borderColor: FACE, borderRadius: 5, transform: [{ rotate: '-12deg' }] },
-  mouthSaving: { width: 13, height: 6, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, borderWidth: 2, borderTopWidth: 0, borderColor: FACE, marginTop: 0 },
-  mouthReading: { width: 10, height: 2, borderRadius: 1, borderWidth: 0, backgroundColor: FACE, opacity: 0.8, marginTop: 3 },
+  mouthSleeping: { width: 7, height: 2, borderRadius: 1, borderWidth: 0, backgroundColor: LID },
+  mouthListening: { width: 7, height: 8, borderRadius: 5, borderWidth: 2, borderColor: LID, marginTop: 1 },
+  mouthSpeaking: { width: 12, height: 9, borderBottomLeftRadius: 10, borderBottomRightRadius: 10, borderTopLeftRadius: 4, borderTopRightRadius: 4, borderWidth: 2, borderColor: LID, marginTop: 1 },
+  mouthFocused: { width: 11, height: 2, borderRadius: 1, borderWidth: 0, backgroundColor: LID, marginTop: 3 },
+  mouthThinking: { width: 8, height: 5, borderLeftWidth: 0, borderRightWidth: 2, borderTopWidth: 0, borderBottomWidth: 2, borderColor: LID, borderRadius: 5, transform: [{ rotate: '-12deg' }] },
+  mouthSaving: { width: 13, height: 6, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, borderWidth: 2, borderTopWidth: 0, borderColor: LID, marginTop: 0 },
+  mouthReading: { width: 10, height: 2, borderRadius: 1, borderWidth: 0, backgroundColor: LID, opacity: 0.8, marginTop: 3 },
   sleepMark: { position: 'absolute', top: -8, right: 4, color: LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '900' },
   cloud: {
     position: 'absolute',

@@ -20,12 +20,13 @@ export function ApprovalInbox({ trigger }: { trigger: number }) {
   const reload = async () => {
     try {
       const db = await getDatabase();
-      const [reqs, proposals] = await Promise.all([
+      const [reqs, proposals, entityProps] = await Promise.all([
         listOpenContextRequests(db),
         import('../db/memoryUpdateProposals').then(({ listOpenMemoryUpdateProposals }) => listOpenMemoryUpdateProposals(db)),
+        import('../db/entityEditProposals').then(({ countOpenEntityEditProposals }) => countOpenEntityEditProposals(db)),
       ]);
       setRequests(reqs);
-      return reqs.length + proposals.length;
+      return reqs.length + proposals.length + entityProps;
     } catch { return 0; }
   };
 

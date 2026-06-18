@@ -730,6 +730,13 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       taken_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_medication_log_date ON medication_log(medication_id, date_key);
+    CREATE TABLE IF NOT EXISTS entity_edit_proposals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL, project_name TEXT, capture_id INTEGER,
+      op TEXT DEFAULT 'append', suggested_text TEXT,
+      status TEXT DEFAULT 'open', created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_entity_edit_open ON entity_edit_proposals(status, id);
   `);
 
   // Voice conversations ("Hey Lucy" / tap-the-face) — persisted so they can be reviewed in-app + web.

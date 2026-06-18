@@ -317,6 +317,27 @@ async function persistExtraction(
     void import('./proposeMemoryUpdates')
       .then((m) => m.proposeMemoryUpdates(db, capture.id))
       .catch(() => { /* non-critical */ });
+    // Passive entity-edit: if this note clearly names an EXISTING Workspace project, propose filing it
+    // under that project (propose-and-confirm — surfaced as an approval card, never auto-applied).
+    void (async () => {
+      try {
+        const names = (extraction.projects ?? []).map((n) => (n || '').trim()).filter(Boolean);
+        if (!names.length) return;
+        const summary = (extraction.summary || extraction.title || '').trim();
+        if (summary.length < 8) return;
+        const norm = (s: string) => s.toLowerCase().replace(/\bproject\b/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        const GENERIC = new Set(['work', 'life', 'personal', 'misc', 'general', 'product', 'app', 'idea', 'stuff']);
+        const projects = await db.getAllAsync<{ id: number; name: string }>("SELECT id, name FROM projects WHERE status != 'archived'");
+        if (!projects.length) return;
+        const { proposeProjectAppend } = await import('../db/entityEditProposals');
+        for (const nm of names) {
+          const key = norm(nm);
+          if (!key || key.length < 3 || GENERIC.has(key)) continue;
+          const match = projects.find((p) => norm(p.name) === key);
+          if (match) { await proposeProjectAppend(db, match.id, match.name, capture.id, summary); break; }
+        }
+      } catch { /* non-critical */ }
+    })();
     // Store a detected action so the Timeline can offer it as a "LUCY can do this" card
     // after the capture finishes processing — avoids synchronous regex false positives.
     if (extraction.detected_action) {

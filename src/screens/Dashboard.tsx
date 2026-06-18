@@ -1534,13 +1534,31 @@ export function NeedsContextView({
   const [proposals, setProposals] = useState<import('../db/memoryUpdateProposals').MemoryUpdateProposalRow[]>([]);
   const [feedbackOpen, setFeedbackOpen] = useState<Record<number, boolean>>({});
   const [feedbackText, setFeedbackText] = useState<Record<number, string>>({});
+  const [entityProps, setEntityProps] = useState<import('../db/entityEditProposals').EntityEditProposalRow[]>([]);
 
   const loadProposals = async () => {
     const db = await getDatabase();
     const { listOpenMemoryUpdateProposals } = await import('../db/memoryUpdateProposals');
     setProposals(await listOpenMemoryUpdateProposals(db));
+    const { listOpenEntityEditProposals } = await import('../db/entityEditProposals');
+    setEntityProps(await listOpenEntityEditProposals(db));
   };
   useEffect(() => { void loadProposals(); }, [requests.length]);
+
+  const applyEntityProp = async (id: number) => {
+    const db = await getDatabase();
+    const { applyEntityEditProposal } = await import('../db/entityEditProposals');
+    await applyEntityEditProposal(db, id);
+    setEntityProps((p) => p.filter((x) => x.id !== id));
+    onAnswered();
+  };
+  const dismissEntityProp = async (id: number) => {
+    const db = await getDatabase();
+    const { setEntityEditProposalStatus } = await import('../db/entityEditProposals');
+    await setEntityEditProposalStatus(db, id, 'dismissed');
+    setEntityProps((p) => p.filter((x) => x.id !== id));
+    onAnswered();
+  };
 
   // Self-improving brain (propose-and-confirm): apply folds the context into the OLD note + re-extracts.
   const applyProposal = async (id: number) => {
@@ -1607,6 +1625,24 @@ export function NeedsContextView({
 
   // One card per item, rendered one-at-a-time in a full-screen swipeable deck (proposals first).
   const deckCards: ReviewCard[] = [
+    ...entityProps.map((p) => ({
+      key: `ent-${p.id}`,
+      render: () => (
+        <View>
+          <Text style={styles.contextLucyLabel}>this looks related to a project —</Text>
+          <Text style={styles.contextQuestion}>Add this note to “{p.project_name ?? 'a project'}”?</Text>
+          {p.suggested_text ? <Text style={styles.contextSnippet} numberOfLines={5}>{protectedPreview(p.suggested_text)}</Text> : null}
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+            <TouchableOpacity style={[styles.contextButton, { flex: 1 }]} onPress={() => void applyEntityProp(p.id)}>
+              <Text style={styles.contextButtonText}>Add to project</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.contextButton, styles.contextButtonDisabled, { flex: 0, paddingHorizontal: 18 }]} onPress={() => void dismissEntityProp(p.id)}>
+              <Text style={styles.contextButtonText}>Skip</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ),
+    })),
     ...proposals.map((p) => ({
       key: `prop-${p.id}`,
       render: () => (

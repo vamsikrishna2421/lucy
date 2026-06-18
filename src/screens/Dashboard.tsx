@@ -48,13 +48,13 @@ import {
 } from '../processing/stalenessEngine';
 
 type ViewMode = 'Focus Now' | 'Timeline' | 'Ask Lucy' | 'Health' | 'Brain';
-type LibraryTab = 'Home' | 'Galaxy' | 'Documents' | 'Calendar' | 'Resources' | 'Projects' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen' | 'Reminders';
+type LibraryTab = 'Home' | 'Galaxy' | 'Documents' | 'Calendar' | 'Resources' | 'Projects' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen' | 'Reminders' | 'Gallery';
 
 // Display names (internal keys kept stable).
 const TAB_LABEL: Record<LibraryTab, string> = {
   Home: 'Workspace', Calendar: 'Calendar', Documents: 'Documents', Resources: 'Online resources', Galaxy: 'Glossary',
   Meetings: 'Meetings', Listen: 'Listen data', Projects: 'Projects', Ideas: 'Ideas', Expenses: 'Expenses',
-  People: 'People', Todos: 'Todos', Reminders: 'Reminders',
+  People: 'People', Todos: 'Todos', Reminders: 'Reminders', Gallery: 'Scans & photos',
 };
 
 function displayTimestamp(value: string): string {
@@ -2515,8 +2515,47 @@ function LibraryView({
         {tab === 'Meetings' && <MeetingsTab />}
         {tab === 'Listen' && <ListenTab />}
         {tab === 'Reminders' && <RemindersTab />}
+        {tab === 'Gallery' && <GalleryTab />}
       </ScrollView>
     </View>
+  );
+}
+
+function GalleryTab() {
+  const [rows, setRows] = useState<Array<{ id: number; source_image_path: string; extracted_title: string | null; created_at: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [viewer, setViewer] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const db = await getDatabase();
+        const list = await db.getAllAsync<{ id: number; source_image_path: string; extracted_title: string | null; created_at: string }>(
+          "SELECT id, source_image_path, extracted_title, created_at FROM captures WHERE source_image_path IS NOT NULL AND source_image_path != '' ORDER BY created_at DESC LIMIT 200",
+        );
+        setRows(list);
+      } catch { /* ignore */ } finally { setLoading(false); }
+    })();
+  }, []);
+
+  if (loading) return <View style={{ paddingVertical: 30 }}><ActivityIndicator color={LUCY_COLORS.primary} /></View>;
+  if (!rows.length) return <EmptyLine text="No photos yet. Snap a note, receipt, or whiteboard and the original lands here." />;
+  return (
+    <>
+      <View style={styles.galleryGrid}>
+        {rows.map((r) => (
+          <TouchableOpacity key={r.id} style={styles.galleryCell} activeOpacity={0.85} onPress={() => setViewer(r.source_image_path)}>
+            <Image source={{ uri: r.source_image_path }} style={styles.galleryThumb} resizeMode="cover" />
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Modal visible={!!viewer} transparent animationType="fade" onRequestClose={() => setViewer(null)}>
+        <Pressable style={styles.imageViewerBackdrop} onPress={() => setViewer(null)}>
+          {viewer ? <Image source={{ uri: viewer }} style={styles.imageViewerImg} resizeMode="contain" /> : null}
+          <Text style={styles.imageViewerHint}>Tap to close · original photo</Text>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -3127,6 +3166,9 @@ const styles = StyleSheet.create({
   reminderMeta: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 4 },
   reminderDone: { backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 14 },
   reminderDoneText: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 13 },
+  galleryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  galleryCell: { width: '32%', aspectRatio: 1, borderRadius: 12, overflow: 'hidden', backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  galleryThumb: { width: '100%', height: '100%' },
   pendingHint: { color: LUCY_COLORS.textMuted, fontSize: 13, marginBottom: 17, paddingHorizontal: 3 },
   library: { flex: 1 },
   wsBack: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 4, marginBottom: 8 },

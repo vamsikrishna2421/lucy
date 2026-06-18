@@ -35,6 +35,7 @@ const BRAIN: BrainTile[] = [
   { key: 'Meetings', label: 'Meetings', hint: 'Conversations captured', icon: 'people-circle', color: LUCY_COLORS.teal },
   { key: 'Ideas', label: 'Ideas', hint: 'Sparks worth keeping', icon: 'bulb', color: LUCY_COLORS.gold },
   { key: 'Reminders', label: 'Reminders', hint: 'What to do, and when', icon: 'alarm', color: LUCY_COLORS.primaryGlow },
+  { key: 'Gallery', label: 'Scans & photos', hint: 'Every image you captured', icon: 'images', color: LUCY_COLORS.teal },
   { key: 'Listen', label: 'Listen data', hint: 'What Lucy has heard', icon: 'mic', color: LUCY_COLORS.rose },
   { key: 'Expenses', label: 'Expenses', hint: 'Money in motion', icon: 'cash', color: LUCY_COLORS.primary },
 ];

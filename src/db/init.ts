@@ -698,4 +698,15 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     if (!vc.has('orig_path')) await db.execAsync('ALTER TABLE vault_items ADD COLUMN orig_path TEXT;');
     if (!vc.has('orig_mime')) await db.execAsync('ALTER TABLE vault_items ADD COLUMN orig_mime TEXT;');
   }
+
+  // Circuit breaker: if a device-calendar read was in-flight when the app last died, expo-calendar
+  // likely crashed natively on a bad event. Auto-pause calendar sync so the app stops crash-looping
+  // (the user can resume it from the calendar). Self-healing — runs once per startup.
+  try {
+    const inflight = await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'cal_read_inflight'");
+    if (inflight?.value === '1') {
+      await db.runAsync("INSERT INTO settings (key, value) VALUES ('device_calendar_sync', 'off') ON CONFLICT(key) DO UPDATE SET value = 'off'");
+      await db.runAsync("INSERT INTO settings (key, value) VALUES ('cal_read_inflight', '') ON CONFLICT(key) DO UPDATE SET value = ''");
+    }
+  } catch { /* settings table absent on very first run — nothing to break */ }
 }

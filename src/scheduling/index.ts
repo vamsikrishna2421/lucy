@@ -62,10 +62,14 @@ async function buildBusy(db: SQLiteDatabase, fromMs: number, toMs: number, av: A
   // (device_calendar_sync) AND calendar permission — reading certain device events can crash
   // expo-calendar natively, so the user can turn this off from the calendar if it misbehaves.
   try {
-    const { getSetting } = await import('../db/settings');
+    const { getSetting, setSetting } = await import('../db/settings');
     if ((await getSetting(db, 'device_calendar_sync')) !== 'off') {
+      // In-flight marker for the startup circuit breaker: if the app dies during this native read
+      // (expo-calendar can crash on certain events), the breaker auto-pauses sync on next launch.
+      await setSetting(db, 'cal_read_inflight', '1');
       const { calendarBusyBlocks } = await import('../processing/calendarConnector');
       const events = await calendarBusyBlocks(fromMs, toMs);
+      await setSetting(db, 'cal_read_inflight', '');
       if (events.length) resourceBlocks.push(...events);
     }
   } catch { /* device calendar is optional */ }

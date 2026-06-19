@@ -14,6 +14,7 @@ function summary(over: Partial<HealthSummary> = {}): HealthSummary {
     energy: { bmr: 1600, tdee: 2200, tdee_source: 'measured' },
     intake: { calories: 1800, protein_g: 90, carbs_g: 200, fat_g: 60, items: [] },
     intakeLogged: true,
+    intakeCompleteness: 'logged',
     goals: { calorie_goal: 1900, protein_g: 110, carbs_g: 200, fat_g: 60 },
     remaining: 100, net: -400, net_rolling_7: -300, drLucy: [],
     ...over,

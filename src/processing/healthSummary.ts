@@ -18,6 +18,7 @@ export interface HealthSummary {
   energy: { bmr: number | null; tdee: number | null; tdee_source: 'measured' | 'estimated' | null };
   intake: { calories: number; protein_g: number; carbs_g: number; fat_g: number; items: FoodLogRow[] };
   intakeLogged: boolean;           // did the user log ANY food today? if false, intake is UNKNOWN (never assume 0/fasting)
+  intakeCompleteness: 'none' | 'partial' | 'logged'; // none=0 meals, partial=1-2 (likely missed some), logged=3+
   goals: { calorie_goal: number; protein_g: number; carbs_g: number; fat_g: number } | null;
   remaining: number | null;        // goal − intake (calories)
   net: number | null;              // intake − tdee today (null when nothing logged — intake unknown)
@@ -57,9 +58,11 @@ export async function buildHealthContextPrefix(db: SQLiteDatabase): Promise<stri
       `- Body: ${p.sex ?? '?'}, ${age ?? '?'}y, ${p.height_cm ?? '?'}cm, ${p.weight_kg ?? '?'}kg, activity ${p.activity_level}, goal "${p.goal}"${p.body_fat_pct ? `, ${p.body_fat_pct}% body fat` : ''}.`,
       `- Energy: BMR ${s.energy.bmr ?? '?'} kcal, TDEE ${s.energy.tdee ?? '?'} kcal (${s.energy.tdee_source ?? 'n/a'}).`,
       s.goals ? `- Daily goal: ${s.goals.calorie_goal} kcal (P ${s.goals.protein_g} / C ${s.goals.carbs_g} / F ${s.goals.fat_g} g).` : '',
-      s.intakeLogged
-        ? `- Today so far: ${s.intake.calories} kcal eaten${s.remaining != null ? `, ${s.remaining} remaining` : ''}; steps ${s.activity.steps}${s.activity.sleep_hours ? `, slept ${s.activity.sleep_hours}h` : ''}.`
-        : `- Today: NO food logged yet. Intake is UNKNOWN — do NOT assume they fasted, ate nothing, or are in a deficit, and do NOT estimate weight loss from this. They are often just too busy to log. Gently invite them to snap a photo of their next meal. Steps ${s.activity.steps}${s.activity.sleep_hours ? `, slept ${s.activity.sleep_hours}h` : ''}.`,
+      !s.intakeLogged
+        ? `- Today: NO food logged yet. Intake is UNKNOWN — do NOT assume they fasted, ate nothing, or are in a deficit, and do NOT estimate weight loss from this. They are often just too busy to log. Gently invite them to snap a photo of their next meal. Steps ${s.activity.steps}${s.activity.sleep_hours ? `, slept ${s.activity.sleep_hours}h` : ''}.`
+        : s.intakeCompleteness === 'partial'
+          ? `- Today so far: ${s.intake.calories} kcal across only a couple of logged meals — this is likely INCOMPLETE (they probably ate more but didn't log it). Do NOT treat ${s.intake.calories} as the full day or infer a deficit/weight-loss from it. Logged: ${s.intake.items.map((i) => i.name).slice(0, 6).join(', ')}. Gently ask if they missed logging any meals or snacks. Steps ${s.activity.steps}${s.activity.sleep_hours ? `, slept ${s.activity.sleep_hours}h` : ''}.`
+          : `- Today so far: ${s.intake.calories} kcal eaten${s.remaining != null ? `, ${s.remaining} remaining` : ''}; steps ${s.activity.steps}${s.activity.sleep_hours ? `, slept ${s.activity.sleep_hours}h` : ''}.`,
       s.net_rolling_7 != null ? `- 7-day net average (ONLY across days they actually logged food): ${s.net_rolling_7} kcal/day (trend only — never a verdict; days with no log are excluded, not counted as zero).` : '',
       medsLine,
       `When estimating weight change: ~7700 kcal ≈ 1 kg. Use their TDEE + intake ONLY for days with logged food; never infer fasting or weight loss from missing logs. Be encouraging and ED-safe; never suggest unsafe deficits.`,
@@ -132,6 +135,10 @@ export async function getHealthSummary(db: SQLiteDatabase, dateKey = todayKey())
   // Did the user log ANY food today? If not, intake is UNKNOWN — we must NOT treat 0 logged as 0 eaten
   // (that would fabricate a huge deficit / "fasting" / rapid weight-loss assumption from mere laziness).
   const intakeLogged = foods.length > 0;
+  // Completeness by distinct meal slots logged: 1-2 likely means the user missed logging meals, so the
+  // logged total is NOT the full day — Lucy should ask, not assume. 3+ slots = reasonably complete.
+  const mealSlots = new Set(foods.map((f) => f.meal_type).filter(Boolean)).size;
+  const intakeCompleteness: HealthSummary['intakeCompleteness'] = mealSlots === 0 ? 'none' : mealSlots < 3 ? 'partial' : 'logged';
   const remaining = goals && intakeLogged ? Math.round(goals.calorie_goal - intake.calories) : null;
   const net = (tdeeVal != null && intakeLogged) ? netCalorie(intake.calories, tdeeVal) : null;
 
@@ -158,6 +165,7 @@ export async function getHealthSummary(db: SQLiteDatabase, dateKey = todayKey())
     energy: { bmr, tdee: tdeeVal, tdee_source: tdeeSource },
     intake,
     intakeLogged,
+    intakeCompleteness,
     goals,
     remaining,
     net,

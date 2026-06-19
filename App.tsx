@@ -4,7 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { splashShownAt } from './src/splashTime';
 import { useIncomingShare } from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, AppState, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, AppState, Linking, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { passiveListener, type PassiveListenerState } from './src/audio/PassiveListener';
 import { SplashAnimation } from './src/components/SplashAnimation';
 import { ErrorBoundary, installGlobalErrorLogger } from './src/components/ErrorBoundary';
@@ -93,6 +93,7 @@ export default function App() {
   const [backgroundEnabled, setBackgroundEnabled] = useState(false);
   const [notificationDetail, setNotificationDetail] = useState<NotificationDetailPayload | null>(null);
   const [approvalTrigger, setApprovalTrigger] = useState(0);
+  const [snapBusy, setSnapBusy] = useState(false);
   const [passiveState, setPassiveState] = useState<PassiveListenerState>(passiveListener.getState());
   const [meetingVisible, setMeetingVisible] = useState(false);
   const [meetingRecording, setMeetingRecording] = useState(false);
@@ -547,6 +548,8 @@ export default function App() {
         .then((db) => getTotalUnreadCount(db))
         .then(setUnreadNotifCount)
         .catch(() => {});
+      // Tapping a meal nudge jumps straight to the camera (the friction-free logging action).
+      if (data?.kind === 'meal-nudge') { void quickSnap(); return; }
       const RICH_KINDS = new Set(['guardian', 'digest', 'open-loop', 'captured-reminder', 'pre-meeting', 'post-meeting', 'on-this-day', 'morning-brief', 'weekly-insight']);
       if (data?.kind && typeof data.kind === 'string' && RICH_KINDS.has(data.kind)) {
         setNotificationDetail(data as unknown as NotificationDetailPayload);
@@ -704,6 +707,36 @@ export default function App() {
   // (hold-to-talk) session also reports status 'listening' but must NOT light
   // up the Listen pill or trigger the no-key banner.
   const listenActive = passiveState.status === 'listening' && !passiveState.quickCapture;
+
+  // One-tap photo capture from Home (camera FAB): just take the pic — LUCY classifies it herself
+  // (meal → calories, receipt → expense, note → memory). No menu. Respects the selected-model key.
+  const quickSnap = useCallback(async () => {
+    try {
+      const { getModelKeyStatus, modelKeyMissingMessage } = await import('./src/ai/provider');
+      const status = await getModelKeyStatus();
+      if (status.remote && !status.keyPresent) { Alert.alert('Add your API key', modelKeyMissingMessage(status)); return; }
+    } catch { /* allow through */ }
+    const { pickImage } = await import('./src/processing/imageCapture');
+    const uri = await pickImage('Snap it', 'Meal, receipt, or a note — I’ll figure out what it is.');
+    if (!uri) return;
+    setSnapBusy(true);
+    try {
+      const db = await getDatabase();
+      const { smartCapturePhoto } = await import('./src/processing/smartPhotoCapture');
+      const r = await smartCapturePhoto(db, uri);
+      goToDashView('Timeline');
+      // For meals, nudge completeness if the day's logs are still sparse (0/1/2 → likely incomplete).
+      let extra = '';
+      if (r.type === 'meal') {
+        try {
+          const { listFoodLog } = await import('./src/db/healthNutrition');
+          const distinct = new Set((await listFoodLog(db)).map((f) => f.meal_type ?? f.name)).size;
+          if (distinct < 3) extra = ' Did you miss any other meals or snacks today? Tap the camera to add them.';
+        } catch { /* optional */ }
+      }
+      Alert.alert(r.type === 'meal' ? 'Meal logged ✓' : r.type === 'receipt' ? 'Receipt logged ✓' : 'Saved ✓', r.message + extra);
+    } catch { Alert.alert('Could not read that', 'Please try again with a clearer photo.'); } finally { setSnapBusy(false); }
+  }, [goToDashView]);
 
   // LUCY's animated face + live "Hey Lucy" status pill. Rendered fresh per call (a function, not a
   // shared element, since both the header and the always-mounted dashboard may render it). It's placed
@@ -954,7 +987,21 @@ export default function App() {
         <View style={styles.globalFace} pointerEvents="box-none">
           {renderLucyFace()}
         </View>
+        {/* Camera FAB (bottom-right, where the old chat bubble was) — one-tap meal/note photo. */}
+        {screen === 'dashboard' ? (
+          <TouchableOpacity style={styles.cameraFab} activeOpacity={0.85} onPress={quickSnap} accessibilityLabel="Snap a photo">
+            <Ionicons name="camera" size={24} color="#fff" />
+          </TouchableOpacity>
+        ) : null}
       </SafeAreaView>
+      <Modal visible={snapBusy} transparent animationType="fade" onRequestClose={() => {}}>
+        <View style={styles.snapBusyOverlay}>
+          <View style={styles.snapBusyCard}>
+            <ActivityIndicator size="large" color={LUCY_COLORS.primary} />
+            <Text style={styles.snapBusyText}>Reading your photo…</Text>
+          </View>
+        </View>
+      </Modal>
       <NotificationDetailModal
         payload={notificationDetail}
         onDismiss={() => setNotificationDetail(null)}
@@ -1018,6 +1065,10 @@ const styles = StyleSheet.create({
   logoStar: { position: 'absolute', top: -8, right: -14, color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '800', textShadowColor: 'rgba(255,139,61,0.7)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
   headerPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 48 },
   globalFace: { position: 'absolute', right: 16, top: 118, zIndex: 30, elevation: 30, alignItems: 'flex-end' },
+  cameraFab: { position: 'absolute', right: 18, bottom: 104, width: 52, height: 52, borderRadius: 26, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center', zIndex: 40, elevation: 8, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+  snapBusyOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
+  snapBusyCard: { backgroundColor: LUCY_COLORS.surface, borderRadius: 18, padding: 26, alignItems: 'center', gap: 12, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  snapBusyText: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '600' },
   faceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   wakePill: {
     flexDirection: 'row',

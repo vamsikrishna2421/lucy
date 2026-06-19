@@ -89,6 +89,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [checkInEnabled, setCheckInEnabled] = useState(false);
   const [alarmStyle, setAlarmStyle] = useState(false);
   const [semanticRouter, setSemanticRouter] = useState(false);
+  const [mealReminders, setMealReminders] = useState(false);
   const [aiModel, setAiModel] = useState('claude-sonnet-4-6');
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [claudeKey, setClaudeKey] = useState('');
@@ -140,6 +141,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       setShieldLlm((await getSetting(db, 'shield_use_local_llm')) === 'true');
       setAlarmStyle((await getSetting(db, 'alarm_style_enabled')) === 'on');
       setSemanticRouter((await getSetting(db, 'semantic_router_enabled')) !== 'off');
+      setMealReminders((await getSetting(db, 'meal_reminders_enabled')) === 'on');
     })();
   }, [backgroundEnabled, localRefresh, refreshToken]);
 
@@ -150,6 +152,17 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
     setAlarmStyle(next);
     const db = await getDatabase();
     await setSetting(db, 'alarm_style_enabled', next ? 'on' : 'off');
+  };
+
+  const toggleMealReminders = async () => {
+    const next = !mealReminders;
+    setMealReminders(next);
+    const db = await getDatabase();
+    await setSetting(db, 'meal_reminders_enabled', next ? 'on' : 'off');
+    try {
+      const { scheduleMealReminders, cancelMealReminders } = await import('../processing/mealReminders');
+      if (next) await scheduleMealReminders(); else await cancelMealReminders();
+    } catch { /* non-critical */ }
   };
 
   const toggleSemanticRouter = async () => {
@@ -455,6 +468,13 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           badge={alarmStyle ? 'On' : 'Off'}
           active={alarmStyle}
           onInfo={() => void toggleAlarmStyle()}
+        />
+        <SettingsRow
+          title="Meal photo reminders"
+          value={mealReminders ? 'On — gentle nudges at meal times to snap your food' : 'Off — no meal reminders'}
+          badge={mealReminders ? 'On' : 'Off'}
+          active={mealReminders}
+          onInfo={() => void toggleMealReminders()}
         />
         <SettingsRow
           title="Smarter answers"

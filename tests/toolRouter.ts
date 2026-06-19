@@ -52,6 +52,10 @@ ok('fastRoute tasks', fastRoute('what are my pending tasks') === 'tasks');
 ok('fastRoute health', fastRoute('how many calories left today') === 'health');
 ok('fastRoute reminders', fastRoute('what reminders do I have') === 'reminders');
 ok('fastRoute people', fastRoute('who is Monisha') === 'people');
+ok('fastRoute money_watch (subscriptions)', fastRoute('what subscriptions am I paying for') === 'money_watch');
+ok('fastRoute money_watch (bills)', fastRoute('any bills coming up soon') === 'money_watch');
+ok('fastRoute keep_in_touch', fastRoute("who haven't I talked to in a while") === 'keep_in_touch');
+ok('fastRoute reach out', fastRoute('who should I reach out to') === 'keep_in_touch');
 ok('fastRoute multi-domain → null (LLM decides)', fastRoute('how am I doing on health and money') === null);
 ok('fastRoute vague → null', fastRoute('what should I think about') === null);
 

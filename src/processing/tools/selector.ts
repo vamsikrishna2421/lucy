@@ -36,10 +36,12 @@ export function parseSelection(raw: string, question: string, knownNames: string
 // then the LLM selector decides (and can compose multiple tools, e.g. health + spending). Pure.
 const DOMAIN_PATTERNS: Array<{ tool: string; re: RegExp }> = [
   { tool: 'spending', re: /\b(spend|spent|spending|paid|payment|payments|expense|expenses|how much.*(cost|spend)|budget)\b/i },
+  { tool: 'money_watch', re: /\b(subscriptions?|recurring|renew|renews|renewal|bills? (due|coming)|due soon|over ?budget|overspend(ing)?|unusual charge|anomal)\b/i },
   { tool: 'tasks', re: /\b(tasks?|to-?dos?|to do|pending|action items?|what.*(do i need|should i do))\b/i },
   { tool: 'health', re: /\b(calorie|calories|kcal|weight|diet|nutrition|protein|carbs?|macro|steps?|sleep|workout|exercise|medication|medicine|meds?|dose|dosage|pill)\b/i },
   { tool: 'reminders', re: /\b(reminders?|remind me of|what.*remind)\b/i },
   { tool: 'people', re: /\b(who is|who'?s|tell me about|who have i|relationship with)\b/i },
+  { tool: 'keep_in_touch', re: /\b(reach out|out of touch|fallen out|neglect|keep in touch|gone quiet|who should i (call|text|message|reach)|haven'?t\s+(?:\w+\s+)?(talked|spoken|spoke|messaged|reached|seen|called|contacted))\b/i },
   { tool: 'knowledge', re: /\b(brain map|knowledge graph|how does .+ relate|what connects|keeps coming up|recurring (theme|topic))\b/i },
 ];
 

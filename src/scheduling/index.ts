@@ -339,7 +339,13 @@ export async function autoPlanDay(db: SQLiteDatabase, opts?: { horizonDays?: num
     const slots = findSlots({ meta, hardBlocks, resourceBlocks: [...resourceBlocks, ...virtual], availability: av, now, horizonDays, maxResults: 1 });
     if (!slots.length) { unplaced.push(meta.title); continue; }
     const s = slots[0];
-    virtual.push({ title: meta.title, start: s.start, end: s.end, resources: meta.resources, source: 'scheduled' });
+    // Lay auto-planned tasks out SEQUENTIALLY: treat each placed task as exclusive so the next one
+    // doesn't get stacked into the same slot just because their resources happen to coexist. Genuinely
+    // passive work (laundry, a download) keeps its real (overlappable) resources.
+    const planResources: TaskResources = meta.energy === 'passive'
+      ? meta.resources
+      : { axes: ['focus', 'self'] as TaskResources['axes'], location: meta.resources.location ?? null };
+    virtual.push({ title: meta.title, start: s.start, end: s.end, resources: planResources, source: 'scheduled' });
     proposals.push({
       todoId: t.id, title: meta.title, start: s.start, end: s.end,
       rationale: rationale(meta, s.start, s.end, s.reasons), resourceLabel: describeResources(meta.resources),

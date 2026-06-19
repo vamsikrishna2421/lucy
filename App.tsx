@@ -94,6 +94,7 @@ export default function App() {
   const [notificationDetail, setNotificationDetail] = useState<NotificationDetailPayload | null>(null);
   const [approvalTrigger, setApprovalTrigger] = useState(0);
   const [snapBusy, setSnapBusy] = useState(false);
+  const [updateReady, setUpdateReady] = useState(false);
   const [passiveState, setPassiveState] = useState<PassiveListenerState>(passiveListener.getState());
   const [meetingVisible, setMeetingVisible] = useState(false);
   const [meetingRecording, setMeetingRecording] = useState(false);
@@ -520,6 +521,19 @@ export default function App() {
       void passiveListener.stop();
     }
   }, [passiveState.status]);
+
+  // Auto OTA check on launch: silently fetch any new update; only surface a "Restart now" banner when
+  // one is actually ready. No manual "check for updates" needed; nothing shown when up to date.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const Updates = await import('expo-updates');
+        if (!Updates.isEnabled || __DEV__) return;
+        const res = await Updates.checkForUpdateAsync();
+        if (res.isAvailable) { await Updates.fetchUpdateAsync(); setUpdateReady(true); }
+      } catch { /* offline or no update — stay quiet */ }
+    })();
+  }, []);
 
   // Once the app is ready (past splash + not onboarding), surface the approval-cards inbox a beat
   // after Home renders, so pending review items greet the user when they open the app.
@@ -987,6 +1001,13 @@ export default function App() {
         <View style={styles.globalFace} pointerEvents="box-none">
           {renderLucyFace()}
         </View>
+        {/* Auto-update banner — only when a new bundle is fetched and ready to apply. */}
+        {updateReady ? (
+          <TouchableOpacity style={styles.updateBanner} activeOpacity={0.9} onPress={() => { void import('expo-updates').then((U) => U.reloadAsync()).catch(() => {}); }}>
+            <Ionicons name="sparkles" size={15} color="#0B0B0F" />
+            <Text style={styles.updateBannerText}>Update ready — tap to restart</Text>
+          </TouchableOpacity>
+        ) : null}
         {/* Camera FAB (bottom-right, where the old chat bubble was) — one-tap meal/note photo. */}
         {screen === 'dashboard' ? (
           <TouchableOpacity style={styles.cameraFab} activeOpacity={0.85} onPress={quickSnap} accessibilityLabel="Snap a photo">
@@ -1066,6 +1087,8 @@ const styles = StyleSheet.create({
   headerPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 48 },
   globalFace: { position: 'absolute', right: 16, top: 118, zIndex: 30, elevation: 30, alignItems: 'flex-end' },
   cameraFab: { position: 'absolute', right: 18, bottom: 104, width: 52, height: 52, borderRadius: 26, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center', zIndex: 40, elevation: 8, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+  updateBanner: { position: 'absolute', left: 16, right: 16, bottom: 92, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: LUCY_COLORS.primaryGlow, borderRadius: 14, paddingVertical: 11, zIndex: 45, elevation: 9, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+  updateBannerText: { color: '#0B0B0F', fontWeight: '800', fontSize: 13.5 },
   snapBusyOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
   snapBusyCard: { backgroundColor: LUCY_COLORS.surface, borderRadius: 18, padding: 26, alignItems: 'center', gap: 12, borderWidth: 1, borderColor: LUCY_COLORS.border },
   snapBusyText: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '600' },

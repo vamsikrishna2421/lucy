@@ -86,19 +86,75 @@ function detectWindow(text: string): TimeWindow {
   return null;
 }
 
-/** Best-effort deadline parse → ISO, or null. Handles today/tomorrow/by <weekday>. */
+const DEADLINE_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const DEADLINE_MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const DEADLINE_DAY_MS = 86_400_000;
+
+/**
+ * Best-effort deadline parse → ISO (end of that day), or null. ADDITIVE: earlier formats win, so the
+ * original behavior (today/tonight, tomorrow, by|before|due <weekday>) is unchanged; later branches only
+ * fire when those don't match. Also handles: next|this|on|coming <weekday>, "in N days/weeks",
+ * month+day ("Aug 31", "31 August"), and "the 15th". Powers the commitment guardian, move/lease
+ * autopilot, and scheduler — so it stays conservative (only confident matches resolve).
+ */
 export function parseDeadline(text: string, now = Date.now()): string | null {
   const t = text.toLowerCase();
   const d = new Date(now);
+  const eod = (date: Date) => { date.setHours(23, 59, 0, 0); return date.toISOString(); };
+
   if (/\b(today|tonight|by end of day|eod)\b/.test(t)) { d.setHours(23, 59, 0, 0); return d.toISOString(); }
   if (/\btomorrow\b/.test(t)) { d.setDate(d.getDate() + 1); d.setHours(23, 59, 0, 0); return d.toISOString(); }
-  const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  const m = /\b(?:by|before|due)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/.exec(t);
-  if (m) {
-    const target = days.indexOf(m[1]);
+
+  const by = /\b(?:by|before|due)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/.exec(t);
+  if (by) {
+    const target = DEADLINE_DAYS.indexOf(by[1]);
     let add = (target - d.getDay() + 7) % 7; if (add === 0) add = 7;
-    d.setDate(d.getDate() + add); d.setHours(23, 59, 0, 0); return d.toISOString();
+    d.setDate(d.getDate() + add); return eod(d);
   }
+
+  // "next | this | on | coming <weekday>"
+  const wd = /\b(next|this|on|coming)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/.exec(t);
+  if (wd) {
+    const target = DEADLINE_DAYS.indexOf(wd[2]);
+    let add = (target - d.getDay() + 7) % 7; if (add === 0) add = 7;
+    if (wd[1] === 'next') add += 7; // "next Friday" → the following week
+    d.setDate(d.getDate() + add); return eod(d);
+  }
+
+  // "in N days" / "in N weeks"
+  const inN = /\bin\s+(\d{1,3})\s+(day|days|week|weeks)\b/.exec(t);
+  if (inN) {
+    const n = parseInt(inN[1], 10);
+    d.setDate(d.getDate() + (inN[2].startsWith('week') ? n * 7 : n));
+    return eod(d);
+  }
+
+  // month + day ("aug 31", "august 31st") or day + month ("31 aug", "31st of august")
+  const MONTH = '(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)';
+  let mo = -1; let dayNum = -1;
+  const md = new RegExp(`\\b${MONTH}\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b`).exec(t);
+  if (md) { mo = DEADLINE_MONTHS.indexOf(md[1].slice(0, 3)); dayNum = parseInt(md[2], 10); }
+  else {
+    const dm = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?${MONTH}\\b`).exec(t);
+    if (dm) { mo = DEADLINE_MONTHS.indexOf(dm[2].slice(0, 3)); dayNum = parseInt(dm[1], 10); }
+  }
+  if (mo >= 0 && dayNum >= 1 && dayNum <= 31) {
+    const cand = new Date(now); cand.setMonth(mo, dayNum); cand.setHours(23, 59, 0, 0);
+    if (cand.getTime() < now - DEADLINE_DAY_MS) cand.setFullYear(cand.getFullYear() + 1); // already passed → next year
+    return cand.toISOString();
+  }
+
+  // "the 15th" / "on the 5th" (ordinal required, so "the 2 items" never matches)
+  const dom = /\bthe\s+(\d{1,2})(?:st|nd|rd|th)\b/.exec(t);
+  if (dom) {
+    const n = parseInt(dom[1], 10);
+    if (n >= 1 && n <= 31) {
+      const cand = new Date(now); cand.setDate(n); cand.setHours(23, 59, 0, 0);
+      if (cand.getTime() < now - DEADLINE_DAY_MS) cand.setMonth(cand.getMonth() + 1); // passed → next month
+      return cand.toISOString();
+    }
+  }
+
   return null;
 }
 

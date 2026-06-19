@@ -10,6 +10,7 @@ import { getDatabase } from '../db';
 import { listProjects, createProject, deleteProject, renameProject, projectActivity, projectNotes, type ProjectRow, type ProjectNote } from '../db/projects';
 import { deriveProjectSuggestions, dismissProjectSuggestion, mergeSuggestionIntoProject, splitHeadline, type ProjectSuggestion } from '../processing/projectAutopilot';
 import { getMoveSignal, dismissMoveSignal, createMovePlan, type StoredMoveSignal } from '../processing/movePlan';
+import { getTripSignal, dismissTripSignal, createTripPlan, type StoredTripSignal } from '../processing/tripPlanner';
 
 export function ProjectsTab() {
   const [projects, setProjects] = useState<ProjectRow[]>([]);
@@ -26,12 +27,14 @@ export function ProjectsTab() {
   const [suggestions, setSuggestions] = useState<ProjectSuggestion[]>([]);
   const [mergeFor, setMergeFor] = useState<ProjectSuggestion | null>(null);
   const [moveSignal, setMoveSignal] = useState<StoredMoveSignal | null>(null);
+  const [tripSignal, setTripSignal] = useState<StoredTripSignal | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
     setProjects(await listProjects(db));
     try { setSuggestions(await deriveProjectSuggestions(db)); } catch { /* optional */ }
     try { setMoveSignal(await getMoveSignal(db)); } catch { /* optional */ }
+    try { setTripSignal(await getTripSignal(db)); } catch { /* optional */ }
     setLoading(false);
   }, []);
 
@@ -72,6 +75,25 @@ export function ProjectsTab() {
     setMoveSignal(null);
     const db = await getDatabase();
     await dismissMoveSignal(db);
+  };
+  const setUpTrip = async () => {
+    if (!tripSignal) return;
+    const sig = tripSignal;
+    setTripSignal(null);
+    const db = await getDatabase();
+    const res = await createTripPlan(db, sig);
+    await load();
+    Alert.alert(
+      'Trip plan ready',
+      res.reminderAt
+        ? `Created "${res.projectName}" with ${res.steps} steps. I'll nudge you to check in on ${new Date(res.reminderAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.`
+        : `Created "${res.projectName}" with ${res.steps} steps to work through.`,
+    );
+  };
+  const dismissTrip = async () => {
+    setTripSignal(null);
+    const db = await getDatabase();
+    await dismissTripSignal(db);
   };
   useEffect(() => { void load(); }, [load]);
 
@@ -141,6 +163,19 @@ export function ProjectsTab() {
             <View style={styles.moveActions}>
               <TouchableOpacity style={styles.moveCta} onPress={() => void setUpMove()}><Text style={styles.moveCtaT}>Set up move plan</Text></TouchableOpacity>
               <TouchableOpacity style={styles.moveDismiss} onPress={() => void dismissMove()}><Text style={styles.moveDismissT}>Not a move</Text></TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {tripSignal && (
+          <View style={styles.moveBox}>
+            <Text style={styles.moveHead}>✦ LOOKS LIKE YOU’RE PLANNING A TRIP{tripSignal.destination ? ` TO ${tripSignal.destination.toUpperCase()}` : ''}</Text>
+            <Text style={styles.moveBody}>
+              Want LUCY to set up a trip plan? It builds a pre-trip checklist{tripSignal.dates.some((d) => d.label === 'Departure') ? ' and nudges you to check in on time' : ''}.
+            </Text>
+            <View style={styles.moveActions}>
+              <TouchableOpacity style={styles.moveCta} onPress={() => void setUpTrip()}><Text style={styles.moveCtaT}>Set up trip plan</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.moveDismiss} onPress={() => void dismissTrip()}><Text style={styles.moveDismissT}>Not a trip</Text></TouchableOpacity>
             </View>
           </View>
         )}

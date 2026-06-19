@@ -307,6 +307,11 @@ async function persistExtraction(
       const { maybeFlagMoveSignal } = await import('./movePlan');
       await maybeFlagMoveSignal(db, extraction, capture);
     } catch { /* non-critical */ }
+    // Trip co-pilot: if this capture signals travel, remember it so the Projects tab can offer a trip plan.
+    try {
+      const { maybeFlagTripSignal } = await import('./tripPlanner');
+      await maybeFlagTripSignal(db, extraction, capture);
+    } catch { /* non-critical */ }
     // Persist mood entry — EVERY capture contributes a mood point. When the LLM returned only the bare
     // 'neutral/medium' default, run the free on-device sentiment so a real feeling isn't lost.
     {

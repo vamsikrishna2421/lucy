@@ -3,7 +3,7 @@
  * Higher = better. Used to rank the conflict-free slots the scheduler found.
  */
 import type { AvailabilityProfile, SchedTaskMeta } from './types';
-import { isInPeakWindow } from './freeBusy';
+import { isInPeakWindow, isInLowWindow } from './freeBusy';
 import { HOUR, DAY, fmtDay, fmtTime, localMinutes, startOfLocalDay } from './time';
 
 export interface ScoreResult {
@@ -23,12 +23,16 @@ export function scoreSlot(
 
   // 1) Energy match — the biggest lever for deep work.
   const peak = isInPeakWindow(av, startMs, endMs);
+  const low = isInLowWindow(av, startMs, endMs);
   if (meta.energy === 'deep') {
     if (peak) { score += 40; reasons.push('your peak focus window'); }
+    else if (low) { score -= 45; } // hard-avoid the learned afternoon crash for demanding work
     else { score -= 25; }
   } else if (meta.energy === 'shallow') {
     // Shallow work is fine off-peak; gently prefer NOT burning a peak window on it.
     if (peak) score -= 8;
+    // Lighter/admin work is a GOOD use of a low-energy dip — actively prefer it there.
+    if (low) { score += 10; reasons.push('fits your low-energy stretch'); }
     const lm = localMinutes(startMs);
     if (lm >= av.workStartMin + 240) { score += 6; reasons.push('good for lighter work'); }
   }

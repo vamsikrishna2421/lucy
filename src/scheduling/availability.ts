@@ -24,6 +24,8 @@ const DEFAULTS: AvailabilityProfile = {
   peakWindows: [
     { label: 'Morning focus', startMin: 9 * 60, endMin: 11 * 60 + 30 },
   ],
+  // No assumed dip until the energy curve learns one from real mood data (avoid imposing a fake crash).
+  lowWindows: [],
   inferred: true,
   confirmedAt: null,
 };
@@ -54,11 +56,13 @@ export async function inferAvailability(db: SQLiteDatabase): Promise<Availabilit
     profile.peakWindows = [{ label: 'Morning focus', startMin: wake + 60, endMin: wake + 210 }];
     if (profile.workStartMin < wake + 30) profile.workStartMin = Math.max(profile.workStartMin, wake + 30);
   }
-  // Refine the peak window from the actual energy curve if there's enough mood data.
+  // Refine the peak window AND learn a low-energy dip from the actual energy curve, when there's
+  // enough mood data. The dip lets the scorer keep demanding work out of the user's real crash hours.
   try {
-    const { computePeakWindow } = await import('./energy');
-    const learned = await computePeakWindow(db);
-    if (learned) profile.peakWindows = [learned];
+    const { computeEnergyCurve } = await import('./energy');
+    const curve = await computeEnergyCurve(db);
+    if (curve.peak) profile.peakWindows = [curve.peak];
+    if (curve.trough) profile.lowWindows = [curve.trough];
   } catch { /* keep the wake-derived default */ }
   profile.inferred = true;
   profile.confirmedAt = null;

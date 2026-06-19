@@ -17,6 +17,7 @@ const AV: AvailabilityProfile = {
   bufferMin: 10, maxFocusMinPerDay: 240, workDays: [1, 2, 3, 4, 5],
   protectedWindows: [{ label: 'Lunch', startMin: 12 * 60 + 30, endMin: 13 * 60 + 30 }],
   peakWindows: [{ label: 'AM', startMin: 9 * 60, endMin: 11 * 60 + 30 }],
+  lowWindows: [{ label: 'Dip', startMin: 15 * 60, endMin: 18 * 60 }],
   inferred: true, confirmedAt: null,
 };
 

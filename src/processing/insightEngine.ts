@@ -14,7 +14,8 @@ import { getSetting, setSetting } from '../db/settings';
 import { listRecentCaptures } from '../db/captures';
 import { getCapturePatterns } from '../db/deviceStats';
 import { getMoodTrend } from './temporalEngine';
-import { getPersonInsights } from './relationshipEngine';
+import { getPersonInsights, getKeepWarmNudges } from './relationshipEngine';
+import { getMoneyInsights } from './moneyWatch';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
 import { promptAI } from '../ai/openai';
 import { resolveRemoteAvailability } from '../ai/provider';
@@ -53,11 +54,13 @@ export async function generateDailyInsights(db: SQLiteDatabase): Promise<Generat
   if (!available) return [];
 
   // Gather all context
-  const [captures, patterns, moodTrend, personInsights, profile, deviceCtx] = await Promise.all([
+  const [captures, patterns, moodTrend, personInsights, keepWarm, moneyInsights, profile, deviceCtx] = await Promise.all([
     listRecentCaptures(db, 30),
     getCapturePatterns(db),
     getMoodTrend(db, 14),
     getPersonInsights(db),
+    getKeepWarmNudges(db).catch(() => []),
+    getMoneyInsights(db).catch(() => []),
     getUserProfile(db),
     getDeviceContext(),
   ]);
@@ -75,6 +78,8 @@ export async function generateDailyInsights(db: SQLiteDatabase): Promise<Generat
     `Capture patterns: Most active at ${patterns.topHour}:00, top day is ${patterns.topDay}`,
     `Mood this week: ${moodTrend.dominant} (${Math.round(moodTrend.positiveRatio * 100)}% positive)`,
     `People insights: ${personInsights.join('; ') || 'None yet'}`,
+    `Relationships going quiet: ${keepWarm.map((k) => k.message).join(' ') || 'None'}`,
+    `Money signals (on-device, from logged expenses): ${moneyInsights.join(' ') || 'None'}`,
     `Device: ${deviceInfo}`,
     `Recent captures:\n${capturesSummary}`,
   ].join('\n\n');

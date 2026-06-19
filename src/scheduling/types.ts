@@ -66,6 +66,7 @@ export interface AvailabilityProfile {
   workDays: number[];    // 0=Sun..6=Sat the user works (default Mon–Fri); weekends are open
   protectedWindows: DailyWindow[]; // includes suggested healthy-habit windows (walk/lunch/gym/dinner)
   peakWindows: DailyWindow[]; // high-energy (deep work fits best here)
+  lowWindows: DailyWindow[];  // low-energy dips (the "afternoon crash") — keep deep work OUT, light work OK
   inferred: boolean;
   confirmedAt: string | null;
 }

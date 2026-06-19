@@ -1,7 +1,8 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getSetting, setSetting } from '../db/settings';
 import { getOverdueItems, getRelationshipGaps, getMoodTrend } from './temporalEngine';
-import { getPersonInsights } from './relationshipEngine';
+import { getPersonInsights, getKeepWarmNudges } from './relationshipEngine';
+import { getMoneyInsights } from './moneyWatch';
 import { countOpenLoops } from '../db/openLoops';
 import { countFollowUps } from '../db/followUps';
 import { sendGuardianNotification } from './notifications';
@@ -72,10 +73,20 @@ export async function sendMorningBrief(db: SQLiteDatabase): Promise<void> {
     parts.push(`${items.join(' and ')} still waiting.`);
   }
 
-  // Relationship gaps
-  if (personInsights.length > 0) {
-    parts.push(personInsights[0]);
+  // Relationship gaps — prefer a warm keep-warm nudge over the dry "haven't mentioned" line.
+  try {
+    const keepWarm = await getKeepWarmNudges(db);
+    if (keepWarm.length > 0) parts.push(keepWarm[0].message);
+    else if (personInsights.length > 0) parts.push(personInsights[0]);
+  } catch {
+    if (personInsights.length > 0) parts.push(personInsights[0]);
   }
+
+  // Money that watches itself — surface the single most actionable money signal (bill due / anomaly / drift).
+  try {
+    const money = await getMoneyInsights(db);
+    if (money.length > 0) parts.push(money[0]);
+  } catch { /* non-critical */ }
 
   // Mood trend
   if (moodTrend.recentTones.length > 0) {

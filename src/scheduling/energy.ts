@@ -12,14 +12,13 @@ function hourOf(ts: string): number {
   return Number.isNaN(d.getTime()) ? -1 : d.getHours();
 }
 
-/** Best contiguous ~2.5h high-energy window (within 6:00–22:00), or null if data is sparse. */
-export async function computePeakWindow(db: SQLiteDatabase): Promise<DailyWindow | null> {
-  let rows: Array<{ created_at: string; energy: string | null; tone: string | null }> = [];
-  try {
-    rows = await db.getAllAsync('SELECT created_at, energy, tone FROM mood_entries WHERE created_at IS NOT NULL');
-  } catch { return null; }
-  if (rows.length < 15) return null;
+export interface EnergyCurve {
+  peak: DailyWindow | null;   // best ~3h high-energy window for deep work
+  trough: DailyWindow | null; // worst ~3h low-energy window (the "afternoon crash") to protect from deep work
+}
 
+/** Per-hour energy score (−99 = no data) built from mood_entries. Pure-ish; shared by peak + trough. */
+function hourlyEnergy(rows: Array<{ created_at: string; energy: string | null; tone: string | null }>): { avg: number[]; cnt: number[] } {
   const sum = new Array(24).fill(0);
   const cnt = new Array(24).fill(0);
   for (const r of rows) {
@@ -32,16 +31,41 @@ export async function computePeakWindow(db: SQLiteDatabase): Promise<DailyWindow
     if (t === 'positive' || t === 'excited') s += 1; else if (t === 'low' || t === 'negative' || t === 'stressed' || t === 'frustrated') s -= 1;
     sum[h] += s; cnt[h] += 1;
   }
-  const avg = sum.map((v, i) => (cnt[i] > 0 ? v / cnt[i] : -99));
+  return { avg: sum.map((v, i) => (cnt[i] > 0 ? v / cnt[i] : -99)), cnt };
+}
 
-  // Slide a 3-hour window over 6:00–22:00, maximizing average of hours with data.
-  let bestStart = -1; let bestScore = -1e9;
+/** Learn both the peak (best) and trough (worst) ~3h windows from the user's mood/energy history. */
+export async function computeEnergyCurve(db: SQLiteDatabase): Promise<EnergyCurve> {
+  let rows: Array<{ created_at: string; energy: string | null; tone: string | null }> = [];
+  try {
+    rows = await db.getAllAsync('SELECT created_at, energy, tone FROM mood_entries WHERE created_at IS NOT NULL');
+  } catch { return { peak: null, trough: null }; }
+  if (rows.length < 15) return { peak: null, trough: null };
+
+  const { avg, cnt } = hourlyEnergy(rows);
+
+  // Slide a 3-hour window over the day; track both the highest and lowest-scoring window with data.
+  let bestStart = -1, bestScore = -1e9;
+  let worstStart = -1, worstScore = 1e9;
   for (let h = 6; h <= 19; h++) {
     const hrs = [h, h + 1, h + 2].filter((x) => cnt[x] > 0);
     if (hrs.length < 2) continue;
     const score = hrs.reduce((a, x) => a + avg[x], 0) / hrs.length;
     if (score > bestScore) { bestScore = score; bestStart = h; }
+    if (score < worstScore) { worstScore = score; worstStart = h; }
   }
-  if (bestStart < 0 || bestScore <= 0) return null; // no clearly-positive window
-  return { label: 'Peak focus', startMin: bestStart * 60, endMin: (bestStart + 3) * 60 };
+
+  const peak = bestStart >= 0 && bestScore > 0
+    ? { label: 'Peak focus', startMin: bestStart * 60, endMin: (bestStart + 3) * 60 }
+    : null;
+  // Only treat a window as a genuine dip if it's clearly negative AND distinct from the peak.
+  const trough = worstStart >= 0 && worstScore < -0.4 && worstStart !== bestStart
+    ? { label: 'Low-energy dip', startMin: worstStart * 60, endMin: (worstStart + 3) * 60 }
+    : null;
+  return { peak, trough };
+}
+
+/** Best contiguous ~3h high-energy window (within 6:00–22:00), or null if data is sparse. */
+export async function computePeakWindow(db: SQLiteDatabase): Promise<DailyWindow | null> {
+  return (await computeEnergyCurve(db)).peak;
 }

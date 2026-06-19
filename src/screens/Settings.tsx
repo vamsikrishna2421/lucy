@@ -22,6 +22,7 @@ import { ScheduledRemindersManager } from '../components/ScheduledRemindersManag
 import { LearnedProfilePanel } from '../components/LearnedProfilePanel';
 import { LaptopAccessPanel } from '../components/LaptopAccessPanel';
 import { getUserProfile, saveUserProfile, type UserProfile } from '../db/userProfile';
+import { LucyPeek } from '../components/LucyPeek';
 
 interface SettingsScreenProps {
   backgroundEnabled: boolean;
@@ -442,6 +443,9 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       <Text style={styles.subtitle}>Quiet controls for your memory.</Text>
 
       {/* ─── You & profile ─────────────────────────────────────────────── */}
+      {/* Lucy peeks over the first settings card — overflow visible + top room keep her unclipped */}
+      <View style={styles.peekAnchor}>
+      <LucyPeek />
       <SettingsGroup
         icon="🪞"
         title="You & profile"
@@ -499,6 +503,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           />
         ) : null}
       </SettingsGroup>
+      </View>
 
       {/* ─── AI & intelligence ─────────────────────────────────────────── */}
       <SettingsGroup
@@ -1808,6 +1813,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 30, letterSpacing: -0.8, fontWeight: '700', color: LUCY_COLORS.textDark, marginBottom: 6 },
   subtitle: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 4, marginBottom: 18, lineHeight: 20 },
   list: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 21, borderWidth: 1, borderColor: LUCY_COLORS.border, overflow: 'hidden' },
+  // Holds LucyPeek over the top edge of the first settings card — needs top room + no clipping.
+  peekAnchor: { marginTop: 34, overflow: 'visible' },
   // ─── Collapsible group (accordion) ──────────────────────────────────────
   group: { backgroundColor: LUCY_COLORS.surface, borderRadius: 20, borderWidth: 1, borderColor: LUCY_COLORS.border, marginBottom: 12, overflow: 'hidden' },
   groupExpanded: { borderColor: LUCY_COLORS.primaryLine, backgroundColor: LUCY_COLORS.surfaceRaised },

@@ -40,6 +40,19 @@ function mk(title: string, start: number, end: number, source: Block['source']):
   return { title, start, end, resources: EXCLUSIVE, source };
 }
 
+/** Whether a candidate span overlaps any of the given daily windows on its local day. */
+function overlapsWindows(windows: AvailabilityProfile['peakWindows'], startMs: number, endMs: number): boolean {
+  const dayStart = startOfLocalDay(startMs);
+  const dow = new Date(startMs).getDay();
+  return windows.some((w) => {
+    if (!windowAppliesOn(w, dow)) return false;
+    const ws = dayStart + w.startMin * 60_000;
+    const we = dayStart + w.endMin * 60_000;
+    // Overlap (not strict containment) so a span that bleeds into a dip is still flagged.
+    return startMs < we && endMs > ws;
+  });
+}
+
 /** Whether a candidate span sits inside a peak-energy window on its day. */
 export function isInPeakWindow(av: AvailabilityProfile, startMs: number, endMs: number): boolean {
   const dayStart = startOfLocalDay(startMs);
@@ -50,4 +63,9 @@ export function isInPeakWindow(av: AvailabilityProfile, startMs: number, endMs: 
     const we = dayStart + w.endMin * 60_000;
     return startMs >= ws && endMs <= we;
   });
+}
+
+/** Whether a candidate span overlaps a learned low-energy dip on its day. */
+export function isInLowWindow(av: AvailabilityProfile, startMs: number, endMs: number): boolean {
+  return overlapsWindows(av.lowWindows ?? [], startMs, endMs);
 }

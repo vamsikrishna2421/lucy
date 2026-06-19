@@ -90,3 +90,62 @@ export async function getPersonInsights(db: SQLiteDatabase): Promise<string[]> {
 
   return insights.slice(0, 3);
 }
+
+// ─── Keep-warm nudges (Vamsi top-6 #3) ──────────────────────────────────────────────────────────
+// People LUCY knows (mentioned enough to matter) who've gone quiet. Warm, human copy — never a
+// dashboard metric — plus a one-tap "remind me to reach out" action.
+
+export interface KeepWarmNudge {
+  name: string;
+  daysSince: number;
+  message: string;     // warm, first-person companion voice
+  action: string;      // the one-tap reminder label
+}
+
+function days(ago: number): string {
+  if (ago >= 60) return `${Math.round(ago / 30)} months`;
+  if (ago >= 14) return `${Math.round(ago / 7)} weeks`;
+  return `${ago} days`;
+}
+
+/** Warm, human reach-out nudges for known people who've gone quiet. Cooler thresholds for the
+ *  people the user talks about most (a close contact going 2 weeks quiet matters more). */
+export async function getKeepWarmNudges(db: SQLiteDatabase): Promise<KeepWarmNudge[]> {
+  const people = await getAllPersonContexts(db);
+  const now = Date.now();
+  const nudges: KeepWarmNudge[] = [];
+
+  for (const p of people) {
+    if (!p.lastMentioned || p.pendingFollowUps > 0) continue; // pending follow-ups are their own surface
+    if (p.mentionCount < 3) continue; // only people who clearly matter to the user
+    const last = new Date(p.lastMentioned.includes('T') ? p.lastMentioned : `${p.lastMentioned.replace(' ', 'T')}Z`);
+    const ago = Math.floor((now - last.getTime()) / 86_400_000);
+    // The more often they normally come up, the sooner "quiet" feels notable.
+    const threshold = p.mentionCount >= 8 ? 14 : p.mentionCount >= 5 ? 21 : 30;
+    if (ago < threshold) continue;
+
+    const close = p.mentionCount >= 8;
+    const message = close
+      ? `You and ${p.name} usually talk more than this — it's been ${days(ago)}. Want me to remind you to reach out?`
+      : `It's been ${days(ago)} since ${p.name} came up. Maybe send a quick hello?`;
+    nudges.push({ name: p.name, daysSince: ago, message, action: `Remind me to message ${p.name}` });
+  }
+
+  // Most-overdue, most-important first; keep it to a calm few.
+  return nudges.sort((a, b) => b.daysSince - a.daysSince).slice(0, 3);
+}
+
+/** One-tap action behind a keep-warm nudge: drop a gentle reminder to reach out to this person. */
+export async function remindToMessage(db: SQLiteDatabase, name: string): Promise<void> {
+  const [{ insertCapture }, { insertReminder }] = await Promise.all([
+    import('../db/captures'),
+    import('../db/reminders'),
+  ]);
+  const text = `Message ${name}`;
+  // Tomorrow morning by default — a soft nudge, not an alarm.
+  const when = new Date(Date.now() + 86_400_000);
+  when.setHours(10, 0, 0, 0);
+  const captureId = await insertCapture(db, 'text', `Keep in touch with ${name}`, 'normal');
+  await db.runAsync('UPDATE captures SET processed = 1, processed_at = CURRENT_TIMESTAMP, next_attempt_at = NULL, extracted_title = ? WHERE id = ?', text, captureId);
+  await insertReminder(db, captureId, { text, time: when.toISOString(), urgency: 'low' }, 'normal');
+}

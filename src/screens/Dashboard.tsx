@@ -5,6 +5,7 @@ import { ReviewCardDeck, type ReviewCard } from '../components/ReviewCardDeck';
 import { MeetingShareBar } from '../components/MeetingShareBar';
 import { formatMeetingRowText } from '../processing/meetingFormat';
 import { LUCY_COLORS } from '../config/colors';
+import { FadeInUp } from '../components/Motion';
 import { getDatabase } from '../db';
 import { captureStatus, listCaptureUpdates, listRecentCaptures, listListenSessions, type CaptureRow, type ListenSessionGroup } from '../db/captures';
 import { answerContextRequest, listOpenContextRequests, type ContextRequestRow } from '../db/contextRequests';
@@ -2639,7 +2640,11 @@ function TimelineView({
               </>
             )}
           </View>
-        ) : groups.map((group) => (
+        ) : groups.map((group, gi) => {
+          // Flat index across all groups so the entrance cascade is continuous down the page;
+          // capped inside FadeInUp's delay below so a long timeline never has a sluggish tail.
+          const groupBase = groups.slice(0, gi).reduce((n, g) => n + g.items.length, 0);
+          return (
           <View key={group.dateKey}>
             {/* Date header */}
             <View style={styles.tlDateHeader}>
@@ -2656,10 +2661,12 @@ function TimelineView({
               ).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
               const isExpanded = expanded[item.id];
               const isLast = idx === group.items.length - 1;
+              // Cap the cascade at 8 items (~440ms) so later cards just fade in promptly.
+              const enterDelay = Math.min(groupBase + idx, 8) * 55;
 
               return (
+                <FadeInUp key={item.id} delay={enterDelay}>
                 <TouchableOpacity
-                  key={item.id}
                   style={styles.tlRow}
                   onPress={() => {
                     const nowExpanded = !expanded[item.id];
@@ -2839,10 +2846,12 @@ function TimelineView({
                     </View>
                   </View>
                 </TouchableOpacity>
+                </FadeInUp>
               );
             })}
           </View>
-        ))}
+          );
+        })}
         <View style={{ height: 20 }} />
       </ScrollView>
 

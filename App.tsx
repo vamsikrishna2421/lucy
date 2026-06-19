@@ -39,6 +39,7 @@ import ConversationModal from './src/components/ConversationModal';
 import { AlarmOverlay } from './src/components/AlarmOverlay';
 import { ApprovalInbox } from './src/components/ApprovalInbox';
 import { LucyPeek } from './src/components/LucyPeek';
+import { ScreenFade } from './src/components/Motion';
 import { wakeWord, type WakeWordStatus } from './src/voice/wakeWord';
 import { conversation, type ConvoState } from './src/voice/conversation';
 
@@ -893,7 +894,7 @@ export default function App() {
               fetch completes, making newly-added captures appear to be missing. */}
           {ready ? (
             <>
-              <View style={{ flex: 1, display: screen === 'capture' ? 'flex' : 'none' }}>
+              <ScreenFade active={screen === 'capture'} style={{ flex: 1 }}>
                 <CaptureScreen
                   refreshToken={refreshToken}
                   passiveState={passiveState}
@@ -906,8 +907,8 @@ export default function App() {
                     void drainQueue();
                   }}
                 />
-              </View>
-              <View style={{ flex: 1, display: screen === 'dashboard' ? 'flex' : 'none' }}>
+              </ScreenFade>
+              <ScreenFade active={screen === 'dashboard'} style={{ flex: 1 }}>
                 <DashboardScreen
                   refreshToken={refreshToken}
                   onAskAbout={(q) => goToDashView('Ask Lucy', q)}
@@ -916,8 +917,8 @@ export default function App() {
                   onViewChange={setDashCurrentView}
                   initialAskQuestion={askInitialQuestion}
                 />
-              </View>
-              <View style={{ flex: 1, display: screen === 'settings' ? 'flex' : 'none' }}>
+              </ScreenFade>
+              <ScreenFade active={screen === 'settings'} style={{ flex: 1 }}>
                 <SettingsScreen
                   refreshToken={refreshToken}
                   backgroundEnabled={backgroundEnabled}
@@ -928,7 +929,7 @@ export default function App() {
                   onChangeWakeWord={setWakeWordPreference}
                   onStartTour={() => { setScreen('dashboard'); startGuidedTour(false); }}
                 />
-              </View>
+              </ScreenFade>
             </>
           ) : null}
         </View>

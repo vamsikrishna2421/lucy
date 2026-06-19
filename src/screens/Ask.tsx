@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { LucyEmptyState } from '../components/LucyEmptyState';
+import { FadeInUp, PressableScale, Stagger } from '../components/Motion';
 import { getDatabase } from '../db';
 import {
   createAskThread,
@@ -331,16 +332,19 @@ export function AskScreen({ initialQuestion }: { initialQuestion?: string } = {}
             {messages.length === 1 ? (
               <View style={{ gap: 8, paddingTop: 8 }}>
                 <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, paddingHorizontal: 4 }}>QUICK QUESTIONS</Text>
-                {QUICK_QUESTIONS.map((q) => (
-                  <TouchableOpacity
-                    key={q}
-                    style={styles.suggestion}
-                    onPress={() => { setQuestion(q); void ask(q); }}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={styles.suggestionText}>{q}</Text>
-                  </TouchableOpacity>
-                ))}
+                <Stagger initialDelay={40}>
+                  {QUICK_QUESTIONS.map((q) => (
+                    <FadeInUp key={q}>
+                      <PressableScale
+                        style={styles.suggestion}
+                        onPress={() => { setQuestion(q); void ask(q); }}
+                        accessibilityLabel={q}
+                      >
+                        <Text style={styles.suggestionText}>{q}</Text>
+                      </PressableScale>
+                    </FadeInUp>
+                  ))}
+                </Stagger>
               </View>
             ) : null}
             {asking ? (

@@ -27,6 +27,7 @@ import {
 } from 'expo-speech-recognition';
 import { Ionicons } from '@expo/vector-icons';
 import { LUCY_COLORS } from '../config/colors';
+import { FadeInUp, Stagger } from '../components/Motion';
 import { getDatabase } from '../db';
 import { listPendingTodos, archiveTodo, type TodoRow } from '../db/todos';
 import { enqueueTranscript, analyzeTranscript } from '../processing/extract';
@@ -821,15 +822,18 @@ export function CaptureScreen({
           </View>
         ) : (
           <>
-            {/* Category cards — tap to open overlay checklist */}
+            {/* Category cards — tap to open overlay checklist. Gentle staggered entrance on mount. */}
             <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-              {categories.map((cat) => (
-                <CategoryCard
-                  key={cat.id}
-                  category={cat}
-                  onPress={() => setOpenCategory(cat)}
-                />
-              ))}
+              <Stagger>
+                {categories.map((cat) => (
+                  <FadeInUp key={cat.id}>
+                    <CategoryCard
+                      category={cat}
+                      onPress={() => setOpenCategory(cat)}
+                    />
+                  </FadeInUp>
+                ))}
+              </Stagger>
             </View>
 
             {done.length > 0 ? (

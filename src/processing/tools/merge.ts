@@ -49,6 +49,7 @@ export async function mergeResults(question: string, results: Array<{ name: stri
       + 'Each block is tagged with the tool that produced it. For any figure, TRUST the dedicated structured tool for its domain: '
       + 'use [spending] for amounts actually spent, [health] for calories/steps, [tasks]/[reminders] for counts. '
       + 'Numbers found inside [memory] notes are context only (e.g. a stated budget) — never present them as the actual spent/eaten amount, and if they differ from a structured tool, label them as a budget/plan, not actuals. '
+      + 'Preserve each tool\'s EXACT timeframe — if [spending] says "in total" (all-time), do NOT call it "this month"; keep the period it stated. '
       + 'Be warm, direct, plain text, under 160 words. Address the user as "you".';
     const user = `User asked: ${question}\n\nTool outputs:\n${labeled}`;
     const text = await promptAI(system, user, openAIKey);

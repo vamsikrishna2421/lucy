@@ -16,6 +16,9 @@ const LOCATIONS: Array<[RegExp, string]> = [
   [/\b(restaurant|lunch with|dinner with|cafe|coffee with)\b/i, 'restaurant'],
 ];
 const PASSIVE_RE = /\b(laundry|dishwasher|wash(ing)? machine|download|backup|upload|charge|charging|soak|marinate|defrost|boil|let .* (run|rest|rise|prove)|water the plants)\b/i;
+// Low-attention leisure media — light enough to ride ALONGSIDE another task (gym + a YouTube watchlist).
+// Treated like passive so it holds no exclusive focus and can run in parallel.
+const LEISURE_RE = /\b(watch(ing)?\s+(yt|youtube|tv|netflix|hulu|prime|a movie|movies|the game|a show|shows|series|episodes?|videos?)|youtube|netflix|hulu|a podcast|podcasts?|listen(ing)?\s+to\s+(music|a podcast|podcasts|something)|scroll(ing)?)\b/i;
 const VOICE_RE = /\b(call|phone|ring|dial|standup|stand-up|sync|interview|discuss|catch up|1:1|one on one|talk to|speak (to|with)|meeting|meet with)\b/i;
 const HANDS_RE = /\b(cook|bake|clean|tidy|repair|fix|build|assemble|paint|wash|chop|iron|garden|wrap)\b/i;
 const DEEP_RE = /\b(write|draft|code|program|design|study|learn|research|analy[sz]e|plan|prepare|read|review|architect|outline|practice|deep work)\b/i;
@@ -93,7 +96,7 @@ export function classifyTask(text: string, opts?: { durationMin?: number; deadli
   const t = (text || '').trim();
   const lower = t.toLowerCase();
   const location = detectLocation(lower);
-  const isPassive = PASSIVE_RE.test(lower) && !DEEP_RE.test(lower);
+  const isPassive = (PASSIVE_RE.test(lower) || LEISURE_RE.test(lower)) && !DEEP_RE.test(lower);
   const isVoice = VOICE_RE.test(lower);
   const isHands = HANDS_RE.test(lower) && !isPassive;
   const isDeep = DEEP_RE.test(lower);

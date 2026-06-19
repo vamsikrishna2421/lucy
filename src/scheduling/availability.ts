@@ -84,6 +84,17 @@ export async function getAvailability(db: SQLiteDatabase): Promise<AvailabilityP
       const LEGACY: Array<[string, number]> = [['Morning walk', 420], ['Lunch', 750], ['Gym', 1080], ['Dinner', 1170]];
       merged.protectedWindows = (Array.isArray(s.protectedWindows) ? s.protectedWindows : [])
         .filter((w) => !LEGACY.some(([l, st]) => w.label === l && w.startMin === st));
+      // Backfill the learned low-energy dip for profiles confirmed before lowWindows existed. The dip is
+      // an internal scheduling hint (not a user-edited window), so we compute it live from current mood
+      // data — keeping it fresh as more energy history accrues, without disturbing the user's confirmed
+      // work/sleep/peak settings.
+      if (!Array.isArray(s.lowWindows) || s.lowWindows.length === 0) {
+        try {
+          const { computeEnergyCurve } = await import('./energy');
+          const curve = await computeEnergyCurve(db);
+          merged.lowWindows = curve.trough ? [curve.trough] : [];
+        } catch { merged.lowWindows = []; }
+      }
       return merged;
     } catch { /* fall through */ }
   }

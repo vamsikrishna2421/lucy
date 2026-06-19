@@ -9,6 +9,7 @@ import type { AvailabilityProfile, Block, SchedTaskMeta, SlotSuggestion, TimeWin
 import { MIN, localMinutes, localDow, overlaps, startOfLocalDay, DAY, HOUR } from './time';
 import { canCoexist } from './resources';
 import { scoreSlot } from './scorer';
+import { loadOf, scoreLoad, type BlockLoad } from './load';
 
 const STEP_MIN = 15;
 
@@ -59,6 +60,11 @@ export function findSlots(input: FindSlotsInput): SlotSuggestion[] {
   // Start search at the next STEP boundary after lead.
   let from = Math.ceil(lead / (STEP_MIN * MIN)) * (STEP_MIN * MIN);
 
+  // Effort-load context (brain/muscle/attention): the new task's load + the loads of nearby committed
+  // blocks, so each candidate can be scored for rolling sustainability (don't stack same-effort work).
+  const candLoad = loadOf(meta.title, meta.resources, meta.energy);
+  const blockLoads: BlockLoad[] = resourceBlocks.map((b) => ({ start: b.start, end: b.end, ...loadOf(b.title, b.resources) }));
+
   const candidates: SlotSuggestion[] = [];
   for (let s = from; s + durMs <= to; s += STEP_MIN * MIN) {
     const e = s + durMs;
@@ -89,7 +95,10 @@ export function findSlots(input: FindSlotsInput): SlotSuggestion[] {
     if (!ok) continue;
 
     const { score, reasons } = scoreSlot(meta, s, e, av, now);
-    candidates.push({ start: s, end: e, score, reasons });
+    // Effort sustainability: penalize slots that would over-concentrate brain/muscle/attention in any
+    // rolling 3h window (interleave instead of stacking); small reward when a demanding task fits well.
+    const load = scoreLoad(candLoad, s, e, blockLoads);
+    candidates.push({ start: s, end: e, score: score + load.delta, reasons: [...reasons, ...load.reasons] });
   }
 
   // Rank, then thin out near-duplicates (keep best; drop others within 90 min on the same day).

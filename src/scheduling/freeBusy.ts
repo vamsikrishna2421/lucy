@@ -69,3 +69,10 @@ export function isInPeakWindow(av: AvailabilityProfile, startMs: number, endMs: 
 export function isInLowWindow(av: AvailabilityProfile, startMs: number, endMs: number): boolean {
   return overlapsWindows(av.lowWindows ?? [], startMs, endMs);
 }
+
+/** Whether an instant falls inside the sleep window (handles the midnight wrap). */
+export function isAsleepAt(av: AvailabilityProfile, ms: number): boolean {
+  const lm = ((ms - startOfLocalDay(ms)) / 60_000); // minutes from local midnight
+  if (av.sleepStartMin > av.sleepEndMin) return lm >= av.sleepStartMin || lm < av.sleepEndMin; // wraps midnight
+  return lm >= av.sleepStartMin && lm < av.sleepEndMin;
+}

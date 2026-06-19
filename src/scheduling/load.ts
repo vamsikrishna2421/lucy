@@ -16,16 +16,32 @@
  *
  * Pure + deterministic (see tests/load.ts). Wired into findSlots (scheduler.ts).
  */
-import type { TaskResources } from './types';
+import type { AvailabilityProfile, TaskResources } from './types';
+import { isInPeakWindow, isInLowWindow, isAsleepAt } from './freeBusy';
 
 export interface TaskLoad { brain: number; muscle: number; attention: number }
 
 export const LOAD_WINDOW_MS = 3 * 60 * 60 * 1000; // rolling window the average is taken over
-export const BRAIN_CAP = 0.6;       // sustainable avg brain effort over the window
-export const MUSCLE_CAP = 0.6;      // sustainable avg muscle effort over the window
+export const BRAIN_CAP = 0.6;       // baseline sustainable avg brain effort over the window
+export const MUSCLE_CAP = 0.6;      // baseline sustainable avg muscle effort over the window
 export const ATTENTION_CAP = 0.7;   // you can pay attention a bit longer than you can think hard
 export const ATTENTION_PARALLEL = 0.3; // at/below this, a task is light enough to run alongside another
 const STEP_MS = 15 * 60 * 1000;
+
+/** Baseline capacity (the flat caps) — used when no time context is supplied. */
+export const BASE_CAPACITY: TaskLoad = { brain: BRAIN_CAP, muscle: MUSCLE_CAP, attention: ATTENTION_CAP };
+
+/**
+ * Effort CAPACITY at a given instant — the threshold varies across the day with the energy curve:
+ * peak hours can sustain more, the afternoon dip less, and sleep is ZERO (nothing should land there).
+ * This makes the same deep-work concentration acceptable in the morning peak but not in the 4pm crash.
+ */
+export function capacityAt(av: AvailabilityProfile, ms: number): TaskLoad {
+  if (isAsleepAt(av, ms)) return { brain: 0, muscle: 0, attention: 0 };
+  if (isInPeakWindow(av, ms, ms)) return { brain: 0.85, muscle: 0.65, attention: 0.9 };
+  if (isInLowWindow(av, ms, ms)) return { brain: 0.4, muscle: 0.55, attention: 0.5 };
+  return BASE_CAPACITY;
+}
 
 const BODY_RE = /\b(gym|work ?out|workout|exercise|run|running|jog|jogging|yoga|lift|lifting|weights?|sport|swim|swimming|cycl(e|ing)|bike|biking|hike|hiking|walk|pilates|cardio|stretch|basketball|soccer|football|tennis|climb|dance)\b/i;
 const DEEP_RE = /\b(code|coding|program|write|writing|draft|design|study|learn|research|analy[sz]e|architect|debug|plan|planning|read|review|prepare|practice|deep work|model|spec|outline)\b/i;
@@ -94,19 +110,22 @@ export interface LoadScore { delta: number; reasons: string[]; rolling: TaskLoad
  * effort in some 3h window (penalty scales with how far over cap). Small positive reward + a human
  * reason when a demanding task lands somewhere genuinely sustainable.
  */
-export function scoreLoad(cand: TaskLoad, candStart: number, candEnd: number, blocks: BlockLoad[]): LoadScore {
+export function scoreLoad(
+  cand: TaskLoad, candStart: number, candEnd: number, blocks: BlockLoad[], caps: TaskLoad = BASE_CAPACITY,
+): LoadScore {
   const rolling = rollingExtremes(candStart, candEnd, cand, blocks);
   let delta = 0;
   const reasons: string[] = [];
 
-  if (rolling.brain > BRAIN_CAP) delta -= Math.round((rolling.brain - BRAIN_CAP) * 180);
-  if (rolling.muscle > MUSCLE_CAP) delta -= Math.round((rolling.muscle - MUSCLE_CAP) * 180);
-  if (rolling.attention > ATTENTION_CAP) delta -= Math.round((rolling.attention - ATTENTION_CAP) * 120);
+  // Compare the rolling average against the TIME-LOCAL capacity (higher in the peak, lower in the dip).
+  if (rolling.brain > caps.brain) delta -= Math.round((rolling.brain - caps.brain) * 180);
+  if (rolling.muscle > caps.muscle) delta -= Math.round((rolling.muscle - caps.muscle) * 180);
+  if (rolling.attention > caps.attention) delta -= Math.round((rolling.attention - caps.attention) * 120);
 
   // Reward + explain only when a demanding task sits somewhere it stays sustainable.
   if (delta === 0) {
-    if (cand.brain >= 0.6 && rolling.brain <= BRAIN_CAP) { delta += 8; reasons.push('keeps your focus load sustainable'); }
-    else if (cand.muscle >= 0.6 && rolling.muscle <= MUSCLE_CAP) { delta += 8; reasons.push('balances your physical effort'); }
+    if (cand.brain >= 0.6 && rolling.brain <= caps.brain) { delta += 8; reasons.push('keeps your focus load sustainable'); }
+    else if (cand.muscle >= 0.6 && rolling.muscle <= caps.muscle) { delta += 8; reasons.push('balances your physical effort'); }
   }
   return { delta, reasons, rolling };
 }

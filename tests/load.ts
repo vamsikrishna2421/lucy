@@ -1,6 +1,7 @@
 /* Pure tests for the effort-load scheduler model. Run: npx tsx tests/load.ts */
-import { loadOf, canParallelize, rollingExtremes, scoreLoad, BRAIN_CAP, type BlockLoad } from '../src/scheduling/load';
+import { loadOf, canParallelize, rollingExtremes, scoreLoad, capacityAt, BRAIN_CAP, type BlockLoad } from '../src/scheduling/load';
 import { classifyTask } from '../src/scheduling/classify';
+import type { AvailabilityProfile } from '../src/scheduling/types';
 
 let pass = 0, fail = 0;
 function ok(name: string, cond: boolean) { if (cond) { pass++; } else { fail++; console.error('FAIL:', name); } }
@@ -41,6 +42,24 @@ ok('spaced deep work explains itself', spaced.reasons.some((r) => /sustainable/i
 // A brain task right after a body task is fine (different efforts don't stack).
 const priorGym: BlockLoad[] = [{ start: -HOUR, end: 0, brain: 0.15, muscle: 0.85, attention: 0.4 }];
 ok('brain after body is sustainable', scoreLoad({ brain: 0.9, muscle: 0.1, attention: 0.85 }, 0, HOUR, priorGym).delta >= 0);
+
+// ── time-varying capacity (peak high, dip low, sleep zero) ───────────────────────
+const AV: AvailabilityProfile = {
+  workStartMin: 9 * 60, workEndMin: 18 * 60, sleepStartMin: 23 * 60, sleepEndMin: 7 * 60,
+  bufferMin: 10, maxFocusMinPerDay: 240, workDays: [1, 2, 3, 4, 5], protectedWindows: [],
+  peakWindows: [{ label: 'AM', startMin: 7 * 60, endMin: 10 * 60 }],
+  lowWindows: [{ label: 'Dip', startMin: 15 * 60, endMin: 18 * 60 }],
+  inferred: false, confirmedAt: null,
+};
+const at = (h: number) => { const d = new Date(); d.setHours(h, 0, 0, 0); return d.getTime(); };
+ok('peak capacity is high', capacityAt(AV, at(8)).brain >= 0.8);
+ok('dip capacity is low', capacityAt(AV, at(16)).brain <= 0.45);
+ok('sleep capacity is zero', capacityAt(AV, at(3)).brain === 0 && capacityAt(AV, at(3)).attention === 0);
+ok('baseline capacity between', (() => { const c = capacityAt(AV, at(12)).brain; return c > 0.45 && c < 0.8; })());
+// Same stacked deep work: penalized HARDER in the dip (low cap) than in the peak (high cap).
+const stackPeak = scoreLoad({ brain: 0.9, muscle: 0.1, attention: 0.85 }, 0, HOUR, priorDeep, capacityAt(AV, at(8)));
+const stackDip = scoreLoad({ brain: 0.9, muscle: 0.1, attention: 0.85 }, 0, HOUR, priorDeep, capacityAt(AV, at(16)));
+ok('dip penalizes deep work more than peak', stackDip.delta < stackPeak.delta);
 
 console.log(`\nload model: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

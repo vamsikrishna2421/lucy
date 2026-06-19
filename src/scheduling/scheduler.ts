@@ -9,7 +9,7 @@ import type { AvailabilityProfile, Block, SchedTaskMeta, SlotSuggestion, TimeWin
 import { MIN, localMinutes, localDow, overlaps, startOfLocalDay, DAY, HOUR } from './time';
 import { canCoexist } from './resources';
 import { scoreSlot } from './scorer';
-import { loadOf, scoreLoad, type BlockLoad } from './load';
+import { loadOf, scoreLoad, capacityAt, type BlockLoad } from './load';
 
 const STEP_MIN = 15;
 
@@ -97,7 +97,8 @@ export function findSlots(input: FindSlotsInput): SlotSuggestion[] {
     const { score, reasons } = scoreSlot(meta, s, e, av, now);
     // Effort sustainability: penalize slots that would over-concentrate brain/muscle/attention in any
     // rolling 3h window (interleave instead of stacking); small reward when a demanding task fits well.
-    const load = scoreLoad(candLoad, s, e, blockLoads);
+    // The capacity threshold is TIME-LOCAL — higher in the peak, lower in the dip, zero in sleep.
+    const load = scoreLoad(candLoad, s, e, blockLoads, capacityAt(av, s + (e - s) / 2));
     candidates.push({ start: s, end: e, score: score + load.delta, reasons: [...reasons, ...load.reasons] });
   }
 

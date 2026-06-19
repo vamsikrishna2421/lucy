@@ -160,6 +160,7 @@ export function ScheduleTab() {
       try { const db = await getDatabase(); await setSetting(db, 'device_calendar_sync', 'on'); } catch { /* ignore */ }
       setCalSync(true);
       await load();
+      setCalToast('Connected — your phone’s Google, Outlook & Teams events now show here.');
     }
     else {
       setInfoSheet({

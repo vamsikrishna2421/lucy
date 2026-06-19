@@ -41,8 +41,16 @@ export async function mergeResults(question: string, results: Array<{ name: stri
     const { available, openAIKey } = await resolveRemoteAvailability();
     if (!available) return { text: combined || 'I could not find anything for that.', toolNames, sources };
     const { promptAI } = await import('../../ai/openai');
-    const system = 'You are LUCY. Answer the user using ONLY the tool outputs below — never invent numbers or facts. Be warm, direct, plain text, under 150 words. Address the user as "you".';
-    const user = `User asked: ${question}\n\nTool outputs:\n${combined}`;
+    // Label each fragment by its tool so the model knows which numbers are AUTHORITATIVE: the dedicated
+    // structured tools (e.g. [spending] totals) are ground truth for their domain. Numbers mentioned in
+    // recalled notes ([memory]) are context/budget — never report them as the actual spent/eaten figure.
+    const labeled = results.map((r) => `[${r.name}] ${r.result.prose}`).filter((p) => p.replace(/^\[\w+\]\s*$/, '')).join('\n\n');
+    const system = 'You are LUCY. Answer the user using ONLY the tool outputs below — never invent numbers or facts. '
+      + 'Each block is tagged with the tool that produced it. For any figure, TRUST the dedicated structured tool for its domain: '
+      + 'use [spending] for amounts actually spent, [health] for calories/steps, [tasks]/[reminders] for counts. '
+      + 'Numbers found inside [memory] notes are context only (e.g. a stated budget) — never present them as the actual spent/eaten amount, and if they differ from a structured tool, label them as a budget/plan, not actuals. '
+      + 'Be warm, direct, plain text, under 160 words. Address the user as "you".';
+    const user = `User asked: ${question}\n\nTool outputs:\n${labeled}`;
     const text = await promptAI(system, user, openAIKey);
     return { text: (text || combined).trim(), toolNames, sources };
   } catch {

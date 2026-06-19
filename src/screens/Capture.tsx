@@ -34,7 +34,6 @@ import { getRemoteAccessState } from '../ai/remoteAccess';
 import { CaptureReplay } from '../components/CaptureReplay';
 import { detectAutomationIntent, executeAction, type ExtractedAction } from '../processing/automationEngine';
 import type { ExtractionResult } from '../types/extraction';
-import { LucyPeek } from '../components/LucyPeek';
 
 interface DoneEntry {
   todo: TodoRow;
@@ -757,7 +756,6 @@ export function CaptureScreen({
           <Text style={styles.heroTitle}>LUCY</Text>
           <Text style={styles.heroPillars}>Listen · Understand · Connect · Yield</Text>
           <View style={styles.heroCard}>
-            <LucyPeek />
             <Text style={styles.heroCardLabel}>LUCY IS ACTIVE</Text>
             <Text style={styles.heroCardTitle}>
               {signalCount > 0 ? `${signalCount} urgent signal${signalCount !== 1 ? 's' : ''} for you` : 'All caught up'}
@@ -1055,7 +1053,7 @@ const styles = StyleSheet.create({
   heroGreeting: { fontSize: 12, fontWeight: '700', color: LUCY_COLORS.primary, letterSpacing: 0.5, marginBottom: 2 },
   heroTitle: { fontSize: 42, fontWeight: '900', letterSpacing: -2.5, color: LUCY_COLORS.textDark, lineHeight: 46, marginBottom: 2 },
   heroPillars: { fontSize: 11, color: LUCY_COLORS.textSubtle, marginBottom: 12 },
-  heroCard: { backgroundColor: 'rgba(255,140,66,0.07)', borderWidth: 1, borderColor: 'rgba(255,140,66,0.25)', borderRadius: 14, padding: 12, marginTop: 34, overflow: 'visible' },
+  heroCard: { backgroundColor: 'rgba(255,140,66,0.07)', borderWidth: 1, borderColor: 'rgba(255,140,66,0.25)', borderRadius: 14, padding: 12 },
   glanceRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 14 },
   glanceChip: { flex: 1, flexDirection: 'row', gap: 8, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 14, padding: 11 },
   glanceChipLabel: { color: LUCY_COLORS.textSubtle, fontSize: 9, fontWeight: '800', letterSpacing: 0.8, marginBottom: 3 },

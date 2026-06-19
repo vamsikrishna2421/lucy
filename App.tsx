@@ -1047,6 +1047,8 @@ export default function App() {
       <Modal visible={updateReady} transparent animationType="fade" onRequestClose={() => setUpdateReady(false)}>
         <View style={styles.updateOverlay}>
           <View style={styles.updateCard}>
+            {/* Lucy pops up over the top edge to tell them an update's ready. */}
+            <LucyPeek />
             <View style={styles.updateIconRing}><Ionicons name="sparkles" size={26} color={LUCY_COLORS.primary} /></View>
             <Text style={styles.updateTitle}>A fresh update is ready</Text>
             <Text style={styles.updateBody}>LUCY just downloaded the latest improvements. Restart to apply them.</Text>
@@ -1124,7 +1126,8 @@ const styles = StyleSheet.create({
   globalFace: { position: 'absolute', right: 16, top: 118, zIndex: 30, elevation: 30, alignItems: 'flex-end' },
   cameraFab: { position: 'absolute', right: 18, bottom: 104, width: 52, height: 52, borderRadius: 26, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center', zIndex: 40, elevation: 8, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
   updateOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', alignItems: 'center', justifyContent: 'center', padding: 30 },
-  updateCard: { width: '100%', maxWidth: 360, backgroundColor: LUCY_COLORS.surface, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 26, alignItems: 'center' },
+  // overflow visible + extra top room so the peeking Lucy (who grips the top edge) isn't clipped.
+  updateCard: { width: '100%', maxWidth: 360, backgroundColor: LUCY_COLORS.surface, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingTop: 34, paddingHorizontal: 26, paddingBottom: 26, alignItems: 'center', overflow: 'visible' },
   updateIconRing: { width: 60, height: 60, borderRadius: 30, backgroundColor: LUCY_COLORS.primarySoft, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   updateTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '800', textAlign: 'center' },
   updateBody: { color: LUCY_COLORS.textMuted, fontSize: 14.5, lineHeight: 21, textAlign: 'center', marginTop: 10, marginBottom: 22 },

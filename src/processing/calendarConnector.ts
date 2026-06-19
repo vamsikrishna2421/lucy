@@ -8,7 +8,9 @@
  * 3. After meetings, prompts user to capture notes
  */
 
-import * as Calendar from 'expo-calendar';
+// expo-calendar 56 deprecated the top-level API (it THROWS, not just warns). The legacy subpath keeps
+// the same functions working over OTA against the already-built native module.
+import * as Calendar from 'expo-calendar/legacy';
 import { Platform } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getSetting, setSetting } from '../db/settings';

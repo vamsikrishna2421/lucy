@@ -17,7 +17,7 @@
  */
 
 import { Linking, Platform } from 'react-native';
-import * as Calendar from 'expo-calendar';
+import * as Calendar from 'expo-calendar/legacy'; // top-level API is deprecated/throws in SDK 56; legacy works
 import * as Notifications from 'expo-notifications';
 
 export type ActionType =

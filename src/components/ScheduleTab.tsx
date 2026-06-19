@@ -13,7 +13,7 @@ import {
 import { classifyTask } from '../scheduling/classify';
 import { updateScheduledBlock } from '../db/schedule';
 import { getAvailability } from '../scheduling/availability';
-import { hasCalendarPermission, requestCalendarPermission } from '../processing/calendarConnector';
+import { hasCalendarPermission, requestCalendarPermission, requestCalendarPermissionDetailed } from '../processing/calendarConnector';
 import { getSetting, setSetting } from '../db/settings';
 import type { AvailabilityProfile, Block, SlotSuggestion, TaskResources } from '../scheduling/types';
 import { SegmentedControl, type SegmentOption } from './SegmentedControl';
@@ -154,9 +154,9 @@ export function ScheduleTab() {
   }, [suggKey, suggAnim]);
 
   const connectCalendars = async () => {
-    const granted = await requestCalendarPermission();
-    setCalPerm(granted);
-    if (granted) {
+    const res = await requestCalendarPermissionDetailed();
+    setCalPerm(res.granted);
+    if (res.granted) {
       try { const db = await getDatabase(); await setSetting(db, 'device_calendar_sync', 'on'); } catch { /* ignore */ }
       setCalSync(true);
       await load();
@@ -166,7 +166,8 @@ export function ScheduleTab() {
       setInfoSheet({
         context: 'Calendar sync',
         title: 'Allow calendar access',
-        message: 'LUCY reads the calendars already on your phone — including any Google, Outlook or Teams account you\'ve added to it. Two quick steps:\n\n1) Tap "Open Settings" below and turn Calendars ON for LUCY.\n2) If you haven\'t added the account yet: Settings → Calendar → Accounts → Add (Google / Outlook). Teams meetings show up once they\'re on that calendar.',
+        message: 'LUCY reads the calendars already on your phone — including any Google, Outlook or Teams account you\'ve added to it. Two quick steps:\n\n1) Tap "Open Settings" below and turn Calendars ON for LUCY.\n2) If you haven\'t added the account yet: Settings → Calendar → Accounts → Add (Google / Outlook). Teams meetings show up once they\'re on that calendar.'
+          + `\n\n(diagnostic — permission: ${res.status}${res.canAskAgain ? '' : ', can\'t re-ask'})`,
         actions: [
           { label: 'Open Settings', style: 'primary', onPress: () => { void Linking.openSettings().catch(() => {}); } },
           { label: 'Maybe later', style: 'default' },

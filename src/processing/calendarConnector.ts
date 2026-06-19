@@ -41,6 +41,16 @@ export async function requestCalendarPermission(): Promise<boolean> {
   }
 }
 
+/** Like requestCalendarPermission but returns the exact status — used to diagnose why a prompt didn't show. */
+export async function requestCalendarPermissionDetailed(): Promise<{ granted: boolean; status: string; canAskAgain: boolean }> {
+  try {
+    const r = await Calendar.requestCalendarPermissionsAsync();
+    return { granted: r.status === 'granted', status: r.status, canAskAgain: r.canAskAgain ?? true };
+  } catch (e) {
+    return { granted: false, status: `error: ${e instanceof Error ? e.message : 'unknown'}`, canAskAgain: false };
+  }
+}
+
 export async function hasCalendarPermission(): Promise<boolean> {
   try {
     const { status } = await Calendar.getCalendarPermissionsAsync();

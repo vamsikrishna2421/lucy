@@ -166,8 +166,7 @@ export function ScheduleTab() {
       setInfoSheet({
         context: 'Calendar sync',
         title: 'Allow calendar access',
-        message: 'LUCY reads the calendars already on your phone — including any Google, Outlook or Teams account you\'ve added to it. Two quick steps:\n\n1) Tap "Open Settings" below and turn Calendars ON for LUCY.\n2) If you haven\'t added the account yet: Settings → Calendar → Accounts → Add (Google / Outlook). Teams meetings show up once they\'re on that calendar.'
-          + `\n\n(diagnostic — permission: ${res.status}${res.canAskAgain ? '' : ', can\'t re-ask'})`,
+        message: 'LUCY reads the calendars already on your phone — including any Google, Outlook or Teams account you\'ve added to it. Two quick steps:\n\n1) Tap "Open Settings" below and turn Calendars ON for LUCY.\n2) If you haven\'t added the account yet: Settings → Calendar → Accounts → Add (Google / Outlook). Teams meetings show up once they\'re on that calendar.',
         actions: [
           { label: 'Open Settings', style: 'primary', onPress: () => { void Linking.openSettings().catch(() => {}); } },
           { label: 'Maybe later', style: 'default' },

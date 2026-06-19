@@ -566,6 +566,16 @@ export default function App() {
     const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
       const req = response.notification.request;
       const data = req.content.data as Record<string, unknown> | undefined;
+      // "Dismiss" action button (opensAppToForeground:false): clear the alarm + silence the rest of the
+      // burst WITHOUT opening Lucy or showing any popup. Just acknowledge, log, and bail.
+      if (response.actionIdentifier === 'dismiss') {
+        void import('./src/processing/persistentReminders')
+          .then(({ acknowledgeNagFromResponse }) => acknowledgeNagFromResponse(data)).catch(() => {});
+        void import('./src/processing/notifications')
+          .then(({ logDeliveredNotification }) => logDeliveredNotification(req))
+          .then(() => getDatabase()).then((db) => getTotalUnreadCount(db)).then(setUnreadNotifCount).catch(() => {});
+        return;
+      }
       // Tapping any buzz of a persistent reminder/event silences the rest of its burst.
       // Tapping a notification silences any remaining alarm burst, then opens a detailed popup so
       // the user can read the FULL note and dismiss it. Rich kinds (guardian/digest/…) get their

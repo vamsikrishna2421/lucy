@@ -15,6 +15,22 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 export const ALARM_CHANNEL = 'lucy-alarm';
+// Notification category with a "Dismiss" button that does NOT open the app — tapping it just clears the
+// alarm + silences the rest of the burst (handled in App.tsx via the response listener). On iOS the
+// button appears on long-press/pull-down; on Android it's an inline button.
+export const NAG_CATEGORY = 'lucy-nag';
+export const NAG_DISMISS_ACTION = 'dismiss';
+
+let _nagCategoryReady = false;
+async function ensureNagCategory(): Promise<void> {
+  if (_nagCategoryReady) return;
+  try {
+    await Notifications.setNotificationCategoryAsync(NAG_CATEGORY, [
+      { identifier: NAG_DISMISS_ACTION, buttonTitle: 'Dismiss', options: { opensAppToForeground: false, isDestructive: true } },
+    ]);
+    _nagCategoryReady = true;
+  } catch { /* best effort */ }
+}
 
 // Alarm-grade nag: a vibrating, sounding notification every 30 SECONDS, re-ringing until the user
 // taps to dismiss. iOS hard-caps pending local notifications at 64 (shared across ALL reminders), so
@@ -71,6 +87,7 @@ export async function scheduleNag(input: NagInput): Promise<string | null> {
   if (!Number.isFinite(input.fireAtMs)) return null;
   if (!(await ensurePermission())) return null;
   await ensureAlarmChannel();
+  await ensureNagCategory();
   await cancelNag(input.key); // replace, never stack
   const now = Date.now();
   // User consent: alarm-style (the buzzing, re-ringing burst) only when the user has turned it ON.
@@ -92,10 +109,12 @@ export async function scheduleNag(input: NagInput): Promise<string | null> {
         identifier: `nag-${input.key}#${i}`,
         content: {
           title: input.title,
-          body: i === 0 ? input.body : `${input.body} · still waiting — tap to dismiss`,
+          body: i === 0 ? input.body : `${input.body} · still waiting`,
           data: { ...(input.data ?? {}), nagGroup: input.key },
           sound: true,
           vibrate: ALARM_VIBRATION,
+          // "Dismiss" action button that clears the alarm WITHOUT opening Lucy.
+          categoryIdentifier: NAG_CATEGORY,
           // Collapse the whole burst into ONE grouped thread per event so a re-ringing alarm doesn't
           // paint 14 separate rows in the tray (Android groups via the alarm channel).
           threadIdentifier: input.key,

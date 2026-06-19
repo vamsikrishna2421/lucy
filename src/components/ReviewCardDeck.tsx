@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
+import { LucyPeek } from './LucyPeek';
 
 export interface ReviewCard {
   key: string;
@@ -91,6 +92,9 @@ export function ReviewCardDeck({
           {...panResponder.panHandlers}
           style={[styles.card, { transform: [{ translateX: pan.x }, { rotate }] }]}
         >
+          {/* LUCY peeks over the card's top edge, as if asking the question from behind it.
+              Re-keyed per card so she pops up fresh on each review. Decorative only. */}
+          <LucyPeek key={`peek-${card.key}`} />
           {card.render()}
         </Animated.View>
       </View>
@@ -117,7 +121,7 @@ const styles = StyleSheet.create({
   dotActive: { backgroundColor: LUCY_COLORS.primary, width: 18 },
   dotMore: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginLeft: 4 },
   cardArea: { flex: 1, justifyContent: 'center', paddingHorizontal: 16 },
-  card: { minHeight: '62%', backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 22, justifyContent: 'flex-start' },
+  card: { minHeight: '62%', backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 22, paddingTop: 30, justifyContent: 'flex-start', overflow: 'visible' },
   navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 14 },
   navBtn: { paddingVertical: 9, paddingHorizontal: 16, borderRadius: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surfaceRaised },
   navBtnDisabled: { opacity: 0.35 },

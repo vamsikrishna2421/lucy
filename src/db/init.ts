@@ -759,6 +759,27 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_voice_messages_conv ON voice_messages(conversation_id, id);
   `);
 
+  // Commitment guardian — promises the user made / is owed, with deadlines, so LUCY can chase at-risk ones.
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS commitments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      capture_id INTEGER,
+      text TEXT,
+      action TEXT,
+      counterparty TEXT,
+      due_at DATETIME,
+      direction TEXT DEFAULT 'i-owe',
+      status TEXT DEFAULT 'open',
+      privacy_level TEXT DEFAULT 'normal',
+      nudged_at DATETIME,
+      resolved_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (capture_id) REFERENCES captures(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_commitments_status_due ON commitments(status, due_at);
+    CREATE INDEX IF NOT EXISTS idx_commitments_capture ON commitments(capture_id);
+  `);
+
   // Circuit breaker: if a device-calendar read was in-flight when the app last died, expo-calendar
   // likely crashed natively on a bad event. Auto-pause calendar sync so the app stops crash-looping
   // (the user can resume it from the calendar). Self-healing — runs once per startup.

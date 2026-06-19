@@ -281,6 +281,15 @@ async function persistExtraction(
     for (const fu of extraction.follow_ups) {
       await insertFollowUp(db, capture.id, fu.assignee, fu.action, extraction.privacy_level);
     }
+    // Commitment guardian: detect promises the user made ("I'll send the deck to Raghavendra by Thu")
+    // and things they're owed, with deadlines, so LUCY can chase the at-risk ones. Deduped on insert.
+    try {
+      const { extractCommitments } = await import('./commitments');
+      const { insertCommitment } = await import('../db/commitments');
+      for (const c of extractCommitments(capture.raw_transcript ?? '')) {
+        await insertCommitment(db, capture.id, c, extraction.privacy_level);
+      }
+    } catch { /* non-critical — commitment tracking never blocks a capture */ }
     // Persist mood entry — EVERY capture contributes a mood point. When the LLM returned only the bare
     // 'neutral/medium' default, run the free on-device sentiment so a real feeling isn't lost.
     {

@@ -31,6 +31,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl';
 import { ActionSheet, Toast, type SheetAction } from '../components/ActionSheet';
 import { LucyEmptyState } from '../components/LucyEmptyState';
+import { CommitmentsSection } from '../components/CommitmentsSection';
 
 const VIEW_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   'Timeline': 'time-outline',
@@ -1979,6 +1980,9 @@ function NowView({
           ))}
         </>
       ) : null}
+
+      {/* Commitment guardian — promises to keep + things owed; at-risk ranks above generic follow-ups. */}
+      <CommitmentsSection onChange={onLoopResolved} />
 
       {followUps.length > 0 ? (
         <>

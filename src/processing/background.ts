@@ -93,6 +93,12 @@ if (!TaskManager.isTaskDefined(BACKGROUND_PROCESSING_TASK)) {
       // Staleness sweep: auto-archive expired reminders, queue review prompts
       try { await runStalenessCheck(db); } catch { /* non-critical */ }
 
+      // Commitment guardian: chase the most pressing at-risk promise (one nudge per run, max once/~20h each).
+      try {
+        const { checkCommitmentNudges } = await import('./commitmentGuardian');
+        await checkCommitmentNudges(db);
+      } catch { /* non-critical */ }
+
       // Brain Pulse: 6-hour cross-domain synthesis (night-suppressed, rate-limited)
       try {
         const { runBrainPulseIfDue } = await import('./brainPulse');

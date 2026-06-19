@@ -10,12 +10,13 @@ import { healthTool } from './impl/health';
 import { remindersTool } from './impl/reminders';
 import { peopleTool } from './impl/people';
 import { keepWarmTool } from './impl/keepWarm';
+import { commitmentsTool } from './impl/commitments';
 import { knowledgeTool } from './impl/knowledge';
 import { describeForSelector } from './describe';
 
 // P1: read tools wrapping existing engines. memory stays the catch-all (last). Action intents
 // (commit a calendar block, create a reminder, log food) remain on the legacy path for now — P2.
-export const TOOLS: LucyTool[] = [spendingTool, moneyWatchTool, tasksTool, healthTool, remindersTool, peopleTool, keepWarmTool, knowledgeTool, memoryTool];
+export const TOOLS: LucyTool[] = [spendingTool, moneyWatchTool, tasksTool, healthTool, remindersTool, peopleTool, keepWarmTool, commitmentsTool, knowledgeTool, memoryTool];
 
 export function getTool(name: string): LucyTool | undefined {
   return TOOLS.find((t) => t.name === name);

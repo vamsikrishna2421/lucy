@@ -56,6 +56,10 @@ ok('fastRoute money_watch (subscriptions)', fastRoute('what subscriptions am I p
 ok('fastRoute money_watch (bills)', fastRoute('any bills coming up soon') === 'money_watch');
 ok('fastRoute keep_in_touch', fastRoute("who haven't I talked to in a while") === 'keep_in_touch');
 ok('fastRoute reach out', fastRoute('who should I reach out to') === 'keep_in_touch');
+ok('fastRoute commitments (promise)', fastRoute('what did I promise this week') === 'commitments');
+ok('fastRoute commitments (owe)', fastRoute('what do I owe anyone') === 'commitments');
+ok('fastRoute commitments (owes me)', fastRoute('who owes me anything') === 'commitments');
+ok('fastRoute commitments (waiting)', fastRoute('what am I waiting on from others') === 'commitments');
 ok('fastRoute multi-domain → null (LLM decides)', fastRoute('how am I doing on health and money') === null);
 ok('fastRoute vague → null', fastRoute('what should I think about') === null);
 

@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 62 (App-parity features + spring motion:
+/* LUCY web - premium - dashboard rev 63 (App-parity features + spring motion:
+   • Tasks: commitment guardian — promises you made + things owed to you, at-risk in rose/amber, Done/Dismiss, via /api/commitments
    • Health: mood-over-time SVG graph (teal/rose, real gaps, shift caption, tap-a-day → "what was happening") via /api/mood-graph
    • Money: money-watch (upcoming bills + recurring/subscriptions + Lucy-noticed insights) via /api/money; flips Market subscription-detection cell to ✅
    • Calendar/Workspace: Shape-your-day editor — office hours, workday toggles, sleep, + 3 mouse-draggable energy curves (brain/muscle/attention) via GET/POST /api/schedule/availability
@@ -1073,6 +1074,7 @@ function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offset
   if(ROUTE==='health')loadHealth(false);
   if(ROUTE==='money')loadMoney();
   if(ROUTE==='people')loadKeepWarm();
+  if(ROUTE==='tasks')loadCommitments();
   if(ROUTE==='ask')afterAsk();
   stampStagger();}
 /* ─── MARKET (LUCY vs competitors — gap tracker, docs/COMPETITOR_COMPARISON.md) ─── */
@@ -1332,7 +1334,7 @@ function focusCap(){go('home');setTimeout(()=>{const c=$('cap');if(c)c.focus();}
 
 /* ─── other sections ─── */
 function vTasks(){const tasks=DATA.todos.filter(pending);const groups={high:[],medium:[],low:[]};tasks.forEach(t=>{(groups[(t.urgency||'medium').toLowerCase()]||groups.medium).push(t);});
-  let h=`<div class="page"><section class="page-hero compact"><div class="page-kicker">Focus</div><h1 class="page-title">The open loops that matter.</h1><div class="page-sub">A cleaner task board organized by urgency, ready to finish or schedule.</div><div class="hero-metrics">${heroMetric(tasks.length,'open tasks')}${heroMetric(groups.high.length,'urgent')}${heroMetric(groups.medium.length,'soon')}</div></section><div class="composer"><input id="ntask" placeholder="Add a task… (Enter)" onkeydown="if(event.key==='Enter')addTask()"/><button class="btn" onclick="addTask()">Add</button></div>`;
+  let h=`<div class="page"><section class="page-hero compact"><div class="page-kicker">Focus</div><h1 class="page-title">The open loops that matter.</h1><div class="page-sub">A cleaner task board organized by urgency, ready to finish or schedule.</div><div class="hero-metrics">${heroMetric(tasks.length,'open tasks')}${heroMetric(groups.high.length,'urgent')}${heroMetric(groups.medium.length,'soon')}</div></section><div class="composer"><input id="ntask" placeholder="Add a task… (Enter)" onkeydown="if(event.key==='Enter')addTask()"/><button class="btn" onclick="addTask()">Add</button></div><div id="commitments">${commitmentsBody()}</div>`;
   if(!tasks.length)return h+empty('◇','No open tasks','You are all caught up.')+'</div>';
   for(const[g,label]of[['high','Urgent'],['medium','Soon'],['low','Whenever']]){if(!groups[g].length)continue;h+=`<div class="sec"><h2>${label}</h2></div><div class="col">`+groups[g].map(taskCard).join('')+'</div>';}return h+'</div>';}
 function vAsk(){let h='<div class="page"><section class="page-hero compact"><div class="page-kicker">Ask Lucy</div><h1 class="page-title">Ask your memory, not the internet.</h1><div class="page-sub">Use this when you want Lucy to connect your own notes, tasks, people, spending, and plans.</div></section><div id="chat"><div id="stream">';
@@ -1362,6 +1364,33 @@ function keepWarmAct(i){
   const n=KEEPWARM&&KEEPWARM.nudges&&KEEPWARM.nudges[i];if(!n)return;const nm=n.name||'them';
   // Bridge into Ask Lucy with a friendly draft prompt; behavior stays in the app/voice brain.
   go('ask');setTimeout(()=>{const q=$('q');if(q){q.value='Help me reach out to '+nm+(n.action?(' — '+n.action):'');q.focus();}},120);
+}
+/* ─── COMMITMENTS (promise guardian — promises made + owed, with at-risk accents) ─── */
+let COMMITMENTS=null;        // {commitments:[{id,line,counterparty,due_at,direction,atRisk}],atRisk:[...]}
+let COMMITMENTS_FETCHED=false;
+async function loadCommitments(){
+  try{const r=await api('/api/commitments');if(r&&typeof r==='object'){COMMITMENTS=r;COMMITMENTS_FETCHED=true;}}catch(e){/* keep last */}
+  const host=$('commitments');if(host){host.innerHTML=commitmentsBody();stampStagger(host);}
+}
+function cmOverdue(due){if(!due)return false;const t=Date.parse(due);return Number.isFinite(t)&&t<Date.now();}
+function commitmentsBody(){
+  if(!COMMITMENTS_FETCHED&&!COMMITMENTS)return '';
+  const all=(COMMITMENTS&&Array.isArray(COMMITMENTS.commitments))?COMMITMENTS.commitments:[];
+  if(!all.length)return '';
+  const owe=all.filter(c=>c&&c.direction==='i-owe');
+  const owed=all.filter(c=>c&&c.direction==='owed-to-me');
+  const card=c=>{const ac=c.atRisk?(cmOverdue(c.due_at)?'#FB7185':'#F5C451'):'var(--border)';
+    return `<div class="card rise" style="flex-direction:column;align-items:stretch;gap:9px;border-left:3px solid ${ac}"><div class="ttl" style="font-size:14.5px;font-weight:600;line-height:1.45">${esc(c.line||'')}</div><div style="display:flex;gap:8px"><button class="btn ghost sm" onclick="commitmentAct(${c.id},'done')">Done</button><button class="btn ghost sm" style="opacity:.6" onclick="commitmentAct(${c.id},'dismissed')">Dismiss</button></div></div>`;};
+  let h='';
+  if(owe.length)h+=`<div class="sec"><h2>You owe · ${owe.length}</h2></div><div class="col">`+owe.map(card).join('')+'</div>';
+  if(owed.length)h+=`<div class="sec"><h2>Owed to you · ${owed.length}</h2></div><div class="col">`+owed.map(card).join('')+'</div>';
+  return h;
+}
+async function commitmentAct(id,status){
+  try{await api('/api/commitments/resolve',{method:'POST',body:JSON.stringify({id,status})});}catch(e){}
+  if(COMMITMENTS&&Array.isArray(COMMITMENTS.commitments)){COMMITMENTS.commitments=COMMITMENTS.commitments.filter(c=>c.id!==id);if(Array.isArray(COMMITMENTS.atRisk))COMMITMENTS.atRisk=COMMITMENTS.atRisk.filter(c=>c.id!==id);}
+  const host=$('commitments');if(host){host.innerHTML=commitmentsBody();stampStagger(host);}
+  toast(status==='done'?'Done ✓':'Dismissed');
 }
 function vPeople(){const ppl=(DATA.people||[]);const hero=`<section class="page-hero compact"><div class="page-kicker">People</div><h1 class="page-title">The people Lucy notices.</h1><div class="page-sub">Names and relationship context gathered from your notes, calls, plans, and follow-ups.</div><div class="hero-metrics">${heroMetric(ppl.length,'people')}${heroMetric(ppl.filter(p=>p.last_mentioned).length,'with history')}</div></section>`;
   const kw=`<div id="keepWarm">${keepWarmBody()}</div>`;

@@ -73,6 +73,14 @@ export async function sendMorningBrief(db: SQLiteDatabase): Promise<void> {
     parts.push(`${items.join(' and ')} still waiting.`);
   }
 
+  // At-risk commitments — a promise due/overdue is worth leading with.
+  try {
+    const { listAtRiskCommitments } = await import('../db/commitments');
+    const { formatCommitmentLine } = await import('./commitmentGuardian');
+    const atRisk = await listAtRiskCommitments(db);
+    if (atRisk.length > 0) parts.push(formatCommitmentLine(atRisk[0]));
+  } catch { /* non-critical */ }
+
   // Relationship gaps — prefer a warm keep-warm nudge over the dry "haven't mentioned" line.
   try {
     const keepWarm = await getKeepWarmNudges(db);

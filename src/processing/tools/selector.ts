@@ -42,6 +42,7 @@ const DOMAIN_PATTERNS: Array<{ tool: string; re: RegExp }> = [
   { tool: 'reminders', re: /\b(reminders?|remind me of|what.*remind)\b/i },
   { tool: 'people', re: /\b(who is|who'?s|tell me about|who have i|relationship with)\b/i },
   { tool: 'keep_in_touch', re: /\b(reach out|out of touch|fallen out|neglect|keep in touch|gone quiet|who should i (call|text|message|reach)|haven'?t\s+(?:\w+\s+)?(talked|spoken|spoke|messaged|reached|seen|called|contacted))\b/i },
+  { tool: 'commitments', re: /\b(promis(?:e|ed|es|ing)|commitment|committed to|what do i owe|who owes me|owes? (?:me|him|her|them)|on the hook|chasing (?:up )?\w+|what am i waiting (?:on|for)|waiting to hear back|did i (?:say|promise) i)\b/i },
   { tool: 'knowledge', re: /\b(brain map|knowledge graph|how does .+ relate|what connects|keeps coming up|recurring (theme|topic))\b/i },
 ];
 

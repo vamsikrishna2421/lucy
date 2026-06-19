@@ -176,6 +176,26 @@ async function route(req: ParsedRequest): Promise<string> {
       const { getKeepWarmNudges } = await import('../processing/relationshipEngine');
       return json(200, { ok: true, nudges: await getKeepWarmNudges(db) });
     }
+    // Commitment guardian — promises made + owed, with at-risk highlighting (web parity).
+    if (req.method === 'GET' && req.path === '/api/commitments') {
+      const { listOpenCommitments, listAtRiskCommitments } = await import('../db/commitments');
+      const { formatCommitmentLine } = await import('../processing/commitmentGuardian');
+      const [open, atRisk] = await Promise.all([listOpenCommitments(db), listAtRiskCommitments(db)]);
+      const atRiskIds = new Set(atRisk.map((c) => c.id));
+      const decorate = (c: import('../db/commitments').CommitmentRow) => ({
+        id: c.id, line: formatCommitmentLine(c), counterparty: c.counterparty,
+        due_at: c.due_at, direction: c.direction, atRisk: atRiskIds.has(c.id),
+      });
+      return json(200, { ok: true, commitments: open.map(decorate), atRisk: atRisk.map(decorate) });
+    }
+    if (req.method === 'POST' && req.path === '/api/commitments/resolve') {
+      const id = Number(payload.id);
+      if (!id) return json(400, { error: 'Missing id' });
+      const status = payload.status === 'dismissed' ? 'dismissed' : 'done';
+      const { markCommitment } = await import('../db/commitments');
+      await markCommitment(db, id, status);
+      return json(200, { ok: true });
+    }
     // Scans & photos gallery — list captures that have an original source image.
     if (req.method === 'GET' && req.path === '/api/gallery') {
       const rows = await db.getAllAsync<{ id: number; extracted_title: string | null; created_at: string }>(

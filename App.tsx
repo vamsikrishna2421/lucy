@@ -1001,13 +1001,6 @@ export default function App() {
         <View style={styles.globalFace} pointerEvents="box-none">
           {renderLucyFace()}
         </View>
-        {/* Auto-update banner — only when a new bundle is fetched and ready to apply. */}
-        {updateReady ? (
-          <TouchableOpacity style={styles.updateBanner} activeOpacity={0.9} onPress={() => { void import('expo-updates').then((U) => U.reloadAsync()).catch(() => {}); }}>
-            <Ionicons name="sparkles" size={15} color="#0B0B0F" />
-            <Text style={styles.updateBannerText}>Update ready — tap to restart</Text>
-          </TouchableOpacity>
-        ) : null}
         {/* Camera FAB (bottom-right, where the old chat bubble was) — one-tap meal/note photo. */}
         {screen === 'dashboard' ? (
           <TouchableOpacity style={styles.cameraFab} activeOpacity={0.85} onPress={quickSnap} accessibilityLabel="Snap a photo">
@@ -1020,6 +1013,22 @@ export default function App() {
           <View style={styles.snapBusyCard}>
             <ActivityIndicator size="large" color={LUCY_COLORS.primary} />
             <Text style={styles.snapBusyText}>Reading your photo…</Text>
+          </View>
+        </View>
+      </Modal>
+      {/* Update-ready — a centered card (not a bottom strip) so it reads as an intentional moment. */}
+      <Modal visible={updateReady} transparent animationType="fade" onRequestClose={() => setUpdateReady(false)}>
+        <View style={styles.updateOverlay}>
+          <View style={styles.updateCard}>
+            <View style={styles.updateIconRing}><Ionicons name="sparkles" size={26} color={LUCY_COLORS.primary} /></View>
+            <Text style={styles.updateTitle}>A fresh update is ready</Text>
+            <Text style={styles.updateBody}>LUCY just downloaded the latest improvements. Restart to apply them.</Text>
+            <TouchableOpacity style={styles.updatePrimary} activeOpacity={0.9} onPress={() => { void import('expo-updates').then((U) => U.reloadAsync()).catch(() => {}); }}>
+              <Text style={styles.updatePrimaryText}>Restart now</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.updateLater} onPress={() => setUpdateReady(false)}>
+              <Text style={styles.updateLaterText}>Later</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1087,8 +1096,15 @@ const styles = StyleSheet.create({
   headerPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 48 },
   globalFace: { position: 'absolute', right: 16, top: 118, zIndex: 30, elevation: 30, alignItems: 'flex-end' },
   cameraFab: { position: 'absolute', right: 18, bottom: 104, width: 52, height: 52, borderRadius: 26, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center', zIndex: 40, elevation: 8, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
-  updateBanner: { position: 'absolute', left: 16, right: 16, bottom: 92, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: LUCY_COLORS.primaryGlow, borderRadius: 14, paddingVertical: 11, zIndex: 45, elevation: 9, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
-  updateBannerText: { color: '#0B0B0F', fontWeight: '800', fontSize: 13.5 },
+  updateOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', alignItems: 'center', justifyContent: 'center', padding: 30 },
+  updateCard: { width: '100%', maxWidth: 360, backgroundColor: LUCY_COLORS.surface, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 26, alignItems: 'center' },
+  updateIconRing: { width: 60, height: 60, borderRadius: 30, backgroundColor: LUCY_COLORS.primarySoft, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  updateTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '800', textAlign: 'center' },
+  updateBody: { color: LUCY_COLORS.textMuted, fontSize: 14.5, lineHeight: 21, textAlign: 'center', marginTop: 10, marginBottom: 22 },
+  updatePrimary: { backgroundColor: LUCY_COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', alignSelf: 'stretch' },
+  updatePrimaryText: { color: '#0B0B0F', fontWeight: '800', fontSize: 16 },
+  updateLater: { paddingVertical: 12, alignItems: 'center', alignSelf: 'stretch', marginTop: 4 },
+  updateLaterText: { color: LUCY_COLORS.textMuted, fontWeight: '600', fontSize: 14 },
   snapBusyOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
   snapBusyCard: { backgroundColor: LUCY_COLORS.surface, borderRadius: 18, padding: 26, alignItems: 'center', gap: 12, borderWidth: 1, borderColor: LUCY_COLORS.border },
   snapBusyText: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '600' },

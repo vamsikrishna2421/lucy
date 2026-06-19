@@ -3327,8 +3327,8 @@ const styles = StyleSheet.create({
   subtitle: { color: LUCY_COLORS.textMuted, fontSize: 12.5, marginTop: 3, lineHeight: 17, maxWidth: 280 },
   viewNav: { marginBottom: 8 },
   // "Today" glance strip
-  glanceStripWrap: { marginBottom: 8 },
-  glanceStrip: { gap: 8, paddingRight: 4 },
+  glanceStripWrap: { marginBottom: 10, flexGrow: 0, flexShrink: 0 },
+  glanceStrip: { gap: 8, paddingRight: 4, alignItems: 'flex-start' },
   glanceCard: {
     width: 128,
     backgroundColor: LUCY_COLORS.surface,

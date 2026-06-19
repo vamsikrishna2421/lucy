@@ -58,8 +58,10 @@ export async function computeEnergyCurve(db: SQLiteDatabase): Promise<EnergyCurv
   const peak = bestStart >= 0 && bestScore > 0
     ? { label: 'Peak focus', startMin: bestStart * 60, endMin: (bestStart + 3) * 60 }
     : null;
-  // Only treat a window as a genuine dip if it's clearly negative AND distinct from the peak.
-  const trough = worstStart >= 0 && worstScore < -0.4 && worstStart !== bestStart
+  // Treat a window as a genuine dip if it's distinct from the peak AND either non-positive (real low)
+  // or clearly below the user's own peak (relative crash) — absolute thresholds were too strict on real
+  // data where the worst stretch is still mildly positive but well under the morning peak.
+  const trough = worstStart >= 0 && worstStart !== bestStart && (worstScore < 0 || bestScore - worstScore >= 1.0)
     ? { label: 'Low-energy dip', startMin: worstStart * 60, endMin: (worstStart + 3) * 60 }
     : null;
   return { peak, trough };

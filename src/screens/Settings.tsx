@@ -8,6 +8,7 @@ import { localModelOptions, type LocalModelId } from '../ai/modelCatalog';
 import { getRemoteAccessState, removeRemoteOpenAIKey, setRemoteEnabled, storeRemoteOpenAIKey, type RemoteAccessState } from '../ai/remoteAccess';
 import { config } from '../config';
 import { LUCY_COLORS } from '../config/colors';
+import { THEME_KEYS, THEME_META, THEME_SETTING_KEY, type ThemeKey } from '../config/themes';
 import { getDatabase } from '../db';
 import { getCaptureQueueSummary, type CaptureQueueSummary } from '../db/captures';
 import { getLatestOrganizationRun, type OrganizationRunRow } from '../db/knowledge';
@@ -77,6 +78,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [selectingModel, setSelectingModel] = useState(false);
   const [remote, setRemote] = useState<RemoteAccessState>(emptyRemote);
   const [remoteKey, setRemoteKey] = useState('');
+  const [themeKey, setThemeKey] = useState<ThemeKey>('lucy');
   const [changingRemote, setChangingRemote] = useState(false);
   const [benchmarkRunning, setBenchmarkRunning] = useState(false);
   const [benchmarkProgress, setBenchmarkProgress] = useState('');
@@ -150,8 +152,34 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       setAlarmStyle((await getSetting(db, 'alarm_style_enabled')) === 'on');
       setSemanticRouter((await getSetting(db, 'semantic_router_enabled')) !== 'off');
       setMealReminders((await getSetting(db, 'meal_reminders_enabled')) === 'on');
+      const savedTheme = await getSetting(db, THEME_SETTING_KEY);
+      if (savedTheme && (THEME_KEYS as string[]).includes(savedTheme)) setThemeKey(savedTheme as ThemeKey);
     })();
   }, [backgroundEnabled, localRefresh, refreshToken]);
+
+  // Accent theme picker — swaps just the accent color, then restarts so every styled surface re-themes.
+  const pickTheme = (k: ThemeKey) => {
+    if (k === themeKey) return;
+    Alert.alert(
+      `Switch to ${THEME_META[k].label} accent?`,
+      'Lucy will restart to apply the new color. You can switch back anytime.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Apply & restart',
+          onPress: () => void (async () => {
+            try {
+              const db = await getDatabase();
+              await setSetting(db, THEME_SETTING_KEY, k);
+              setThemeKey(k);
+              const U = await import('expo-updates');
+              await U.reloadAsync();
+            } catch { Alert.alert('Could not switch', 'Please try again.'); }
+          })(),
+        },
+      ],
+    );
+  };
 
   useEffect(() => subscribeToDeviceModel(setDeviceModel), []);
 
@@ -448,6 +476,24 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
     <ScrollView style={styles.container} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>Settings</Text>
       <Text style={styles.subtitle}>Quiet controls for your memory.</Text>
+
+      {/* ─── Appearance — accent theme ─────────────────────────────────── */}
+      <SettingsGroup icon="🎨" title="Appearance" summary="Pick an accent color" pill={THEME_META[themeKey].label}>
+        <Text style={styles.themeHint}>Swap Lucy's accent to a familiar app's color. Restarts to apply.</Text>
+        <View style={styles.themeRow}>
+          {THEME_KEYS.map((k) => {
+            const active = k === themeKey;
+            return (
+              <TouchableOpacity key={k} activeOpacity={0.85} onPress={() => pickTheme(k)} style={styles.themeChip}>
+                <View style={[styles.themeSwatch, { backgroundColor: THEME_META[k].swatch }, active && styles.themeSwatchActive]}>
+                  {active ? <Text style={styles.themeCheck}>✓</Text> : null}
+                </View>
+                <Text style={[styles.themeLabel, active && styles.themeLabelActive]} numberOfLines={1}>{THEME_META[k].label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </SettingsGroup>
 
       {/* ─── You & profile ─────────────────────────────────────────────── */}
       <SettingsGroup
@@ -1840,6 +1886,14 @@ const styles = StyleSheet.create({
   listContent: { paddingTop: 18, paddingBottom: 48 },
   title: { fontSize: 30, letterSpacing: -0.8, fontWeight: '700', color: LUCY_COLORS.textDark, marginBottom: 6 },
   subtitle: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 4, marginBottom: 18, lineHeight: 20 },
+  themeHint: { color: LUCY_COLORS.textMuted, fontSize: 12.5, lineHeight: 18, marginBottom: 12 },
+  themeRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 6 },
+  themeChip: { alignItems: 'center', flex: 1, gap: 6 },
+  themeSwatch: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
+  themeSwatchActive: { borderColor: LUCY_COLORS.textDark },
+  themeCheck: { color: '#0B0B0F', fontSize: 18, fontWeight: '900' },
+  themeLabel: { color: LUCY_COLORS.textSubtle, fontSize: 10.5, fontWeight: '700' },
+  themeLabelActive: { color: LUCY_COLORS.textDark },
   list: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 21, borderWidth: 1, borderColor: LUCY_COLORS.border, overflow: 'hidden' },
   // ─── Collapsible group (accordion) ──────────────────────────────────────
   group: { backgroundColor: LUCY_COLORS.surface, borderRadius: 20, borderWidth: 1, borderColor: LUCY_COLORS.border, marginBottom: 12, overflow: 'hidden' },

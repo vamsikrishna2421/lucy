@@ -6,9 +6,15 @@
  *   - Amber glow system for active/important states
  *   - Warm cream text, never cold grey
  *   - Borders that define depth without harsh contrast
+ *
+ * THEMES: only the ACCENT family (primary*) is swappable per the user's chosen "skin" (Settings →
+ * Appearance). Surfaces/text stay the same. The choice is read SYNCHRONOUSLY at boot so every
+ * StyleSheet picks up the right accent; changing it persists + restarts the app.
  */
-export const LUCY_COLORS = {
-  // ─── Core amber ──────────────────────────────────────────────────────────
+import { ACCENT_THEMES, type AccentPalette, THEME_SETTING_KEY, isThemeKey } from './themes';
+
+const BASE_COLORS = {
+  // ─── Core accent (overridden by the active theme) ─────────────────────────
   primary:      '#FF8C42',   // main CTA, highlights
   primaryGlow:  '#FFA05C',   // hover/active state, a touch lighter
   primaryDeep:  '#E8722A',   // pressed state, 10% darker
@@ -55,11 +61,28 @@ export const LUCY_COLORS = {
   yield:      '#FDDCB0',
 } as const;
 
+/** Read the chosen theme's accent SYNCHRONOUSLY at module init. Fully guarded — any failure (DB not
+ *  ready on first launch, native module absent in a test/node context) falls back to the default amber. */
+function activeAccent(): AccentPalette {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const SQLite = require('expo-sqlite') as typeof import('expo-sqlite');
+    const db = SQLite.openDatabaseSync('lucy.db');
+    const row = db.getFirstSync<{ value: string }>('SELECT value FROM settings WHERE key = ?', THEME_SETTING_KEY);
+    if (row && isThemeKey(row.value)) return ACCENT_THEMES[row.value];
+  } catch { /* default below */ }
+  return ACCENT_THEMES.lucy;
+}
+
+type Palette = { -readonly [K in keyof typeof BASE_COLORS]: string };
+export const LUCY_COLORS: Palette = { ...BASE_COLORS, ...activeAccent() };
+const ACTIVE_PRIMARY = LUCY_COLORS.primary;
+
 /** Shadow presets for depth — use on elevated cards, modals, active states. */
 export const LUCY_SHADOWS = {
   /** Subtle elevation — secondary cards */
   sm: {
-    shadowColor: '#FF8C42',
+    shadowColor: ACTIVE_PRIMARY,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
@@ -67,7 +90,7 @@ export const LUCY_SHADOWS = {
   },
   /** Standard card elevation */
   md: {
-    shadowColor: '#FF8C42',
+    shadowColor: ACTIVE_PRIMARY,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.10,
     shadowRadius: 8,
@@ -75,7 +98,7 @@ export const LUCY_SHADOWS = {
   },
   /** Modal / sheet elevation */
   lg: {
-    shadowColor: '#FF8C42',
+    shadowColor: ACTIVE_PRIMARY,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
@@ -83,7 +106,7 @@ export const LUCY_SHADOWS = {
   },
   /** Active / focus glow — primary interactive elements */
   glow: {
-    shadowColor: '#FF8C42',
+    shadowColor: ACTIVE_PRIMARY,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 12,

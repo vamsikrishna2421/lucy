@@ -17,9 +17,10 @@ export interface HealthSummary {
   activity: { steps: number; sleep_hours: number | null; resting_hr: number | null; active_minutes: number | null; active_energy_kcal: number | null; active_energy_source: 'measured' | 'estimated' | 'absent' };
   energy: { bmr: number | null; tdee: number | null; tdee_source: 'measured' | 'estimated' | null };
   intake: { calories: number; protein_g: number; carbs_g: number; fat_g: number; items: FoodLogRow[] };
+  intakeLogged: boolean;           // did the user log ANY food today? if false, intake is UNKNOWN (never assume 0/fasting)
   goals: { calorie_goal: number; protein_g: number; carbs_g: number; fat_g: number } | null;
   remaining: number | null;        // goal − intake (calories)
-  net: number | null;              // intake − tdee today
+  net: number | null;              // intake − tdee today (null when nothing logged — intake unknown)
   net_rolling_7: number | null;    // 7-day rolling average net (trend, not a verdict)
   drLucy: import('./drLucy').GuardianGuidance[]; // gentle, grounded guardian guidance (may be empty)
 }
@@ -56,10 +57,12 @@ export async function buildHealthContextPrefix(db: SQLiteDatabase): Promise<stri
       `- Body: ${p.sex ?? '?'}, ${age ?? '?'}y, ${p.height_cm ?? '?'}cm, ${p.weight_kg ?? '?'}kg, activity ${p.activity_level}, goal "${p.goal}"${p.body_fat_pct ? `, ${p.body_fat_pct}% body fat` : ''}.`,
       `- Energy: BMR ${s.energy.bmr ?? '?'} kcal, TDEE ${s.energy.tdee ?? '?'} kcal (${s.energy.tdee_source ?? 'n/a'}).`,
       s.goals ? `- Daily goal: ${s.goals.calorie_goal} kcal (P ${s.goals.protein_g} / C ${s.goals.carbs_g} / F ${s.goals.fat_g} g).` : '',
-      `- Today so far: ${s.intake.calories} kcal eaten${s.remaining != null ? `, ${s.remaining} remaining` : ''}; steps ${s.activity.steps}${s.activity.sleep_hours ? `, slept ${s.activity.sleep_hours}h` : ''}.`,
-      s.net_rolling_7 != null ? `- 7-day net average: ${s.net_rolling_7} kcal/day (trend only — frame gently, never as a verdict).` : '',
+      s.intakeLogged
+        ? `- Today so far: ${s.intake.calories} kcal eaten${s.remaining != null ? `, ${s.remaining} remaining` : ''}; steps ${s.activity.steps}${s.activity.sleep_hours ? `, slept ${s.activity.sleep_hours}h` : ''}.`
+        : `- Today: NO food logged yet. Intake is UNKNOWN — do NOT assume they fasted, ate nothing, or are in a deficit, and do NOT estimate weight loss from this. They are often just too busy to log. Gently invite them to snap a photo of their next meal. Steps ${s.activity.steps}${s.activity.sleep_hours ? `, slept ${s.activity.sleep_hours}h` : ''}.`,
+      s.net_rolling_7 != null ? `- 7-day net average (ONLY across days they actually logged food): ${s.net_rolling_7} kcal/day (trend only — never a verdict; days with no log are excluded, not counted as zero).` : '',
       medsLine,
-      `When estimating weight change: ~7700 kcal ≈ 1 kg. Use their TDEE + intake. Be encouraging and ED-safe; never suggest unsafe deficits.`,
+      `When estimating weight change: ~7700 kcal ≈ 1 kg. Use their TDEE + intake ONLY for days with logged food; never infer fasting or weight loss from missing logs. Be encouraging and ED-safe; never suggest unsafe deficits.`,
       '',
     ].filter(Boolean);
     return parts.join('\n');
@@ -126,8 +129,11 @@ export async function getHealthSummary(db: SQLiteDatabase, dateKey = todayKey())
     goals = { calorie_goal: cal, ...macroTargets(cal, weightKg) };
   }
 
-  const remaining = goals ? Math.round(goals.calorie_goal - intake.calories) : null;
-  const net = tdeeVal != null ? netCalorie(intake.calories, tdeeVal) : null;
+  // Did the user log ANY food today? If not, intake is UNKNOWN — we must NOT treat 0 logged as 0 eaten
+  // (that would fabricate a huge deficit / "fasting" / rapid weight-loss assumption from mere laziness).
+  const intakeLogged = foods.length > 0;
+  const remaining = goals && intakeLogged ? Math.round(goals.calorie_goal - intake.calories) : null;
+  const net = (tdeeVal != null && intakeLogged) ? netCalorie(intake.calories, tdeeVal) : null;
 
   // Personal baselines for Dr. Lucy (mean RHR/sleep over ~21 days).
   const baseRow = await db.getFirstAsync<{ rhr: number | null; sleep: number | null }>(
@@ -151,6 +157,7 @@ export async function getHealthSummary(db: SQLiteDatabase, dateKey = todayKey())
     },
     energy: { bmr, tdee: tdeeVal, tdee_source: tdeeSource },
     intake,
+    intakeLogged,
     goals,
     remaining,
     net,

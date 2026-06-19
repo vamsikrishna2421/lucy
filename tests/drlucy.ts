@@ -13,6 +13,7 @@ function summary(over: Partial<HealthSummary> = {}): HealthSummary {
     activity: { steps: 8000, sleep_hours: 7.5, resting_hr: 60, active_minutes: 30, active_energy_kcal: 300, active_energy_source: 'estimated' },
     energy: { bmr: 1600, tdee: 2200, tdee_source: 'measured' },
     intake: { calories: 1800, protein_g: 90, carbs_g: 200, fat_g: 60, items: [] },
+    intakeLogged: true,
     goals: { calorie_goal: 1900, protein_g: 110, carbs_g: 200, fat_g: 60 },
     remaining: 100, net: -400, net_rolling_7: -300, drLucy: [],
     ...over,

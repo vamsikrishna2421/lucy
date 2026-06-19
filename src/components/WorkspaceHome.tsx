@@ -39,6 +39,7 @@ const BRAIN: BrainTile[] = [
   { key: 'Medications', label: 'Medications', hint: 'Doses & reminders', icon: 'medkit', color: LUCY_COLORS.rose },
   { key: 'Listen', label: 'Listen data', hint: 'What Lucy has heard', icon: 'mic', color: LUCY_COLORS.rose },
   { key: 'Expenses', label: 'Expenses', hint: 'Money in motion', icon: 'cash', color: LUCY_COLORS.primary },
+  { key: 'Goals', label: 'Money goals', hint: 'Save toward a target', icon: 'flag', color: LUCY_COLORS.gold },
 ];
 
 export function WorkspaceHome({ onOpen, onPlanDay }: { onOpen: (tab: string) => void; onPlanDay: () => void }) {

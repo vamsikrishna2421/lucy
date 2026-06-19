@@ -96,6 +96,15 @@ export async function sendMorningBrief(db: SQLiteDatabase): Promise<void> {
     if (money.length > 0) parts.push(money[0]);
   } catch { /* non-critical */ }
 
+  // Savings goal slipping — turn it into a number to act on.
+  try {
+    const { getGoalsWithProgress } = await import('../db/moneyGoals');
+    const { goalGuidance } = await import('./moneyGoals');
+    const goals = await getGoalsWithProgress(db);
+    const behind = goals.find((g) => g.status === 'active' && g.progress.onTrack === false);
+    if (behind) parts.push(goalGuidance(behind.label, behind.progress, behind.currency));
+  } catch { /* non-critical */ }
+
   // Mood trend
   if (moodTrend.recentTones.length > 0) {
     const stressed = moodTrend.recentTones.filter((t) => ['stressed', 'frustrated', 'negative'].includes(t)).length;

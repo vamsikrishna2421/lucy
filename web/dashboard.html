@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 65 (App-parity features + spring motion:
+/* LUCY web - premium - dashboard rev 66 (App-parity features + spring motion:
+   • Money: savings goals (Vamsi #2) — target + deadline tracked by contributions, on/off-track pacing bar, via /api/money/goals (+/contribute)
    • Projects: rename/edit a project (short headline + description) via /api/projects/update — old name kept as alias so items still gather
    • Projects: project autopilot suggestions with ＋ Create / Add to existing (merge) / Dismiss, via /api/projects/suggestions + /merge; smarter dedup hides near-duplicates of existing projects
    • Tasks: commitment guardian — promises you made + things owed to you, at-risk in rose/amber, Done/Dismiss, via /api/commitments
@@ -1654,12 +1655,39 @@ async function hlSaveProfile(){
 /* ─── MONEY-WATCH (subscription detection + upcoming bills + drift) ─── */
 let MONEY=null;          // {insights,recurring,upcoming}
 let MONEY_FETCHED=false;
+let MONEY_GOALS=[];      // [{id,label,target_amount,currency,deadline,project_name,status,progress}]
 async function loadMoney(){
   try{const r=await api('/api/money');if(r&&typeof r==='object'){MONEY=r;MONEY_FETCHED=true;}}catch(e){/* keep last */}
+  try{const g=await api('/api/money/goals');if(g&&g.ok)MONEY_GOALS=g.goals||[];}catch(e){/* keep last */}
   const host=$('moneyWatch');if(host)host.innerHTML=moneyWatchBody();
+  const gh=$('moneyGoals');if(gh){gh.innerHTML=goalsBody();stampStagger(gh);}
   // Once we have real subscriptions, flip the Market table cell to ✅ and refresh if shown.
   if(MONEY&&Array.isArray(MONEY.recurring)&&MONEY.recurring.length)flipSubscriptionCell();
 }
+function goalMoney(n,cur){return (cur||'₹')+Math.round(n||0).toLocaleString();}
+function goalsBody(){
+  const goals=MONEY_GOALS||[];
+  const head=`<div class="sec"><h2>Goals</h2><div class="grow"></div><button class="btn ghost sm" onclick="newMoneyGoal()">＋ New goal</button></div>`;
+  if(!goals.length)return head+`<div class="card" style="color:var(--muted);display:block">No savings goals yet — set one (e.g. save 2000 for the move by Aug) and Lucy tracks your pace.</div>`;
+  return head+'<div class="col">'+goals.map(g=>{const p=g.progress||{};const pct=Math.max(0,Math.min(1,p.pct||0));const cur=g.currency||'₹';
+    const col=p.done?'#22C55E':(p.onTrack===false?'#FB7185':(p.onTrack===true?'var(--primary)':'var(--muted)'));
+    const dl=(p.daysLeft==null)?'':(p.daysLeft<0?((-p.daysLeft)+'d over'):(p.daysLeft+'d left'));
+    const status=p.done?'Done 🎉':(p.onTrack===false?'Behind':(p.onTrack===true?'On track':'No deadline'));
+    return `<div class="card rise" style="flex-direction:column;gap:8px;align-items:stretch;border-left:3px solid ${col}">
+      <div style="display:flex;align-items:center;gap:8px"><span class="ttl">${esc(g.label)}</span>${g.project_name?`<span class="when">· ${esc(g.project_name)}</span>`:''}<span class="when" style="margin-left:auto">${esc(status)}${dl?' · '+esc(dl):''}</span></div>
+      <div style="display:flex;justify-content:space-between"><span class="when">${goalMoney(p.saved,cur)} of ${goalMoney(p.target,cur)}</span><span class="when">${Math.round(pct*100)}%</span></div>
+      <div style="height:7px;background:var(--raised);border-radius:6px;overflow:hidden"><div style="height:100%;width:${Math.round(pct*100)}%;background:${col}"></div></div>
+      <div style="display:flex;gap:8px"><button class="btn sm" onclick="contributeGoal(${g.id})">＋ Add</button><button class="btn ghost sm" onclick="delMoneyGoal(${g.id})">Delete</button></div>
+    </div>`;}).join('')+'</div>';
+}
+async function newMoneyGoal(){const label=prompt('Goal name (e.g. Move fund):');if(!label||!label.trim())return;
+  const target=Number(prompt('Target amount (number):'));if(!Number.isFinite(target)||target<=0){toast('Enter a valid amount');return;}
+  const deadline=(prompt('Deadline (YYYY-MM-DD, optional):')||'').trim();const cur=(prompt('Currency symbol:','₹')||'₹').trim()||'₹';
+  let iso=null;if(deadline){const d=new Date(deadline);if(!isNaN(d.getTime()))iso=d.toISOString();}
+  await api('/api/money/goals',{method:'POST',body:JSON.stringify({label:label.trim(),target,currency:cur,deadline:iso})});toast('Goal created ✓');await loadMoney();}
+async function contributeGoal(id){const amount=Number(prompt('How much did you put aside?'));if(!Number.isFinite(amount)||amount===0)return;
+  await api('/api/money/goals/contribute',{method:'POST',body:JSON.stringify({goalId:id,amount})});toast('Saved ✓');await loadMoney();}
+async function delMoneyGoal(id){if(!confirm('Delete this goal?'))return;await api('/api/money/goals/'+id,{method:'DELETE'});toast('Deleted');await loadMoney();}
 function moneyDue(ms){const t=parseTs(ms);if(isNaN(t))return '';const d=dayKey(t),today=dayKey(Date.now());const diff=Math.round((d-today)/86400000);if(diff===0)return 'today';if(diff===1)return 'tomorrow';if(diff>1&&diff<7)return 'in '+diff+' days';return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric'});}
 function moneyWatchBody(){
   if(!MONEY_FETCHED&&!MONEY)return '';
@@ -1684,6 +1712,7 @@ function vMoney(){const ex=(DATA.expenses||[]);const now=new Date();const month=
   const total=month.reduce((s,e)=>s+(+e.amount||0),0);const cats={};month.forEach(e=>{cats[e.category||'other']=(cats[e.category||'other']||0)+(+e.amount||0);});const catArr=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
   let h=`<div class="page"><section class="page-hero compact"><div class="page-kicker">Money</div><h1 class="page-title">Spending Lucy found in your notes.</h1><div class="page-sub">Receipts and expense mentions become a simple monthly view.</div><div class="hero-metrics">${heroMetric(total.toFixed(2),'this month')}${heroMetric(month.length,'payments')}${heroMetric(ex.length,'all time')}</div></section>`;
   h+=`<div id="moneyWatch">${moneyWatchBody()}</div>`;
+  h+=`<div id="moneyGoals">${goalsBody()}</div>`;
   if(catArr.length){h+=`<div class="sec"><h2>By category</h2></div><div class="col">`+catArr.map(([c,v])=>{const pct=total?Math.round(v/total*100):0;return `<div class="card" style="flex-direction:column;gap:6px"><div style="display:flex;width:100%"><span class="ttl">${esc(c)}</span><span class="when" style="margin-left:auto">${v.toFixed(2)} · ${pct}%</span></div><div style="height:6px;background:var(--raised);border-radius:6px;width:100%;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--primary)"></div></div></div>`;}).join('')+'</div>';}
   h+=`<div class="sec"><h2>Recent payments</h2></div>`;h+=ex.length?'<div class="col">'+ex.slice(0,30).map(e=>`<div class="card"><div style="flex:1"><span class="ttl">${esc(e.description||e.category||'Payment')}</span><div class="sub">${esc(e.category||'')}</div></div><span class="ttl" style="color:var(--primary)">${(+e.amount||0).toFixed(2)}</span><span class="when">${fmt(e.created_at)}</span></div>`).join('')+'</div>':empty('▦','No expenses tracked','');
   return h+'</div>';}

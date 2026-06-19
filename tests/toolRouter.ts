@@ -60,6 +60,9 @@ ok('fastRoute commitments (promise)', fastRoute('what did I promise this week') 
 ok('fastRoute commitments (owe)', fastRoute('what do I owe anyone') === 'commitments');
 ok('fastRoute commitments (owes me)', fastRoute('who owes me anything') === 'commitments');
 ok('fastRoute commitments (waiting)', fastRoute('what am I waiting on from others') === 'commitments');
+ok('fastRoute money_goals (savings goal)', fastRoute('how is my savings goal going') === 'money_goals');
+ok('fastRoute money_goals (on track to save)', fastRoute('am I on track to save for the move') === 'money_goals');
+ok('fastRoute money_goals (how much saved)', fastRoute('how much have I saved toward the move') === 'money_goals');
 ok('fastRoute multi-domain → null (LLM decides)', fastRoute('how am I doing on health and money') === null);
 ok('fastRoute vague → null', fastRoute('what should I think about') === null);
 

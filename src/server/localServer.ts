@@ -171,6 +171,38 @@ async function route(req: ParsedRequest): Promise<string> {
       const recurring = detectRecurring(expenses);
       return json(200, { ok: true, insights: await getMoneyInsights(db), recurring, upcoming: forecastUpcomingBills(recurring) });
     }
+    // Savings goals (Vamsi #2) — list with pacing, create, contribute, delete (web parity).
+    if (req.method === 'GET' && req.path === '/api/money/goals') {
+      const { getGoalsWithProgress } = await import('../db/moneyGoals');
+      return json(200, { ok: true, goals: await getGoalsWithProgress(db) });
+    }
+    if (req.method === 'POST' && req.path === '/api/money/goals') {
+      const label = String(payload.label ?? '').trim();
+      const target = Number(payload.target);
+      if (!label || !Number.isFinite(target) || target <= 0) return json(400, { error: 'label and positive target required' });
+      const { createMoneyGoal } = await import('../db/moneyGoals');
+      const id = await createMoneyGoal(db, {
+        label, target,
+        currency: typeof payload.currency === 'string' ? payload.currency : undefined,
+        deadline: typeof payload.deadline === 'string' && payload.deadline ? payload.deadline : null,
+      });
+      return json(200, { ok: true, id });
+    }
+    if (req.method === 'POST' && req.path === '/api/money/goals/contribute') {
+      const goalId = Number(payload.goalId);
+      const amount = Number(payload.amount);
+      if (!goalId || !Number.isFinite(amount)) return json(400, { error: 'goalId and amount required' });
+      const { addContribution } = await import('../db/moneyGoals');
+      await addContribution(db, goalId, amount, typeof payload.note === 'string' ? payload.note : null);
+      return json(200, { ok: true });
+    }
+    if (req.method === 'DELETE' && req.path.startsWith('/api/money/goals/')) {
+      const id = Number(req.path.split('/').pop());
+      if (!id) return json(400, { error: 'Missing id' });
+      const { deleteMoneyGoal } = await import('../db/moneyGoals');
+      await deleteMoneyGoal(db, id);
+      return json(200, { ok: true });
+    }
     // Relationship keep-warm nudges (web parity).
     if (req.method === 'GET' && req.path === '/api/keepwarm') {
       const { getKeepWarmNudges } = await import('../processing/relationshipEngine');

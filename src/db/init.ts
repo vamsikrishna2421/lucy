@@ -788,6 +788,32 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_commitments_capture ON commitments(capture_id);
   `);
 
+  // Money goals (Vamsi #2) — a savings target (optional deadline) tracked by logged contributions,
+  // so LUCY can turn "save 2000 for the move by Aug" into a number with on/off-track pacing.
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS money_goals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      label TEXT NOT NULL,
+      target_amount REAL NOT NULL,
+      currency TEXT DEFAULT '₹',
+      deadline DATETIME,
+      project_name TEXT,
+      status TEXT DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      resolved_at DATETIME
+    );
+    CREATE TABLE IF NOT EXISTS money_goal_contributions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      goal_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      note TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (goal_id) REFERENCES money_goals(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_money_goals_status ON money_goals(status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_goal_contrib ON money_goal_contributions(goal_id, created_at);
+  `);
+
   // Circuit breaker: if a device-calendar read was in-flight when the app last died, expo-calendar
   // likely crashed natively on a bad event. Auto-pause calendar sync so the app stops crash-looping
   // (the user can resume it from the calendar). Self-healing — runs once per startup.

@@ -25,6 +25,7 @@ import { GalaxyView } from './Galaxy';
 import { DocumentsTab } from '../components/DocumentsTab';
 import { ScheduleTab } from '../components/ScheduleTab';
 import { ProjectsTab } from '../components/ProjectsTab';
+import { MoneyGoals } from '../components/MoneyGoals';
 import { WorkspaceHome } from '../components/WorkspaceHome';
 import { AskScreen } from './Ask';
 import { Ionicons } from '@expo/vector-icons';
@@ -63,12 +64,12 @@ import {
 } from '../processing/stalenessEngine';
 
 type ViewMode = 'Focus Now' | 'Timeline' | 'Ask Lucy' | 'Health' | 'Brain';
-type LibraryTab = 'Home' | 'Galaxy' | 'Documents' | 'Calendar' | 'Resources' | 'Projects' | 'Todos' | 'Ideas' | 'Expenses' | 'People' | 'Meetings' | 'Listen' | 'Reminders' | 'Gallery' | 'Medications';
+type LibraryTab = 'Home' | 'Galaxy' | 'Documents' | 'Calendar' | 'Resources' | 'Projects' | 'Todos' | 'Ideas' | 'Expenses' | 'Goals' | 'People' | 'Meetings' | 'Listen' | 'Reminders' | 'Gallery' | 'Medications';
 
 // Display names (internal keys kept stable).
 const TAB_LABEL: Record<LibraryTab, string> = {
   Home: 'Workspace', Calendar: 'Calendar', Documents: 'Documents', Resources: 'Online resources', Galaxy: 'Glossary',
-  Meetings: 'Meetings', Listen: 'Listen data', Projects: 'Projects', Ideas: 'Ideas', Expenses: 'Expenses',
+  Meetings: 'Meetings', Listen: 'Listen data', Projects: 'Projects', Ideas: 'Ideas', Expenses: 'Expenses', Goals: 'Money goals',
   People: 'People', Todos: 'Todos', Reminders: 'Reminders', Gallery: 'Scans & photos', Medications: 'Medications',
 };
 
@@ -3069,13 +3070,13 @@ function LibraryView({
     </TouchableOpacity>
   );
 
-  // Galaxy + Documents + Calendar + Projects are full-screen browsers (no inner ScrollView).
-  if (tab === 'Galaxy' || tab === 'Documents' || tab === 'Calendar' || tab === 'Projects') {
+  // Galaxy + Documents + Calendar + Projects + Goals are full-screen browsers (own scroll; no outer ScrollView).
+  if (tab === 'Galaxy' || tab === 'Documents' || tab === 'Calendar' || tab === 'Projects' || tab === 'Goals') {
     return (
       <View style={styles.library}>
         {backBar}
         <View style={{ flex: 1 }}>
-          {tab === 'Galaxy' ? <GalaxyView /> : tab === 'Documents' ? <DocumentsTab /> : tab === 'Calendar' ? <ScheduleTab /> : <ProjectsTab />}
+          {tab === 'Galaxy' ? <GalaxyView /> : tab === 'Documents' ? <DocumentsTab /> : tab === 'Calendar' ? <ScheduleTab /> : tab === 'Goals' ? <MoneyGoals /> : <ProjectsTab />}
         </View>
       </View>
     );

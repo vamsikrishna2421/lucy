@@ -37,6 +37,7 @@ export function parseSelection(raw: string, question: string, knownNames: string
 const DOMAIN_PATTERNS: Array<{ tool: string; re: RegExp }> = [
   { tool: 'spending', re: /\b(spend|spent|spending|paid|payment|payments|expense|expenses|how much.*(cost|spend)|budget)\b/i },
   { tool: 'money_watch', re: /\b(subscriptions?|recurring|renew|renews|renewal|bills? (due|coming)|due soon|over ?budget|overspend(ing)?|unusual charge|anomal)\b/i },
+  { tool: 'money_goals', re: /\b(savings? goal|saving goal|money goals?|on track to save|how much.*saved|saved (so far|toward|towards)|reach my goal|nest egg|save (?:up )?for)\b/i },
   { tool: 'tasks', re: /\b(tasks?|to-?dos?|to do|pending|action items?|what.*(do i need|should i do))\b/i },
   { tool: 'health', re: /\b(calorie|calories|kcal|weight|diet|nutrition|protein|carbs?|macro|steps?|sleep|workout|exercise|medication|medicine|meds?|dose|dosage|pill)\b/i },
   { tool: 'reminders', re: /\b(reminders?|remind me of|what.*remind)\b/i },

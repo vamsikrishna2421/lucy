@@ -87,7 +87,8 @@ export async function syncNextEventLiveActivity(): Promise<void> {
     if (_eventActivityId && _eventStart && now > _eventStart + START_GRACE_MS) await endNextEventLiveActivity(db);
     if ((await getSetting(db, 'alarm_style_enabled')) !== 'on') { await endNextEventLiveActivity(db); return; }
 
-    const horizon = now + 6 * 60 * 60 * 1000; // only surface events within the next 6 hours
+    // Short heads-up only: surface the event ~5 min before it starts (not hours ahead).
+    const horizon = now + 5 * 60 * 1000;
     const row = await db.getFirstAsync<{ id: number; title: string; start_at: number }>(
       "SELECT id, title, start_at FROM scheduled_blocks WHERE status='committed' AND start_at > ? AND start_at < ? ORDER BY start_at ASC LIMIT 1",
       now, horizon,
@@ -99,7 +100,8 @@ export async function syncNextEventLiveActivity(): Promise<void> {
     if (key === _eventKey && _eventActivityId) return; // already showing this one
     await endNextEventLiveActivity(db);
     const id = m.startActivity(
-      { title: row.title || 'Upcoming', subtitle: 'Tap to see details', progressBar: { date: row.start_at } },
+      // Subtitle doubles as the dismiss tip (the Island has no in-place close button on iOS).
+      { title: row.title || 'Upcoming', subtitle: 'Starts soon · swipe to dismiss', progressBar: { date: row.start_at } },
       { backgroundColor: '#0B0B0F', titleColor: '#FFFFFF', subtitleColor: '#FFA05C', deepLinkUrl: `lucy://event?title=${encodeURIComponent(row.title || 'Upcoming')}&start=${row.start_at}&key=${encodeURIComponent(key)}` },
     );
     if (typeof id === 'string') {

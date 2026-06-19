@@ -109,6 +109,9 @@ export interface ExtractionResult {
   open_loops: OpenLoop[];
   follow_ups: FollowUp[];
   mood: MoodEntry;
+  /** How important this note is to the user's life — drives the "free up space" cleanup
+   *  (low = safe to delete later). Defaults to 'normal' when the model omits it. */
+  importance: 'low' | 'normal' | 'high';
   /** Optional: an imperative action the LLM detected. Null when the capture is
    *  informational (not a command). Surfaced as a "LUCY can do this" card after
    *  processing — replaces the brittle synchronous regex path for complex phrasings. */

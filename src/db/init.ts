@@ -24,6 +24,7 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       archived_at DATETIME,
       archive_reason TEXT,
       guardian_note TEXT,
+      importance TEXT DEFAULT 'normal',
       FOREIGN KEY (parent_capture_id) REFERENCES captures(id)
     );
 
@@ -396,6 +397,11 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     // JSON array of {value, kind} that the Privacy Shield masked from the cloud
     // (passwords + people names). Used to highlight protected values in the UI.
     await db.execAsync('ALTER TABLE captures ADD COLUMN protected_values TEXT;');
+  }
+  if (!existing.has('importance')) {
+    // 'low' | 'normal' | 'high' — how important the note is, for the "free up space" cleanup.
+    // Existing rows default to 'normal' (importance can't be reconstructed retroactively).
+    await db.execAsync("ALTER TABLE captures ADD COLUMN importance TEXT DEFAULT 'normal';");
   }
   const todoColumns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(todos)');
   const existingTodoColumns = new Set(todoColumns.map((column) => column.name));

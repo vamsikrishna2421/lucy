@@ -305,7 +305,7 @@ async function persistExtraction(
       );
     }
     await insertExtractionSnapshot(db, capture.id, extraction);
-    await updateCaptureResult(db, capture.id, extraction.privacy_level, extraction.title, formatStructuredMemory(extraction));
+    await updateCaptureResult(db, capture.id, extraction.privacy_level, extraction.title, formatStructuredMemory(extraction), extraction.importance);
     // Record which passwords/names the Privacy Shield masked from the cloud, so the
     // UI can highlight them. Deterministic detection over the raw text, augmented with
     // the people the model extracted (covers names the on-device LLM caught for shielding).

@@ -186,6 +186,10 @@ export function normalizeExtraction(value: unknown): ExtractionResult {
       const energy = validEnergy.includes(rawEnergy as typeof validEnergy[number]) ? rawEnergy as typeof validEnergy[number] : 'medium';
       return { tone, energy };
     })(),
+    importance: (() => {
+      const raw = text((source as Record<string, unknown>).importance ?? 'normal').toLowerCase().trim();
+      return (raw === 'low' || raw === 'high') ? raw : 'normal';
+    })(),
     detected_action: (() => {
       const validActionTypes = ['timer','call','navigate','play','remind','event','message','shortcut','open_app'] as const;
       const raw = (source as Record<string, unknown>).detected_action;

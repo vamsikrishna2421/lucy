@@ -24,6 +24,41 @@ export interface CaptureRow {
   listen_session_id: string | null;
   protected_values: string | null;
   source_image_path: string | null;
+  importance: 'low' | 'normal' | 'high' | null;
+}
+
+/** A capture trimmed for the "free up space" cleanup list. */
+export interface CleanupCapture {
+  id: number;
+  created_at: string;
+  title: string;
+  snippet: string;
+  importance: 'low' | 'normal' | 'high';
+  has_image: boolean;
+}
+
+/**
+ * Least-important, oldest captures for the "free up space" cleanup screen — low importance first, then
+ * oldest first. Skips already-archived rows. The user multi-selects + deletes to reclaim space.
+ */
+export async function getLowImportanceCaptures(db: SQLiteDatabase, limit = 200): Promise<CleanupCapture[]> {
+  const rows = await db.getAllAsync<{ id: number; created_at: string; extracted_title: string | null; raw_transcript: string | null; importance: string | null; source_image_path: string | null }>(
+    `SELECT id, created_at, extracted_title, raw_transcript, importance, source_image_path
+       FROM captures
+      WHERE archived_at IS NULL AND COALESCE(importance, 'normal') != 'high'
+      ORDER BY CASE COALESCE(importance, 'normal') WHEN 'low' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END ASC,
+               created_at ASC
+      LIMIT ?`,
+    limit,
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    created_at: r.created_at,
+    title: (r.extracted_title || (r.raw_transcript || '').slice(0, 50) || 'Note').trim(),
+    snippet: (r.raw_transcript || '').slice(0, 120).replace(/\s+/g, ' ').trim(),
+    importance: (r.importance === 'low' || r.importance === 'high') ? r.importance : 'normal',
+    has_image: !!r.source_image_path,
+  }));
 }
 
 /** Links the on-device original photo (LUCY Lens source-of-truth) to a capture. */
@@ -168,12 +203,14 @@ export async function updateCaptureResult(
   privacyLevel: PrivacyLevel,
   title: string,
   structuredText: string,
+  importance: 'low' | 'normal' | 'high' = 'normal',
 ): Promise<void> {
   await db.runAsync(
-    'UPDATE captures SET privacy_level = ?, extracted_title = ?, structured_text = ? WHERE id = ?',
+    'UPDATE captures SET privacy_level = ?, extracted_title = ?, structured_text = ?, importance = ? WHERE id = ?',
     privacyLevel,
     title,
     structuredText,
+    importance,
     id,
   );
 }

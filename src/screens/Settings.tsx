@@ -9,7 +9,7 @@ import { getRemoteAccessState, removeRemoteOpenAIKey, setRemoteEnabled, storeRem
 import { config } from '../config';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
-import { getCaptureQueueSummary, type CaptureQueueSummary } from '../db/captures';
+import { getCaptureQueueSummary, getLowImportanceCaptures, type CaptureQueueSummary } from '../db/captures';
 import { getLatestOrganizationRun, type OrganizationRunRow } from '../db/knowledge';
 import { getSetting, setSetting } from '../db/settings';
 import { getBackgroundProcessingState, type BackgroundProcessingState } from '../processing/background';
@@ -19,6 +19,7 @@ import { runEnglishDeviceBenchmark, type BenchmarkResult } from '../processing/b
 import { organizeMemory } from '../processing/organizer';
 import { CheckInScheduler } from '../components/CheckInScheduler';
 import { DayShaper } from '../components/DayShaper';
+import { FreeUpSpace } from '../components/FreeUpSpace';
 import { ScheduledRemindersManager } from '../components/ScheduledRemindersManager';
 import { LearnedProfilePanel } from '../components/LearnedProfilePanel';
 import { LaptopAccessPanel } from '../components/LaptopAccessPanel';
@@ -102,6 +103,8 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [selectedVoiceName, setSelectedVoiceName] = useState('System default');
   const [dayShaperVisible, setDayShaperVisible] = useState(false);
   const [dayShaped, setDayShaped] = useState(false);
+  const [freeUpSpaceVisible, setFreeUpSpaceVisible] = useState(false);
+  const [lowNoteCount, setLowNoteCount] = useState(0);
 
   useEffect(() => wakeWord.onStatusChange(setWakeStatus), []);
 
@@ -146,6 +149,9 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         const av = await getAvailability(db);
         setDayShaped(!av.inferred && !!av.energyCurves);
       } catch { /* non-critical */ }
+      try {
+        setLowNoteCount((await getLowImportanceCaptures(db)).length);
+      } catch { /* non-critical — count pill just hides */ }
       setShieldLlm((await getSetting(db, 'shield_use_local_llm')) === 'true');
       setAlarmStyle((await getSetting(db, 'alarm_style_enabled')) === 'on');
       setSemanticRouter((await getSetting(db, 'semantic_router_enabled')) !== 'off');
@@ -761,6 +767,26 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         </View>
       </SettingsGroup>
 
+      {/* ─── Storage ───────────────────────────────────────────────────── */}
+      <SettingsGroup
+        icon="🧹"
+        title="Storage"
+        summary="Clear low-importance notes to reclaim space"
+        pill={lowNoteCount > 0 ? `${lowNoteCount}` : undefined}
+      >
+        <SettingsRow
+          title="Free up space"
+          value={lowNoteCount > 0
+            ? `${lowNoteCount} least-important note${lowNoteCount === 1 ? '' : 's'} ready to review`
+            : 'Nothing to clear — your memory is already tidy'}
+          badge={lowNoteCount > 0 ? `${lowNoteCount}` : undefined}
+          active={lowNoteCount > 0}
+          actionLabel="Review"
+          onAction={() => setFreeUpSpaceVisible(true)}
+          onInfo={() => setFreeUpSpaceVisible(true)}
+        />
+      </SettingsGroup>
+
       {/* ─── Privacy & data ────────────────────────────────────────────── */}
       <SettingsGroup
         icon="🔒"
@@ -920,6 +946,11 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         visible={dayShaperVisible}
         onClose={() => setDayShaperVisible(false)}
         onSaved={() => { setDayShaped(true); setLocalRefresh((v) => v + 1); }}
+      />
+      <FreeUpSpace
+        visible={freeUpSpaceVisible}
+        onClose={() => setFreeUpSpaceVisible(false)}
+        onChanged={() => setLocalRefresh((v) => v + 1)}
       />
       <SettingsSheet title={panelTitle(activePanel)} visible={activePanel !== null} onClose={() => setActivePanel(null)}>
         {activePanel === 'intelligence' ? (

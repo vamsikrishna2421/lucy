@@ -50,6 +50,7 @@ export function stopAlarmLiveActivity(id: string | null, title = 'Alarm'): void 
 const LA_ID_KEY = 'live_event_activity_id';
 const LA_KEY_KEY = 'live_event_activity_key';
 const LA_START_KEY = 'live_event_activity_start';
+const LA_ACKED_KEY = 'live_event_acked_key'; // event the user already opened+dismissed — never re-show it
 const START_GRACE_MS = 5 * 60 * 1000; // end the countdown ~5 min after the event begins (don't linger)
 
 let _eventActivityId: string | null = null;
@@ -93,11 +94,13 @@ export async function syncNextEventLiveActivity(): Promise<void> {
     );
     if (!row) { await endNextEventLiveActivity(db); return; }
     const key = `evt-${row.id}-${row.start_at}`;
+    // The user opened + dismissed this event from the Island — honor that, never bring it back.
+    if (key === (await getSetting(db, LA_ACKED_KEY))) { await endNextEventLiveActivity(db); return; }
     if (key === _eventKey && _eventActivityId) return; // already showing this one
     await endNextEventLiveActivity(db);
     const id = m.startActivity(
-      { title: row.title || 'Upcoming', subtitle: 'Starting soon', progressBar: { date: row.start_at } },
-      { backgroundColor: '#0B0B0F', titleColor: '#FFFFFF', subtitleColor: '#FFA05C' },
+      { title: row.title || 'Upcoming', subtitle: 'Tap to see details', progressBar: { date: row.start_at } },
+      { backgroundColor: '#0B0B0F', titleColor: '#FFFFFF', subtitleColor: '#FFA05C', deepLinkUrl: `lucy://event?title=${encodeURIComponent(row.title || 'Upcoming')}&start=${row.start_at}&key=${encodeURIComponent(key)}` },
     );
     if (typeof id === 'string') {
       _eventActivityId = id; _eventKey = key; _eventStart = row.start_at;
@@ -105,6 +108,25 @@ export async function syncNextEventLiveActivity(): Promise<void> {
         const { setSetting } = await import('../db/settings');
         await setSetting(db, LA_ID_KEY, id); await setSetting(db, LA_KEY_KEY, key); await setSetting(db, LA_START_KEY, String(row.start_at));
       } catch { /* ignore */ }
+    }
+  } catch { /* ignore */ }
+}
+
+/**
+ * The user tapped the Island banner → it opened the app. End the banner immediately and remember this
+ * event so the countdown never returns for it (the app shows an in-app card instead). Pass the `key`
+ * carried in the deep link; falls back to the persisted/active one.
+ */
+export async function acknowledgeEventLiveActivity(key?: string): Promise<void> {
+  try {
+    const { getDatabase } = await import('../db');
+    const db = await getDatabase();
+    await recoverPersisted(db);
+    const ackKey = key || _eventKey || '';
+    await endNextEventLiveActivity(db);
+    if (ackKey) {
+      const { setSetting } = await import('../db/settings');
+      await setSetting(db, LA_ACKED_KEY, ackKey);
     }
   } catch { /* ignore */ }
 }

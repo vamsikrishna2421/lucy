@@ -97,6 +97,7 @@ export default function App() {
   const [approvalTrigger, setApprovalTrigger] = useState(0);
   const [snapBusy, setSnapBusy] = useState(false);
   const [snapPickerOpen, setSnapPickerOpen] = useState(false);
+  const [eventCard, setEventCard] = useState<{ title: string; start: number } | null>(null);
   const [updateReady, setUpdateReady] = useState(false);
   const [passiveState, setPassiveState] = useState<PassiveListenerState>(passiveListener.getState());
   const [meetingVisible, setMeetingVisible] = useState(false);
@@ -404,6 +405,20 @@ export default function App() {
       const mm = url.match(/^lucy:\/\/([^?]*)\??(.*)$/);
       const kind = (mm && mm[1] ? mm[1] : 'voice').replace(/\/+$/, '');
       const qs = (mm && mm[2]) || '';
+      // Tapped the Dynamic Island event banner → open Lucy, end the Island banner immediately, and show
+      // an in-app card with the event + its schedule (tap to dismiss). It won't return to the Island.
+      if (kind === 'event') {
+        const pick = (k: string) => { const m2 = qs.match(new RegExp(`(?:^|&)${k}=([^&]*)`)); return m2 ? decodeURIComponent(m2[1].replace(/\+/g, ' ')) : ''; };
+        const title = pick('title') || 'Upcoming';
+        const start = Number(pick('start')) || 0;
+        const key = pick('key');
+        setEventCard({ title, start });
+        try {
+          const { acknowledgeEventLiveActivity } = await import('./src/audio/liveActivity');
+          await acknowledgeEventLiveActivity(key || undefined);
+        } catch { /* ignore */ }
+        return;
+      }
       const tm = qs.match(/(?:^|&)text=([^&]*)/);
       const rawText = tm ? decodeURIComponent(tm[1].replace(/\+/g, ' ')) : '';
       // Strip leading "Lucy" / "Hey Lucy" / "Tell Lucy to" prefix so a Siri Shortcut can
@@ -1015,6 +1030,23 @@ export default function App() {
           </TouchableOpacity>
         ) : null}
       </SafeAreaView>
+      {/* Event acknowledge card — shown when the Dynamic Island banner is tapped. Tap anywhere to dismiss. */}
+      <Modal visible={!!eventCard} transparent animationType="fade" onRequestClose={() => setEventCard(null)}>
+        <TouchableOpacity activeOpacity={1} style={styles.eventCardOverlay} onPress={() => setEventCard(null)}>
+          <View style={styles.eventCardBox}>
+            <View style={styles.eventCardIconRing}>
+              <Ionicons name="calendar" size={22} color={LUCY_COLORS.primary} />
+            </View>
+            <Text style={styles.eventCardKicker}>UPCOMING</Text>
+            <Text style={styles.eventCardTitle}>{eventCard?.title}</Text>
+            <Text style={styles.eventCardWhen}>
+              {eventCard?.start ? new Date(eventCard.start).toLocaleString(undefined, { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
+            </Text>
+            <View style={styles.eventCardDivider} />
+            <Text style={styles.eventCardDismiss}>Tap anywhere to dismiss</Text>
+          </View>
+        </TouchableOpacity>
+      </Modal>
       {/* Designed snap picker — Lucy peeks over the card and offers the source. */}
       <Modal visible={snapPickerOpen} transparent animationType="fade" onRequestClose={() => setSnapPickerOpen(false)}>
         <TouchableOpacity activeOpacity={1} style={styles.snapPickerOverlay} onPress={() => setSnapPickerOpen(false)}>
@@ -1136,6 +1168,14 @@ const styles = StyleSheet.create({
   updatePrimaryText: { color: '#0B0B0F', fontWeight: '800', fontSize: 16 },
   updateLater: { paddingVertical: 12, alignItems: 'center', alignSelf: 'stretch', marginTop: 4 },
   updateLaterText: { color: LUCY_COLORS.textMuted, fontWeight: '600', fontSize: 14 },
+  eventCardOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', alignItems: 'center', justifyContent: 'center', padding: 30 },
+  eventCardBox: { width: '100%', maxWidth: 340, backgroundColor: LUCY_COLORS.surface, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 24, alignItems: 'center' },
+  eventCardIconRing: { width: 52, height: 52, borderRadius: 26, backgroundColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  eventCardKicker: { color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800', letterSpacing: 1.4 },
+  eventCardTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '800', textAlign: 'center', marginTop: 6 },
+  eventCardWhen: { color: LUCY_COLORS.textMuted, fontSize: 14.5, fontWeight: '600', textAlign: 'center', marginTop: 8 },
+  eventCardDivider: { height: 1, alignSelf: 'stretch', backgroundColor: LUCY_COLORS.border, marginTop: 18, marginBottom: 12 },
+  eventCardDismiss: { color: LUCY_COLORS.textSubtle, fontSize: 13, fontWeight: '600' },
   snapPickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', alignItems: 'center', justifyContent: 'center', padding: 30 },
   snapPickerCard: { width: '100%', maxWidth: 360, backgroundColor: LUCY_COLORS.surface, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingTop: 40, paddingHorizontal: 22, paddingBottom: 18, overflow: 'visible' },
   snapPickerTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '800' },

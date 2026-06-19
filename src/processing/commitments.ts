@@ -129,6 +129,16 @@ export function extractCommitments(text: string, now = Date.now()): Commitment[]
   return out;
 }
 
+/** Resolve a commitment's due field (which may be natural language like "Thursday" from the LLM, an ISO
+ *  date, or empty) to an ISO timestamp, or null. Reuses the scheduler's parseDeadline for relative dates. */
+export function resolveCommitmentDue(due: string | null | undefined, now = Date.now()): string | null {
+  const raw = (due ?? '').trim();
+  if (!raw) return null;
+  const direct = Date.parse(raw);
+  if (Number.isFinite(direct)) return new Date(direct).toISOString();
+  return parseDeadline(raw, now) ?? parseDeadline(`by ${raw}`, now);
+}
+
 /** Of the extracted commitments, the ones that are at risk now: have a due date that is past or within
  *  the given lookahead window (default 48h) and still open. (No persistence here — caller supplies the set.) */
 export function atRiskCommitments(commitments: Commitment[], now = Date.now(), withinMs = 48 * 60 * 60 * 1000): Commitment[] {

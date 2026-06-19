@@ -176,6 +176,19 @@ export function normalizeExtraction(value: unknown): ExtractionResult {
           })
           .filter((item) => item.action.trim().length > 0)
       : [],
+    commitments: Array.isArray(source.commitments)
+      ? source.commitments
+          .map((item) => {
+            const c = record(item);
+            return {
+              action: text(c.action).trim(),
+              counterparty: text(c.counterparty).trim() || null,
+              due: text(c.due).trim() || null,
+              direction: enumValue(c.direction, ['i-owe', 'owed-to-me'] as const, 'i-owe' as const),
+            };
+          })
+          .filter((item) => item.action.length > 0)
+      : [],
     mood: (() => {
       const validTones = ['positive','negative','neutral','stressed','excited','frustrated','calm'] as const;
       const validEnergy = ['high','medium','low'] as const;

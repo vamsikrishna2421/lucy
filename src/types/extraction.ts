@@ -74,6 +74,18 @@ export interface FollowUp {
   action: string;
 }
 
+/** A promise with an obligation between the user and another person — the commitment guardian.
+ *  'i-owe' = the user promised it; 'owed-to-me' = someone owes the user. */
+export interface ExtractedCommitment {
+  /** The concrete thing owed, short + imperative ("send the deck"). */
+  action: string;
+  /** The other person, or null when unnamed. */
+  counterparty: string | null;
+  /** Deadline exactly as stated ("Thursday", "by Friday") or null; resolved to a date on-device. */
+  due: string | null;
+  direction: 'i-owe' | 'owed-to-me';
+}
+
 /** An executable action the LLM detected in the capture (imperative commands like
  *  "call Mom", "set a 20-min timer", "navigate to the office"). Mirrors ExtractedAction
  *  from automationEngine so the same confirmation UI can be reused. */
@@ -108,6 +120,7 @@ export interface ExtractionResult {
   memory_gaps: MemoryGap[];
   open_loops: OpenLoop[];
   follow_ups: FollowUp[];
+  commitments: ExtractedCommitment[];
   mood: MoodEntry;
   /** How important this note is to the user's life — drives the "free up space" cleanup
    *  (low = safe to delete later). Defaults to 'normal' when the model omits it. */

@@ -282,11 +282,22 @@ async function persistExtraction(
       await insertFollowUp(db, capture.id, fu.assignee, fu.action, extraction.privacy_level);
     }
     // Commitment guardian: detect promises the user made ("I'll send the deck to Raghavendra by Thu")
-    // and things they're owed, with deadlines, so LUCY can chase the at-risk ones. Deduped on insert.
+    // and things they're owed, with deadlines, so LUCY can chase the at-risk ones. The LLM-typed
+    // commitments handle messy phrasing; the regex extractor is the offline/fallback net. Deduped on insert.
     try {
-      const { extractCommitments } = await import('./commitments');
+      const { extractCommitments, resolveCommitmentDue } = await import('./commitments');
       const { insertCommitment } = await import('../db/commitments');
-      for (const c of extractCommitments(capture.raw_transcript ?? '')) {
+      const baseNow = Date.parse(capture.created_at ?? '') || Date.now();
+      for (const lc of extraction.commitments ?? []) {
+        await insertCommitment(db, capture.id, {
+          text: lc.action,
+          action: lc.action,
+          counterparty: lc.counterparty,
+          dueISO: resolveCommitmentDue(lc.due, baseNow),
+          direction: lc.direction,
+        }, extraction.privacy_level);
+      }
+      for (const c of extractCommitments(capture.raw_transcript ?? '', baseNow)) {
         await insertCommitment(db, capture.id, c, extraction.privacy_level);
       }
     } catch { /* non-critical — commitment tracking never blocks a capture */ }
@@ -500,6 +511,7 @@ async function chunkAndMergeExtract(
     merged.reminders = [...merged.reminders, ...r.reminders];
     merged.open_loops = [...merged.open_loops, ...r.open_loops];
     merged.follow_ups = [...merged.follow_ups, ...r.follow_ups];
+    merged.commitments = [...merged.commitments, ...r.commitments];
     merged.tags = [...new Set([...merged.tags, ...r.tags])];
     merged.clarifications = [...merged.clarifications, ...r.clarifications];
     merged.memory_gaps = [...merged.memory_gaps, ...r.memory_gaps];

@@ -42,6 +42,7 @@ function fixture(overrides: Partial<ExtractionResult>): ExtractionResult {
     memory_gaps: [],
     open_loops: [],
     follow_ups: [],
+    commitments: [],
     mood: { tone: 'neutral', energy: 'medium' },
     importance: 'normal',
     detected_action: null,

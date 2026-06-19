@@ -152,12 +152,16 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       setAlarmStyle((await getSetting(db, 'alarm_style_enabled')) === 'on');
       setSemanticRouter((await getSetting(db, 'semantic_router_enabled')) !== 'off');
       setMealReminders((await getSetting(db, 'meal_reminders_enabled')) === 'on');
-      const savedTheme = await getSetting(db, THEME_SETTING_KEY);
-      if (savedTheme && (THEME_KEYS as string[]).includes(savedTheme)) setThemeKey(savedTheme as ThemeKey);
+      try {
+        const SecureStore = await import('expo-secure-store');
+        const savedTheme = SecureStore.getItem(THEME_SETTING_KEY);
+        if (savedTheme && (THEME_KEYS as string[]).includes(savedTheme)) setThemeKey(savedTheme as ThemeKey);
+      } catch { /* default */ }
     })();
   }, [backgroundEnabled, localRefresh, refreshToken]);
 
   // Accent theme picker — swaps just the accent color, then restarts so every styled surface re-themes.
+  // Stored in SecureStore (read synchronously at boot in colors.ts; the app DB is encrypted).
   const pickTheme = (k: ThemeKey) => {
     if (k === themeKey) return;
     Alert.alert(
@@ -169,8 +173,8 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           text: 'Apply & restart',
           onPress: () => void (async () => {
             try {
-              const db = await getDatabase();
-              await setSetting(db, THEME_SETTING_KEY, k);
+              const SecureStore = await import('expo-secure-store');
+              await SecureStore.setItemAsync(THEME_SETTING_KEY, k);
               setThemeKey(k);
               const U = await import('expo-updates');
               await U.reloadAsync();

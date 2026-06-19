@@ -61,15 +61,15 @@ const BASE_COLORS = {
   yield:      '#FDDCB0',
 } as const;
 
-/** Read the chosen theme's accent SYNCHRONOUSLY at module init. Fully guarded — any failure (DB not
- *  ready on first launch, native module absent in a test/node context) falls back to the default amber. */
+/** Read the chosen theme's accent SYNCHRONOUSLY at module init from SecureStore (the app DB is
+ *  SQLCipher-encrypted, so it can't be read without the key at boot — SecureStore has a sync getItem
+ *  and needs no key). Fully guarded: any failure falls back to the default amber. */
 function activeAccent(): AccentPalette {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const SQLite = require('expo-sqlite') as typeof import('expo-sqlite');
-    const db = SQLite.openDatabaseSync('lucy.db');
-    const row = db.getFirstSync<{ value: string }>('SELECT value FROM settings WHERE key = ?', THEME_SETTING_KEY);
-    if (row && isThemeKey(row.value)) return ACCENT_THEMES[row.value];
+    const SecureStore = require('expo-secure-store') as typeof import('expo-secure-store');
+    const v = SecureStore.getItem(THEME_SETTING_KEY);
+    if (isThemeKey(v)) return ACCENT_THEMES[v];
   } catch { /* default below */ }
   return ACCENT_THEMES.lucy;
 }

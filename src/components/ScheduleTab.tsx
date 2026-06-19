@@ -138,12 +138,14 @@ export function ScheduleTab() {
   // Keep the "now" line live (updates every minute) for the day/week grid.
   useEffect(() => { const t = setInterval(() => setNowMs(Date.now()), 60_000); return () => clearInterval(t); }, []);
   // Spring the "new event" card up + fade in when it opens (native driver). Lucy handles her own peek.
+  // Run the card's entrance ONLY when it opens — not on every keystroke. Depending on the whole
+  // createDraft object re-fired this on each letter (new object ref), resetting opacity to 0 → a flicker.
+  const createOpen = createDraft != null;
   useEffect(() => {
-    if (createDraft) {
-      createAnim.setValue(0);
-      Animated.spring(createAnim, { toValue: 1, tension: 70, friction: 12, useNativeDriver: true }).start();
-    }
-  }, [createDraft, createAnim]);
+    if (!createOpen) return;
+    createAnim.setValue(0);
+    Animated.spring(createAnim, { toValue: 1, tension: 70, friction: 12, useNativeDriver: true }).start();
+  }, [createOpen, createAnim]);
   // Spring the suggestion card up + fade in each time a fresh result lands (native driver).
   useEffect(() => {
     if (!suggKey) return;

@@ -148,5 +148,29 @@ ok('"12pm" → 12:00', parseExplicitDateTime('eat at 12pm')?.time === '12:00');
 ok('task title strips time+day', (() => { const t = extractSchedulableTask('schedule gym at 6:30am tomorrow'); return /gym/i.test(t) && !/6:30|am|tomorrow/i.test(t); })());
 ok('task title strips weekday', (() => { const t = extractSchedulableTask('schedule standup at 9am monday'); return /standup/i.test(t) && !/monday|9am/i.test(t); })());
 
+// ── parseTimingConstraint (refine a scheduling suggestion's window) ──────────────
+{
+  const { parseTimingConstraint } = require('../src/scheduling/timingConstraint') as typeof import('../src/scheduling/timingConstraint');
+  const N = new Date(2026, 5, 17, 10, 0, 0, 0).getTime(); // Wed Jun 17 2026
+  const d = (ms: number) => new Date(ms);
+  {
+    const c = parseTimingConstraint('last week of this month', N)!;
+    ok('last-week-of-month → Jun 24', c !== null && d(c.earliestStart).getMonth() === 5 && d(c.earliestStart).getDate() === 24);
+  }
+  {
+    const c = parseTimingConstraint('not tomorrow, drop it after that', N)!;
+    ok('not tomorrow → Jun 19 (day after tomorrow)', c !== null && d(c.earliestStart).getDate() === 19);
+  }
+  {
+    const c = parseTimingConstraint('after the 25th', N)!;
+    ok('after the 25th → Jun 25', c !== null && d(c.earliestStart).getDate() === 25);
+  }
+  {
+    const c = parseTimingConstraint('next week', N)!;
+    ok('next week → a Monday in the future', c !== null && d(c.earliestStart).getDay() === 1 && c.earliestStart > N);
+  }
+  ok('no timing phrase → null', parseTimingConstraint('just do it whenever', N) === null);
+}
+
 console.log(`\nhardening: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

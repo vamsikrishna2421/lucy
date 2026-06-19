@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import { ShieldedText, type ProtectedValueLite } from './ShieldedText';
@@ -78,6 +78,7 @@ export function MemoryDetailSheet({ captureId, visible, onClose }: { captureId: 
 
   return (
     <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[s.sheet, { height: '88%' }]}>
@@ -164,6 +165,7 @@ export function MemoryDetailSheet({ captureId, visible, onClose }: { captureId: 
           <Text style={s.viewerHint}>Tap to close · original photo</Text>
         </Pressable>
       </Modal>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

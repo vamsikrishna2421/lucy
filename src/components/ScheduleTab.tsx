@@ -3,7 +3,7 @@
  * Visual redesign only: keeps the same scheduling engine calls and data shapes.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import {
@@ -855,6 +855,7 @@ export function ScheduleTab() {
       {/* New-event card — appears when you tap an empty slot in Day view. Lucy peeks over the top edge
           and asks; the slot you tapped is prefilled, and you pick a duration before adding. */}
       <Modal visible={!!createDraft} transparent animationType="fade" onRequestClose={() => setCreateDraft(null)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={styles.createBackdrop} onPress={() => setCreateDraft(null)}>
           {/* Outer wrapper keeps overflow visible so Lucy isn't clipped; tap inside is swallowed. */}
           <Pressable style={styles.createOuter} onPress={() => { /* swallow */ }}>
@@ -931,10 +932,12 @@ export function ScheduleTab() {
             </Animated.View>
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Event detail card — rename / recurring / reschedule / delete */}
       <Modal visible={!!detail} transparent animationType="slide" onRequestClose={() => setDetail(null)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={styles.cardBackdrop} onPress={() => setDetail(null)}>
           <Pressable style={styles.eventCard} onPress={() => { /* swallow */ }}>
             {(() => {
@@ -992,6 +995,7 @@ export function ScheduleTab() {
             })()}
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Habit suggestion — designed sheet (was a plain OS alert) */}

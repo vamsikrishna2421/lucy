@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Keyboard,
+  KeyboardAvoidingView,
   useWindowDimensions,
   Linking,
   Modal,
@@ -949,6 +950,7 @@ export function CaptureScreen({
 
       {/* Edit todo modal */}
       <Modal transparent animationType="fade" visible={editTodo !== null} onRequestClose={() => setEditTodo(null)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={styles.modalBackdrop} onPress={() => setEditTodo(null)}>
           <Pressable style={styles.modalCard}>
             <Text style={styles.modalTitle}>Edit task</Text>
@@ -969,6 +971,7 @@ export function CaptureScreen({
             </View>
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -977,6 +980,7 @@ export function CaptureScreen({
         visible={pendingTodo !== null}
         onRequestClose={() => setPendingTodo(null)}
       >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={styles.modalBackdrop} onPress={() => setPendingTodo(null)}>
           <Pressable style={styles.modalCard}>
             <Text style={styles.modalTitle}>Mark as done</Text>
@@ -1000,6 +1004,7 @@ export function CaptureScreen({
             </View>
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Category checklist modal */}

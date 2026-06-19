@@ -89,3 +89,26 @@ export async function projectActivity(db: SQLiteDatabase, name: string): Promise
   const b = await db.getFirstAsync<{ n: number }>(`SELECT COUNT(*) n FROM scheduled_blocks WHERE status='committed' AND (${blockWhere})`, ...blockArgs);
   return { tasks: t?.n ?? 0, blocks: b?.n ?? 0 };
 }
+
+export interface ProjectNote { id: number; title: string | null; snippet: string; created_at: string; }
+
+/** The actual captures/notes that mention this project (by name or any merged alias) — so the project
+ *  space can SHOW them, not just count tasks. Newest first. */
+export async function projectNotes(db: SQLiteDatabase, name: string, limit = 50): Promise<ProjectNote[]> {
+  const terms = await projectMatchTerms(db, name);
+  if (terms.length === 0) return [];
+  const where = terms.map(() => '(extracted_title LIKE ? OR raw_transcript LIKE ? OR structured_text LIKE ?)').join(' OR ');
+  const args = terms.flatMap((term) => { const like = `%${term}%`; return [like, like, like]; });
+  const rows = await db.getAllAsync<{ id: number; extracted_title: string | null; raw_transcript: string | null; structured_text: string | null; created_at: string }>(
+    `SELECT id, extracted_title, raw_transcript, structured_text, created_at FROM captures
+     WHERE archived_at IS NULL AND (${where}) ORDER BY created_at DESC LIMIT ?`,
+    ...args,
+    limit,
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.extracted_title,
+    snippet: (r.structured_text || r.raw_transcript || '').replace(/\s+/g, ' ').trim().slice(0, 140),
+    created_at: r.created_at,
+  }));
+}

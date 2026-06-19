@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
-import { listProjects, createProject, deleteProject, renameProject, projectActivity, type ProjectRow } from '../db/projects';
+import { listProjects, createProject, deleteProject, renameProject, projectActivity, projectNotes, type ProjectRow, type ProjectNote } from '../db/projects';
 import { deriveProjectSuggestions, dismissProjectSuggestion, mergeSuggestionIntoProject, splitHeadline, type ProjectSuggestion } from '../processing/projectAutopilot';
 
 export function ProjectsTab() {
@@ -17,10 +17,11 @@ export function ProjectsTab() {
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
   const [open, setOpen] = useState<ProjectRow | null>(null);
-  const [editing, setEditing] = useState<ProjectRow | null>(null);
+  const [editMode, setEditMode] = useState(false);
   const [eName, setEName] = useState('');
   const [eDesc, setEDesc] = useState('');
   const [activity, setActivity] = useState<{ tasks: number; blocks: number } | null>(null);
+  const [notes, setNotes] = useState<ProjectNote[]>([]);
   const [suggestions, setSuggestions] = useState<ProjectSuggestion[]>([]);
   const [mergeFor, setMergeFor] = useState<ProjectSuggestion | null>(null);
 
@@ -53,9 +54,13 @@ export function ProjectsTab() {
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
-    if (!open) { setActivity(null); return; }
+    if (!open) { setActivity(null); setNotes([]); setEditMode(false); return; }
     let live = true;
-    (async () => { const db = await getDatabase(); const a = await projectActivity(db, open.name); if (live) setActivity(a); })();
+    (async () => {
+      const db = await getDatabase();
+      const [a, n] = await Promise.all([projectActivity(db, open.name), projectNotes(db, open.name)]);
+      if (live) { setActivity(a); setNotes(n); }
+    })();
     return () => { live = false; };
   }, [open]);
 
@@ -75,7 +80,7 @@ export function ProjectsTab() {
   const startEdit = (p: ProjectRow) => {
     setEName(p.name ?? '');
     setEDesc(p.description ?? '');
-    setEditing(p);
+    setEditMode(true);
   };
   const tidyUp = () => {
     const split = splitHeadline(eName);
@@ -84,15 +89,14 @@ export function ProjectsTab() {
     setEDesc((prev) => (prev.trim() ? `${prev.trim()} — ${split.description}` : split.description));
   };
   const saveEdit = async () => {
-    if (!editing) return;
-    const nextName = eName.trim() || editing.name; // never save an empty name
+    if (!open) return;
+    const nextName = eName.trim() || open.name; // never save an empty name
     const nextDesc = eDesc.trim() ? eDesc.trim() : null;
     const db = await getDatabase();
-    await renameProject(db, editing.id, nextName, nextDesc);
-    setEditing(null);
+    await renameProject(db, open.id, nextName, nextDesc);
+    setOpen((cur) => (cur ? { ...cur, name: nextName, description: nextDesc } : cur));
+    setEditMode(false);
     await load();
-    // reflect the rename in the still-open project space sheet
-    setOpen((cur) => (cur && cur.id === editing.id ? { ...cur, name: nextName, description: nextDesc } : cur));
   };
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={LUCY_COLORS.primary} /></View>;
@@ -184,48 +188,61 @@ export function ProjectsTab() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Project space */}
-      <Modal visible={!!open} transparent animationType="slide" onRequestClose={() => setOpen(null)}>
+      {/* Project space — inline edit + related notes, all in ONE modal (iOS can't stack two modals) */}
+      <Modal visible={!!open} transparent animationType="slide" onRequestClose={() => { setOpen(null); setEditMode(false); }}>
         <View style={styles.modalBg}><View style={styles.sheet}>
-          <View style={styles.head}><Text style={styles.h}>{open?.name}</Text><TouchableOpacity onPress={() => setOpen(null)}><Text style={styles.x}>✕</Text></TouchableOpacity></View>
-          {open?.description ? <Text style={styles.sub}>{open.description}</Text> : null}
-          <View style={styles.stats}>
-            <View style={styles.stat}><Text style={styles.statN}>{activity?.tasks ?? '—'}</Text><Text style={styles.statL}>open tasks</Text></View>
-            <View style={styles.stat}><Text style={styles.statN}>{activity?.blocks ?? '—'}</Text><Text style={styles.statL}>scheduled</Text></View>
+          <View style={styles.head}>
+            <Text style={[styles.h, { flex: 1, marginRight: 10 }]} numberOfLines={2}>{open?.name}</Text>
+            <TouchableOpacity onPress={() => { setOpen(null); setEditMode(false); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><Text style={styles.x}>✕</Text></TouchableOpacity>
           </View>
-          <Text style={styles.note}>Tasks and calendar blocks that mention "{open?.name}" show up here. Deeper linking (docs, notes per project) is coming.</Text>
-          {open && (
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.editBtn} onPress={() => startEdit(open)}><Text style={styles.editBtnT}>Edit details</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.deleteBtn} onPress={() => remove(open)}><Text style={styles.deleteBtnT}>Delete</Text></TouchableOpacity>
-            </View>
+
+          {!editMode ? (
+            <>
+              {open?.description ? <Text style={styles.sub}>{open.description}</Text> : null}
+              <View style={styles.stats}>
+                <View style={styles.stat}><Text style={styles.statN}>{activity?.tasks ?? '—'}</Text><Text style={styles.statL}>open tasks</Text></View>
+                <View style={styles.stat}><Text style={styles.statN}>{activity?.blocks ?? '—'}</Text><Text style={styles.statL}>scheduled</Text></View>
+                <View style={styles.stat}><Text style={styles.statN}>{notes.length || '—'}</Text><Text style={styles.statL}>notes</Text></View>
+              </View>
+              <Text style={styles.sectionLabel}>RELATED NOTES</Text>
+              {notes.length === 0 ? (
+                <Text style={styles.notesEmpty}>No notes mention “{open?.name}” yet. As you capture thoughts about it, they’ll gather here.</Text>
+              ) : (
+                <ScrollView style={{ maxHeight: 300 }} contentContainerStyle={{ paddingBottom: 4 }} showsVerticalScrollIndicator={false}>
+                  {notes.map((n) => (
+                    <View key={n.id} style={styles.noteRow}>
+                      <Text style={styles.noteTitle} numberOfLines={1}>{n.title || n.snippet || 'Untitled note'}</Text>
+                      {n.snippet ? <Text style={styles.noteSnippet} numberOfLines={2}>{n.snippet}</Text> : null}
+                      <Text style={styles.noteWhen}>{new Date(n.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+              {open && (
+                <View style={styles.actionRow}>
+                  <TouchableOpacity style={styles.editBtn} onPress={() => open && startEdit(open)}><Text style={styles.editBtnT}>Edit details</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.deleteBtn} onPress={() => open && remove(open)}><Text style={styles.deleteBtnT}>Delete</Text></TouchableOpacity>
+                </View>
+              )}
+            </>
+          ) : (
+            <>
+              <View style={styles.editHead}>
+                <Text style={styles.eyebrow}>EDIT PROJECT</Text>
+                <TouchableOpacity style={styles.tidyBtn} onPress={tidyUp} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Text style={styles.tidyBtnT}>Tidy up ✨</Text></TouchableOpacity>
+              </View>
+              <Text style={styles.sub}>Give it a short headline and move the long bits into the description. Existing tasks and blocks stay linked.</Text>
+              <Text style={styles.fieldLabel}>NAME</Text>
+              <TextInput style={styles.input} placeholder="Project name" placeholderTextColor={LUCY_COLORS.textFaint} value={eName} onChangeText={setEName} />
+              <Text style={styles.fieldLabel}>DESCRIPTION</Text>
+              <TextInput style={[styles.input, { height: 96, textAlignVertical: 'top' }]} placeholder="What this project is about (optional)" placeholderTextColor={LUCY_COLORS.textFaint} value={eDesc} onChangeText={setEDesc} multiline />
+              <View style={styles.rowEnd}>
+                <TouchableOpacity style={styles.btnGhost} onPress={() => setEditMode(false)}><Text style={styles.btnGhostT}>Cancel</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.btn, !eName.trim() && styles.btnDisabled]} disabled={!eName.trim()} onPress={saveEdit}><Text style={styles.btnT}>Save</Text></TouchableOpacity>
+              </View>
+            </>
           )}
         </View></View>
-      </Modal>
-
-      {/* Edit project name + description */}
-      <Modal visible={!!editing} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
-        <TouchableOpacity style={styles.modalBg} activeOpacity={1} onPress={() => setEditing(null)}>
-          <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
-            <View style={styles.grip} />
-            <Text style={styles.eyebrow}>EDIT PROJECT</Text>
-            <View style={styles.editHead}>
-              <Text style={styles.h}>Tidy the name</Text>
-              <TouchableOpacity style={styles.tidyBtn} onPress={tidyUp} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Text style={styles.tidyBtnT}>Tidy up ✨</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.sub}>Give it a short headline and move the long bits into the description. Existing tasks and blocks stay linked.</Text>
-            <Text style={styles.fieldLabel}>NAME</Text>
-            <TextInput style={styles.input} placeholder="Project name" placeholderTextColor={LUCY_COLORS.textFaint} value={eName} onChangeText={setEName} />
-            <Text style={styles.fieldLabel}>DESCRIPTION</Text>
-            <TextInput style={[styles.input, { height: 96, textAlignVertical: 'top' }]} placeholder="What this project is about (optional)" placeholderTextColor={LUCY_COLORS.textFaint} value={eDesc} onChangeText={setEDesc} multiline />
-            <View style={styles.rowEnd}>
-              <TouchableOpacity style={styles.btnGhost} onPress={() => setEditing(null)}><Text style={styles.btnGhostT}>Cancel</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.btn, !eName.trim() && styles.btnDisabled]} disabled={!eName.trim()} onPress={saveEdit}><Text style={styles.btnT}>Save</Text></TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -289,4 +306,11 @@ const styles = StyleSheet.create({
   pickRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 14, padding: 13, marginTop: 10 },
   pickName: { color: LUCY_COLORS.textDark, fontWeight: '800', fontSize: 14 },
   pickDesc: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 2 },
+  // Related-notes list inside the project space
+  sectionLabel: { color: LUCY_COLORS.primaryGlow, fontWeight: '900', fontSize: 10.5, letterSpacing: 1, marginTop: 18, marginBottom: 4 },
+  notesEmpty: { color: LUCY_COLORS.textMuted, fontSize: 13, marginTop: 8, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, padding: 16, lineHeight: 19 },
+  noteRow: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 13, padding: 12, marginTop: 8 },
+  noteTitle: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 14 },
+  noteSnippet: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 3, lineHeight: 17 },
+  noteWhen: { color: LUCY_COLORS.textFaint, fontSize: 11, marginTop: 6 },
 });

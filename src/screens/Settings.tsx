@@ -18,6 +18,7 @@ import { listVoices, setVoice, getSelectedVoiceId, loadVoicePrefs, speak, type T
 import { runEnglishDeviceBenchmark, type BenchmarkResult } from '../processing/benchmark';
 import { organizeMemory } from '../processing/organizer';
 import { CheckInScheduler } from '../components/CheckInScheduler';
+import { DayShaper } from '../components/DayShaper';
 import { ScheduledRemindersManager } from '../components/ScheduledRemindersManager';
 import { LearnedProfilePanel } from '../components/LearnedProfilePanel';
 import { LaptopAccessPanel } from '../components/LaptopAccessPanel';
@@ -99,6 +100,8 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [wakeStatus, setWakeStatus] = useState<WakeWordStatus>(wakeWord.status);
   const [voicePickerVisible, setVoicePickerVisible] = useState(false);
   const [selectedVoiceName, setSelectedVoiceName] = useState('System default');
+  const [dayShaperVisible, setDayShaperVisible] = useState(false);
+  const [dayShaped, setDayShaped] = useState(false);
 
   useEffect(() => wakeWord.onStatusChange(setWakeStatus), []);
 
@@ -138,6 +141,11 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       setProfile(userProfile);
       setProfileDraft(userProfile);
       setCheckInEnabled(!!(await getSetting(db, 'progress_checkin_notification_id')));
+      try {
+        const { getAvailability } = await import('../scheduling/availability');
+        const av = await getAvailability(db);
+        setDayShaped(!av.inferred && !!av.energyCurves);
+      } catch { /* non-critical */ }
       setShieldLlm((await getSetting(db, 'shield_use_local_llm')) === 'true');
       setAlarmStyle((await getSetting(db, 'alarm_style_enabled')) === 'on');
       setSemanticRouter((await getSetting(db, 'semantic_router_enabled')) !== 'off');
@@ -498,6 +506,26 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
             onAction={onStartTour}
           />
         ) : null}
+      </SettingsGroup>
+
+      {/* ─── Your day & energy ─────────────────────────────────────────── */}
+      <SettingsGroup
+        icon="🌤️"
+        title="Your day & energy"
+        summary="Office hours, sleep & when you're at your best"
+        pill={dayShaped ? 'Shaped' : undefined}
+      >
+        <SettingsRow
+          title="Shape your day"
+          value={dayShaped
+            ? 'Custom hours & energy — tap to fine-tune when Lucy schedules'
+            : 'Set your work hours and how your energy moves through the day'}
+          badge={dayShaped ? 'Custom' : 'Set up'}
+          active={dayShaped}
+          actionLabel={dayShaped ? 'Edit' : 'Shape'}
+          onAction={() => setDayShaperVisible(true)}
+          onInfo={() => setDayShaperVisible(true)}
+        />
       </SettingsGroup>
 
       {/* ─── AI & intelligence ─────────────────────────────────────────── */}
@@ -887,6 +915,11 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       <ScheduledRemindersManager
         visible={remindersManagerVisible}
         onClose={() => setRemindersManagerVisible(false)}
+      />
+      <DayShaper
+        visible={dayShaperVisible}
+        onClose={() => setDayShaperVisible(false)}
+        onSaved={() => { setDayShaped(true); setLocalRefresh((v) => v + 1); }}
       />
       <SettingsSheet title={panelTitle(activePanel)} visible={activePanel !== null} onClose={() => setActivePanel(null)}>
         {activePanel === 'intelligence' ? (

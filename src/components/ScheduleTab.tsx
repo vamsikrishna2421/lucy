@@ -50,10 +50,30 @@ const CAL_VIEW_OPTIONS: SegmentOption<'agenda' | 'day' | 'week' | 'month'>[] = [
 ];
 
 interface Sugg {
-  meta: { title: string; durationMin: number; resources: TaskResources; energy: string; location?: string | null };
-  suggestions: SlotSuggestion[];
+  meta: { title: string; durationMin: number; resources: TaskResources; energy: string; location?: string | null; domain?: 'office' | 'personal' | null };
+  suggestions: Array<SlotSuggestion & { rationale?: string }>;
   todoId?: number | null;
   windowLabel?: string; // set when the user refined the window ("the last week of June")
+}
+
+// Quick natural-language window nudges shown under a suggestion — each refines the search in one tap.
+const REFINE_QUICKS = ['Not tomorrow', 'Next week', 'This weekend'] as const;
+
+// A few-word "why this time" line built from the scorer's human reasons (de-duped, sentence-cased).
+function whyLine(s: SlotSuggestion & { rationale?: string }): string {
+  const reasons = (s.reasons ?? []).map((r) => r.trim()).filter(Boolean);
+  const seen = new Set<string>();
+  const picked: string[] = [];
+  for (const r of reasons) { const k = r.toLowerCase(); if (!seen.has(k)) { seen.add(k); picked.push(r); } if (picked.length >= 2) break; }
+  if (!picked.length) return 'A clear, open stretch on your calendar';
+  let line = picked.join(' · ');
+  line = line.charAt(0).toUpperCase() + line.slice(1);
+  return line;
+}
+function durLabel(min: number): string {
+  if (min < 60) return `${min} min`;
+  const h = min / 60;
+  return Number.isInteger(h) ? `${h} hr` : `${h.toFixed(1)} hr`;
 }
 
 export function ScheduleTab() {
@@ -85,6 +105,11 @@ export function ScheduleTab() {
   // Tap-to-create: a Lucy-peeking card to schedule an event on the time you tapped (day view only).
   const [createDraft, setCreateDraft] = useState<{ startMs: number; durationMin: number; title: string } | null>(null);
   const createAnim = useRef(new Animated.Value(0)).current; // card entrance (fade + rise + scale)
+  // Suggestion panel: dedicated in-flight flag (separate from `busy`) so the card can show a calm
+  // "Finding the best times…" state without disturbing the rest of the planner, plus its own entrance.
+  const [suggLoading, setSuggLoading] = useState(false);
+  const suggAnim = useRef(new Animated.Value(0)).current; // suggestion card entrance (fade + rise)
+  const [suggKey, setSuggKey] = useState(0); // bump to replay Lucy's peek + entrance on each new result
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -119,6 +144,12 @@ export function ScheduleTab() {
       Animated.spring(createAnim, { toValue: 1, tension: 70, friction: 12, useNativeDriver: true }).start();
     }
   }, [createDraft, createAnim]);
+  // Spring the suggestion card up + fade in each time a fresh result lands (native driver).
+  useEffect(() => {
+    if (!suggKey) return;
+    suggAnim.setValue(0);
+    Animated.spring(suggAnim, { toValue: 1, tension: 68, friction: 12, useNativeDriver: true }).start();
+  }, [suggKey, suggAnim]);
 
   const connectCalendars = async () => {
     const granted = await requestCalendarPermission();
@@ -149,19 +180,19 @@ export function ScheduleTab() {
 
   const doSuggest = async (text: string, todoId?: number) => {
     if (!text.trim() && !todoId) return;
-    setBusy(true); setProposals(null);
+    setBusy(true); setProposals(null); setSuggLoading(true); setSugg(null);
     try {
       const db = await getDatabase();
       const r = todoId ? await suggestForTodo(db, todoId) : await suggestForText(db, text);
-      if (r) setSugg({ meta: r.meta, suggestions: r.suggestions, todoId: todoId ?? null });
-    } finally { setBusy(false); }
+      if (r) { setSugg({ meta: r.meta, suggestions: r.suggestions, todoId: todoId ?? null }); setSuggKey((k) => k + 1); }
+    } finally { setBusy(false); setSuggLoading(false); }
   };
 
   // Refine the current suggestion with a natural-language timing comment ("last week of this month",
   // "not tomorrow", "after the 25th") — re-suggests inside that window.
   const refineSuggestion = async (comment: string) => {
     if (!sugg || !comment.trim()) return;
-    setBusy(true);
+    setBusy(true); setSuggLoading(true);
     try {
       const { parseTimingConstraint } = await import('../scheduling/timingConstraint');
       const c = parseTimingConstraint(comment);
@@ -169,8 +200,9 @@ export function ScheduleTab() {
       const db = await getDatabase();
       const r = await suggestForText(db, sugg.meta.title, { durationMin: sugg.meta.durationMin, earliestStart: c.earliestStart, horizonDays: c.horizonDays });
       setSugg({ meta: r.meta, suggestions: r.suggestions, todoId: sugg.todoId, windowLabel: c.label });
+      setSuggKey((k) => k + 1);
       setRefineText('');
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setSuggLoading(false); }
   };
 
   const accept = async (s: SlotSuggestion) => {
@@ -694,21 +726,90 @@ export function ScheduleTab() {
             <TouchableOpacity style={styles.heroPlan} onPress={planDay} disabled={busy}><Text style={styles.heroPlanText}>Plan my day</Text></TouchableOpacity>
           </View>
 
-          {sugg ? (
-            <View style={styles.resultCard}>
-              <Text style={styles.boxH}>{sugg.suggestions.length ? `Best times for "${sugg.meta.title}"` : `No conflict-free slot for "${sugg.meta.title}"`}</Text>
-              <Text style={styles.rowD}>{sugg.meta.durationMin} min - {describeResources(sugg.meta.resources)}{sugg.windowLabel ? ` · ${sugg.windowLabel}` : ''}</Text>
-              {sugg.suggestions.map((s, i) => (
-                <View key={i} style={styles.slotRow}>
-                  <View style={{ flex: 1 }}><Text style={styles.rowT}>{dayLabel(s.start)} - {clock(s.start)} to {clock(s.end)}</Text><Text style={styles.rowD}>{s.reasons.join(', ')}</Text></View>
-                  <TouchableOpacity style={styles.btnSm} onPress={() => accept(s)}><Text style={styles.btnT}>Add</Text></TouchableOpacity>
-                </View>
-              ))}
-              {/* Refine the window with a plain-language comment, e.g. "last week of this month". */}
-              <View style={[styles.findRow, { marginTop: 10 }]}>
-                <TextInput style={styles.input} placeholder="Not these? Tell me when… (e.g. last week of this month)" placeholderTextColor={LUCY_COLORS.textFaint} value={refineText} onChangeText={setRefineText} onSubmitEditing={() => refineSuggestion(refineText)} />
-                <TouchableOpacity style={styles.btn} disabled={busy || !refineText.trim()} onPress={() => refineSuggestion(refineText)}><Text style={styles.btnT}>Redo</Text></TouchableOpacity>
+          {/* Calm loading state while Lucy searches (first search or a refine) — never an error. */}
+          {suggLoading ? (
+            <View style={styles.suggLoadCard}>
+              <ActivityIndicator color={LUCY_COLORS.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.suggLoadT}>Finding the best times…</Text>
+                <Text style={styles.suggLoadSub}>Reading your calendar, focus windows and energy.</Text>
               </View>
+            </View>
+          ) : null}
+
+          {sugg && !suggLoading ? (
+            // Lucy peeks over the top edge of this pop-up surface — the outer wrapper keeps overflow
+            // visible + reserves headroom so she isn't clipped. Springs up + fades in per fresh result.
+            <View style={styles.suggOuter}>
+              <Animated.View
+                style={{
+                  opacity: suggAnim,
+                  transform: [{ translateY: suggAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+                }}
+              >
+                <View style={styles.suggCard}>
+                  <LucyPeek key={`peek-sugg-${suggKey}`} />
+
+                  {/* Context → bold title (the WHAT being scheduled) */}
+                  <Text style={styles.suggEyebrow}>{sugg.suggestions.length ? 'Lucy found a few times' : 'No clear slot yet'}</Text>
+                  <Text style={styles.suggTitle} numberOfLines={2}>{sugg.meta.title}</Text>
+
+                  {/* Meta chips: duration · domain (office/personal) · refined window */}
+                  <View style={styles.suggMetaRow}>
+                    <View style={styles.metaChip}><Text style={styles.metaChipT}>{durLabel(sugg.meta.durationMin)}</Text></View>
+                    {sugg.meta.domain ? (
+                      <View style={styles.metaChip}><Text style={styles.metaChipT}>{sugg.meta.domain === 'office' ? 'Office' : 'Personal'}</Text></View>
+                    ) : null}
+                    {sugg.windowLabel ? (
+                      <View style={[styles.metaChip, styles.metaChipWindow]}><Text style={[styles.metaChipT, { color: LUCY_COLORS.primaryGlow }]}>{sugg.windowLabel}</Text></View>
+                    ) : null}
+                  </View>
+
+                  {/* Top options — each a tappable card. The best one is gently flagged as recommended. */}
+                  {sugg.suggestions.length ? (
+                    <View style={styles.optionList}>
+                      {sugg.suggestions.slice(0, 3).map((s, i) => {
+                        const best = i === 0;
+                        return (
+                          <TouchableOpacity
+                            key={i}
+                            activeOpacity={0.85}
+                            onPress={() => accept(s)}
+                            disabled={busy}
+                            style={[styles.optionRow, best && styles.optionRowBest]}
+                          >
+                            <View style={[styles.optionRail, best && styles.optionRailBest]} />
+                            <View style={{ flex: 1 }}>
+                              {best ? <Text style={styles.optionBadge}>★ Recommended</Text> : null}
+                              <Text style={styles.optionWhen} numberOfLines={1}>{dayLabel(s.start)} · {clock(s.start)} – {clock(s.end)}</Text>
+                              <Text style={styles.optionWhy} numberOfLines={2}>{whyLine(s)}</Text>
+                            </View>
+                            <View style={[styles.optionAdd, best && styles.optionAddBest]}>
+                              <Text style={[styles.optionAddT, best && styles.optionAddTBest]}>Add</Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <Text style={styles.suggEmpty}>Nothing conflict-free fit this window. Tell Lucy when below and she'll look again.</Text>
+                  )}
+
+                  {/* Refine — a natural inline affordance, not clutter: quick chips + a free-text nudge. */}
+                  <Text style={styles.suggRefineLabel}>Prefer another time?</Text>
+                  <View style={styles.refineChipRow}>
+                    {REFINE_QUICKS.map((q) => (
+                      <TouchableOpacity key={q} style={styles.refineChip} activeOpacity={0.8} disabled={busy} onPress={() => refineSuggestion(q)}>
+                        <Text style={styles.refineChipT}>{q}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={styles.refineRow}>
+                    <TextInput style={styles.refineInput} placeholder="…or tell me when (e.g. last week of June)" placeholderTextColor={LUCY_COLORS.textFaint} value={refineText} onChangeText={setRefineText} onSubmitEditing={() => refineSuggestion(refineText)} returnKeyType="search" />
+                    <TouchableOpacity style={[styles.refineGo, (!refineText.trim() || busy) && styles.refineGoOff]} disabled={busy || !refineText.trim()} onPress={() => refineSuggestion(refineText)}><Text style={styles.refineGoT}>Find</Text></TouchableOpacity>
+                  </View>
+                </View>
+              </Animated.View>
             </View>
           ) : null}
 
@@ -1190,4 +1291,56 @@ const styles = StyleSheet.create({
   durChipT: { color: LUCY_COLORS.textMuted, fontSize: 13.5, fontWeight: '800' },
   durChipTOn: { color: LUCY_COLORS.primaryGlow, fontWeight: '900' },
   createEndHint: { color: LUCY_COLORS.textSubtle, fontSize: 12, fontWeight: '700', marginTop: 10 },
+
+  // ── Task scheduling suggestions (redesigned) ─────────────────────────────────
+  // Calm loading card while Lucy searches.
+  suggLoadCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 13,
+    backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border,
+    borderRadius: 20, padding: 16, marginBottom: 12,
+  },
+  suggLoadT: { color: LUCY_COLORS.textDark, fontSize: 14.5, fontWeight: '900' },
+  suggLoadSub: { color: LUCY_COLORS.textMuted, fontSize: 12.5, lineHeight: 17, marginTop: 3 },
+  // Outer wrapper reserves headroom for LucyPeek + keeps overflow visible (she hangs over the lip).
+  suggOuter: { paddingTop: 34, overflow: 'visible', marginBottom: 12 },
+  suggCard: {
+    backgroundColor: LUCY_COLORS.surfaceSheet, borderRadius: 24, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 18,
+    borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, overflow: 'visible',
+    shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 22, elevation: 12,
+  },
+  suggEyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
+  suggTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '900', lineHeight: 25, marginTop: 4 },
+  suggMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 11 },
+  metaChip: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6 },
+  metaChipWindow: { backgroundColor: LUCY_COLORS.primaryMist, borderColor: LUCY_COLORS.primaryLine },
+  metaChipT: { color: LUCY_COLORS.textMuted, fontSize: 11.5, fontWeight: '800' },
+  optionList: { marginTop: 14, gap: 9 },
+  optionRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border,
+    borderRadius: 16, paddingVertical: 13, paddingLeft: 12, paddingRight: 12,
+  },
+  optionRowBest: {
+    backgroundColor: LUCY_COLORS.primaryMist, borderColor: LUCY_COLORS.primaryLine,
+    shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.22, shadowRadius: 12, elevation: 4,
+  },
+  optionRail: { width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: LUCY_COLORS.border, minHeight: 38 },
+  optionRailBest: { backgroundColor: LUCY_COLORS.primary },
+  optionBadge: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '900', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 3 },
+  optionWhen: { color: LUCY_COLORS.textDark, fontSize: 14.5, fontWeight: '900', lineHeight: 19 },
+  optionWhy: { color: LUCY_COLORS.textMuted, fontSize: 12, lineHeight: 16.5, marginTop: 3 },
+  optionAdd: { minWidth: 52, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 11, borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surfaceRaised, paddingHorizontal: 12 },
+  optionAddBest: { backgroundColor: LUCY_COLORS.primary, borderColor: LUCY_COLORS.primary, shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 5 },
+  optionAddT: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '900' },
+  optionAddTBest: { color: '#fff' },
+  suggEmpty: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 19, marginTop: 14 },
+  suggRefineLabel: { color: LUCY_COLORS.textSubtle, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase', marginTop: 20, marginBottom: 10 },
+  refineChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  refineChip: { minHeight: 38, justifyContent: 'center', backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 999, paddingHorizontal: 14 },
+  refineChipT: { color: LUCY_COLORS.textMuted, fontSize: 12.5, fontWeight: '800' },
+  refineRow: { flexDirection: 'row', gap: 8 },
+  refineInput: { flex: 1, backgroundColor: LUCY_COLORS.background, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 14, paddingHorizontal: 13, paddingVertical: 11, color: LUCY_COLORS.textDark, fontSize: 13.5 },
+  refineGo: { minWidth: 56, alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingHorizontal: 14, backgroundColor: LUCY_COLORS.primary },
+  refineGoOff: { opacity: 0.4 },
+  refineGoT: { color: '#fff', fontWeight: '900', fontSize: 13 },
 });

@@ -43,15 +43,20 @@ function parseTs(s: string): number {
   return new Date(iso.endsWith('Z') ? iso : `${iso}Z`).getTime();
 }
 
-/** Build a continuous per-day series over the last `days` (empty days carry score=null for graph gaps). */
+/** Build a continuous per-day series over the last `days` (empty days carry score=null for graph gaps).
+ *  The daily score is INTENSITY-WEIGHTED: each capture is weighted by |valence| so a genuine emotional
+ *  moment isn't muted by a pile of neutral task-notes (a day of 10 "buy milk" + 1 "so stressed" reads
+ *  stressed, not flat). An all-neutral day scores 0 (calm), and a day with no captures stays null (gap). */
 export function buildSeries(rows: MoodRow[], days: number, now = Date.now()): MoodPoint[] {
-  const byDay = new Map<string, { sum: number; count: number; tones: Record<string, number> }>();
+  const byDay = new Map<string, { wsum: number; wtot: number; count: number; tones: Record<string, number> }>();
   for (const r of rows) {
     const t = parseTs(r.created_at);
     if (!Number.isFinite(t)) continue;
     const key = localDayKey(t);
-    const b = byDay.get(key) ?? { sum: 0, count: 0, tones: {} };
-    b.sum += toneValence(r.tone); b.count += 1;
+    const b = byDay.get(key) ?? { wsum: 0, wtot: 0, count: 0, tones: {} };
+    const v = toneValence(r.tone);
+    const w = Math.abs(v); // intensity weight — neutrals (0) add no pull toward the middle
+    b.wsum += v * w; b.wtot += w; b.count += 1;
     const tone = (r.tone || 'neutral').toLowerCase(); b.tones[tone] = (b.tones[tone] ?? 0) + 1;
     byDay.set(key, b);
   }
@@ -63,7 +68,7 @@ export function buildSeries(rows: MoodRow[], days: number, now = Date.now()): Mo
     const b = byDay.get(key);
     out.push({
       date: key, dayMs,
-      score: b ? Math.round((b.sum / b.count) * 100) / 100 : null,
+      score: b ? (b.wtot > 0 ? Math.round((b.wsum / b.wtot) * 100) / 100 : 0) : null,
       count: b?.count ?? 0,
       dominantTone: b ? Object.entries(b.tones).sort((a, c) => c[1] - a[1])[0][0] : null,
     });

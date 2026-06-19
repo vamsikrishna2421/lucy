@@ -33,6 +33,17 @@ const up = detectShift(buildSeries(upRows, 13, now));
 ok('detects upturn', up.direction === 'up' && up.delta > 0);
 ok('upturn names a day', !!up.sinceDate && /lifted/i.test(up.message));
 
+// Intensity weighting: many neutral task-notes + one stressed note → the day still reads clearly low.
+const dilute = [
+  row('neutral', 1), row('neutral', 1), row('neutral', 1), row('neutral', 1), row('neutral', 1),
+  row('stressed', 1),
+];
+const dilutedDay = buildSeries(dilute, 2, now).find((p) => p.count > 0);
+ok('neutrals do not mute a real low', dilutedDay != null && (dilutedDay.score ?? 0) <= -1);
+// An all-neutral day is calm (score 0), not a gap.
+const calmDay = buildSeries([row('neutral', 1), row('neutral', 1)], 2, now).find((p) => p.count > 0);
+ok('all-neutral day scores 0', calmDay != null && calmDay.score === 0);
+
 // Steady mood → flat (no false alarm).
 const flatRows = [row('calm', 6), row('content', 5), row('calm', 3), row('content', 1)];
 const flat = detectShift(buildSeries(flatRows, 7, now));

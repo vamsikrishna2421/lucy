@@ -73,7 +73,9 @@ export async function generateDeviceIntelligence(): Promise<DeviceIntelligenceRe
   // Determine capture rhythm description
   const hour = patterns.topHour;
   const timeLabel = hour < 9 ? 'early morning' : hour < 12 ? 'morning' : hour < 15 ? 'midday' : hour < 18 ? 'afternoon' : 'evening';
-  const captureRhythm = `Most active ${timeLabel} (${hour}:00), ${patterns.topDay} is your most captured day. About ${patterns.avgPerDay} thought${patterns.avgPerDay !== 1 ? 's' : ''} per day this week.`;
+  const captureRhythm = patterns.hasData
+    ? `Most active ${timeLabel} (${hour}:00), ${patterns.topDay} is your most captured day. About ${patterns.avgPerDay} thought${patterns.avgPerDay !== 1 ? 's' : ''} per day this week.`
+    : 'Not enough captures yet this week to call out your active times — your real pattern will emerge as you use LUCY.';
 
   const batteryPattern = batteryAnalysis?.heaviestDay
     ? `Your phone drains heaviest on ${batteryAnalysis.heaviestDay}s — likely your busiest day.`
@@ -89,7 +91,9 @@ export async function generateDeviceIntelligence(): Promise<DeviceIntelligenceRe
     : 'Capture more regularly to reveal mood-activity patterns.';
 
   // Generate a top insight using LLM if available
-  let topInsight = `Your most productive capture window is ${timeLabel} on ${patterns.topDay}. Protect that time for deep thinking.`;
+  let topInsight = patterns.hasData
+    ? `Your most productive capture window is ${timeLabel} on ${patterns.topDay}. Protect that time for deep thinking.`
+    : 'Capture a few more thoughts and LUCY will start surfacing your real rhythms and patterns.';
 
   try {
     const { available, openAIKey } = await resolveRemoteAvailability();

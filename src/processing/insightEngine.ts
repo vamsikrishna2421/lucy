@@ -75,7 +75,7 @@ export async function generateDailyInsights(db: SQLiteDatabase): Promise<Generat
     .join('\n');
 
   const contextStr = [
-    `Capture patterns: Most active at ${patterns.topHour}:00, top day is ${patterns.topDay}`,
+    patterns.hasData ? `Capture patterns: Most active at ${patterns.topHour}:00, top day is ${patterns.topDay}` : 'Capture patterns: not enough data yet',
     `Mood this week: ${moodTrend.dominant} (${Math.round(moodTrend.positiveRatio * 100)}% positive)`,
     `People insights: ${personInsights.join('; ') || 'None yet'}`,
     `Relationships going quiet: ${keepWarm.map((k) => k.message).join(' ') || 'None'}`,

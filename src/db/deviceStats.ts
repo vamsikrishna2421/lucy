@@ -62,6 +62,7 @@ export async function getCapturePatterns(db: SQLiteDatabase): Promise<{
   topDay: string;
   avgPerDay: number;
   totalLast7Days: number;
+  hasData: boolean; // false when there aren't enough captures to claim a real pattern (don't fabricate)
 }> {
   const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -93,5 +94,7 @@ export async function getCapturePatterns(db: SQLiteDatabase): Promise<{
     topDay:  topDayRow ? (DAY_NAMES[topDayRow.day] ?? 'Unknown') : 'Monday',
     avgPerDay: Math.round((total?.n ?? 0) / 7),
     totalLast7Days: total?.n ?? 0,
+    // Need a real signal (a few captures + a clear top hour) before claiming a "most active" pattern.
+    hasData: !!topHourRow && (total?.n ?? 0) >= 4,
   };
 }

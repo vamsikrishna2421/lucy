@@ -301,6 +301,12 @@ async function persistExtraction(
         await insertCommitment(db, capture.id, c, extraction.privacy_level);
       }
     } catch { /* non-critical — commitment tracking never blocks a capture */ }
+    // Move/lease autopilot: if this capture signals a move, remember it so the Projects tab can offer
+    // to set up a move plan (propose-and-confirm — never auto-creates anything here).
+    try {
+      const { maybeFlagMoveSignal } = await import('./movePlan');
+      await maybeFlagMoveSignal(db, extraction, capture);
+    } catch { /* non-critical */ }
     // Persist mood entry — EVERY capture contributes a mood point. When the LLM returned only the bare
     // 'neutral/medium' default, run the free on-device sentiment so a real feeling isn't lost.
     {

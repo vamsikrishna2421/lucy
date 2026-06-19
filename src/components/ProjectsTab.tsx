@@ -9,6 +9,7 @@ import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import { listProjects, createProject, deleteProject, renameProject, projectActivity, projectNotes, type ProjectRow, type ProjectNote } from '../db/projects';
 import { deriveProjectSuggestions, dismissProjectSuggestion, mergeSuggestionIntoProject, splitHeadline, type ProjectSuggestion } from '../processing/projectAutopilot';
+import { getMoveSignal, dismissMoveSignal, createMovePlan, type StoredMoveSignal } from '../processing/movePlan';
 
 export function ProjectsTab() {
   const [projects, setProjects] = useState<ProjectRow[]>([]);
@@ -24,11 +25,13 @@ export function ProjectsTab() {
   const [notes, setNotes] = useState<ProjectNote[]>([]);
   const [suggestions, setSuggestions] = useState<ProjectSuggestion[]>([]);
   const [mergeFor, setMergeFor] = useState<ProjectSuggestion | null>(null);
+  const [moveSignal, setMoveSignal] = useState<StoredMoveSignal | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
     setProjects(await listProjects(db));
     try { setSuggestions(await deriveProjectSuggestions(db)); } catch { /* optional */ }
+    try { setMoveSignal(await getMoveSignal(db)); } catch { /* optional */ }
     setLoading(false);
   }, []);
 
@@ -50,6 +53,25 @@ export function ProjectsTab() {
     await mergeSuggestionIntoProject(db, p.id, s.name);
     await load();
     Alert.alert('Folded in', `"${s.name}" now feeds into ${p.name}.`);
+  };
+  const setUpMove = async () => {
+    if (!moveSignal) return;
+    const sig = moveSignal;
+    setMoveSignal(null);
+    const db = await getDatabase();
+    const res = await createMovePlan(db, sig);
+    await load();
+    Alert.alert(
+      'Move plan ready',
+      res.noticeReminderAt
+        ? `Created "${res.projectName}" with ${res.steps} steps. I'll remind you to give notice on ${new Date(res.noticeReminderAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.`
+        : `Created "${res.projectName}" with ${res.steps} steps to work through.`,
+    );
+  };
+  const dismissMove = async () => {
+    setMoveSignal(null);
+    const db = await getDatabase();
+    await dismissMoveSignal(db);
   };
   useEffect(() => { void load(); }, [load]);
 
@@ -109,6 +131,19 @@ export function ProjectsTab() {
           <TouchableOpacity style={styles.btn} onPress={() => setAdding(true)}><Text style={styles.btnT}>＋ New project</Text></TouchableOpacity>
         </View>
         <Text style={styles.sub}>A dedicated space for each personal project.</Text>
+
+        {moveSignal && (
+          <View style={styles.moveBox}>
+            <Text style={styles.moveHead}>✦ LOOKS LIKE YOU’RE PLANNING A MOVE</Text>
+            <Text style={styles.moveBody}>
+              Want LUCY to set up a move plan? It builds a checklist project with the standard steps{moveSignal.dates.some((d) => d.label === 'Lease ends') ? ' and chases your notice deadline' : ''}.
+            </Text>
+            <View style={styles.moveActions}>
+              <TouchableOpacity style={styles.moveCta} onPress={() => void setUpMove()}><Text style={styles.moveCtaT}>Set up move plan</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.moveDismiss} onPress={() => void dismissMove()}><Text style={styles.moveDismissT}>Not a move</Text></TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {suggestions.length > 0 && (
           <View style={styles.sgBox}>
@@ -313,4 +348,13 @@ const styles = StyleSheet.create({
   noteTitle: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 14 },
   noteSnippet: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 3, lineHeight: 17 },
   noteWhen: { color: LUCY_COLORS.textFaint, fontSize: 11, marginTop: 6 },
+  // Move/lease autopilot offer banner
+  moveBox: { backgroundColor: 'rgba(255,140,66,0.10)', borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, borderRadius: 16, padding: 14, marginBottom: 14 },
+  moveHead: { color: LUCY_COLORS.primaryGlow, fontWeight: '900', fontSize: 11, letterSpacing: 0.5, marginBottom: 6 },
+  moveBody: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 19 },
+  moveActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
+  moveCta: { backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10 },
+  moveCtaT: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  moveDismiss: { paddingHorizontal: 10, paddingVertical: 10 },
+  moveDismissT: { color: LUCY_COLORS.textFaint, fontWeight: '700', fontSize: 13 },
 });

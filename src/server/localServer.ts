@@ -153,6 +153,29 @@ async function route(req: ParsedRequest): Promise<string> {
       const { listFoodLog } = await import('../db/healthNutrition');
       return json(200, { ok: true, items: await listFoodLog(db) });
     }
+    // Mood-over-time graph (web parity with the app's Health mood graph). ?day=<ms> ⇒ that day's notes.
+    if (req.method === 'GET' && req.path === '/api/mood-graph') {
+      const { getMoodGraph, getDayHighlights } = await import('../processing/moodGraph');
+      const dayMs = Number(req.query.day);
+      if (Number.isFinite(dayMs) && dayMs > 0) {
+        return json(200, { ok: true, highlights: await getDayHighlights(db, dayMs) });
+      }
+      const days = Math.max(7, Math.min(90, Number(req.query.days) || 30));
+      return json(200, { ok: true, ...(await getMoodGraph(db, days)) });
+    }
+    // Money that watches itself — recurring/bills/anomaly/drift (web parity).
+    if (req.method === 'GET' && req.path === '/api/money') {
+      const { getMoneyInsights, detectRecurring, forecastUpcomingBills } = await import('../processing/moneyWatch');
+      const { listExpenses } = await import('../db/expenses');
+      const expenses = await listExpenses(db);
+      const recurring = detectRecurring(expenses);
+      return json(200, { ok: true, insights: await getMoneyInsights(db), recurring, upcoming: forecastUpcomingBills(recurring) });
+    }
+    // Relationship keep-warm nudges (web parity).
+    if (req.method === 'GET' && req.path === '/api/keepwarm') {
+      const { getKeepWarmNudges } = await import('../processing/relationshipEngine');
+      return json(200, { ok: true, nudges: await getKeepWarmNudges(db) });
+    }
     // Scans & photos gallery — list captures that have an original source image.
     if (req.method === 'GET' && req.path === '/api/gallery') {
       const rows = await db.getAllAsync<{ id: number; extracted_title: string | null; created_at: string }>(
@@ -574,7 +597,10 @@ async function route(req: ParsedRequest): Promise<string> {
     // ─── Intelligent Calendar ─────────────────────────────────────────────────
     if (req.method === 'GET' && req.path === '/api/schedule/availability') {
       const { getAvailability } = await import('../scheduling/availability');
-      return json(200, { ok: true, availability: await getAvailability(db) });
+      const { suggestedEnergyCurves } = await import('../scheduling/load');
+      const availability = await getAvailability(db);
+      // Seed for the web energy editor when the user hasn't shaped their own curves yet.
+      return json(200, { ok: true, availability, suggestedCurves: suggestedEnergyCurves(availability) });
     }
     if (req.method === 'POST' && req.path === '/api/schedule/availability') {
       const { setAvailability } = await import('../scheduling/availability');

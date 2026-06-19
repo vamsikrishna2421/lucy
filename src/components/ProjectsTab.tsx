@@ -4,7 +4,7 @@
  * mention it), delete. Deeper per-project linking comes next.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import { listProjects, createProject, deleteProject, renameProject, projectActivity, projectNotes, type ProjectRow, type ProjectNote } from '../db/projects';
@@ -146,7 +146,7 @@ export function ProjectsTab() {
 
       {/* New project */}
       <Modal visible={adding} transparent animationType="slide" onRequestClose={() => setAdding(false)}>
-        <View style={styles.modalBg}><View style={styles.sheet}>
+        <KeyboardAvoidingView style={styles.modalBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><View style={styles.sheet}>
           <Text style={styles.h}>New project</Text>
           <TextInput style={styles.input} placeholder="Project name" placeholderTextColor={LUCY_COLORS.textFaint} value={name} onChangeText={setName} />
           <TextInput style={[styles.input, { height: 80 }]} placeholder="Description (optional)" placeholderTextColor={LUCY_COLORS.textFaint} value={desc} onChangeText={setDesc} multiline />
@@ -154,7 +154,7 @@ export function ProjectsTab() {
             <TouchableOpacity style={styles.btnGhost} onPress={() => setAdding(false)}><Text style={styles.btnGhostT}>Cancel</Text></TouchableOpacity>
             <TouchableOpacity style={styles.btn} onPress={add}><Text style={styles.btnT}>Create</Text></TouchableOpacity>
           </View>
-        </View></View>
+        </View></KeyboardAvoidingView>
       </Modal>
 
       {/* Add suggestion to an existing project */}
@@ -190,7 +190,7 @@ export function ProjectsTab() {
 
       {/* Project space — inline edit + related notes, all in ONE modal (iOS can't stack two modals) */}
       <Modal visible={!!open} transparent animationType="slide" onRequestClose={() => { setOpen(null); setEditMode(false); }}>
-        <View style={styles.modalBg}><View style={styles.sheet}>
+        <KeyboardAvoidingView style={styles.modalBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><View style={styles.sheet}>
           <View style={styles.head}>
             <Text style={[styles.h, { flex: 1, marginRight: 10 }]} numberOfLines={2}>{open?.name}</Text>
             <TouchableOpacity onPress={() => { setOpen(null); setEditMode(false); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><Text style={styles.x}>✕</Text></TouchableOpacity>
@@ -242,7 +242,7 @@ export function ProjectsTab() {
               </View>
             </>
           )}
-        </View></View>
+        </View></KeyboardAvoidingView>
       </Modal>
     </View>
   );

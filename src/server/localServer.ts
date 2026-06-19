@@ -203,6 +203,23 @@ async function route(req: ParsedRequest): Promise<string> {
       await deleteMoneyGoal(db, id);
       return json(200, { ok: true });
     }
+    // Savings-goal suggestion (auto-detected from a capture) — propose-and-confirm (web parity).
+    if (req.method === 'GET' && req.path === '/api/money/goal-suggestion') {
+      const { getGoalSignal } = await import('../processing/goalPlanner');
+      return json(200, { ok: true, suggestion: await getGoalSignal(db) });
+    }
+    if (req.method === 'POST' && req.path === '/api/money/goal-suggestion/accept') {
+      const { getGoalSignal, createGoalFromSignal } = await import('../processing/goalPlanner');
+      const sig = await getGoalSignal(db);
+      if (!sig) return json(404, { error: 'No suggestion' });
+      const id = await createGoalFromSignal(db, sig);
+      return json(200, { ok: true, id });
+    }
+    if (req.method === 'POST' && req.path === '/api/money/goal-suggestion/dismiss') {
+      const { dismissGoalSignal } = await import('../processing/goalPlanner');
+      await dismissGoalSignal(db);
+      return json(200, { ok: true });
+    }
     // Relationship keep-warm nudges (web parity).
     if (req.method === 'GET' && req.path === '/api/keepwarm') {
       const { getKeepWarmNudges } = await import('../processing/relationshipEngine');

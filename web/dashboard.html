@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 66 (App-parity features + spring motion:
+/* LUCY web - premium - dashboard rev 67 (App-parity features + spring motion:
+   • Money: auto-detected savings-goal suggestion banner ("save 2000 for the move by Aug" → Create goal), via /api/money/goal-suggestion
    • Money: savings goals (Vamsi #2) — target + deadline tracked by contributions, on/off-track pacing bar, via /api/money/goals (+/contribute)
    • Projects: rename/edit a project (short headline + description) via /api/projects/update — old name kept as alias so items still gather
    • Projects: project autopilot suggestions with ＋ Create / Add to existing (merge) / Dismiss, via /api/projects/suggestions + /merge; smarter dedup hides near-duplicates of existing projects
@@ -1656,18 +1657,29 @@ async function hlSaveProfile(){
 let MONEY=null;          // {insights,recurring,upcoming}
 let MONEY_FETCHED=false;
 let MONEY_GOALS=[];      // [{id,label,target_amount,currency,deadline,project_name,status,progress}]
+let GOAL_SUGGESTION=null;// auto-detected savings goal awaiting confirm
 async function loadMoney(){
   try{const r=await api('/api/money');if(r&&typeof r==='object'){MONEY=r;MONEY_FETCHED=true;}}catch(e){/* keep last */}
   try{const g=await api('/api/money/goals');if(g&&g.ok)MONEY_GOALS=g.goals||[];}catch(e){/* keep last */}
+  try{const s=await api('/api/money/goal-suggestion');GOAL_SUGGESTION=(s&&s.ok)?s.suggestion:null;}catch(e){/* keep last */}
   const host=$('moneyWatch');if(host)host.innerHTML=moneyWatchBody();
   const gh=$('moneyGoals');if(gh){gh.innerHTML=goalsBody();stampStagger(gh);}
   // Once we have real subscriptions, flip the Market table cell to ✅ and refresh if shown.
   if(MONEY&&Array.isArray(MONEY.recurring)&&MONEY.recurring.length)flipSubscriptionCell();
 }
 function goalMoney(n,cur){return (cur||'₹')+Math.round(n||0).toLocaleString();}
+function goalSuggestBody(){
+  const s=GOAL_SUGGESTION;if(!s)return '';
+  const cur=s.currency||'₹';const by=s.deadlineISO?(' by '+new Date(s.deadlineISO).toLocaleDateString(undefined,{month:'short',day:'numeric'})):'';
+  return `<div class="card" style="border-color:var(--primary);background:rgba(255,140,66,.08);flex-direction:column;align-items:stretch;gap:8px;margin-bottom:10px">
+    <div style="font-weight:800;font-size:11.5px;letter-spacing:.5px;color:var(--accent,#FF8C42)">✦ TRACK THIS GOAL?</div>
+    <div class="when">Save ${goalMoney(s.target,cur)} for ${esc(s.label)}${by}?</div>
+    <div style="display:flex;gap:8px"><button class="btn sm" onclick="acceptGoalSuggestion()">Create goal</button><button class="btn ghost sm" onclick="dismissGoalSuggestion()">Not now</button></div>
+  </div>`;
+}
 function goalsBody(){
   const goals=MONEY_GOALS||[];
-  const head=`<div class="sec"><h2>Goals</h2><div class="grow"></div><button class="btn ghost sm" onclick="newMoneyGoal()">＋ New goal</button></div>`;
+  const head=`<div class="sec"><h2>Goals</h2><div class="grow"></div><button class="btn ghost sm" onclick="newMoneyGoal()">＋ New goal</button></div>`+goalSuggestBody();
   if(!goals.length)return head+`<div class="card" style="color:var(--muted);display:block">No savings goals yet — set one (e.g. save 2000 for the move by Aug) and Lucy tracks your pace.</div>`;
   return head+'<div class="col">'+goals.map(g=>{const p=g.progress||{};const pct=Math.max(0,Math.min(1,p.pct||0));const cur=g.currency||'₹';
     const col=p.done?'#22C55E':(p.onTrack===false?'#FB7185':(p.onTrack===true?'var(--primary)':'var(--muted)'));
@@ -1688,6 +1700,8 @@ async function newMoneyGoal(){const label=prompt('Goal name (e.g. Move fund):');
 async function contributeGoal(id){const amount=Number(prompt('How much did you put aside?'));if(!Number.isFinite(amount)||amount===0)return;
   await api('/api/money/goals/contribute',{method:'POST',body:JSON.stringify({goalId:id,amount})});toast('Saved ✓');await loadMoney();}
 async function delMoneyGoal(id){if(!confirm('Delete this goal?'))return;await api('/api/money/goals/'+id,{method:'DELETE'});toast('Deleted');await loadMoney();}
+async function acceptGoalSuggestion(){await api('/api/money/goal-suggestion/accept',{method:'POST',body:'{}'});toast('Goal created ✓');await loadMoney();}
+async function dismissGoalSuggestion(){await api('/api/money/goal-suggestion/dismiss',{method:'POST',body:'{}'});await loadMoney();}
 function moneyDue(ms){const t=parseTs(ms);if(isNaN(t))return '';const d=dayKey(t),today=dayKey(Date.now());const diff=Math.round((d-today)/86400000);if(diff===0)return 'today';if(diff===1)return 'tomorrow';if(diff>1&&diff<7)return 'in '+diff+' days';return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric'});}
 function moneyWatchBody(){
   if(!MONEY_FETCHED&&!MONEY)return '';

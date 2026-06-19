@@ -50,6 +50,12 @@ import {
   type GoalWithProgress,
 } from '../db/moneyGoals';
 import { formatMoney, goalGuidance, type GoalProgress } from '../processing/moneyGoals';
+import {
+  createGoalFromSignal,
+  dismissGoalSignal,
+  getGoalSignal,
+  type StoredGoalSignal,
+} from '../processing/goalPlanner';
 import { FadeInUp, PressableScale, Stagger } from './Motion';
 
 interface MoneyGoalsProps {
@@ -83,6 +89,13 @@ function daysLeftChip(daysLeft: number | null): { text: string; tone: PaceState 
   if (daysLeft < 0) return { text: `${Math.abs(daysLeft)}d over`, tone: 'behind' };
   if (daysLeft === 0) return { text: 'due today', tone: 'behind' };
   return { text: `${daysLeft} days left`, tone: 'neutral' };
+}
+
+/** Format a suggested-goal deadline ISO into a short "Mon D" (e.g. "Aug 1"); '' if unparseable. */
+function formatSuggestDeadline(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 /** Parse a forgiving "YYYY-MM-DD" into a midday ISO string (so the date doesn't drift across TZs). */
@@ -223,6 +236,10 @@ export function MoneyGoals({ refreshKey, onChange }: MoneyGoalsProps) {
   const [goals, setGoals] = useState<GoalWithProgress[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Propose-and-confirm: a savings goal LUCY auto-detected from a capture (null = none pending).
+  const [suggestion, setSuggestion] = useState<StoredGoalSignal | null>(null);
+  const [actingSuggestion, setActingSuggestion] = useState(false);
+
   // New-goal sheet state
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState('');
@@ -240,7 +257,9 @@ export function MoneyGoals({ refreshKey, onChange }: MoneyGoalsProps) {
   const load = useCallback(async () => {
     try {
       const db = await getDatabase();
-      setGoals(await getGoalsWithProgress(db));
+      const [list, sig] = await Promise.all([getGoalsWithProgress(db), getGoalSignal(db)]);
+      setGoals(list);
+      setSuggestion(sig);
     } catch {
       // never a scary state — just show the empty/loaded surface
     } finally {
@@ -341,6 +360,37 @@ export function MoneyGoals({ refreshKey, onChange }: MoneyGoalsProps) {
     );
   };
 
+  // ── Suggested-goal banner (propose-and-confirm) ───────────────────────────
+  const acceptSuggestion = async () => {
+    if (!suggestion || actingSuggestion) return;
+    setActingSuggestion(true);
+    try {
+      const db = await getDatabase();
+      await createGoalFromSignal(db, suggestion);
+      haptic.capture();
+      setSuggestion(null);
+      await load();
+      onChange?.();
+    } catch {
+      Alert.alert("Couldn't create that", 'That goal didn’t save — give it another try in a moment.');
+    } finally {
+      setActingSuggestion(false);
+    }
+  };
+
+  const declineSuggestion = async () => {
+    if (!suggestion || actingSuggestion) return;
+    const prev = suggestion;
+    setSuggestion(null); // optimistic — feels instant
+    try {
+      const db = await getDatabase();
+      await dismissGoalSignal(db);
+      haptic.taskUndo();
+    } catch {
+      setSuggestion(prev); // restore if the clear failed
+    }
+  };
+
   if (loading) {
     return <View style={styles.center}><ActivityIndicator color={LUCY_COLORS.primary} /></View>;
   }
@@ -365,6 +415,41 @@ export function MoneyGoals({ refreshKey, onChange }: MoneyGoalsProps) {
             <Text style={styles.newBtnT}>＋ New goal</Text>
           </TouchableOpacity>
         </View>
+
+        {/* ── Suggested goal LUCY spotted in a capture — propose & confirm ─────── */}
+        {suggestion ? (
+          <FadeInUp>
+            <View style={styles.suggestBox}>
+              <Text style={styles.suggestHead}>✦ TRACK THIS GOAL?</Text>
+              <Text style={styles.suggestBody}>
+                Save{' '}
+                <Text style={styles.suggestStrong}>{formatMoney(suggestion.target, suggestion.currency)}</Text>
+                {' '}for{' '}
+                <Text style={styles.suggestStrong}>{suggestion.label}</Text>
+                {suggestion.deadlineISO ? ` by ${formatSuggestDeadline(suggestion.deadlineISO)}` : ''}?
+              </Text>
+              <View style={styles.suggestActions}>
+                <PressableScale
+                  style={[styles.suggestCta, actingSuggestion && styles.suggestCtaBusy]}
+                  onPress={() => void acceptSuggestion()}
+                  accessibilityLabel={`Create goal: save for ${suggestion.label}`}
+                >
+                  {actingSuggestion
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={styles.suggestCtaT}>Create goal</Text>}
+                </PressableScale>
+                <TouchableOpacity
+                  style={styles.suggestDismiss}
+                  onPress={() => void declineSuggestion()}
+                  disabled={actingSuggestion}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                >
+                  <Text style={styles.suggestDismissT}>Not now</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </FadeInUp>
+        ) : null}
 
         {empty ? (
           <FadeInUp>
@@ -531,6 +616,25 @@ const styles = StyleSheet.create({
   headSub: { color: LUCY_COLORS.textMuted, fontSize: 13, marginTop: 4 },
   newBtn: { backgroundColor: LUCY_COLORS.primary, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 9 },
   newBtnT: { color: '#fff', fontWeight: '800', fontSize: 13 },
+
+  // Suggested-goal banner (propose & confirm) — soft primary-tinted, sits above the list
+  suggestBox: {
+    backgroundColor: 'rgba(255,140,66,0.10)',
+    borderWidth: 1,
+    borderColor: LUCY_COLORS.primaryLine,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  suggestHead: { color: LUCY_COLORS.primaryGlow, fontWeight: '900', fontSize: 11, letterSpacing: 0.5, marginBottom: 6 },
+  suggestBody: { color: LUCY_COLORS.textMuted, fontSize: 13.5, lineHeight: 20 },
+  suggestStrong: { color: LUCY_COLORS.textDark, fontWeight: '800' },
+  suggestActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
+  suggestCta: { backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, minWidth: 112, alignItems: 'center', justifyContent: 'center' },
+  suggestCtaBusy: { opacity: 0.8 },
+  suggestCtaT: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  suggestDismiss: { paddingHorizontal: 10, paddingVertical: 10 },
+  suggestDismissT: { color: LUCY_COLORS.textFaint, fontWeight: '700', fontSize: 13 },
 
   // Goal card
   card: {

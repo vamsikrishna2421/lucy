@@ -312,6 +312,11 @@ async function persistExtraction(
       const { maybeFlagTripSignal } = await import('./tripPlanner');
       await maybeFlagTripSignal(db, extraction, capture);
     } catch { /* non-critical */ }
+    // Savings-goal autopilot: "save 2000 for the move by Aug" → remember it so the Goals tab can offer it.
+    try {
+      const { maybeFlagGoalSignal } = await import('./goalPlanner');
+      await maybeFlagGoalSignal(db, extraction, capture);
+    } catch { /* non-critical */ }
     // Persist mood entry — EVERY capture contributes a mood point. When the LLM returned only the bare
     // 'neutral/medium' default, run the free on-device sentiment so a real feeling isn't lost.
     {

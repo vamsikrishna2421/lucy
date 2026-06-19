@@ -613,6 +613,26 @@ async function route(req: ParsedRequest): Promise<string> {
       const done = await deleteProject(db, id);
       return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such project' }) });
     }
+    // Project autopilot — suggestions LUCY noticed, plus merge-into-existing (web parity).
+    if (req.method === 'GET' && req.path === '/api/projects/suggestions') {
+      const { deriveProjectSuggestions } = await import('../processing/projectAutopilot');
+      return json(200, { ok: true, suggestions: await deriveProjectSuggestions(db) });
+    }
+    if (req.method === 'POST' && req.path === '/api/projects/merge') {
+      const projectId = Number(payload.projectId);
+      const suggestion = String(payload.suggestion ?? '').trim();
+      if (!projectId || !suggestion) return json(400, { error: 'projectId and suggestion required' });
+      const { mergeSuggestionIntoProject } = await import('../processing/projectAutopilot');
+      await mergeSuggestionIntoProject(db, projectId, suggestion);
+      return json(200, { ok: true });
+    }
+    if (req.method === 'POST' && req.path === '/api/projects/dismiss-suggestion') {
+      const name = String(payload.name ?? '').trim();
+      if (!name) return json(400, { error: 'name required' });
+      const { dismissProjectSuggestion } = await import('../processing/projectAutopilot');
+      await dismissProjectSuggestion(db, name);
+      return json(200, { ok: true });
+    }
 
     // ─── Intelligent Calendar ─────────────────────────────────────────────────
     if (req.method === 'GET' && req.path === '/api/schedule/availability') {

@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 63 (App-parity features + spring motion:
+/* LUCY web - premium - dashboard rev 64 (App-parity features + spring motion:
+   • Projects: project autopilot suggestions with ＋ Create / Add to existing (merge) / Dismiss, via /api/projects/suggestions + /merge; smarter dedup hides near-duplicates of existing projects
    • Tasks: commitment guardian — promises you made + things owed to you, at-risk in rose/amber, Done/Dismiss, via /api/commitments
    • Health: mood-over-time SVG graph (teal/rose, real gaps, shift caption, tap-a-day → "what was happening") via /api/mood-graph
    • Money: money-watch (upcoming bills + recurring/subscriptions + Lucy-noticed insights) via /api/money; flips Market subscription-detection cell to ✅
@@ -1228,13 +1229,31 @@ function vLinks(){return `<div class="page"><section class="page-hero compact"><
   <div id="linksWrap"><div class="empty"><div class="big">○</div>Loading...</div></div></div>`;}
 function vProjects(){return `<div class="page"><section class="page-hero compact"><div class="split-toolbar"><div><div class="page-kicker">Projects</div><h1 class="page-title">Dedicated spaces for bigger threads.</h1><div class="page-sub">Keep long-running goals, moves, paperwork, and creative work from disappearing into the timeline.</div></div><span class="grow"></span><button class="btn" onclick="newProject()">＋ New project</button></div></section>
   <div id="projWrap"><div class="empty"><div class="big">○</div>Loading...</div></div></div>`;}
-async function loadProjects(){let r=null;try{r=await api('/api/projects');}catch(e){}const w=$('projWrap');if(!w)return;
+let PROJ_SUGGEST=[];
+async function loadProjects(){let r=null,sg=null;try{r=await api('/api/projects');}catch(e){}try{sg=await api('/api/projects/suggestions');}catch(e){}const w=$('projWrap');if(!w)return;
   const items=(r&&r.items)||[];
-  if(!items.length){w.innerHTML=empty('📂','No projects yet','Click ＋ New project to give a project its own space.');return;}
-  w.innerHTML='<div style="display:flex;flex-direction:column;gap:8px">'+items.map(p=>`<div class="card" style="padding:13px 15px;display:flex;align-items:center;gap:12px">
+  PROJ_SUGGEST=(sg&&sg.suggestions)||[];
+  let html='';
+  if(PROJ_SUGGEST.length){
+    html+=`<div class="card" style="border-color:var(--accent,#FF8C42);background:rgba(255,140,66,.06);margin-bottom:14px;flex-direction:column;align-items:stretch;gap:0;padding:13px 15px">`+
+      `<div style="font-weight:800;font-size:11.5px;letter-spacing:.5px;color:var(--accent,#FF8C42);margin-bottom:4px">✦ LUCY NOTICED THESE</div>`+
+      PROJ_SUGGEST.map((s,i)=>{const opts=items.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+        return `<div style="display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--border);padding:10px 0 4px">
+          <div><div style="font-weight:700">${esc(s.name)}</div><div class="subtle-line" style="margin-top:1px">${s.evidence} related notes — make it a project?</div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn sm" onclick="createProjSuggestion(${i})">＋ Create</button>
+            ${items.length?`<select onchange="mergeProjSuggestion(${i},this)" style="background:var(--card2,#1c1813);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:7px 9px;font-size:12px"><option value="">Add to existing…</option>${opts}</select>`:''}
+            <button class="btn ghost sm" onclick="dismissProjSuggestion(${i})">✕ Dismiss</button>
+          </div></div>`;}).join('')+`</div>`;
+  }
+  if(!items.length){w.innerHTML=html+empty('📂','No projects yet','Click ＋ New project to give a project its own space.');return;}
+  w.innerHTML=html+'<div style="display:flex;flex-direction:column;gap:8px">'+items.map(p=>`<div class="card" style="padding:13px 15px;display:flex;align-items:center;gap:12px">
     <span style="width:10px;height:10px;border-radius:50%;background:var(--accent,#FF8C42);flex:none"></span>
     <div style="flex:1"><div style="font-weight:600">${esc(p.name)}</div>${p.description?`<div class="subtle-line" style="margin-top:2px">${esc(p.description)}</div>`:''}</div>
     <button class="btn ghost sm" onclick="delProject(${p.id})">✕</button></div>`).join('')+'</div>';}
+async function createProjSuggestion(i){const s=PROJ_SUGGEST[i];if(!s)return;await api('/api/projects',{method:'POST',body:JSON.stringify({name:s.name,description:`Auto-gathered from ${s.evidence} related notes.`})});toast('Project created ✓');await loadProjects();}
+async function mergeProjSuggestion(i,sel){const s=PROJ_SUGGEST[i];const pid=Number(sel&&sel.value);if(!s||!pid)return;await api('/api/projects/merge',{method:'POST',body:JSON.stringify({suggestion:s.name,projectId:pid})});toast('Merged ✓');await loadProjects();}
+async function dismissProjSuggestion(i){const s=PROJ_SUGGEST[i];if(!s)return;await api('/api/projects/dismiss-suggestion',{method:'POST',body:JSON.stringify({name:s.name})});await loadProjects();}
 async function newProject(){const name=prompt('Project name:');if(!name||!name.trim())return;const description=prompt('Short description (optional):')||'';
   await api('/api/projects',{method:'POST',body:JSON.stringify({name:name.trim(),description})});toast('Project created ✓');await loadProjects();}
 async function delProject(id){if(!confirm('Delete this project?'))return;await api('/api/projects/'+id,{method:'DELETE'});toast('Deleted');await loadProjects();}

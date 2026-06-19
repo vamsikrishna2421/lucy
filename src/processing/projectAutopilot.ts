@@ -9,13 +9,35 @@
  * related tasks/blocks without moving anything.
  */
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { listProjects } from '../db/projects';
+import { addProjectAlias, listProjects, projectAliases } from '../db/projects';
 
 export interface ProjectSuggestion { name: string; evidence: number; entityType: string }
 
 const norm = (s: string): string => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 // Generic words that aren't real projects even if they recur.
-const GENERIC = new Set(['work', 'life', 'project', 'product', 'stuff', 'misc', 'general', 'personal', 'app', 'idea', 'team', 'company', 'meeting', 'task', 'today', 'tomorrow']);
+const GENERIC = new Set(['work', 'life', 'project', 'product', 'stuff', 'misc', 'general', 'personal', 'app', 'idea', 'team', 'company', 'meeting', 'task', 'today', 'tomorrow', 'ai', 'application', 'apps']);
+
+/** Meaningful (non-generic) tokens of a name, for near-duplicate comparison. */
+function meaningfulTokens(s: string): Set<string> {
+  return new Set(norm(s).split(' ').filter((t) => t.length >= 2 && !GENERIC.has(t)));
+}
+
+/** True when `candidate` is essentially the same project as one that already exists — e.g. "Lucy app"
+ *  vs an existing "Lucy". Catches subset/superset and heavy token overlap so we don't suggest a near-
+ *  duplicate of a project (or alias) the user already has. Exported for unit tests. */
+export function isNearExisting(candidate: string, existingNames: string[]): boolean {
+  const cand = meaningfulTokens(candidate);
+  if (cand.size === 0) return false;
+  for (const name of existingNames) {
+    const ex = meaningfulTokens(name);
+    if (ex.size === 0) continue;
+    const overlap = [...cand].filter((t) => ex.has(t)).length;
+    const subset = overlap === ex.size || overlap === cand.size; // one fully contains the other
+    const jaccard = overlap / (cand.size + ex.size - overlap);
+    if (subset || jaccard >= 0.5) return true;
+  }
+  return false;
+}
 
 export async function deriveProjectSuggestions(db: SQLiteDatabase, minEvidence = 3, max = 5): Promise<ProjectSuggestion[]> {
   let rows: Array<{ name: string; entity_type: string; evidence_count: number }> = [];
@@ -29,7 +51,11 @@ export async function deriveProjectSuggestions(db: SQLiteDatabase, minEvidence =
     );
   } catch { return []; }
 
-  const existing = new Set((await listProjects(db)).map((p) => norm(p.name)));
+  // Existing projects + every alias they've absorbed — used for both exact and near-duplicate skipping.
+  const projects = await listProjects(db);
+  const existingNames: string[] = [];
+  for (const p of projects) { existingNames.push(p.name, ...projectAliases(p)); }
+  const existing = new Set(existingNames.map(norm));
   // Also skip ones the user already dismissed (stored as a setting list).
   let dismissed = new Set<string>();
   try {
@@ -43,11 +69,20 @@ export async function deriveProjectSuggestions(db: SQLiteDatabase, minEvidence =
   for (const r of rows) {
     const key = norm(r.name);
     if (!key || key.length < 3 || GENERIC.has(key) || existing.has(key) || dismissed.has(key) || seen.has(key)) continue;
+    // Don't propose a near-duplicate of a project the user already has (e.g. "Lucy app" when "Lucy" exists).
+    if (isNearExisting(r.name, existingNames)) continue;
     seen.add(key);
     out.push({ name: r.name.trim(), evidence: r.evidence_count, entityType: r.entity_type });
     if (out.length >= max) break;
   }
   return out;
+}
+
+/** Merge a suggested cluster into an existing project: record the suggestion's name as an alias of that
+ *  project (so it absorbs the cluster's items) and dismiss the suggestion. Non-destructive + reversible. */
+export async function mergeSuggestionIntoProject(db: SQLiteDatabase, projectId: number, suggestionName: string): Promise<void> {
+  await addProjectAlias(db, projectId, suggestionName);
+  await dismissProjectSuggestion(db, suggestionName);
 }
 
 /** Remember a dismissed suggestion so we don't keep proposing it. */

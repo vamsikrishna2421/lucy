@@ -307,7 +307,8 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
       name TEXT NOT NULL,
       description TEXT,
       color TEXT,
-      status TEXT DEFAULT 'active'
+      status TEXT DEFAULT 'active',
+      aliases TEXT
     );
 
     CREATE TABLE IF NOT EXISTS scheduled_blocks (
@@ -423,6 +424,13 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
   const reminderRecurCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(reminders)');
   if (!new Set(reminderRecurCols.map((c) => c.name)).has('recurrence')) {
     await db.execAsync('ALTER TABLE reminders ADD COLUMN recurrence TEXT;');
+  }
+
+  // Project aliases: JSON array of alternate names a project absorbs (when the user merges a
+  // suggested cluster into an existing project). projectActivity matches name OR any alias.
+  const projectCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(projects)');
+  if (!new Set(projectCols.map((c) => c.name)).has('aliases')) {
+    await db.execAsync('ALTER TABLE projects ADD COLUMN aliases TEXT;');
   }
   await db.execAsync(`
     CREATE INDEX IF NOT EXISTS idx_captures_created_at ON captures(created_at, id);

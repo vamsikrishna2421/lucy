@@ -8,7 +8,7 @@ import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TextInpu
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import { listProjects, createProject, deleteProject, projectActivity, type ProjectRow } from '../db/projects';
-import { deriveProjectSuggestions, dismissProjectSuggestion, type ProjectSuggestion } from '../processing/projectAutopilot';
+import { deriveProjectSuggestions, dismissProjectSuggestion, mergeSuggestionIntoProject, type ProjectSuggestion } from '../processing/projectAutopilot';
 
 export function ProjectsTab() {
   const [projects, setProjects] = useState<ProjectRow[]>([]);
@@ -19,6 +19,7 @@ export function ProjectsTab() {
   const [open, setOpen] = useState<ProjectRow | null>(null);
   const [activity, setActivity] = useState<{ tasks: number; blocks: number } | null>(null);
   const [suggestions, setSuggestions] = useState<ProjectSuggestion[]>([]);
+  const [mergeFor, setMergeFor] = useState<ProjectSuggestion | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -37,6 +38,14 @@ export function ProjectsTab() {
     setSuggestions((list) => list.filter((x) => x.name !== s.name));
     const db = await getDatabase();
     await dismissProjectSuggestion(db, s.name);
+  };
+  const mergeSuggested = async (s: ProjectSuggestion, p: ProjectRow) => {
+    setMergeFor(null);
+    setSuggestions((list) => list.filter((x) => x.name !== s.name));
+    const db = await getDatabase();
+    await mergeSuggestionIntoProject(db, p.id, s.name);
+    await load();
+    Alert.alert('Folded in', `"${s.name}" now feeds into ${p.name}.`);
   };
   useEffect(() => { void load(); }, [load]);
 
@@ -76,12 +85,17 @@ export function ProjectsTab() {
             <Text style={styles.sgHead}>✦ LUCY noticed these</Text>
             {suggestions.map((s) => (
               <View key={s.name} style={styles.sgRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.sgName}>{s.name}</Text>
-                  <Text style={styles.sgMeta}>{s.evidence} related notes — make it a project?</Text>
+                <View style={styles.sgTop}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sgName}>{s.name}</Text>
+                    <Text style={styles.sgMeta}>{s.evidence} related notes — make it a project?</Text>
+                  </View>
+                  <TouchableOpacity style={styles.sgDismiss} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} onPress={() => void dismissSuggested(s)}><Text style={styles.sgDismissT}>✕</Text></TouchableOpacity>
                 </View>
-                <TouchableOpacity style={styles.sgCreate} onPress={() => void createSuggested(s)}><Text style={styles.sgCreateT}>＋ Create</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.sgDismiss} onPress={() => void dismissSuggested(s)}><Text style={styles.sgDismissT}>✕</Text></TouchableOpacity>
+                <View style={styles.sgActions}>
+                  <TouchableOpacity style={styles.sgCreate} onPress={() => void createSuggested(s)}><Text style={styles.sgCreateT}>＋ Create</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.sgMerge} onPress={() => setMergeFor(s)}><Text style={styles.sgMergeT}>Add to existing ▾</Text></TouchableOpacity>
+                </View>
               </View>
             ))}
           </View>
@@ -111,6 +125,37 @@ export function ProjectsTab() {
             <TouchableOpacity style={styles.btn} onPress={add}><Text style={styles.btnT}>Create</Text></TouchableOpacity>
           </View>
         </View></View>
+      </Modal>
+
+      {/* Add suggestion to an existing project */}
+      <Modal visible={!!mergeFor} transparent animationType="slide" onRequestClose={() => setMergeFor(null)}>
+        <TouchableOpacity style={styles.modalBg} activeOpacity={1} onPress={() => setMergeFor(null)}>
+          <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
+            <View style={styles.grip} />
+            <Text style={styles.eyebrow}>FOLD INTO A PROJECT</Text>
+            <Text style={styles.h}>Add to existing</Text>
+            {mergeFor && <Text style={styles.sub}>“{mergeFor.name}” and its {mergeFor.evidence} related notes will start feeding into the project you pick.</Text>}
+            {projects.length === 0 ? (
+              <Text style={styles.pickEmpty}>You have no projects yet. Use ＋ Create to make this its own project.</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 340 }} contentContainerStyle={{ paddingBottom: 4 }}>
+                {projects.map((p) => (
+                  <TouchableOpacity key={p.id} style={styles.pickRow} onPress={() => mergeFor && void mergeSuggested(mergeFor, p)}>
+                    <View style={styles.dot} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pickName}>{p.name}</Text>
+                      {p.description ? <Text style={styles.pickDesc} numberOfLines={1}>{p.description}</Text> : null}
+                    </View>
+                    <Text style={styles.chev}>›</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+            <View style={styles.rowEnd}>
+              <TouchableOpacity style={styles.btnGhost} onPress={() => setMergeFor(null)}><Text style={styles.btnGhostT}>Cancel</Text></TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Project space */}
@@ -158,11 +203,22 @@ const styles = StyleSheet.create({
   note: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 14, lineHeight: 17 },
   sgBox: { backgroundColor: 'rgba(255,140,66,0.07)', borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, borderRadius: 16, padding: 12, marginBottom: 14 },
   sgHead: { color: LUCY_COLORS.primaryGlow, fontWeight: '800', fontSize: 12, marginBottom: 8, letterSpacing: 0.4 },
-  sgRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
+  sgRow: { paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: LUCY_COLORS.primaryLine },
+  sgTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   sgName: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 14 },
-  sgMeta: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 1 },
-  sgCreate: { backgroundColor: LUCY_COLORS.primary, borderRadius: 11, paddingHorizontal: 12, paddingVertical: 7 },
-  sgCreateT: { color: '#fff', fontWeight: '800', fontSize: 12 },
-  sgDismiss: { paddingHorizontal: 6, paddingVertical: 6 },
+  sgMeta: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 1, lineHeight: 16 },
+  sgActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 9 },
+  sgCreate: { backgroundColor: LUCY_COLORS.primary, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 8 },
+  sgCreateT: { color: '#fff', fontWeight: '800', fontSize: 12.5 },
+  sgMerge: { borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 8 },
+  sgMergeT: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 12.5 },
+  sgDismiss: { paddingHorizontal: 4, paddingVertical: 2 },
   sgDismissT: { color: LUCY_COLORS.textFaint, fontSize: 15 },
+  // Add-to-existing picker sheet
+  grip: { width: 40, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.border, alignSelf: 'center', marginBottom: 14 },
+  eyebrow: { color: LUCY_COLORS.primaryGlow, fontWeight: '900', fontSize: 11, letterSpacing: 1, marginBottom: 4 },
+  pickEmpty: { color: LUCY_COLORS.textMuted, fontSize: 13, marginTop: 14, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, padding: 16, lineHeight: 19 },
+  pickRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 14, padding: 13, marginTop: 10 },
+  pickName: { color: LUCY_COLORS.textDark, fontWeight: '800', fontSize: 14 },
+  pickDesc: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 2 },
 });

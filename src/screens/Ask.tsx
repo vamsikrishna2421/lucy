@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
+import { LucyEmptyState } from '../components/LucyEmptyState';
 import { getDatabase } from '../db';
 import {
   createAskThread,
@@ -515,9 +516,10 @@ function InsightsView({
         <Text style={{ color: LUCY_COLORS.textSubtle, textAlign: 'center', marginTop: 40, fontSize: 14 }}>LUCY is thinking...</Text>
       ) : insights.length === 0 ? (
         <View style={{ padding: 20, gap: 16 }}>
-          <Text style={{ color: LUCY_COLORS.textSubtle, textAlign: 'center', fontSize: 14, lineHeight: 22 }}>
-            No insights generated yet.
-          </Text>
+          <LucyEmptyState
+            title="No insights yet"
+            message="As you capture thoughts, I'll surface gentle patterns and ideas here — no need to ask."
+          />
           <View style={{ backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 14, padding: 16 }}>
             <Text style={{ color: LUCY_COLORS.primaryGlow, fontSize: 13, fontWeight: '700', marginBottom: 4 }}>To generate insights:</Text>
             <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 21 }}>

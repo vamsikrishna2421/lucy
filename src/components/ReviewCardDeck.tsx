@@ -22,10 +22,13 @@ const SWIPE_THRESHOLD = SCREEN_W * 0.28;
 export function ReviewCardDeck({
   cards,
   emptyText = 'All caught up — nothing to review right now.',
+  emptyNode,
   header,
 }: {
   cards: ReviewCard[];
   emptyText?: string;
+  /** Optional rich empty state (e.g. a character-led <LucyEmptyState>); overrides emptyText. */
+  emptyNode?: React.ReactNode;
   header?: React.ReactNode;
 }) {
   const [index, setIndex] = useState(0);
@@ -62,8 +65,10 @@ export function ReviewCardDeck({
       <View style={styles.wrap}>
         {header}
         <View style={styles.emptyWrap}>
-          <Text style={styles.emptyEmoji}>✦</Text>
-          <Text style={styles.emptyText}>{emptyText}</Text>
+          {emptyNode ?? (<>
+            <Text style={styles.emptyEmoji}>✦</Text>
+            <Text style={styles.emptyText}>{emptyText}</Text>
+          </>)}
         </View>
       </View>
     );

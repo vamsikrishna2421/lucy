@@ -27,6 +27,9 @@ import { ProjectsTab } from '../components/ProjectsTab';
 import { WorkspaceHome } from '../components/WorkspaceHome';
 import { AskScreen } from './Ask';
 import { Ionicons } from '@expo/vector-icons';
+import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl';
+import { ActionSheet, Toast, type SheetAction } from '../components/ActionSheet';
+import { LucyEmptyState } from '../components/LucyEmptyState';
 
 const VIEW_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   'Timeline': 'time-outline',
@@ -206,6 +209,7 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
   const [contextRefresh, setContextRefresh] = useState(0);
   const [stalenessReviews, setStalenessReviews] = useState<StalenessReview[]>([]);
   const [contextBatch, setContextBatch] = useState<ContextBatch | null>(null);
+  const [nextEvent, setNextEvent] = useState<{ title: string; start_at: number } | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -252,6 +256,15 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
         setOnThisDay(await getOnThisDayMemories(db));
       } catch { /* non-critical */ }
       try {
+        // Next upcoming committed event (today + next day) for the "Today" glance strip.
+        const now = Date.now();
+        const row = await db.getFirstAsync<{ title: string; start_at: number }>(
+          "SELECT title, start_at FROM scheduled_blocks WHERE status='committed' AND start_at > ? ORDER BY start_at ASC LIMIT 1",
+          now,
+        );
+        setNextEvent(row && row.start_at < now + 36 * 3600 * 1000 ? row : null);
+      } catch { /* non-critical */ }
+      try {
         const rows = await db.getAllAsync<{ capture_id: number; tone: string }>(
           'SELECT capture_id, tone FROM mood_entries ORDER BY created_at DESC',
         );
@@ -271,6 +284,50 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
   const displayTasks = focusTasks.length ? focusTasks : pendingTodos.slice(0, 3);
   // Brain is reached via the bottom nav, so it's not in the top tab row.
   const views: ViewMode[] = ['Timeline', 'Focus Now', 'Ask Lucy', 'Health'];
+  const viewOptions: SegmentOption<ViewMode>[] = views.map((v) => ({ value: v, label: v, icon: VIEW_ICON[v] }));
+
+  // ─── "Today" glance strip data — pulled from data already loaded; absent data ⇒ hidden card. ───
+  const topTask = pendingTodos[0];
+  const organizingCount = contextBatch?.total ?? 0;
+  const moodLabel = moodTrend.dominant && moodTrend.dominant !== 'neutral' ? moodTrend.dominant : null;
+  const glanceCards: { key: string; icon: keyof typeof Ionicons.glyphMap; tint: string; label: string; value: string; onPress: () => void }[] = [];
+  if (nextEvent) {
+    glanceCards.push({
+      key: 'event', icon: 'calendar-outline', tint: '#5B8CFF', label: 'Next up',
+      value: nextEvent.title,
+      onPress: () => { setView('Brain'); setTab('Calendar'); },
+    });
+  }
+  if (topTask) {
+    glanceCards.push({
+      key: 'task', icon: 'flash-outline', tint: LUCY_COLORS.primary, label: 'Top task',
+      value: topTask.task,
+      onPress: () => setView('Focus Now'),
+    });
+  }
+  if (organizingCount > 0) {
+    glanceCards.push({
+      key: 'org', icon: 'sparkles-outline', tint: LUCY_COLORS.violet, label: 'Organizing',
+      value: `${organizingCount} item${organizingCount === 1 ? '' : 's'}`,
+      onPress: () => setView('Focus Now'),
+    });
+  }
+  if (moodLabel) {
+    glanceCards.push({
+      key: 'mood', icon: 'heart-outline', tint: LUCY_COLORS.rose, label: 'Mood today',
+      value: moodLabel.charAt(0).toUpperCase() + moodLabel.slice(1),
+      onPress: () => setView('Focus Now'),
+    });
+  }
+
+  // Lucy "speaks" — a warm, reactive two-part greeting that mirrors the day's state. The orb itself
+  // is the single global overlay (App.tsx) that sits in this hero's top-right, so the copy reads as
+  // her companion voice without seating a second orb here.
+  const heroLine = pendingTodos.length
+    ? `I'm holding ${pendingTodos.length} open task${pendingTodos.length === 1 ? '' : 's'} for you — tap Focus Now when you're ready.`
+    : captures.length
+      ? "You're all caught up. I'll keep watch and tidy things quietly."
+      : 'Hold the mic or snap anything — I\'ll organize what matters.';
 
   return (
     <View style={styles.container}>
@@ -278,25 +335,27 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
         <View style={styles.homeHeroGlow} />
         <Text style={styles.todayDate}>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
         <Text style={styles.title} numberOfLines={1}>{greetingForHour(new Date().getHours())}{userName ? `, ${userName}` : ''}</Text>
-        <Text style={styles.subtitle} numberOfLines={1}>
-          {pendingTodos.length
-            ? `Lucy is holding ${pendingTodos.length} open task${pendingTodos.length === 1 ? '' : 's'} for you.`
-            : captures.length
-              ? 'Your memory is organized. Nothing urgent is asking for attention.'
-              : 'Start capturing and Lucy will quietly organize what matters.'}
-        </Text>
+        <Text style={styles.subtitle} numberOfLines={2}>{heroLine}</Text>
       </View>
-      <View style={styles.viewNav}>
-        {views.map((item) => {
-          const active = view === item;
-          return (
-            <TouchableOpacity key={item} style={[styles.viewTab, active && styles.activeView]} onPress={() => setView(item)}>
-              <Ionicons name={VIEW_ICON[item]} size={14} color={active ? LUCY_COLORS.primaryGlow : LUCY_COLORS.textMuted} style={{ marginBottom: 2 }} />
-              <Text style={[styles.viewText, active && styles.activeViewText]}>{item}</Text>
+      {glanceCards.length ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.glanceStrip}
+          style={styles.glanceStripWrap}
+        >
+          {glanceCards.map((c) => (
+            <TouchableOpacity key={c.key} activeOpacity={0.85} style={styles.glanceCard} onPress={c.onPress}>
+              <View style={[styles.glanceIcon, { backgroundColor: c.tint + '22', borderColor: c.tint + '55' }]}>
+                <Ionicons name={c.icon} size={15} color={c.tint} />
+              </View>
+              <Text style={styles.glanceLabel}>{c.label}</Text>
+              <Text style={styles.glanceValue} numberOfLines={1}>{c.value}</Text>
             </TouchableOpacity>
-          );
-        })}
-      </View>
+          ))}
+        </ScrollView>
+      ) : null}
+      <SegmentedControl options={viewOptions} value={view} onChange={setView} style={styles.viewNav} />
       {view === 'Focus Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} stalenessReviews={stalenessReviews} contextBatch={contextBatch} onStalenessResolved={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} onAskAbout={onAskAbout} /> : null}
       {view === 'Ask Lucy' ? <AskScreen initialQuestion={initialAskQuestion} /> : null}
@@ -841,6 +900,9 @@ function HealthView() {
   const [logging, setLogging] = useState(false);          // text/voice logging spinner
   const [reading, setReading] = useState(false);          // photo vision spinner
   const [netExpanded, setNetExpanded] = useState(false);  // ED-safe: net trend is opt-in
+  // Designed feedback (replaces Alert.alert): an informational sheet + a transient success toast.
+  const [sheet, setSheet] = useState<{ title: string; message?: string } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const refreshNutrition = async () => {
     const db = await getDatabase();
@@ -859,16 +921,18 @@ function HealthView() {
       const db = await getDatabase();
       const { getModelKeyStatus, modelKeyMissingMessage } = await import('../ai/provider');
       const status = await getModelKeyStatus();
-      if (status.remote && !status.keyPresent) { setLogging(false); Alert.alert('Add your API key', modelKeyMissingMessage(status)); return; }
+      if (status.remote && !status.keyPresent) { setLogging(false); setSheet({ title: 'Add your API key', message: modelKeyMissingMessage(status) }); return; }
       const { logFoodFromText } = await import('../processing/foodNutrition');
       const res = await logFoodFromText(db, text);
       setMealText('');
       if (!res.estimated) {
-        Alert.alert('Logged ✓', 'I saved the meal, but couldn\'t estimate the calories from that. Name the foods and rough amounts — like "2 eggs and toast" — and I\'ll add a calorie count. (Estimates use remote intelligence — add a key in Settings.)');
+        setSheet({ title: 'Saved your meal', message: 'I couldn\'t estimate the calories from that. Name the foods and rough amounts — like "2 eggs and toast" — and I\'ll add a calorie count. (Estimates use remote intelligence — add a key in Settings.)' });
+      } else {
+        setToast('Meal logged');
       }
       await refreshNutrition();
     } catch (e) {
-      Alert.alert('Could not log', e instanceof Error ? e.message : 'Please try again.');
+      setSheet({ title: 'Could not log', message: e instanceof Error ? e.message : 'Please try again.' });
     } finally {
       setLogging(false);
     }
@@ -883,7 +947,7 @@ function HealthView() {
       const { getModelKeyStatus, modelKeyMissingMessage } = await import('../ai/provider');
       const status = await getModelKeyStatus();
       if (status.remote && !status.keyPresent) {
-        Alert.alert('Add your API key', modelKeyMissingMessage(status));
+        setSheet({ title: 'Add your API key', message: modelKeyMissingMessage(status) });
         return;
       }
       setReading(true);
@@ -892,12 +956,14 @@ function HealthView() {
       const res = await logFoodFromPhoto(db, uri);
       setReading(false);
       if (!res.estimated) {
-        Alert.alert('Logged ✓', 'I saved the meal, but couldn\'t make out the food well enough to estimate calories. Try a clearer, well-lit photo from above, or type what it was.');
+        setSheet({ title: 'Saved your meal', message: 'I couldn\'t make out the food well enough to estimate calories. Try a clearer, well-lit photo from above, or type what it was.' });
+      } else {
+        setToast('Meal logged');
       }
       await refreshNutrition();
     } catch (e) {
       setReading(false);
-      Alert.alert('Could not read meal', e instanceof Error ? e.message : 'Please try again.');
+      setSheet({ title: 'Could not read meal', message: e instanceof Error ? e.message : 'Please try again.' });
     }
   };
 
@@ -1221,6 +1287,15 @@ function HealthView() {
         onClose={() => setShowProfile(false)}
         onSaved={() => { void refreshNutrition(); }}
       />
+      <ActionSheet
+        visible={!!sheet}
+        onClose={() => setSheet(null)}
+        title={sheet?.title ?? ''}
+        message={sheet?.message}
+        actions={[{ label: 'Got it', style: 'primary' }]}
+        cancelLabel={null}
+      />
+      <Toast visible={!!toast} message={toast ?? ''} onHide={() => setToast(null)} />
     </ScrollView>
   );
 }
@@ -1499,7 +1574,13 @@ function NowView({
       {scheduledReminders.length ? scheduledReminders.map((item) => <ReminderCard item={item} key={item.id} />) : <EmptyLine text="No scheduled reminders yet." />}
       {unscheduledCount ? <Text style={styles.pendingHint}>{unscheduledCount} captured reminder{unscheduledCount === 1 ? '' : 's'} need a specific time.</Text> : null}
       <SectionTitle title="Focus" count={todos.length || undefined} />
-      {todos.length ? todos.map((item) => <FocusTodoCard key={item.id} item={item} />) : <EmptyLine text="Capture a task and it will appear here." />}
+      {todos.length ? todos.map((item) => <FocusTodoCard key={item.id} item={item} />) : (
+        <LucyEmptyState
+          compact
+          title="Nothing on your plate"
+          message="Capture a task by voice or text and I'll line it up here for you."
+        />
+      )}
 
       {/* Needs Context — moved to bottom so it doesn't clutter the main focus.
           Shows only when there are unanswered clarification requests. */}
@@ -1735,6 +1816,12 @@ export function NeedsContextView({
       <ReviewCardDeck
         cards={deckCards}
         emptyText="Nothing needs clarification right now. LUCY will ask only when extra context can help."
+        emptyNode={(
+          <LucyEmptyState
+            title="All clear"
+            message="Nothing needs clarification right now. I'll only ask when a little context helps me help you."
+          />
+        )}
         header={(
           <View style={[styles.contextIntro, { paddingHorizontal: 18 }]}>
             <Text style={styles.eyebrow}>CONNECT</Text>
@@ -1816,6 +1903,12 @@ function TimelineView({
   const [extractionChips, setExtractionChips] = useState<Record<number, import('../types/extraction').ExtractionResult>>({});
   // note_type badges loaded eagerly for all visible captures (single cheap JSON parse)
   const [noteTypes, setNoteTypes] = useState<Record<number, string>>({});
+  // Designed confirm/info sheet + success toast — replaces Alert.alert across the timeline.
+  const [confirmSheet, setConfirmSheet] = useState<{
+    context?: string; title: string; message?: string; accent?: string;
+    actions: SheetAction[]; cancelLabel?: string | null;
+  } | null>(null);
+  const [tlToast, setTlToast] = useState<string | null>(null);
 
   const runReprocess = async (capture: CaptureRow) => {
     const db = await getDatabase();
@@ -1830,41 +1923,38 @@ function TimelineView({
     // which costs credits. Warn before a single tap can fan out into a big spend.
     const len = capture.raw_transcript?.length ?? 0;
     if (len > 600) {
-      Alert.alert(
-        'Reprocess this entry?',
-        'This looks like a long or multi-event entry. Reprocessing re-runs AI extraction and may make several API calls (one per event), which uses credits.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Reprocess', style: 'destructive', onPress: () => void runReprocess(capture) },
-        ],
-      );
+      setConfirmSheet({
+        context: 'Long entry',
+        title: 'Reprocess this entry?',
+        message: 'This looks like a long or multi-event entry. Reprocessing re-runs AI extraction and may make several API calls (one per event), which uses credits.',
+        actions: [{ label: 'Reprocess', style: 'destructive', onPress: () => void runReprocess(capture) }],
+      });
       return;
     }
     await runReprocess(capture);
   };
 
   const confirmDeleteCapture = (capture: CaptureRow) => {
-    Alert.alert(
-      'Delete memory?',
-      'This thought will be permanently removed from your timeline.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive',
-          onPress: async () => {
-            const db = await getDatabase();
-            const { deleteCaptureCompletely } = await import('../db/captures');
-            await deleteCaptureCompletely(db, capture.id, 'deleted by user');
-            // Rebuild the knowledge projection so the deleted memory leaves the Brain too.
-            try {
-              const { organizeMemory } = await import('../processing/organizer');
-              await organizeMemory(db, 'after-delete');
-            } catch { /* non-critical — derived rows are already purged */ }
-            onFeedback();
-          },
+    setConfirmSheet({
+      context: 'From your timeline',
+      title: 'Delete memory?',
+      message: 'This thought will be permanently removed from your timeline.',
+      accent: LUCY_COLORS.error,
+      actions: [{
+        label: 'Delete', style: 'destructive',
+        onPress: async () => {
+          const db = await getDatabase();
+          const { deleteCaptureCompletely } = await import('../db/captures');
+          await deleteCaptureCompletely(db, capture.id, 'deleted by user');
+          // Rebuild the knowledge projection so the deleted memory leaves the Brain too.
+          try {
+            const { organizeMemory } = await import('../processing/organizer');
+            await organizeMemory(db, 'after-delete');
+          } catch { /* non-critical — derived rows are already purged */ }
+          onFeedback();
         },
-      ],
-    );
+      }],
+    });
   };
 
   const handleSearch = (query: string) => {
@@ -2037,7 +2127,7 @@ function TimelineView({
                 onPress: async () => {
                   const { getModelKeyStatus, modelKeyMissingMessage } = await import('../ai/provider');
                   const status = await getModelKeyStatus();
-                  if (status.remote && !status.keyPresent) { Alert.alert('Add your API key', modelKeyMissingMessage(status)); return; }
+                  if (status.remote && !status.keyPresent) { setConfirmSheet({ title: 'Add your API key', message: modelKeyMissingMessage(status), actions: [{ label: 'Got it', style: 'primary' }], cancelLabel: null }); return; }
                   const { snapImageToMemory } = await import('../processing/imageCapture');
                   try {
                     const ok = await snapImageToMemory(setReadingImage);
@@ -2436,9 +2526,9 @@ function TimelineView({
                     // A failed action (e.g. contact not found, permission denied)
                     // used to silently close the modal with no feedback.
                     if (!result.success) {
-                      Alert.alert('Couldn\'t complete action', result.message);
+                      setConfirmSheet({ title: 'Couldn\'t complete that', message: result.message, actions: [{ label: 'Got it', style: 'primary' }], cancelLabel: null });
                     } else if (result.message) {
-                      Alert.alert('Done', result.message, [{ text: 'OK' }]);
+                      setTlToast(result.message);
                     }
                     // Remove the action banner once confirmed or dismissed
                     try {
@@ -2469,6 +2559,17 @@ function TimelineView({
           </Pressable>
         </Modal>
       ) : null}
+      <ActionSheet
+        visible={!!confirmSheet}
+        onClose={() => setConfirmSheet(null)}
+        context={confirmSheet?.context}
+        title={confirmSheet?.title ?? ''}
+        message={confirmSheet?.message}
+        accent={confirmSheet?.accent}
+        actions={confirmSheet?.actions ?? []}
+        cancelLabel={confirmSheet?.cancelLabel === undefined ? 'Cancel' : confirmSheet.cancelLabel}
+      />
+      <Toast visible={!!tlToast} message={tlToast ?? ''} onHide={() => setTlToast(null)} />
     </View>
   );
 }
@@ -2680,7 +2781,12 @@ function GalleryTab() {
   }, []);
 
   if (loading) return <View style={{ paddingVertical: 30 }}><ActivityIndicator color={LUCY_COLORS.primary} /></View>;
-  if (!rows.length) return <EmptyLine text="No photos yet. Snap a note, receipt, or whiteboard and the original lands here." />;
+  if (!rows.length) return (
+    <LucyEmptyState
+      title="No photos yet"
+      message="Snap a note, receipt, or whiteboard — I'll read it and keep the original right here."
+    />
+  );
   return (
     <>
       <View style={styles.galleryGrid}>
@@ -2731,7 +2837,12 @@ function RemindersTab() {
   };
 
   if (loading) return <View style={{ paddingVertical: 30 }}><ActivityIndicator color={LUCY_COLORS.primary} /></View>;
-  if (!rows.length) return <EmptyLine text="No reminders yet. Say or type “remind me to…” and they'll show up here." />;
+  if (!rows.length) return (
+    <LucyEmptyState
+      title="No reminders yet"
+      message={'Say or type "remind me to…" and I\'ll nudge you at the right moment.'}
+    />
+  );
   return (
     <>
       {rows.map((r) => (
@@ -3213,12 +3324,23 @@ const styles = StyleSheet.create({
   homeHeroGlow: { position: 'absolute', right: -72, top: -92, width: 156, height: 156, borderRadius: 78, backgroundColor: 'rgba(255,140,66,0.10)' },
   todayDate: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '800', letterSpacing: 0.8, marginBottom: 2, textTransform: 'uppercase' },
   title: { fontSize: 22, letterSpacing: -0.2, fontWeight: '900', color: LUCY_COLORS.textDark, lineHeight: 25 },
-  subtitle: { color: LUCY_COLORS.textMuted, fontSize: 12.5, marginTop: 1, lineHeight: 16, maxWidth: 330 },
-  viewNav: { flexDirection: 'row', padding: 3, borderRadius: 16, backgroundColor: LUCY_COLORS.surfaceSheet, borderWidth: 1, borderColor: LUCY_COLORS.borderSoft, marginBottom: 8 },
-  viewTab: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 13 },
-  activeView: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border },
-  viewText: { color: LUCY_COLORS.textMuted, fontWeight: '700', fontSize: 12 },
-  activeViewText: { color: LUCY_COLORS.primaryGlow },
+  subtitle: { color: LUCY_COLORS.textMuted, fontSize: 12.5, marginTop: 3, lineHeight: 17, maxWidth: 280 },
+  viewNav: { marginBottom: 8 },
+  // "Today" glance strip
+  glanceStripWrap: { marginBottom: 8 },
+  glanceStrip: { gap: 8, paddingRight: 4 },
+  glanceCard: {
+    width: 128,
+    backgroundColor: LUCY_COLORS.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: LUCY_COLORS.borderSoft,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+  },
+  glanceIcon: { width: 28, height: 28, borderRadius: 9, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 9 },
+  glanceLabel: { color: LUCY_COLORS.primaryGlow, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 3 },
+  glanceValue: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '800' },
   content: { flex: 1 },
   tonight: { backgroundColor: LUCY_COLORS.surface, borderColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderRadius: 24, padding: 19, marginBottom: 16 },
   eyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', letterSpacing: 1 },

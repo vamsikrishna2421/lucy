@@ -3,7 +3,7 @@
  * Visual redesign only: keeps the same scheduling engine calls and data shapes.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import {
@@ -15,6 +15,8 @@ import { getAvailability } from '../scheduling/availability';
 import { hasCalendarPermission, requestCalendarPermission } from '../processing/calendarConnector';
 import { getSetting, setSetting } from '../db/settings';
 import type { AvailabilityProfile, Block, SlotSuggestion, TaskResources } from '../scheduling/types';
+import { SegmentedControl, type SegmentOption } from './SegmentedControl';
+import { ActionSheet, Toast, type SheetAction } from './ActionSheet';
 
 function clock(ms: number): string { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
 function dayKey(ms: number): number { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); }
@@ -38,6 +40,13 @@ function catColor(title: string, label: string): string {
   return '#8AA4FF';
 }
 
+const CAL_VIEW_OPTIONS: SegmentOption<'agenda' | 'day' | 'week' | 'month'>[] = [
+  { value: 'day', label: 'Day' },
+  { value: 'agenda', label: 'Upcoming' },
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+];
+
 interface Sugg {
   meta: { title: string; durationMin: number; resources: TaskResources; energy: string; location?: string | null };
   suggestions: SlotSuggestion[];
@@ -60,6 +69,9 @@ export function ScheduleTab() {
   const [ref, setRef] = useState<number>(dayKey(Date.now()));
   const [calPerm, setCalPerm] = useState<boolean | null>(null);
   const [calSync, setCalSync] = useState(true); // device-calendar sync kill-switch
+  // Designed info/confirm sheet + success toast — replaces Alert.alert on this surface.
+  const [infoSheet, setInfoSheet] = useState<{ context?: string; title: string; message?: string; accent?: string; actions: SheetAction[]; cancelLabel?: string | null } | null>(null);
+  const [calToast, setCalToast] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState<number>(Date.now());
   const [planOpen, setPlanOpen] = useState(false); // "Plan with Lucy" collapsible (calendar-first)
   const [detail, setDetail] = useState<{ id: number; title: string; start: number; end: number; resources: TaskResources } | null>(null);
@@ -105,10 +117,13 @@ export function ScheduleTab() {
       await load();
     }
     else {
-      Alert.alert(
-        'Connect Google / Teams / Outlook',
-        'To show those events here, add the account to your phone first:\n\niPhone: Settings → Calendar → Accounts → Add Account (Google or Outlook), then turn Calendars ON.\nAndroid: Settings → Accounts → add Google/Outlook with Calendar sync.\n\nThen allow LUCY calendar access when asked.',
-      );
+      setInfoSheet({
+        context: 'Calendar sync',
+        title: 'Connect Google / Teams / Outlook',
+        message: 'To show those events here, add the account to your phone first:\n\niPhone: Settings → Calendar → Accounts → Add Account (Google or Outlook), then turn Calendars ON.\nAndroid: Settings → Accounts → add Google/Outlook with Calendar sync.\n\nThen allow LUCY calendar access when asked.',
+        actions: [{ label: 'Got it', style: 'primary' }],
+        cancelLabel: null,
+      });
     }
   };
 
@@ -138,7 +153,7 @@ export function ScheduleTab() {
     try {
       const { parseTimingConstraint } = await import('../scheduling/timingConstraint');
       const c = parseTimingConstraint(comment);
-      if (!c) { Alert.alert('When should it be?', 'Try things like "last week of this month", "not tomorrow", "after the 25th", or "next week".'); return; }
+      if (!c) { setInfoSheet({ title: 'When should it be?', message: 'Try things like "last week of this month", "not tomorrow", "after the 25th", or "next week".', actions: [{ label: 'Got it', style: 'primary' }], cancelLabel: null }); return; }
       const db = await getDatabase();
       const r = await suggestForText(db, sugg.meta.title, { durationMin: sugg.meta.durationMin, earliestStart: c.earliestStart, horizonDays: c.horizonDays });
       setSugg({ meta: r.meta, suggestions: r.suggestions, todoId: sugg.todoId, windowLabel: c.label });
@@ -270,7 +285,14 @@ export function ScheduleTab() {
       return;
     }
     if (it.device) {
-      Alert.alert(it.title, `${clock(it.start)} - ${clock(it.end)}\n\nFrom a calendar you connected (Google / Teams / Outlook). LUCY schedules around it but won't change it.`, [{ text: 'Close' }]);
+      setInfoSheet({
+        context: `${clock(it.start)} – ${clock(it.end)}`,
+        title: it.title,
+        message: 'From a calendar you connected (Google / Teams / Outlook). LUCY schedules around it but won\'t change it.',
+        accent: '#5B8CFF',
+        actions: [{ label: 'Close', style: 'primary' }],
+        cancelLabel: null,
+      });
       return;
     }
     if (!it.id) return;
@@ -310,7 +332,7 @@ export function ScheduleTab() {
       const r = await commitSeries(db, { title: detail.title, startMs: detail.start, endMs: detail.end, resources: detail.resources }, rule);
       setDetail(null);
       await load();
-      Alert.alert('Made recurring', `"${detail.title}" added ${rule === 'weekdays' ? 'every weekday' : rule} — ${r.count} upcoming.`);
+      setCalToast(`Made recurring — ${r.count} upcoming`);
     } finally { setBusy(false); }
   };
   const deleteEvent = async () => {
@@ -562,13 +584,13 @@ export function ScheduleTab() {
           </View>
         </View>
         {view !== 'month' ? <WeekStrip /> : null}
-        <View style={styles.viewRow}>
-          {(['day', 'agenda', 'week', 'month'] as const).map((v) => (
-            <TouchableOpacity key={v} style={[styles.viewChip, view === v && styles.viewChipOn]} onPress={() => setView(v)}>
-              <Text style={[styles.viewChipT, view === v && styles.viewChipTOn]}>{v === 'agenda' ? 'Upcoming' : v[0].toUpperCase() + v.slice(1)}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <SegmentedControl
+          compact
+          style={styles.viewRow}
+          value={view}
+          onChange={setView}
+          options={CAL_VIEW_OPTIONS}
+        />
         {renderBody()}
       </View>
 
@@ -801,6 +823,17 @@ export function ScheduleTab() {
           </Pressable>
         </Pressable>
       </Modal>
+      <ActionSheet
+        visible={!!infoSheet}
+        onClose={() => setInfoSheet(null)}
+        context={infoSheet?.context}
+        title={infoSheet?.title ?? ''}
+        message={infoSheet?.message}
+        accent={infoSheet?.accent}
+        actions={infoSheet?.actions ?? []}
+        cancelLabel={infoSheet?.cancelLabel === undefined ? 'Cancel' : infoSheet.cancelLabel}
+      />
+      <Toast visible={!!calToast} message={calToast ?? ''} onHide={() => setCalToast(null)} />
     </ScrollView>
   );
 }
@@ -882,7 +915,7 @@ const styles = StyleSheet.create({
   timetableHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 },
   section: { color: LUCY_COLORS.textDark, fontWeight: '900', fontSize: 20, marginTop: 3 },
   rangeL: { color: LUCY_COLORS.textDark, fontSize: 15.5, fontWeight: '900', flexShrink: 1, letterSpacing: 0.2 },
-  viewRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 999, padding: 4 },
+  viewRow: { marginBottom: 14 },
   viewChip: { flex: 1, alignItems: 'center', paddingHorizontal: 8, paddingVertical: 8, borderRadius: 999 },
   viewChipOn: { backgroundColor: LUCY_COLORS.primary, shadowColor: LUCY_COLORS.primary, shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 3 },
   viewChipT: { color: LUCY_COLORS.textMuted, fontSize: 12.5, fontWeight: '800' },

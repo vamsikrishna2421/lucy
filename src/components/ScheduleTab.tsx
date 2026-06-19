@@ -3,7 +3,7 @@
  * Visual redesign only: keeps the same scheduling engine calls and data shapes.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import {
@@ -164,9 +164,12 @@ export function ScheduleTab() {
     else {
       setInfoSheet({
         context: 'Calendar sync',
-        title: 'Connect Google / Teams / Outlook',
-        message: 'To show those events here, add the account to your phone first:\n\niPhone: Settings → Calendar → Accounts → Add Account (Google or Outlook), then turn Calendars ON.\nAndroid: Settings → Accounts → add Google/Outlook with Calendar sync.\n\nThen allow LUCY calendar access when asked.',
-        actions: [{ label: 'Got it', style: 'primary' }],
+        title: 'Allow calendar access',
+        message: 'LUCY reads the calendars already on your phone — including any Google, Outlook or Teams account you\'ve added to it. Two quick steps:\n\n1) Tap "Open Settings" below and turn Calendars ON for LUCY.\n2) If you haven\'t added the account yet: Settings → Calendar → Accounts → Add (Google / Outlook). Teams meetings show up once they\'re on that calendar.',
+        actions: [
+          { label: 'Open Settings', style: 'primary', onPress: () => { void Linking.openSettings().catch(() => {}); } },
+          { label: 'Maybe later', style: 'default' },
+        ],
         cancelLabel: null,
       });
     }

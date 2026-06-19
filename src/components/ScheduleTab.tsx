@@ -42,6 +42,7 @@ interface Sugg {
   meta: { title: string; durationMin: number; resources: TaskResources; energy: string; location?: string | null };
   suggestions: SlotSuggestion[];
   todoId?: number | null;
+  windowLabel?: string; // set when the user refined the window ("the last week of June")
 }
 
 export function ScheduleTab() {
@@ -52,6 +53,7 @@ export function ScheduleTab() {
   const [unsched, setUnsched] = useState<Array<{ id: number; task: string }>>([]);
   const [task, setTask] = useState('');
   const [sugg, setSugg] = useState<Sugg | null>(null);
+  const [refineText, setRefineText] = useState('');
   const [proposals, setProposals] = useState<DayProposal[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<'agenda' | 'day' | 'week' | 'month'>('day');
@@ -125,6 +127,22 @@ export function ScheduleTab() {
       const db = await getDatabase();
       const r = todoId ? await suggestForTodo(db, todoId) : await suggestForText(db, text);
       if (r) setSugg({ meta: r.meta, suggestions: r.suggestions, todoId: todoId ?? null });
+    } finally { setBusy(false); }
+  };
+
+  // Refine the current suggestion with a natural-language timing comment ("last week of this month",
+  // "not tomorrow", "after the 25th") — re-suggests inside that window.
+  const refineSuggestion = async (comment: string) => {
+    if (!sugg || !comment.trim()) return;
+    setBusy(true);
+    try {
+      const { parseTimingConstraint } = await import('../scheduling/timingConstraint');
+      const c = parseTimingConstraint(comment);
+      if (!c) { Alert.alert('When should it be?', 'Try things like "last week of this month", "not tomorrow", "after the 25th", or "next week".'); return; }
+      const db = await getDatabase();
+      const r = await suggestForText(db, sugg.meta.title, { durationMin: sugg.meta.durationMin, earliestStart: c.earliestStart, horizonDays: c.horizonDays });
+      setSugg({ meta: r.meta, suggestions: r.suggestions, todoId: sugg.todoId, windowLabel: c.label });
+      setRefineText('');
     } finally { setBusy(false); }
   };
 
@@ -591,13 +609,18 @@ export function ScheduleTab() {
           {sugg ? (
             <View style={styles.resultCard}>
               <Text style={styles.boxH}>{sugg.suggestions.length ? `Best times for "${sugg.meta.title}"` : `No conflict-free slot for "${sugg.meta.title}"`}</Text>
-              <Text style={styles.rowD}>{sugg.meta.durationMin} min - {describeResources(sugg.meta.resources)}</Text>
+              <Text style={styles.rowD}>{sugg.meta.durationMin} min - {describeResources(sugg.meta.resources)}{sugg.windowLabel ? ` · ${sugg.windowLabel}` : ''}</Text>
               {sugg.suggestions.map((s, i) => (
                 <View key={i} style={styles.slotRow}>
                   <View style={{ flex: 1 }}><Text style={styles.rowT}>{dayLabel(s.start)} - {clock(s.start)} to {clock(s.end)}</Text><Text style={styles.rowD}>{s.reasons.join(', ')}</Text></View>
                   <TouchableOpacity style={styles.btnSm} onPress={() => accept(s)}><Text style={styles.btnT}>Add</Text></TouchableOpacity>
                 </View>
               ))}
+              {/* Refine the window with a plain-language comment, e.g. "last week of this month". */}
+              <View style={[styles.findRow, { marginTop: 10 }]}>
+                <TextInput style={styles.input} placeholder="Not these? Tell me when… (e.g. last week of this month)" placeholderTextColor={LUCY_COLORS.textFaint} value={refineText} onChangeText={setRefineText} onSubmitEditing={() => refineSuggestion(refineText)} />
+                <TouchableOpacity style={styles.btn} disabled={busy || !refineText.trim()} onPress={() => refineSuggestion(refineText)}><Text style={styles.btnT}>Redo</Text></TouchableOpacity>
+              </View>
             </View>
           ) : null}
 

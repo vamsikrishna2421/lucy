@@ -25,6 +25,7 @@ import {
   type ExpoSpeechRecognitionErrorEvent,
   type ExpoSpeechRecognitionResultEvent,
 } from 'expo-speech-recognition';
+import { Ionicons } from '@expo/vector-icons';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import { listPendingTodos, archiveTodo, type TodoRow } from '../db/todos';
@@ -123,6 +124,17 @@ function formatDoneTime(iso: string): string {
     minute: '2-digit',
     timeZoneName: 'short',
   });
+}
+
+/** Friendly "when" for the next calendar event: "Today 3:00 PM" / "Tomorrow 9:00 AM". */
+function formatEventWhen(ms: number): string {
+  const d = new Date(ms);
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const day = new Date(ms); day.setHours(0, 0, 0, 0);
+  const diff = Math.round((day.getTime() - today.getTime()) / 86400000);
+  const prefix = diff <= 0 ? 'Today' : diff === 1 ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'short' });
+  return `${prefix} ${time}`;
 }
 
 /** Breathing amber glow — LUCY is alive and watching. The #1 premium wow moment.
@@ -456,6 +468,7 @@ export function CaptureScreen({
   const [editText, setEditText] = useState('');
   const [capturedToday, setCapturedToday] = useState(0);
   const [captureStreak, setCaptureStreak] = useState(0);
+  const [nextEvent, setNextEvent] = useState<{ title: string; start_at: number } | null>(null);
   const [voiceRecording, setVoiceRecording] = useState(false);
   const [scanningReceipt, setScanningReceipt] = useState(false);
   const [replayExtraction, setReplayExtraction] = useState<ExtractionResult | null>(null);
@@ -500,6 +513,15 @@ export function CaptureScreen({
       }
       // Streak only counts if captured today
       setCaptureStreak(dayRows[0]?.d === today ? streak : 0);
+      // Next calendar event (within ~36h) — these are tasks indirectly, so they live here in Tasks.
+      try {
+        const now = Date.now();
+        const evRow = await db.getFirstAsync<{ title: string; start_at: number }>(
+          "SELECT title, start_at FROM scheduled_blocks WHERE status='committed' AND start_at > ? ORDER BY start_at ASC LIMIT 1",
+          now,
+        );
+        setNextEvent(evRow && evRow.start_at < now + 36 * 3600 * 1000 ? evRow : null);
+      } catch { /* non-critical */ }
     })();
   }, [refreshToken]);
 
@@ -760,6 +782,31 @@ export function CaptureScreen({
           </View>
         </Animated.View>
 
+        {/* Next up + Top task — surfaced here in Tasks (they're tasks indirectly), off the Timeline. */}
+        {(nextEvent || todos[0]) ? (
+          <View style={styles.glanceRow}>
+            {nextEvent ? (
+              <View style={styles.glanceChip}>
+                <Ionicons name="calendar-outline" size={14} color="#5B8CFF" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.glanceChipLabel}>NEXT UP</Text>
+                  <Text style={styles.glanceChipValue} numberOfLines={1}>{nextEvent.title}</Text>
+                  <Text style={styles.glanceChipMeta}>{formatEventWhen(nextEvent.start_at)}</Text>
+                </View>
+              </View>
+            ) : null}
+            {todos[0] ? (
+              <View style={styles.glanceChip}>
+                <Ionicons name="flash-outline" size={14} color={LUCY_COLORS.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.glanceChipLabel}>TOP TASK</Text>
+                  <Text style={styles.glanceChipValue} numberOfLines={2}>{(todos.find((t) => t.urgency === 'high') ?? todos[0]).task}</Text>
+                </View>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         {categories.length === 0 && done.length === 0 ? (
           <View style={styles.emptyBoard}>
             {/* AmberPulse — LUCY is listening */}
@@ -1007,6 +1054,11 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 42, fontWeight: '900', letterSpacing: -2.5, color: LUCY_COLORS.textDark, lineHeight: 46, marginBottom: 2 },
   heroPillars: { fontSize: 11, color: LUCY_COLORS.textSubtle, marginBottom: 12 },
   heroCard: { backgroundColor: 'rgba(255,140,66,0.07)', borderWidth: 1, borderColor: 'rgba(255,140,66,0.25)', borderRadius: 14, padding: 12 },
+  glanceRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 14 },
+  glanceChip: { flex: 1, flexDirection: 'row', gap: 8, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 14, padding: 11 },
+  glanceChipLabel: { color: LUCY_COLORS.textSubtle, fontSize: 9, fontWeight: '800', letterSpacing: 0.8, marginBottom: 3 },
+  glanceChipValue: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '800' },
+  glanceChipMeta: { color: LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '600', marginTop: 2 },
   heroCardLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, color: LUCY_COLORS.primary, marginBottom: 4 },
   heroCardTitle: { fontSize: 18, fontWeight: '800', color: LUCY_COLORS.textDark },  // was 15 — more punchy
   // Compact header

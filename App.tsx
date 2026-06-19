@@ -38,6 +38,7 @@ import { NotificationDetailModal, type NotificationDetailPayload } from './src/s
 import ConversationModal from './src/components/ConversationModal';
 import { AlarmOverlay } from './src/components/AlarmOverlay';
 import { ApprovalInbox } from './src/components/ApprovalInbox';
+import { LucyPeek } from './src/components/LucyPeek';
 import { wakeWord, type WakeWordStatus } from './src/voice/wakeWord';
 import { conversation, type ConvoState } from './src/voice/conversation';
 
@@ -94,6 +95,7 @@ export default function App() {
   const [notificationDetail, setNotificationDetail] = useState<NotificationDetailPayload | null>(null);
   const [approvalTrigger, setApprovalTrigger] = useState(0);
   const [snapBusy, setSnapBusy] = useState(false);
+  const [snapPickerOpen, setSnapPickerOpen] = useState(false);
   const [updateReady, setUpdateReady] = useState(false);
   const [passiveState, setPassiveState] = useState<PassiveListenerState>(passiveListener.getState());
   const [meetingVisible, setMeetingVisible] = useState(false);
@@ -722,16 +724,21 @@ export default function App() {
   // up the Listen pill or trigger the no-key banner.
   const listenActive = passiveState.status === 'listening' && !passiveState.quickCapture;
 
-  // One-tap photo capture from Home (camera FAB): just take the pic — LUCY classifies it herself
-  // (meal → calories, receipt → expense, note → memory). No menu. Respects the selected-model key.
+  // Camera FAB → a designed picker card (with peeking Lucy). After a source is chosen, LUCY classifies
+  // the photo herself (meal → calories, receipt → expense, note → memory). Respects the model key.
   const quickSnap = useCallback(async () => {
     try {
       const { getModelKeyStatus, modelKeyMissingMessage } = await import('./src/ai/provider');
       const status = await getModelKeyStatus();
       if (status.remote && !status.keyPresent) { Alert.alert('Add your API key', modelKeyMissingMessage(status)); return; }
     } catch { /* allow through */ }
-    const { pickImage } = await import('./src/processing/imageCapture');
-    const uri = await pickImage('Snap it', 'Meal, receipt, or a note — I’ll figure out what it is.');
+    setSnapPickerOpen(true);
+  }, []);
+
+  const runSnap = useCallback(async (source: 'camera' | 'library') => {
+    setSnapPickerOpen(false);
+    const { fromCamera, fromLibrary } = await import('./src/processing/imageCapture');
+    const uri = await (source === 'camera' ? fromCamera() : fromLibrary());
     if (!uri) return;
     setSnapBusy(true);
     try {
@@ -739,7 +746,6 @@ export default function App() {
       const { smartCapturePhoto } = await import('./src/processing/smartPhotoCapture');
       const r = await smartCapturePhoto(db, uri);
       goToDashView('Timeline');
-      // For meals, nudge completeness if the day's logs are still sparse (0/1/2 → likely incomplete).
       let extra = '';
       if (r.type === 'meal') {
         try {
@@ -1008,6 +1014,27 @@ export default function App() {
           </TouchableOpacity>
         ) : null}
       </SafeAreaView>
+      {/* Designed snap picker — Lucy peeks over the card and offers the source. */}
+      <Modal visible={snapPickerOpen} transparent animationType="fade" onRequestClose={() => setSnapPickerOpen(false)}>
+        <TouchableOpacity activeOpacity={1} style={styles.snapPickerOverlay} onPress={() => setSnapPickerOpen(false)}>
+          <View style={styles.snapPickerCard}>
+            <LucyPeek />
+            <Text style={styles.snapPickerTitle}>Snap it</Text>
+            <Text style={styles.snapPickerBody}>A meal, a receipt, or a note — I’ll figure out what it is and file it.</Text>
+            <TouchableOpacity style={styles.snapPickerPrimary} activeOpacity={0.9} onPress={() => void runSnap('camera')}>
+              <Ionicons name="camera" size={18} color="#0B0B0F" />
+              <Text style={styles.snapPickerPrimaryText}>Take photo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.snapPickerSecondary} activeOpacity={0.85} onPress={() => void runSnap('library')}>
+              <Ionicons name="images-outline" size={17} color={LUCY_COLORS.textDark} />
+              <Text style={styles.snapPickerSecondaryText}>Choose from library</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.snapPickerCancel} onPress={() => setSnapPickerOpen(false)}>
+              <Text style={styles.snapPickerCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
       <Modal visible={snapBusy} transparent animationType="fade" onRequestClose={() => {}}>
         <View style={styles.snapBusyOverlay}>
           <View style={styles.snapBusyCard}>
@@ -1105,6 +1132,16 @@ const styles = StyleSheet.create({
   updatePrimaryText: { color: '#0B0B0F', fontWeight: '800', fontSize: 16 },
   updateLater: { paddingVertical: 12, alignItems: 'center', alignSelf: 'stretch', marginTop: 4 },
   updateLaterText: { color: LUCY_COLORS.textMuted, fontWeight: '600', fontSize: 14 },
+  snapPickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', alignItems: 'center', justifyContent: 'center', padding: 30 },
+  snapPickerCard: { width: '100%', maxWidth: 360, backgroundColor: LUCY_COLORS.surface, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingTop: 40, paddingHorizontal: 22, paddingBottom: 18, overflow: 'visible' },
+  snapPickerTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '800' },
+  snapPickerBody: { color: LUCY_COLORS.textMuted, fontSize: 14.5, lineHeight: 21, marginTop: 8, marginBottom: 18 },
+  snapPickerPrimary: { flexDirection: 'row', gap: 8, backgroundColor: LUCY_COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
+  snapPickerPrimaryText: { color: '#0B0B0F', fontWeight: '800', fontSize: 16 },
+  snapPickerSecondary: { flexDirection: 'row', gap: 8, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', marginTop: 10, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  snapPickerSecondaryText: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 15 },
+  snapPickerCancel: { paddingVertical: 12, alignItems: 'center', marginTop: 4 },
+  snapPickerCancelText: { color: LUCY_COLORS.textMuted, fontWeight: '600', fontSize: 14 },
   snapBusyOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
   snapBusyCard: { backgroundColor: LUCY_COLORS.surface, borderRadius: 18, padding: 26, alignItems: 'center', gap: 12, borderWidth: 1, borderColor: LUCY_COLORS.border },
   snapBusyText: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '600' },

@@ -187,9 +187,11 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
   const [tab, setTab] = useState<LibraryTab>('Home');
   const [userName, setUserName] = useState('');
 
-  // Allow the parent (bottom nav) to push a view in (e.g. Brain, Ask Lucy).
+  // Allow the parent (bottom nav) to push a view in (e.g. Brain, Ask Lucy). Tapping Workspace always
+  // lands on its Home grid, not whatever sub-section (Calendar/Documents) was last open.
   useEffect(() => {
     if (requestedView) setView(requestedView);
+    if (requestedView === 'Brain') setTab('Home');
   }, [requestKey]);
 
   // Report the current view up so the bottom nav can highlight Home vs Brain.
@@ -209,7 +211,6 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
   const [contextRefresh, setContextRefresh] = useState(0);
   const [stalenessReviews, setStalenessReviews] = useState<StalenessReview[]>([]);
   const [contextBatch, setContextBatch] = useState<ContextBatch | null>(null);
-  const [nextEvent, setNextEvent] = useState<{ title: string; start_at: number } | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -256,15 +257,6 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
         setOnThisDay(await getOnThisDayMemories(db));
       } catch { /* non-critical */ }
       try {
-        // Next upcoming committed event (today + next day) for the "Today" glance strip.
-        const now = Date.now();
-        const row = await db.getFirstAsync<{ title: string; start_at: number }>(
-          "SELECT title, start_at FROM scheduled_blocks WHERE status='committed' AND start_at > ? ORDER BY start_at ASC LIMIT 1",
-          now,
-        );
-        setNextEvent(row && row.start_at < now + 36 * 3600 * 1000 ? row : null);
-      } catch { /* non-critical */ }
-      try {
         const rows = await db.getAllAsync<{ capture_id: number; tone: string }>(
           'SELECT capture_id, tone FROM mood_entries ORDER BY created_at DESC',
         );
@@ -286,40 +278,6 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
   const views: ViewMode[] = ['Timeline', 'Focus Now', 'Ask Lucy', 'Health'];
   const viewOptions: SegmentOption<ViewMode>[] = views.map((v) => ({ value: v, label: v, icon: VIEW_ICON[v] }));
 
-  // ─── "Today" glance strip data — pulled from data already loaded; absent data ⇒ hidden card. ───
-  const topTask = pendingTodos[0];
-  const organizingCount = contextBatch?.total ?? 0;
-  const moodLabel = moodTrend.dominant && moodTrend.dominant !== 'neutral' ? moodTrend.dominant : null;
-  const glanceCards: { key: string; icon: keyof typeof Ionicons.glyphMap; tint: string; label: string; value: string; onPress: () => void }[] = [];
-  if (nextEvent) {
-    glanceCards.push({
-      key: 'event', icon: 'calendar-outline', tint: '#5B8CFF', label: 'Next up',
-      value: nextEvent.title,
-      onPress: () => { setView('Brain'); setTab('Calendar'); },
-    });
-  }
-  if (topTask) {
-    glanceCards.push({
-      key: 'task', icon: 'flash-outline', tint: LUCY_COLORS.primary, label: 'Top task',
-      value: topTask.task,
-      onPress: () => setView('Focus Now'),
-    });
-  }
-  if (organizingCount > 0) {
-    glanceCards.push({
-      key: 'org', icon: 'sparkles-outline', tint: LUCY_COLORS.violet, label: 'Organizing',
-      value: `${organizingCount} item${organizingCount === 1 ? '' : 's'}`,
-      onPress: () => setView('Focus Now'),
-    });
-  }
-  if (moodLabel) {
-    glanceCards.push({
-      key: 'mood', icon: 'heart-outline', tint: LUCY_COLORS.rose, label: 'Mood today',
-      value: moodLabel.charAt(0).toUpperCase() + moodLabel.slice(1),
-      onPress: () => setView('Focus Now'),
-    });
-  }
-
   // Lucy "speaks" — a warm, reactive two-part greeting that mirrors the day's state. The orb itself
   // is the single global overlay (App.tsx) that sits in this hero's top-right, so the copy reads as
   // her companion voice without seating a second orb here.
@@ -337,24 +295,6 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
         <Text style={styles.title} numberOfLines={1}>{greetingForHour(new Date().getHours())}{userName ? `, ${userName}` : ''}</Text>
         <Text style={styles.subtitle} numberOfLines={2}>{heroLine}</Text>
       </View>
-      {glanceCards.length ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.glanceStrip}
-          style={styles.glanceStripWrap}
-        >
-          {glanceCards.map((c) => (
-            <TouchableOpacity key={c.key} activeOpacity={0.85} style={styles.glanceCard} onPress={c.onPress}>
-              <View style={[styles.glanceIcon, { backgroundColor: c.tint + '22', borderColor: c.tint + '55' }]}>
-                <Ionicons name={c.icon} size={15} color={c.tint} />
-              </View>
-              <Text style={styles.glanceLabel}>{c.label}</Text>
-              <Text style={styles.glanceValue} numberOfLines={1}>{c.value}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      ) : null}
       <SegmentedControl options={viewOptions} value={view} onChange={setView} style={styles.viewNav} />
       {view === 'Focus Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} stalenessReviews={stalenessReviews} contextBatch={contextBatch} onStalenessResolved={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} onAskAbout={onAskAbout} /> : null}
@@ -1212,6 +1152,9 @@ function HealthView() {
         </View>
       ) : null}
 
+      {/* Weekly travel + health context (moved here from Focus Now per user). */}
+      <WeeklyLifeWidget />
+
       {/* Sleep 7-day */}
       {health7.some((h) => h.sleep_hours) ? (
         <View style={{ backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 12 }}>
@@ -1539,9 +1482,6 @@ function NowView({
       ) : null}
       {/* Brain Pulse — 6-hour cross-domain insight synthesis */}
       <BrainPulseSection />
-
-      {/* Weekly life context — travel timeline + health */}
-      <WeeklyLifeWidget />
 
       {/* Staleness reviews — shown before Follow-ups so the user cleans house first */}
       {stalenessReviews.length > 0 ? (
@@ -3327,20 +3267,6 @@ const styles = StyleSheet.create({
   subtitle: { color: LUCY_COLORS.textMuted, fontSize: 12.5, marginTop: 3, lineHeight: 17, maxWidth: 280 },
   viewNav: { marginBottom: 8 },
   // "Today" glance strip
-  glanceStripWrap: { marginBottom: 10, flexGrow: 0, flexShrink: 0 },
-  glanceStrip: { gap: 8, paddingRight: 4, alignItems: 'flex-start' },
-  glanceCard: {
-    width: 128,
-    backgroundColor: LUCY_COLORS.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: LUCY_COLORS.borderSoft,
-    paddingVertical: 11,
-    paddingHorizontal: 12,
-  },
-  glanceIcon: { width: 28, height: 28, borderRadius: 9, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 9 },
-  glanceLabel: { color: LUCY_COLORS.primaryGlow, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 3 },
-  glanceValue: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '800' },
   content: { flex: 1 },
   tonight: { backgroundColor: LUCY_COLORS.surface, borderColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderRadius: 24, padding: 19, marginBottom: 16 },
   eyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '700', letterSpacing: 1 },

@@ -9,7 +9,7 @@ function permissionAlert(what: string) {
   );
 }
 
-async function fromCamera(): Promise<string | null> {
+export async function fromCamera(): Promise<string | null> {
   const { status } = await ImagePicker.requestCameraPermissionsAsync();
   if (status !== 'granted') { permissionAlert('Camera'); return null; }
   // High quality — fine handwriting strokes need detail for the vision model to read accurately.
@@ -17,7 +17,7 @@ async function fromCamera(): Promise<string | null> {
   return r.canceled || !r.assets[0] ? null : r.assets[0].uri;
 }
 
-async function fromLibrary(): Promise<string | null> {
+export async function fromLibrary(): Promise<string | null> {
   const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (status !== 'granted') { permissionAlert('Photos'); return null; }
   const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9, allowsEditing: false });

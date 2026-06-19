@@ -5,7 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 61 (Scans & photos gallery served over LAN + Medications mirror in Health section via /api/medications; desktop alerts from rev 59) */
+/* LUCY web - premium - dashboard rev 62 (App-parity features + spring motion:
+   • Health: mood-over-time SVG graph (teal/rose, real gaps, shift caption, tap-a-day → "what was happening") via /api/mood-graph
+   • Money: money-watch (upcoming bills + recurring/subscriptions + Lucy-noticed insights) via /api/money; flips Market subscription-detection cell to ✅
+   • Calendar/Workspace: Shape-your-day editor — office hours, workday toggles, sleep, + 3 mouse-draggable energy curves (brain/muscle/attention) via GET/POST /api/schedule/availability
+   • People: keep-warm reach-out nudges via /api/keepwarm
+   • Schedule suggestions now surface human reasons + rationale ("why")
+   • Motion: spring view fade, staggered .rise card entrances, button press feedback, expand/collapse, honors prefers-reduced-motion
+   Prior: rev 61 scans gallery + medications mirror; desktop alerts from rev 59) */
 [data-theme="dark"]{
   --bg:#0A0907; --bg2:#100D0A; --side:#121009; --side2:#0C0A07;
   --card:#171410; --card2:#1C1813; --raised:#221D16; --elevated:#2A2219;
@@ -88,8 +95,31 @@ nav{display:flex;flex-direction:column;gap:1px}
   display:grid;place-items:center;font-size:16px;box-shadow:var(--shadow-sm);transition:.2s}
 .theme-btn:hover{border-color:var(--primary);transform:rotate(12deg)}
 #scrollarea{flex:1;overflow-y:auto;padding:8px 26px 60px;scroll-behavior:smooth}
-.fade{animation:fade .3s ease}
-@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* ─── Motion system (spring-like, GPU-only transform/opacity) ───
+   --ease-spring = a gentle overshoot for entrances; --ease-soft = calm settle.
+   Honors prefers-reduced-motion below. */
+:root{--ease-spring:cubic-bezier(.22,1.2,.36,1);--ease-soft:cubic-bezier(.25,.9,.3,1)}
+.fade{animation:fade .42s var(--ease-spring) both}
+@keyframes fade{from{opacity:0;transform:translateY(12px) scale(.992)}to{opacity:1;transform:none}}
+/* staggered card entrance — add .rise to children, they cascade in.
+   Set --i on each child (or rely on the JS that stamps it) for the delay step. */
+.rise{animation:riseIn .5s var(--ease-spring) both;animation-delay:calc(var(--i,0) * 42ms)}
+@keyframes riseIn{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+.pop{animation:popIn .34s var(--ease-spring) both}
+@keyframes popIn{0%{opacity:0;transform:scale(.9)}100%{opacity:1;transform:scale(1)}}
+/* press feedback — universal for our buttons/tappables */
+.btn,.vchip,.qa-card,.wtile,.wqbtn,.nav-i,.ico-btn,.card.tap,.spill,.theme-btn{will-change:transform}
+.btn:active,.vchip:active,.qa-card:active,.wqbtn:active,.ico-btn:active,.card.tap:active,.spill:active{transform:translateY(1px) scale(.97);transition:transform .08s ease}
+.wtile:active{transform:translateY(0) scale(.98)}
+.nav-i:active{transform:scale(.98)}
+/* smooth expand/collapse: grid-rows trick (animatable, no fixed height) */
+.collapse{display:grid;grid-template-rows:0fr;transition:grid-template-rows .38s var(--ease-soft),opacity .3s ease;opacity:.4}
+.collapse.open{grid-template-rows:1fr;opacity:1}
+.collapse>.collapse-inner{overflow:hidden;min-height:0}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+  .fade,.rise,.pop{animation:none}
+}
 
 /* ─── Home hero ─── */
 .layout{display:grid;grid-template-columns:1fr 312px;gap:22px;align-items:start}
@@ -739,6 +769,86 @@ nav{display:flex;flex-direction:column;gap:1px}
 .dl-del:hover{border-color:#FB7185}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);z-index:50;background:var(--elevated);border:1px solid var(--border);color:var(--text);padding:11px 20px;border-radius:30px;font-size:13.5px;opacity:0;transition:.25s;box-shadow:var(--shadow);pointer-events:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ─── Mood-over-time graph (Health) ─── */
+.mood-graph-card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:18px;padding:16px 18px 14px;box-shadow:var(--shadow-sm)}
+.mood-graph-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
+.mood-graph-head .mg-title{font-weight:760;font-size:14px}
+.mood-graph-head .mg-cap{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.4}
+.mg-shift{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;padding:4px 11px;border-radius:20px;margin-left:auto;white-space:nowrap}
+.mg-shift.up{background:rgba(45,212,191,.13);color:#2DD4BF}
+.mg-shift.down{background:rgba(251,113,133,.14);color:#FB7185}
+.mg-svg-wrap{position:relative;width:100%;overflow:visible}
+.mg-svg{display:block;width:100%;height:auto;cursor:pointer;touch-action:none}
+.mg-dot{transition:r .15s ease,opacity .15s ease}
+.mg-dot:hover{r:6}
+.mg-dot.sel{r:6.5}
+.mg-axis{font-size:9px;fill:var(--faint)}
+.mg-day-label{font-size:9px;fill:var(--subtle)}
+.mg-line{fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.mg-happening{margin-top:12px;border-top:1px solid var(--divider);padding-top:12px;animation:fade .35s var(--ease-spring) both}
+.mg-happening .mh-head{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--subtle);margin-bottom:8px;display:flex;align-items:center;gap:7px}
+.mg-happening .mh-row{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--divider)}
+.mg-happening .mh-row:last-child{border-bottom:0}
+.mg-happening .mh-t{font-size:11px;color:var(--faint);flex:0 0 56px;padding-top:1px}
+.mg-happening .mh-b{font-size:13px;color:var(--text);line-height:1.4}
+.mg-happening .mh-b .mh-snip{color:var(--subtle);font-size:12px;margin-top:2px}
+
+/* ─── Money-watch (Money) ─── */
+.mw-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+@media(max-width:760px){.mw-grid{grid-template-columns:1fr}}
+.mw-panel{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:18px;padding:15px 16px;box-shadow:var(--shadow-sm)}
+.mw-panel .mw-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:760;margin-bottom:11px}
+.mw-panel .mw-h .mw-ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:14px;background:var(--primary-soft);color:var(--primary-deep);flex:0 0 26px}
+[data-theme="dark"] .mw-panel .mw-h .mw-ic{color:var(--primary-glow)}
+.mw-sub{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--divider)}
+.mw-sub:last-child{border-bottom:0}
+.mw-sub .mw-nm{font-weight:600;font-size:13.5px}
+.mw-sub .mw-meta{font-size:11.5px;color:var(--subtle);margin-top:2px}
+.mw-sub .mw-amt{margin-left:auto;text-align:right;flex:0 0 auto}
+.mw-sub .mw-amt b{font-size:14px;color:var(--primary);font-variant-numeric:tabular-nums}
+.mw-sub .mw-amt span{display:block;font-size:11px;color:var(--faint);margin-top:1px}
+.mw-line{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--divider);font-size:13px;color:var(--text);line-height:1.45}
+.mw-line:last-child{border-bottom:0}
+.mw-line .mw-bullet{flex:0 0 auto;color:var(--primary);font-weight:800}
+.mw-up{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--divider);align-items:center;font-size:13px;color:var(--text)}
+.mw-up:last-child{border-bottom:0}
+.mw-up .mw-cal{flex:0 0 auto;font-size:15px;opacity:.85}
+
+/* ─── Keep-warm (People) ─── */
+.kw-card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-left:3px solid #FF6B81;border-radius:16px;padding:13px 15px;display:flex;align-items:center;gap:13px;box-shadow:var(--shadow-sm)}
+.kw-card .kw-av{width:38px;height:38px;border-radius:50%;flex:0 0 38px;display:grid;place-items:center;font-weight:700;font-size:15px;background:radial-gradient(circle at 36% 30%,#FFB1BF,#FF6B81 62%,#C2415A);color:#fff}
+.kw-card .kw-b{flex:1;min-width:0}
+.kw-card .kw-nm{font-weight:650;font-size:14.5px;display:flex;align-items:center;gap:8px}
+.kw-card .kw-days{font-size:11px;font-weight:700;color:#FB7185;background:rgba(251,113,133,.13);padding:1px 8px;border-radius:20px}
+.kw-card .kw-msg{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.4}
+
+/* ─── Shape-your-day editor (energy curves) ─── */
+.sd-card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--shadow-sm)}
+.sd-card h2{margin:0 0 4px;font-size:16px;font-weight:780}
+.sd-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:11px;margin:14px 0 4px}
+.sd-fld label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:5px;font-weight:600}
+.sd-fld input[type=time]{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:11px;color:var(--text);padding:9px 11px;font:inherit;outline:none}
+.sd-fld input[type=time]:focus{border-color:var(--primary)}
+.sd-days{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 4px}
+.sd-day{width:38px;height:34px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--subtle);font-size:12px;font-weight:700;transition:.15s}
+.sd-day.on{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-deep)}
+[data-theme="dark"] .sd-day.on{color:var(--primary-glow)}
+.sd-seg{display:inline-flex;background:var(--raised);border:1px solid var(--border);border-radius:30px;padding:3px;gap:2px;margin:4px 0 2px}
+.sd-seg button{background:none;border:none;color:var(--subtle);padding:7px 15px;border-radius:30px;font-size:12.5px;font-weight:650;transition:.18s;display:flex;align-items:center;gap:6px}
+.sd-seg button.on{color:var(--on-primary)}
+.sd-seg button.on.brain{background:#A78BFA}
+.sd-seg button.on.muscle{background:#FB7185}
+.sd-seg button.on.attention{background:#2DD4BF}
+.sd-curve-wrap{position:relative;margin-top:12px;background:var(--bg2);border:1px solid var(--border-soft);border-radius:14px;padding:10px 8px 4px}
+.sd-curve{display:block;width:100%;height:auto;touch-action:none;cursor:crosshair;user-select:none}
+.sd-curve-hint{font-size:11.5px;color:var(--subtle);margin-top:6px;text-align:center}
+.sd-bar{transition:height .12s ease,y .12s ease,fill .15s ease}
+.sd-grid-ln{stroke:var(--border-soft);stroke-width:1}
+.sd-hr-lbl{font-size:8.5px;fill:var(--faint)}
+.sd-sleep-band{fill:var(--raised);opacity:.55}
+.sd-actions{display:flex;gap:10px;align-items:center;margin-top:16px}
+.sd-empty-sched{color:var(--subtle);font-size:12.5px}
 </style>
 </head>
 <body>
@@ -935,6 +1045,13 @@ function renderNav(){$('nav').innerHTML=NAV.map(([k,ic,label])=>{
   let badge='';if(DATA){if(k==='tasks')badge=DATA.todos.filter(pending).length||'';if(k==='timeline')badge=(DATA.captures||[]).length||'';if(k==='people')badge=(DATA.people||[]).length||'';}
   return `<div class="nav-i ${ROUTE===k?'on':''}" onclick="go('${k}')"><span class="ic">${ic}</span>${label}${badge?`<span class="badge">${badge}</span>`:''}</div>`;}).join('');}
 function go(k){ROUTE=k;toggleSide(false);renderNav();draw();setOrbPersona(k);}
+/* Stamp a cascading --i on freshly added .rise cards so they cascade in (capped so late
+   items don't lag). Skips elements already stamped. Respects reduced-motion via CSS. */
+function stampStagger(root){
+  const host=root||$('scrollarea');if(!host)return;
+  const els=host.querySelectorAll('.rise:not([data-st])');let i=0;
+  els.forEach(el=>{el.setAttribute('data-st','1');el.style.setProperty('--i',Math.min(i,10));i++;});
+}
 
 async function load(silent){
   if(!silent)setOrbMood('read');
@@ -954,7 +1071,10 @@ function draw(){const v=$('scrollarea');v.classList.remove('fade');void v.offset
   if(view==='projects')loadProjects();
   if(ROUTE==='about')loadGuard();
   if(ROUTE==='health')loadHealth(false);
-  if(ROUTE==='ask')afterAsk();}
+  if(ROUTE==='money')loadMoney();
+  if(ROUTE==='people')loadKeepWarm();
+  if(ROUTE==='ask')afterAsk();
+  stampStagger();}
 /* ─── MARKET (LUCY vs competitors — gap tracker, docs/COMPETITOR_COMPARISON.md) ─── */
 const CMP_MAP={'✅':'#22C55E','🟡':'#F5C451','❌':'#6b6b78','🔒':'#FF8C42'};
 function cmpCell(v){const c=CMP_MAP[v]||'var(--muted)';const w=v==='🔒'?'900':'800';return `<td style="text-align:center;color:${c};font-weight:${w};padding:9px 6px;border-top:1px solid var(--border)">${v}</td>`;}
@@ -1004,6 +1124,13 @@ const CMP_CATS=[
     ['Privacy: on-device, no bank login','🔒','❌','❌','❌'],
   ]},
 ];
+/* Subscription detection now ships in Money-watch → flip the Market cell (LUCY col) to ✅. */
+let _subsFlipped=false;
+function flipSubscriptionCell(){
+  if(_subsFlipped)return;
+  for(const cat of CMP_CATS){for(const row of cat.rows){if(/subscription detection/i.test(row[0])&&row[1]==='❌'){row[1]='✅';_subsFlipped=true;}}}
+  if(_subsFlipped&&ROUTE==='compare')draw();
+}
 const CMP_MOAT=['All-in-one life OS','On-device / privacy-first','Voice-native (Hey Lucy)','Conflict-free calendar','BYO-key, no lock-in'];
 const CMP_GAPS=['Android parity + a real web/desktop app','Build the health/calorie vertical (Cal-AI-class + Indian DB + Dr. Lucy)','Ingestion: web clipper + email/Slack "AI inbox"','Calendar write-back + external task pull + auto-rebuild','Finance: decide opt-in bank sync vs privacy-pure','UI/UX polish to specialist standard','Bot-free meeting notes (Granola-style)'];
 function vCompare(){return `<div class="page">
@@ -1162,7 +1289,7 @@ function vTimeline(){const caps=(DATA.captures||[]);return `<div class="page">
 
 function timelineHtml(caps){if(!caps.length)return empty('◉','Nothing captured yet','Use the composer above to add your first thought.');
   return caps.map(c=>{const kind=(c.capture_kind||'thought');const body=capBody(c);
-    return `<div class="tl-item"><div class="tl-time">${clock(c.created_at)}</div>
+    return `<div class="tl-item rise"><div class="tl-time">${clock(c.created_at)}</div>
       <div class="tl-card" onclick="openCapture(${c.id})" style="cursor:pointer"><div class="tl-row"><div style="flex:1">
         <div class="tags"><span class="tag kind">${esc(kind)}</span>${tagFor(c)}</div>
         <div class="ttl">${esc(capText(c))}</div>${body?`<div class="body">${esc(body.slice(0,160))}${body.length>160?'…':''}</div>`:''}</div>
@@ -1216,9 +1343,30 @@ function vBrain(){const k=DATA.knowledge||{};const ents=(k.entities||[]).slice(0
   let h=`<div class="page"><section class="page-hero compact"><div class="page-kicker">Brain</div><h1 class="page-title">Lucy’s private knowledge map.</h1><div class="page-sub">Entities and relationships extracted from your captures, kept on the device.</div><div class="hero-metrics">${heroMetric((k.entities||[]).length,'entities')}${heroMetric((k.connections||[]).length,'connections')}</div></section><div class="sec"><h2>Entities · ${(k.entities||[]).length}</h2></div>`;
   h+=ents.length?'<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">'+ents.map(e=>`<div class="card" style="flex-direction:column;gap:6px"><div style="display:flex;width:100%;align-items:center;gap:8px"><span class="ttl">${esc(e.name)}</span><span class="when">×${e.evidence_count||1}</span></div><span class="cat">${esc(e.entity_type||'')}</span></div>`).join('')+'</div>':empty('❋','No entities yet','LUCY builds this as you capture more.');
   if(cons.length){h+=`<div class="sec"><h2>Connections · ${cons.length}</h2></div><div class="col">`+cons.map(c=>`<div class="card"><div style="flex:1"><span class="ttl">${esc(c.source_name||'?')}</span> <span style="color:var(--primary)">— ${esc(c.relation||'relates to')} →</span> <span class="ttl">${esc(c.target_name||'?')}</span>${c.explanation?`<div class="sub">${esc(c.explanation)}</div>`:''}</div><span class="pill ${esc(c.confidence||'emerging')}">${esc(c.confidence||'')}</span></div>`).join('')+'</div>';}return h+'</div>';}
+/* ─── KEEP-WARM (relationship nudges) ─── */
+let KEEPWARM=null;       // {nudges:[{name,daysSince,message,action}]}
+let KEEPWARM_FETCHED=false;
+async function loadKeepWarm(){
+  try{const r=await api('/api/keepwarm');if(r&&typeof r==='object'){KEEPWARM=r;KEEPWARM_FETCHED=true;}}catch(e){/* keep last */}
+  const host=$('keepWarm');if(host){host.innerHTML=keepWarmBody();stampStagger(host);}
+}
+function keepWarmBody(){
+  if(!KEEPWARM_FETCHED&&!KEEPWARM)return '';
+  const nudges=(KEEPWARM&&Array.isArray(KEEPWARM.nudges))?KEEPWARM.nudges:[];
+  if(!nudges.length)return '';
+  return `<div class="sec"><h2>Keep warm</h2></div><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">`+
+    nudges.map((n,i)=>{const nm=(n&&n.name)||'Someone';const days=(n&&n.daysSince!=null)?(n.daysSince+'d'):'';const act=(n&&n.action)?`<button class="btn ghost sm" onclick="keepWarmAct(${i})">Reach out</button>`:'';
+      return `<div class="kw-card rise"><div class="kw-av">${esc(nm[0].toUpperCase())}</div><div class="kw-b"><div class="kw-nm">${esc(nm)}${days?`<span class="kw-days">${esc(days)}</span>`:''}</div><div class="kw-msg">${esc((n&&n.message)||'')}</div></div>${act}</div>`;}).join('')+`</div>`;
+}
+function keepWarmAct(i){
+  const n=KEEPWARM&&KEEPWARM.nudges&&KEEPWARM.nudges[i];if(!n)return;const nm=n.name||'them';
+  // Bridge into Ask Lucy with a friendly draft prompt; behavior stays in the app/voice brain.
+  go('ask');setTimeout(()=>{const q=$('q');if(q){q.value='Help me reach out to '+nm+(n.action?(' — '+n.action):'');q.focus();}},120);
+}
 function vPeople(){const ppl=(DATA.people||[]);const hero=`<section class="page-hero compact"><div class="page-kicker">People</div><h1 class="page-title">The people Lucy notices.</h1><div class="page-sub">Names and relationship context gathered from your notes, calls, plans, and follow-ups.</div><div class="hero-metrics">${heroMetric(ppl.length,'people')}${heroMetric(ppl.filter(p=>p.last_mentioned).length,'with history')}</div></section>`;
-  if(!ppl.length)return `<div class="page">${hero}`+empty('◐','No people yet','LUCY remembers people as you mention them.')+'</div>';
-  return `<div class="page">${hero}<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">`+ppl.map(p=>`<div class="card" style="flex-direction:column;gap:7px"><div style="display:flex;width:100%;align-items:center;gap:9px"><div class="avatar">${esc((p.name||'?')[0].toUpperCase())}</div><span class="ttl" style="font-size:15.5px">${esc(p.name)}</span></div>${p.context?`<div class="sub">${esc(p.context)}</div>`:''}<div class="when" style="margin:0">${p.last_mentioned?'Last mentioned '+fmt(p.last_mentioned):''}</div></div>`).join('')+'</div></div>';}
+  const kw=`<div id="keepWarm">${keepWarmBody()}</div>`;
+  if(!ppl.length)return `<div class="page">${hero}${kw}`+empty('◐','No people yet','LUCY remembers people as you mention them.')+'</div>';
+  return `<div class="page">${hero}${kw}<div class="sec"><h2>Everyone Lucy knows</h2></div><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">`+ppl.map(p=>`<div class="card rise" style="flex-direction:column;gap:7px"><div style="display:flex;width:100%;align-items:center;gap:9px"><div class="avatar">${esc((p.name||'?')[0].toUpperCase())}</div><span class="ttl" style="font-size:15.5px">${esc(p.name)}</span></div>${p.context?`<div class="sub">${esc(p.context)}</div>`:''}<div class="when" style="margin:0">${p.last_mentioned?'Last mentioned '+fmt(p.last_mentioned):''}</div></div>`).join('')+'</div></div>';}
 /* ─── HEALTH (Dr. Lucy: nutrition + activity, backed by /api/health) ─── */
 let HEALTH=null;            // last summary from /api/health
 let HEALTH_LOADING=false;   // first-load shimmer
@@ -1229,7 +1377,76 @@ async function loadHealth(force){
   try{const r=await api('/api/health');if(r&&r.ok)HEALTH=r.summary||{};}catch(e){/* keep last; vHealth shows a soft note */}
   try{const rm=await api('/api/medications');if(rm&&rm.ok)MEDS=rm.items||[];}catch(e){/* optional */}
   HEALTH_LOADING=false;if(ROUTE==='health')redrawHealth();
+  loadMoodGraph();
 }
+/* ─── MOOD-OVER-TIME GRAPH (Health) — daily valence −2..+2, gaps on empty days ─── */
+let MOODG=null;          // {series,shift,hasData}
+let MOODG_DAY=null;      // selected dayMs → {highlights}
+let MOODG_FETCHED=false;
+async function loadMoodGraph(){
+  try{const r=await api('/api/mood-graph');if(r&&typeof r==='object'){MOODG=r;MOODG_FETCHED=true;}}catch(e){/* keep last */}
+  redrawMoodGraph();
+}
+function redrawMoodGraph(){const host=$('moodGraph');if(host)host.innerHTML=moodGraphBody();}
+/* Map valence (−2..+2) → y inside the plot band. baseline (0) sits at mid. */
+function moodGraphBody(){
+  if(!MOODG_FETCHED&&!MOODG)return `<div class="mood-graph-card"><div class="hl-skel" style="height:120px"></div></div>`;
+  if(!MOODG||!MOODG.hasData)return empty('〰','No mood trend yet','Tap how you feel a few times and Lucy will chart the drift.');
+  const series=(MOODG.series||[]).filter(p=>p&&p.dayMs);
+  if(!series.length)return empty('〰','No mood trend yet','Tap how you feel a few times and Lucy will chart the drift.');
+  const shift=MOODG.shift||{};
+  const dir=shift.direction||'flat';
+  const arrow=dir==='up'?'↑':dir==='down'?'↓':'→';
+  const shiftEl=(dir!=='flat'&&shift.message)?`<span class="mg-shift ${dir==='up'?'up':'down'}">${arrow} ${esc(shift.message)}</span>`:'';
+  const cap=(dir==='flat'&&shift.message)?esc(shift.message):'Daily feeling, teal above the line, rose below.';
+  // ── geometry ──
+  const W=560,H=190,padL=26,padR=14,padT=14,padB=26;
+  const plotW=W-padL-padR,plotH=H-padT-padB;
+  const minV=-2,maxV=2;const mid=padT+plotH/2; // valence 0
+  const yFor=v=>padT+plotH*(1-(v-minV)/(maxV-minV));
+  const n=series.length;
+  const xFor=i=>n<=1?padL+plotW/2:padL+plotW*(i/(n-1));
+  // points with real scores (gaps = null)
+  const pts=series.map((p,i)=>({i,x:xFor(i),v:(p.score==null?null:Math.max(minV,Math.min(maxV,p.score))),dayMs:p.dayMs,date:p.date,count:p.count,tone:p.dominantTone}));
+  if(!pts.some(p=>p.v!=null))return empty('〰','No mood trend yet','Tap how you feel a few times and Lucy will chart the drift.');
+  // Build path segments that BREAK on null (so gaps are real gaps, not zero).
+  let segs=[],cur=[];
+  pts.forEach(p=>{if(p.v==null){if(cur.length>1)segs.push(cur);cur=[];}else cur.push(p);});
+  if(cur.length>1)segs.push(cur);
+  const teal='#2DD4BF',rose='#FB7185';
+  // line color: split stroke per segment by its mean sign (calm: rose when the stretch ran low)
+  const linePaths=segs.map(seg=>{const d=seg.map((p,k)=>(k?'L':'M')+p.x.toFixed(1)+' '+yFor(p.v).toFixed(1)).join(' ');const mean=seg.reduce((s,p)=>s+p.v,0)/seg.length;return `<path class="mg-line" d="${d}" stroke="${mean<0?rose:teal}"/>`;});
+  // area fill to baseline per segment
+  const areaPaths=segs.map(seg=>{if(seg.length<2)return '';const mean=seg.reduce((s,p)=>s+p.v,0)/seg.length;const col=mean<0?rose:teal;const top=seg.map((p,k)=>(k?'L':'M')+p.x.toFixed(1)+' '+yFor(p.v).toFixed(1)).join(' ');const d=`${top} L ${seg[seg.length-1].x.toFixed(1)} ${mid.toFixed(1)} L ${seg[0].x.toFixed(1)} ${mid.toFixed(1)} Z`;return `<path d="${d}" fill="${col}" opacity=".10"/>`;});
+  // dots (only real scores)
+  const dots=pts.filter(p=>p.v!=null).map(p=>{const sel=MOODG_DAY&&MOODG_DAY.dayMs===p.dayMs?' sel':'';const col=p.v<0?rose:p.v>0?teal:'var(--muted)';return `<circle class="mg-dot${sel}" cx="${p.x.toFixed(1)}" cy="${yFor(p.v).toFixed(1)}" r="${sel?6.5:4}" fill="${col}" stroke="var(--card)" stroke-width="1.5" onclick="moodGraphPick(${p.dayMs})" style="cursor:pointer"><title>${esc(p.date||'')} · ${p.v>0?'+':''}${(+p.v).toFixed(1)}</title></circle>`;});
+  // sparse x labels (first, middle, last)
+  const labelIdx=n<=1?[0]:[0,Math.floor((n-1)/2),n-1];
+  const xLabels=[...new Set(labelIdx)].map(i=>{const p=pts[i];if(!p)return '';const dt=p.date?new Date(p.dayMs):null;const lab=dt?dt.toLocaleDateString(undefined,{month:'short',day:'numeric'}):'';return `<text class="mg-day-label" x="${p.x.toFixed(1)}" y="${(H-7)}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${lab}</text>`;}).join('');
+  const svg=`<div class="mg-svg-wrap"><svg class="mg-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+    <line x1="${padL}" y1="${mid}" x2="${W-padR}" y2="${mid}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 4"/>
+    <text class="mg-axis" x="${padL-4}" y="${padT+4}" text-anchor="end">good</text>
+    <text class="mg-axis" x="${padL-4}" y="${H-padB}" text-anchor="end">low</text>
+    ${areaPaths.join('')}${linePaths.join('')}${dots.join('')}${xLabels}
+  </svg></div>`;
+  const happening=MOODG_DAY?moodHappeningBody():'';
+  return `<div class="mood-graph-card"><div class="mood-graph-head"><div><div class="mg-title">How the days have felt</div><div class="mg-cap">${cap}</div></div>${shiftEl}</div>${svg}${happening}</div>`;
+}
+function moodHappeningBody(){
+  if(!MOODG_DAY)return '';
+  const d=new Date(MOODG_DAY.dayMs);const dl=d.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'});
+  if(MOODG_DAY.loading)return `<div class="mg-happening"><div class="mh-head">What was happening · ${esc(dl)}</div><div class="subtle-line">Looking back…</div></div>`;
+  const hl=MOODG_DAY.highlights||[];
+  if(!hl.length)return `<div class="mg-happening"><div class="mh-head">What was happening · ${esc(dl)}</div><div class="subtle-line">Nothing captured that day.</div></div>`;
+  return `<div class="mg-happening"><div class="mh-head">What was happening · ${esc(dl)}</div>`+
+    hl.slice(0,6).map(h=>`<div class="mh-row"><div class="mh-t">${esc(h.time||'')}</div><div class="mh-b">${esc(h.title||'Note')}${h.snippet?`<div class="mh-snip">${esc(h.snippet)}</div>`:''}</div></div>`).join('')+`</div>`;
+}
+async function moodGraphPick(dayMs){
+  if(MOODG_DAY&&MOODG_DAY.dayMs===dayMs){MOODG_DAY=null;redrawMoodGraph();return;} // tap again to close
+  MOODG_DAY={dayMs,loading:true};redrawMoodGraph();
+  try{const r=await api('/api/mood-graph?day='+dayMs);MOODG_DAY={dayMs,highlights:(r&&r.highlights)||[]};}
+  catch(e){MOODG_DAY={dayMs,highlights:[]};}
+  redrawMoodGraph();}
 function hlMeds(){
   if(!MEDS||!MEDS.length)return '';
   return `<div class="sec"><h2>Medications</h2></div><div class="col">`+MEDS.map(m=>`<div class="card"><span style="font-size:18px">💊</span><div style="flex:1"><span class="ttl">${esc(m.name)}${m.dosage?' · '+esc(m.dosage):''}</span><div class="sub">${(m.times&&m.times.length)?esc(m.times.join(', ')):'no times set'}</div></div></div>`).join('')+`</div><div class="subtle-line" style="font-size:11.5px;color:var(--subtle);margin-top:6px">Reminders are managed in the app. LUCY only tracks what you enter — check doses with your doctor.</div>`;
@@ -1262,6 +1479,7 @@ function hlDashboard(){
   const m=(DATA.mood_entries||[]);const tones={positive:'😊',excited:'🤩',calm:'😌',neutral:'😐',low:'😔',frustrated:'😤',stressed:'😰',negative:'😣'};
   const moodSec=`<div class="sec"><h2>How you feel</h2></div><div class="card" style="gap:10px;flex-wrap:wrap">`+
     Object.entries(tones).map(([t,e])=>`<button class="btn ghost" onclick="logMood('${t}')" style="font-size:20px">${e}<span style="font-size:12px;margin-left:6px">${t}</span></button>`).join('')+`</div>`+
+    `<div class="sec"><h2>Mood over time</h2></div><div id="moodGraph">${moodGraphBody()}</div>`+
     (m.length?`<div class="sec"><h2>Recent check-ins</h2></div><div class="col">`+m.slice(0,8).map(x=>`<div class="card"><span style="font-size:20px">${tones[x.tone]||'😐'}</span><div style="flex:1"><span class="ttl">${esc(x.tone)}</span><div class="sub">energy: ${esc(x.energy||'medium')}</div></div><span class="when">${fmt(x.created_at)}</span></div>`).join('')+'</div>':'');
   // Food logger is always available so anyone can log a meal.
   const logger=`<div class="sec"><h2>Log food</h2></div>
@@ -1378,9 +1596,39 @@ async function hlSaveProfile(){
     else{toast('Lucy needs the latest update for this');setOrbMood('confused',1400);}
   }catch(e){toast('Could not reach the phone — try again');setOrbMood('confused',1400);}
   if(ROUTE==='health')redrawHealth();loadHealth(true);}
+/* ─── MONEY-WATCH (subscription detection + upcoming bills + drift) ─── */
+let MONEY=null;          // {insights,recurring,upcoming}
+let MONEY_FETCHED=false;
+async function loadMoney(){
+  try{const r=await api('/api/money');if(r&&typeof r==='object'){MONEY=r;MONEY_FETCHED=true;}}catch(e){/* keep last */}
+  const host=$('moneyWatch');if(host)host.innerHTML=moneyWatchBody();
+  // Once we have real subscriptions, flip the Market table cell to ✅ and refresh if shown.
+  if(MONEY&&Array.isArray(MONEY.recurring)&&MONEY.recurring.length)flipSubscriptionCell();
+}
+function moneyDue(ms){const t=parseTs(ms);if(isNaN(t))return '';const d=dayKey(t),today=dayKey(Date.now());const diff=Math.round((d-today)/86400000);if(diff===0)return 'today';if(diff===1)return 'tomorrow';if(diff>1&&diff<7)return 'in '+diff+' days';return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric'});}
+function moneyWatchBody(){
+  if(!MONEY_FETCHED&&!MONEY)return '';
+  const M=MONEY||{};
+  const recurring=Array.isArray(M.recurring)?M.recurring:[];
+  const upcoming=Array.isArray(M.upcoming)?M.upcoming:[];
+  const insights=Array.isArray(M.insights)?M.insights:[];
+  if(!recurring.length&&!upcoming.length&&!insights.length)return '';
+  const panels=[];
+  if(upcoming.length)panels.push(`<div class="mw-panel rise"><div class="mw-h"><span class="mw-ic">📅</span>Upcoming bills</div>`+
+    upcoming.map(u=>`<div class="mw-up"><span class="mw-cal">›</span><span>${esc(typeof u==='string'?u:(u&&u.label)||'')}</span></div>`).join('')+`</div>`);
+  if(recurring.length)panels.push(`<div class="mw-panel rise"><div class="mw-h"><span class="mw-ic">🔁</span>Recurring &amp; subscriptions</div>`+
+    recurring.map(s=>{const amt=(s&&s.amount!=null)?(+s.amount).toFixed(2):'';const due=s&&s.nextDueMs?moneyDue(s.nextDueMs):'';const meta=[s&&s.cadence?esc(s.cadence):'',s&&s.count?esc(s.count)+'× seen':''].filter(Boolean).join(' · ');
+      return `<div class="mw-sub"><div style="min-width:0"><div class="mw-nm">${esc((s&&s.label)||'Subscription')}</div>${meta?`<div class="mw-meta">${meta}</div>`:''}</div><div class="mw-amt">${amt?`<b>${amt}</b>`:''}${due?`<span>next ${esc(due)}</span>`:''}</div></div>`;}).join('')+`</div>`);
+  let h='';
+  if(panels.length)h+=`<div class="mw-grid">${panels.join('')}</div>`;
+  if(insights.length)h+=`<div class="mw-panel rise" style="margin-top:14px"><div class="mw-h"><span class="mw-ic">✦</span>Lucy noticed</div>`+
+    insights.map(t=>`<div class="mw-line"><span class="mw-bullet">•</span><span>${esc(typeof t==='string'?t:(t&&t.text)||'')}</span></div>`).join('')+`</div>`;
+  return h?`<div style="margin-bottom:18px">${h}</div>`:'';
+}
 function vMoney(){const ex=(DATA.expenses||[]);const now=new Date();const month=ex.filter(e=>{const ts=parseTs(e.created_at);if(isNaN(ts))return false;const t=new Date(ts);return t.getMonth()===now.getMonth()&&t.getFullYear()===now.getFullYear();});
   const total=month.reduce((s,e)=>s+(+e.amount||0),0);const cats={};month.forEach(e=>{cats[e.category||'other']=(cats[e.category||'other']||0)+(+e.amount||0);});const catArr=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
   let h=`<div class="page"><section class="page-hero compact"><div class="page-kicker">Money</div><h1 class="page-title">Spending Lucy found in your notes.</h1><div class="page-sub">Receipts and expense mentions become a simple monthly view.</div><div class="hero-metrics">${heroMetric(total.toFixed(2),'this month')}${heroMetric(month.length,'payments')}${heroMetric(ex.length,'all time')}</div></section>`;
+  h+=`<div id="moneyWatch">${moneyWatchBody()}</div>`;
   if(catArr.length){h+=`<div class="sec"><h2>By category</h2></div><div class="col">`+catArr.map(([c,v])=>{const pct=total?Math.round(v/total*100):0;return `<div class="card" style="flex-direction:column;gap:6px"><div style="display:flex;width:100%"><span class="ttl">${esc(c)}</span><span class="when" style="margin-left:auto">${v.toFixed(2)} · ${pct}%</span></div><div style="height:6px;background:var(--raised);border-radius:6px;width:100%;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--primary)"></div></div></div>`;}).join('')+'</div>';}
   h+=`<div class="sec"><h2>Recent payments</h2></div>`;h+=ex.length?'<div class="col">'+ex.slice(0,30).map(e=>`<div class="card"><div style="flex:1"><span class="ttl">${esc(e.description||e.category||'Payment')}</span><div class="sub">${esc(e.category||'')}</div></div><span class="ttl" style="color:var(--primary)">${(+e.amount||0).toFixed(2)}</span><span class="when">${fmt(e.created_at)}</span></div>`).join('')+'</div>':empty('▦','No expenses tracked','');
   return h+'</div>';}
@@ -1501,6 +1749,127 @@ function toMin(s){const m=/^(\d{1,2}):(\d{2})$/.exec((s||'').trim());return m?(+
 function dayKey(ms){const d=new Date(ms);d.setHours(0,0,0,0);return d.getTime();}
 function dayLabel(ms){const t=dayKey(Date.now()),d=dayKey(ms);if(d===t)return'Today';if(d===t+86400000)return'Tomorrow';return new Date(ms).toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'});}
 function vCalendar(){return `<div id="calWrap"><div class="empty"><div class="big">○</div>Loading your schedule...</div></div>`;}
+/* ─── SHAPE-YOUR-DAY EDITOR — office hours, workdays, sleep, + 3 mouse-editable energy curves ─── */
+let SHAPE=null;          // editable model {workStartMin,workEndMin,workDays:[],sleepStartMin,sleepEndMin,curves:{brain,muscle,attention}}
+let SHAPE_FETCHED=false;
+let SHAPE_DIM='brain';   // active curve in the editor
+let _shapeDrag=false;
+const SHAPE_DIMS=[['brain','🧠','Brain','#A78BFA'],['muscle','💪','Muscle','#FB7185'],['attention','🎯','Attention','#2DD4BF']];
+function shapeColor(dim){const d=SHAPE_DIMS.find(x=>x[0]===dim);return d?d[3]:'#A78BFA';}
+function clamp01(v){return Math.max(0,Math.min(1,v));}
+function norm24(a){const out=new Array(24).fill(0);if(Array.isArray(a))for(let i=0;i<24;i++){const n=+a[i];out[i]=isNaN(n)?0:clamp01(n);}return out;}
+async function loadShape(){
+  if(SHAPE)return; // editing model already live — don't clobber unsaved edits on poll
+  let r=null;try{r=await api('/api/schedule/availability');}catch(e){r=null;}
+  if(!r){SHAPE_FETCHED=true;const h=$('shapeDay');if(h)h.innerHTML=shapeDayBody();return;}
+  const av=(r&&r.availability)||{};const sug=(r&&r.suggestedCurves)||{};const seed=av.energyCurves||{};
+  SHAPE={
+    workStartMin:av.workStartMin!=null?av.workStartMin:540,
+    workEndMin:av.workEndMin!=null?av.workEndMin:1080,
+    workDays:Array.isArray(av.workDays)?av.workDays.slice():[1,2,3,4,5],
+    sleepStartMin:av.sleepStartMin!=null?av.sleepStartMin:1380,
+    sleepEndMin:av.sleepEndMin!=null?av.sleepEndMin:420,
+    curves:{
+      brain:norm24(seed.brain||sug.brain),
+      muscle:norm24(seed.muscle||sug.muscle),
+      attention:norm24(seed.attention||sug.attention)
+    }
+  };
+  SHAPE_FETCHED=true;
+  const h=$('shapeDay');if(h)h.innerHTML=shapeDayBody();
+}
+/* Is this hour inside the (possibly wrap-around) sleep window? → locked at 0. */
+function isSleepHour(h){if(!SHAPE)return false;const s=Math.floor(SHAPE.sleepStartMin/60)%24,e=Math.floor(SHAPE.sleepEndMin/60)%24;if(s===e)return false;return s<e?(h>=s&&h<e):(h>=s||h<e);}
+function shapeDayBody(){
+  if(!SHAPE_FETCHED&&!SHAPE)return '';
+  if(!SHAPE)return `<section class="cal-card"><div class="cal-card-title">Shape your day</div><div class="sd-empty-sched">Relaunch LUCY so the energy model ships, then reopen this page.</div></section>`;
+  const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const days=DOW.map((d,i)=>`<button type="button" class="sd-day ${SHAPE.workDays.includes(i)?'on':''}" onclick="shapeToggleDay(${i})">${d[0]}</button>`).join('');
+  const seg=SHAPE_DIMS.map(([k,ic,lbl])=>`<button type="button" class="${SHAPE_DIM===k?'on '+k:''}" onclick="shapeSetDim('${k}')">${ic} ${lbl}</button>`).join('');
+  return `<section class="sd-card">
+    <h2>Shape your day</h2>
+    <div class="cal-card-sub" style="margin-bottom:0">Tell Lucy when you work and sleep — then draw your energy so deep work lands when you're sharp.</div>
+    <div class="sd-row">
+      <div class="sd-fld"><label>Office start</label><input type="time" id="sdWS" value="${hm(SHAPE.workStartMin)}" onchange="shapeTime('workStartMin',this.value)"/></div>
+      <div class="sd-fld"><label>Office end</label><input type="time" id="sdWE" value="${hm(SHAPE.workEndMin)}" onchange="shapeTime('workEndMin',this.value)"/></div>
+      <div class="sd-fld"><label>Sleep start</label><input type="time" id="sdSS" value="${hm(SHAPE.sleepStartMin)}" onchange="shapeTime('sleepStartMin',this.value)"/></div>
+      <div class="sd-fld"><label>Wake up</label><input type="time" id="sdSE" value="${hm(SHAPE.sleepEndMin)}" onchange="shapeTime('sleepEndMin',this.value)"/></div>
+    </div>
+    <label style="font-size:11.5px;color:var(--muted);font-weight:600">Workdays</label>
+    <div class="sd-days">${days}</div>
+    <div style="margin-top:10px"><div class="sd-seg">${seg}</div></div>
+    <div class="sd-curve-wrap" id="sdCurveWrap">${shapeCurveSvg()}</div>
+    <div class="sd-curve-hint">Drag across the bars — or tap one — to set your ${esc(SHAPE_DIM)} level through the day. Sleep hours stay locked.</div>
+    <div class="sd-actions"><button class="btn" onclick="shapeSave()">Save my day</button><button class="btn ghost sm" onclick="shapeResetDim()">Reset ${esc(SHAPE_DIM)}</button></div>
+  </section>`;
+}
+/* Shared plot geometry (one source of truth so the pointer math + drawing never drift). */
+const SD_GEO={W:560,H:150,padL:22,padR:10,padT:10,padB:20};
+function sdGeo(){const g=SD_GEO;const plotW=g.W-g.padL-g.padR,plotH=g.H-g.padT-g.padB;return{...g,plotW,plotH,bw:plotW/24,yFor:v=>g.padT+plotH*(1-clamp01(v))};}
+/* ONLY the bars + line (the part that changes on drag) — kept in a <g> so the capture
+   rect that holds pointer-capture is never destroyed mid-drag. */
+function shapeLayerSvg(){
+  if(!SHAPE)return '';
+  const curve=SHAPE.curves[SHAPE_DIM]||[];const col=shapeColor(SHAPE_DIM);
+  const G=sdGeo();const gap=Math.min(3,G.bw*0.18);const base=G.padT+G.plotH;
+  let bars='';for(let h=0;h<24;h++){const sleep=isSleepHour(h);const v=sleep?0:clamp01(curve[h]||0);const x=G.padL+h*G.bw+gap/2;const y=G.yFor(v);const bh=Math.max(0,base-y);const fill=sleep?'var(--border)':col;const op=sleep?.5:.9;
+    bars+=`<rect class="sd-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(G.bw-gap).toFixed(1)}" height="${bh.toFixed(1)}" rx="2" fill="${fill}" opacity="${op}"/>`;}
+  const linePts=[];for(let h=0;h<24;h++){if(isSleepHour(h))continue;linePts.push([G.padL+h*G.bw+G.bw/2,G.yFor(clamp01(curve[h]||0))]);}
+  const linePath=linePts.length>1?`<path d="${linePts.map((p,k)=>(k?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".55" pointer-events="none"/>`:'';
+  return bars+linePath;
+}
+/* The full interactive 24-bar energy curve: static frame + #sdLayer (bars/line) + a persistent capture rect. */
+function shapeCurveSvg(){
+  if(!SHAPE)return '';
+  const G=sdGeo();
+  // sleep band(s) — static between drags (only time inputs change them)
+  let bands='';for(let h=0;h<24;h++){if(isSleepHour(h)){bands+=`<rect class="sd-sleep-band" x="${(G.padL+h*G.bw).toFixed(1)}" y="${G.padT}" width="${G.bw.toFixed(1)}" height="${G.plotH}"/>`;}}
+  const grid=[0,.5,1].map(g=>`<line class="sd-grid-ln" x1="${G.padL}" y1="${G.yFor(g).toFixed(1)}" x2="${G.W-G.padR}" y2="${G.yFor(g).toFixed(1)}"/>`).join('');
+  let hours='';[0,6,12,18,24].forEach(h=>{const x=G.padL+Math.min(h,24)*G.bw;const lab=h===0?'12a':h===12?'12p':h===24?'12a':(h<12?h+'a':(h-12)+'p');hours+=`<text class="sd-hr-lbl" x="${x.toFixed(1)}" y="${G.H-6}" text-anchor="${h===0?'start':h===24?'end':'middle'}">${lab}</text>`;});
+  // capture rect carries the geometry + pointer handlers; rendered LAST so it sits on top.
+  const capture=`<rect id="sdCapture" x="${G.padL}" y="${G.padT}" width="${G.plotW}" height="${G.plotH}" fill="transparent"
+    onpointerdown="shapePointer(event,this,true)" onpointermove="shapePointer(event,this,false)"
+    onpointerup="shapeEnd(event,this)" onpointercancel="shapeEnd(event,this)" onpointerleave="shapeEnd(event,this)" style="cursor:crosshair;touch-action:none"/>`;
+  return `<svg class="sd-curve" viewBox="0 0 ${G.W} ${G.H}" preserveAspectRatio="xMidYMid meet">${bands}${grid}<g id="sdLayer">${shapeLayerSvg()}</g>${hours}${capture}</svg>`;
+}
+function shapeSetDim(d){SHAPE_DIM=d;const h=$('shapeDay');if(h)h.innerHTML=shapeDayBody();}
+function shapeToggleDay(i){if(!SHAPE)return;const a=SHAPE.workDays;const k=a.indexOf(i);if(k>=0)a.splice(k,1);else{a.push(i);a.sort((x,y)=>x-y);}const h=$('shapeDay');if(h)h.innerHTML=shapeDayBody();}
+function shapeTime(key,val){if(!SHAPE)return;const m=toMin(val);if(m!=null)SHAPE[key]=m;const h=$('shapeDay');if(h)h.innerHTML=shapeDayBody();}
+function shapeResetDim(){if(!SHAPE)return;SHAPE.curves[SHAPE_DIM]=new Array(24).fill(0);redrawShapeLayer();}
+/* Light update during drag: only the bars/line group, so the capture rect (and its pointer
+   capture) survive. Full SVG rebuild is only needed when sleep bands move (time inputs). */
+function redrawShapeLayer(){const g=document.getElementById('sdLayer');if(g)g.innerHTML=shapeLayerSvg();else redrawShapeCurve();}
+function redrawShapeCurve(){const w=$('sdCurveWrap');if(w)w.innerHTML=shapeCurveSvg();}
+/* Pointer → which hour + what level (top of plot = 1, bottom = 0). Locked hours ignore writes. */
+function shapeApplyPointer(e,rect){
+  if(!SHAPE)return;
+  const svg=rect.ownerSVGElement;if(!svg)return;
+  const r=svg.getBoundingClientRect();if(!r.width||!r.height)return;
+  const G=sdGeo();
+  const sx=(e.clientX-r.left)/r.width*G.W;
+  const sy=(e.clientY-r.top)/r.height*G.H;
+  let h=Math.floor((sx-G.padL)/G.bw);if(h<0)h=0;if(h>23)h=23;
+  if(isSleepHour(h))return; // locked
+  let v=1-(sy-G.padT)/G.plotH;v=clamp01(v);
+  SHAPE.curves[SHAPE_DIM][h]=v;
+  redrawShapeLayer();
+}
+function shapePointer(e,rect,down){
+  if(down){_shapeDrag=true;try{rect.setPointerCapture&&rect.setPointerCapture(e.pointerId);}catch(_){}}
+  if(!_shapeDrag)return;
+  e.preventDefault&&e.preventDefault();
+  shapeApplyPointer(e,rect);
+}
+function shapeEnd(e,rect){_shapeDrag=false;try{rect.releasePointerCapture&&e.pointerId!=null&&rect.releasePointerCapture(e.pointerId);}catch(_){}}
+async function shapeSave(){
+  if(!SHAPE)return;toast('Saving your day…');setOrbMood('think');
+  const body={workStartMin:SHAPE.workStartMin,workEndMin:SHAPE.workEndMin,workDays:SHAPE.workDays.slice(),sleepStartMin:SHAPE.sleepStartMin,sleepEndMin:SHAPE.sleepEndMin,energyCurves:{brain:SHAPE.curves.brain,muscle:SHAPE.curves.muscle,attention:SHAPE.curves.attention}};
+  try{const r=await api('/api/schedule/availability',{method:'POST',body:JSON.stringify(body)});
+    if(r&&r.ok!==false){toast('Your day is set ✓');setOrbMood('organize',1400);}
+    else{toast('Lucy needs the latest update for this');setOrbMood('confused',1400);}
+  }catch(e){toast('Could not reach the phone — try again');setOrbMood('confused',1400);}
+  await loadSchedule();
+}
 async function loadSchedule(){try{SCHED=await api('/api/schedule?days=42');}catch(e){SCHED=null;}if(curView()==='calendar')renderSchedule();}
 function renderSchedule(){const w=$('calWrap');if(!w)return;
   if(!SCHED||!SCHED.ok){w.innerHTML=empty('◷','Calendar needs the latest update','Relaunch LUCY so the scheduler ships, then reopen this page.');return;}
@@ -1552,9 +1921,13 @@ function renderSchedule(){const w=$('calWrap');if(!w)return;
   const viewBar=`<div class="cal-viewbar"><div>${[['agenda','Agenda'],['day','Day'],['week','Week'],['month','Month']].map(([v,l])=>`<button class="vchip ${CAL_VIEW===v?'on':''}" onclick="setCalView('${v}')">${l}</button>`).join('')}</div><span class="grow"></span><button class="vchip" onclick="calNav(-1)">‹</button><button class="vchip" onclick="calToday()">Today</button><button class="vchip" onclick="calNav(1)">›</button><span class="cal-range">${calRangeLabel()}</span></div>`;
   const body=CAL_VIEW==='month'?renderMonth():CAL_VIEW==='week'?renderGrid(weekDays()):CAL_VIEW==='day'?renderGrid([CAL_REF]):renderAgenda();
   const calendarCol=`<section class="cal-board"><div class="cal-board-head"><div><h2>Your timetable</h2><p>Drag Lucy-scheduled blocks in day or week view to adjust them.</p></div></div>${myDayCard()}${viewBar}${legend}<div style="margin-top:12px">${body}</div></section>`;
-  const setupCol=`<div class="cal-action-stack">${chatCard}${conf}${finder}${unschedCard}${fixedCard}${habitsCard}${avCard}</div>`;
+  const shapeCard=`<div id="shapeDay">${shapeDayBody()}</div>`;
+  const setupCol=`<div class="cal-action-stack">${chatCard}${conf}${finder}${unschedCard}${fixedCard}${habitsCard}${avCard}${shapeCard}</div>`;
   w.innerHTML=`<div class="cal-shell">${hero}<div class="cal-main"><div class="cal-left">${setupCol}</div><div class="cal-right">${calendarCol}</div></div></div>`;
   renderSchat();
+  loadShape();          // fetch the energy model on first open, then fill #shapeDay
+  if(SHAPE){const sh=$('shapeDay');if(sh)sh.innerHTML=shapeDayBody();}
+  stampStagger(w);
   return;
   }
   const av=SCHED.availability||{};
@@ -1683,12 +2056,23 @@ async function moveBlock(id,startMs){toast('Moving…');try{const r=await api('/
 function habitRow(b){return `<div class="cal-event-row habit">
     <div class="cal-event-time">${clock(b.start)} - ${clock(b.end)}</div>
     <div class="cal-event-main"><div class="cal-event-title">${esc(b.title)}</div><div class="cal-event-meta"><span class="cal-tag">habit</span></div></div></div>`;}
+/* Human "why" for a scheduling suggestion — surface both the reason chips and the rationale line. */
+function schedWhy(s){
+  const reasons=(s&&Array.isArray(s.reasons))?s.reasons.filter(Boolean):[];
+  const rationale=(s&&s.rationale&&typeof s.rationale==='string')?s.rationale.trim():'';
+  let h='';
+  if(rationale)h+=`<div class="subtle-line" style="margin-top:3px">${esc(rationale)}</div>`;
+  if(reasons.length)h+=`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px">${reasons.map(r=>`<span class="kw" style="margin:0">${esc(r)}</span>`).join('')}</div>`;
+  if(!h&&reasons.length)h=`<div class="subtle-line" style="margin-top:3px">${esc(reasons.join(', '))}</div>`;
+  return h;
+}
 async function suggestTodo(id){const area=$('planArea');if(area)area.innerHTML='<div class="subtle-line">Finding time…</div>';
   let r;try{r=await api('/api/schedule/suggest',{method:'POST',body:JSON.stringify({todoId:id})});}catch(e){if(area)area.innerHTML='<div class="subtle-line">Could not reach LUCY.</div>';return;}
   if(!r||!r.ok||!r.suggestions||!r.suggestions.length){if(area)area.innerHTML='<div class="subtle-line">No conflict-free slot found for that task in your free time.</div>';return;}
   CALSUG={meta:r.meta,suggestions:r.suggestions,todoId:id};PLAN=null;
   area.innerHTML=`<div class="subtle-line" style="margin-bottom:8px">For “${esc(r.meta.title)}” · ${r.meta.durationMin} min · ${esc(r.meta.resourceLabel||'')}</div>`+
-    r.suggestions.map((s,i)=>`<div class="card" style="padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px"><div style="flex:1"><div style="font-weight:500">${dayLabel(s.start)} · ${clock(s.start)}–${clock(s.end)}</div><div class="subtle-line" style="margin-top:2px">${esc((s.reasons||[]).join(', '))}</div></div><button class="btn sm" onclick="acceptSlot(${i})">Add</button></div>`).join('');}
+    r.suggestions.map((s,i)=>`<div class="card rise" style="padding:10px 12px;margin-bottom:6px;display:flex;align-items:flex-start;gap:10px"><div style="flex:1"><div style="font-weight:500">${dayLabel(s.start)} · ${clock(s.start)}–${clock(s.end)}</div>${schedWhy(s)}</div><button class="btn sm" onclick="acceptSlot(${i})">Add</button></div>`).join('');
+  stampStagger(area);}
 async function planDay(){const area=$('planArea');if(area)area.innerHTML='<div class="subtle-line">Planning your day around your calendar…</div>';
   let r;try{r=await api('/api/schedule/plan-day',{method:'POST',body:'{}'});}catch(e){if(area)area.innerHTML='<div class="subtle-line">Could not reach LUCY.</div>';return;}
   if(!r||!r.ok){if(area)area.innerHTML='<div class="subtle-line">Planning needs the latest update — relaunch LUCY.</div>';return;}
@@ -1748,10 +2132,10 @@ async function suggestTime(){const task=($('calTask').value||'').trim();if(!task
   if(!r||!r.ok||!r.suggestions||!r.suggestions.length){CALSUG=null;return offerRearrange(task,dur);}
   CALSUG=r;
   $('calSug').innerHTML=`<div class="subtle-line" style="margin-bottom:8px">For “${esc(r.meta.title)}” · ${r.meta.durationMin} min · ${esc(r.meta.resourceLabel||'')}</div>`+
-    r.suggestions.map((s,i)=>`<div class="card" style="padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
-      <div style="flex:1"><div style="font-weight:500">${dayLabel(s.start)} · ${clock(s.start)} – ${clock(s.end)}</div>
-        <div class="subtle-line" style="margin-top:3px">${esc((s.reasons||[]).join(', '))}</div></div>
-      <button class="btn sm" onclick="acceptSlot(${i})">Add</button></div>`).join('');}
+    r.suggestions.map((s,i)=>`<div class="card rise" style="padding:11px 13px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px">
+      <div style="flex:1"><div style="font-weight:500">${dayLabel(s.start)} · ${clock(s.start)} – ${clock(s.end)}</div>${schedWhy(s)}</div>
+      <button class="btn sm" onclick="acceptSlot(${i})">Add</button></div>`).join('');
+  stampStagger($('calSug'));}
 async function acceptSlot(i){if(!CALSUG||!CALSUG.suggestions[i])return;const s=CALSUG.suggestions[i],m=CALSUG.meta;
   if(m.recurrence){toast('Adding '+m.recurrence+'…');
     let r;try{r=await api('/api/schedule/commit-series',{method:'POST',body:JSON.stringify({title:m.title,startMs:s.start,endMs:s.end,resources:m.resources,energy:m.energy,location:m.location,recurrence:m.recurrence,todoId:CALSUG.todoId||null})});}catch(e){toast('Could not add');return;}
@@ -1943,6 +2327,8 @@ function desktopAlertsInit(){
 
 setOrbPersona(ROUTE);applyOrbAmbient();setInterval(applyOrbAmbient,60000);
 renderNav();load();desktopAlertsInit();
+/* Prime money-watch once so the Market table reflects shipped subscription detection without a visit. */
+setTimeout(()=>{try{loadMoney();}catch(e){}},1500);
 setInterval(()=>{if(ROUTE!=='ask'&&!busy)load(true);},20000);
 </script>
 </body>

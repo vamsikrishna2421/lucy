@@ -85,6 +85,21 @@ export async function mergeSuggestionIntoProject(db: SQLiteDatabase, projectId: 
   await dismissProjectSuggestion(db, suggestionName);
 }
 
+/** Tidy a long, run-on project name into a short headline + the rest as a description, by splitting on
+ *  the first strong separator (— – : | · or a spaced hyphen). Pure — used to PREFILL the rename form so
+ *  the user can one-tap "Interactive Food Bowl Builder App — Tap-to-Assemble Salad…" into a clean name +
+ *  description. Returns the name unchanged (empty description) when there's no separator. */
+export function splitHeadline(name: string): { headline: string; description: string } {
+  const s = (name || '').trim();
+  const m = /\s*[—–:|·]\s*|\s+-\s+/.exec(s);
+  if (m && m.index > 0) {
+    const headline = s.slice(0, m.index).trim();
+    const description = s.slice(m.index + m[0].length).trim();
+    if (headline) return { headline, description };
+  }
+  return { headline: s, description: '' };
+}
+
 /** Remember a dismissed suggestion so we don't keep proposing it. */
 export async function dismissProjectSuggestion(db: SQLiteDatabase, name: string): Promise<void> {
   try {

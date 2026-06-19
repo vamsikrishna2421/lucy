@@ -7,8 +7,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
-import { listProjects, createProject, deleteProject, projectActivity, type ProjectRow } from '../db/projects';
-import { deriveProjectSuggestions, dismissProjectSuggestion, mergeSuggestionIntoProject, type ProjectSuggestion } from '../processing/projectAutopilot';
+import { listProjects, createProject, deleteProject, renameProject, projectActivity, type ProjectRow } from '../db/projects';
+import { deriveProjectSuggestions, dismissProjectSuggestion, mergeSuggestionIntoProject, splitHeadline, type ProjectSuggestion } from '../processing/projectAutopilot';
 
 export function ProjectsTab() {
   const [projects, setProjects] = useState<ProjectRow[]>([]);
@@ -17,6 +17,9 @@ export function ProjectsTab() {
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
   const [open, setOpen] = useState<ProjectRow | null>(null);
+  const [editing, setEditing] = useState<ProjectRow | null>(null);
+  const [eName, setEName] = useState('');
+  const [eDesc, setEDesc] = useState('');
   const [activity, setActivity] = useState<{ tasks: number; blocks: number } | null>(null);
   const [suggestions, setSuggestions] = useState<ProjectSuggestion[]>([]);
   const [mergeFor, setMergeFor] = useState<ProjectSuggestion | null>(null);
@@ -67,6 +70,29 @@ export function ProjectsTab() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => { const db = await getDatabase(); await deleteProject(db, p.id); setOpen(null); await load(); } },
     ]);
+  };
+
+  const startEdit = (p: ProjectRow) => {
+    setEName(p.name ?? '');
+    setEDesc(p.description ?? '');
+    setEditing(p);
+  };
+  const tidyUp = () => {
+    const split = splitHeadline(eName);
+    if (!split.description) return; // nothing to move — leave fields as-is
+    setEName(split.headline);
+    setEDesc((prev) => (prev.trim() ? `${prev.trim()} — ${split.description}` : split.description));
+  };
+  const saveEdit = async () => {
+    if (!editing) return;
+    const nextName = eName.trim() || editing.name; // never save an empty name
+    const nextDesc = eDesc.trim() ? eDesc.trim() : null;
+    const db = await getDatabase();
+    await renameProject(db, editing.id, nextName, nextDesc);
+    setEditing(null);
+    await load();
+    // reflect the rename in the still-open project space sheet
+    setOpen((cur) => (cur && cur.id === editing.id ? { ...cur, name: nextName, description: nextDesc } : cur));
   };
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={LUCY_COLORS.primary} /></View>;
@@ -168,8 +194,38 @@ export function ProjectsTab() {
             <View style={styles.stat}><Text style={styles.statN}>{activity?.blocks ?? '—'}</Text><Text style={styles.statL}>scheduled</Text></View>
           </View>
           <Text style={styles.note}>Tasks and calendar blocks that mention "{open?.name}" show up here. Deeper linking (docs, notes per project) is coming.</Text>
-          {open && <TouchableOpacity style={[styles.btnGhost, { alignSelf: 'flex-start', marginTop: 14 }]} onPress={() => remove(open)}><Text style={[styles.btnGhostT, { color: LUCY_COLORS.error }]}>Delete project</Text></TouchableOpacity>}
+          {open && (
+            <View style={styles.actionRow}>
+              <TouchableOpacity style={styles.editBtn} onPress={() => startEdit(open)}><Text style={styles.editBtnT}>Edit details</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.deleteBtn} onPress={() => remove(open)}><Text style={styles.deleteBtnT}>Delete</Text></TouchableOpacity>
+            </View>
+          )}
         </View></View>
+      </Modal>
+
+      {/* Edit project name + description */}
+      <Modal visible={!!editing} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
+        <TouchableOpacity style={styles.modalBg} activeOpacity={1} onPress={() => setEditing(null)}>
+          <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
+            <View style={styles.grip} />
+            <Text style={styles.eyebrow}>EDIT PROJECT</Text>
+            <View style={styles.editHead}>
+              <Text style={styles.h}>Tidy the name</Text>
+              <TouchableOpacity style={styles.tidyBtn} onPress={tidyUp} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.tidyBtnT}>Tidy up ✨</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.sub}>Give it a short headline and move the long bits into the description. Existing tasks and blocks stay linked.</Text>
+            <Text style={styles.fieldLabel}>NAME</Text>
+            <TextInput style={styles.input} placeholder="Project name" placeholderTextColor={LUCY_COLORS.textFaint} value={eName} onChangeText={setEName} />
+            <Text style={styles.fieldLabel}>DESCRIPTION</Text>
+            <TextInput style={[styles.input, { height: 96, textAlignVertical: 'top' }]} placeholder="What this project is about (optional)" placeholderTextColor={LUCY_COLORS.textFaint} value={eDesc} onChangeText={setEDesc} multiline />
+            <View style={styles.rowEnd}>
+              <TouchableOpacity style={styles.btnGhost} onPress={() => setEditing(null)}><Text style={styles.btnGhostT}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, !eName.trim() && styles.btnDisabled]} disabled={!eName.trim()} onPress={saveEdit}><Text style={styles.btnT}>Save</Text></TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -195,7 +251,19 @@ const styles = StyleSheet.create({
   btnT: { color: '#fff', fontWeight: '800' },
   btnGhost: { borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 13, paddingHorizontal: 16, paddingVertical: 10 },
   btnGhostT: { color: LUCY_COLORS.textDark },
+  btnDisabled: { opacity: 0.4 },
   x: { color: LUCY_COLORS.textMuted, fontSize: 18 },
+  // Project space actions: edit (neutral) + delete (destructive), kept distinct
+  actionRow: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  editBtn: { flex: 1, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, backgroundColor: LUCY_COLORS.primaryMist, borderRadius: 13, paddingVertical: 12, alignItems: 'center' },
+  editBtnT: { color: LUCY_COLORS.primaryGlow, fontWeight: '800', fontSize: 14 },
+  deleteBtn: { borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 13, paddingHorizontal: 18, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
+  deleteBtnT: { color: LUCY_COLORS.error, fontWeight: '700', fontSize: 14 },
+  // Edit sheet
+  editHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  tidyBtn: { borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, backgroundColor: LUCY_COLORS.primaryMist, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 7 },
+  tidyBtnT: { color: LUCY_COLORS.primaryGlow, fontWeight: '800', fontSize: 12.5 },
+  fieldLabel: { color: LUCY_COLORS.primaryGlow, fontWeight: '900', fontSize: 10.5, letterSpacing: 1, marginTop: 16 },
   stats: { flexDirection: 'row', gap: 12, marginTop: 14 },
   stat: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 16, padding: 14, alignItems: 'center' },
   statN: { color: LUCY_COLORS.primary, fontWeight: '900', fontSize: 23 },

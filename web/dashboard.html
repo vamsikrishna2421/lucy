@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>LUCY</title>
 <style>
-/* LUCY web - premium - dashboard rev 64 (App-parity features + spring motion:
+/* LUCY web - premium - dashboard rev 65 (App-parity features + spring motion:
+   • Projects: rename/edit a project (short headline + description) via /api/projects/update — old name kept as alias so items still gather
    • Projects: project autopilot suggestions with ＋ Create / Add to existing (merge) / Dismiss, via /api/projects/suggestions + /merge; smarter dedup hides near-duplicates of existing projects
    • Tasks: commitment guardian — promises you made + things owed to you, at-risk in rose/amber, Done/Dismiss, via /api/commitments
    • Health: mood-over-time SVG graph (teal/rose, real gaps, shift caption, tap-a-day → "what was happening") via /api/mood-graph
@@ -1229,9 +1230,10 @@ function vLinks(){return `<div class="page"><section class="page-hero compact"><
   <div id="linksWrap"><div class="empty"><div class="big">○</div>Loading...</div></div></div>`;}
 function vProjects(){return `<div class="page"><section class="page-hero compact"><div class="split-toolbar"><div><div class="page-kicker">Projects</div><h1 class="page-title">Dedicated spaces for bigger threads.</h1><div class="page-sub">Keep long-running goals, moves, paperwork, and creative work from disappearing into the timeline.</div></div><span class="grow"></span><button class="btn" onclick="newProject()">＋ New project</button></div></section>
   <div id="projWrap"><div class="empty"><div class="big">○</div>Loading...</div></div></div>`;}
-let PROJ_SUGGEST=[];
+let PROJ_SUGGEST=[];let PROJ_ITEMS=[];
 async function loadProjects(){let r=null,sg=null;try{r=await api('/api/projects');}catch(e){}try{sg=await api('/api/projects/suggestions');}catch(e){}const w=$('projWrap');if(!w)return;
   const items=(r&&r.items)||[];
+  PROJ_ITEMS=items;
   PROJ_SUGGEST=(sg&&sg.suggestions)||[];
   let html='';
   if(PROJ_SUGGEST.length){
@@ -1250,7 +1252,12 @@ async function loadProjects(){let r=null,sg=null;try{r=await api('/api/projects'
   w.innerHTML=html+'<div style="display:flex;flex-direction:column;gap:8px">'+items.map(p=>`<div class="card" style="padding:13px 15px;display:flex;align-items:center;gap:12px">
     <span style="width:10px;height:10px;border-radius:50%;background:var(--accent,#FF8C42);flex:none"></span>
     <div style="flex:1"><div style="font-weight:600">${esc(p.name)}</div>${p.description?`<div class="subtle-line" style="margin-top:2px">${esc(p.description)}</div>`:''}</div>
+    <button class="btn ghost sm" onclick="editProject(${p.id})">Edit</button>
     <button class="btn ghost sm" onclick="delProject(${p.id})">✕</button></div>`).join('')+'</div>';}
+async function editProject(id){const p=(PROJ_ITEMS||[]).find(x=>x.id===id);if(!p)return;
+  const name=prompt('Project name (keep it short):',p.name);if(name===null)return;
+  const description=prompt('Description (the longer details):',p.description||'');if(description===null)return;
+  await api('/api/projects/update',{method:'POST',body:JSON.stringify({id,name:(name.trim()||p.name),description})});toast('Updated ✓');await loadProjects();}
 async function createProjSuggestion(i){const s=PROJ_SUGGEST[i];if(!s)return;await api('/api/projects',{method:'POST',body:JSON.stringify({name:s.name,description:`Auto-gathered from ${s.evidence} related notes.`})});toast('Project created ✓');await loadProjects();}
 async function mergeProjSuggestion(i,sel){const s=PROJ_SUGGEST[i];const pid=Number(sel&&sel.value);if(!s||!pid)return;await api('/api/projects/merge',{method:'POST',body:JSON.stringify({suggestion:s.name,projectId:pid})});toast('Merged ✓');await loadProjects();}
 async function dismissProjSuggestion(i){const s=PROJ_SUGGEST[i];if(!s)return;await api('/api/projects/dismiss-suggestion',{method:'POST',body:JSON.stringify({name:s.name})});await loadProjects();}

@@ -633,6 +633,14 @@ async function route(req: ParsedRequest): Promise<string> {
       await dismissProjectSuggestion(db, name);
       return json(200, { ok: true });
     }
+    if (req.method === 'POST' && req.path === '/api/projects/update') {
+      const id = Number(payload.id);
+      const name = String(payload.name ?? '').trim();
+      if (!id || !name) return json(400, { error: 'id and name required' });
+      const { renameProject } = await import('../db/projects');
+      await renameProject(db, id, name, typeof payload.description === 'string' ? payload.description : undefined);
+      return json(200, { ok: true });
+    }
 
     // ─── Intelligent Calendar ─────────────────────────────────────────────────
     if (req.method === 'GET' && req.path === '/api/schedule/availability') {

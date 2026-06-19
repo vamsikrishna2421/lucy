@@ -42,6 +42,20 @@ export async function updateProject(db: SQLiteDatabase, id: number, fields: { na
   if (fields.description !== undefined) await db.runAsync('UPDATE projects SET description = ? WHERE id = ?', (fields.description ?? '').trim() || null, id);
 }
 
+/** Rename a project (and optionally reset its description), preserving the OLD name as an alias so tasks
+ *  and calendar blocks that still mention the long original name keep gathering under it. Non-destructive. */
+export async function renameProject(db: SQLiteDatabase, id: number, name: string, description?: string | null): Promise<void> {
+  const clean = (name ?? '').trim();
+  if (!clean) return;
+  const row = await db.getFirstAsync<ProjectRow>('SELECT * FROM projects WHERE id = ?', id);
+  if (!row) return;
+  const oldName = (row.name ?? '').trim();
+  await updateProject(db, id, { name: clean, description: description === undefined ? row.description : description });
+  if (oldName && oldName.toLowerCase() !== clean.toLowerCase()) {
+    await addProjectAlias(db, id, oldName);
+  }
+}
+
 /** Merge a suggested cluster into an existing project by recording its name as an alias — so the
  *  project's gather/count absorbs it, non-destructively and reversibly (no captures are moved). */
 export async function addProjectAlias(db: SQLiteDatabase, projectId: number, alias: string): Promise<void> {

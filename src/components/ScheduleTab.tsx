@@ -2,14 +2,15 @@
  * ScheduleTab - Lucy's on-device calendar surface.
  * Visual redesign only: keeps the same scheduling engine calls and data shapes.
  */
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { getDatabase } from '../db';
 import {
   getPlan, suggestForText, suggestForTodo, commitBlock, cancelBlock, commitSeries, autoPlanDay,
-  unscheduledPendingTodos, describeResources, type DayProposal,
+  addFixedBlock, unscheduledPendingTodos, describeResources, type DayProposal,
 } from '../scheduling';
+import { classifyTask } from '../scheduling/classify';
 import { updateScheduledBlock } from '../db/schedule';
 import { getAvailability } from '../scheduling/availability';
 import { hasCalendarPermission, requestCalendarPermission } from '../processing/calendarConnector';
@@ -17,6 +18,7 @@ import { getSetting, setSetting } from '../db/settings';
 import type { AvailabilityProfile, Block, SlotSuggestion, TaskResources } from '../scheduling/types';
 import { SegmentedControl, type SegmentOption } from './SegmentedControl';
 import { ActionSheet, Toast, type SheetAction } from './ActionSheet';
+import { LucyPeek } from './LucyPeek';
 
 function clock(ms: number): string { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
 function dayKey(ms: number): number { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); }
@@ -80,6 +82,9 @@ export function ScheduleTab() {
   const [resolveSugg, setResolveSugg] = useState<{ a: SlotSuggestion[]; b: SlotSuggestion[]; loading: boolean }>({ a: [], b: [], loading: false });
   const [habitSuggest, setHabitSuggest] = useState<{ title: string; start: number; end: number; resources: TaskResources } | null>(null);
   const [learned, setLearned] = useState<Array<{ title: string; startMin: number; endMin: number; days: number[] }>>([]);
+  // Tap-to-create: a Lucy-peeking card to schedule an event on the time you tapped (day view only).
+  const [createDraft, setCreateDraft] = useState<{ startMs: number; durationMin: number; title: string } | null>(null);
+  const createAnim = useRef(new Animated.Value(0)).current; // card entrance (fade + rise + scale)
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -107,6 +112,13 @@ export function ScheduleTab() {
   useEffect(() => { void load(); }, [load]);
   // Keep the "now" line live (updates every minute) for the day/week grid.
   useEffect(() => { const t = setInterval(() => setNowMs(Date.now()), 60_000); return () => clearInterval(t); }, []);
+  // Spring the "new event" card up + fade in when it opens (native driver). Lucy handles her own peek.
+  useEffect(() => {
+    if (createDraft) {
+      createAnim.setValue(0);
+      Animated.spring(createAnim, { toValue: 1, tension: 70, friction: 12, useNativeDriver: true }).start();
+    }
+  }, [createDraft, createAnim]);
 
   const connectCalendars = async () => {
     const granted = await requestCalendarPermission();
@@ -240,6 +252,47 @@ export function ScheduleTab() {
   const HOURS: number[] = []; for (let h = 6; h < 24; h++) HOURS.push(h);
   const G_START = 6 * 60; const PXM = 0.7; const G_H = (24 * 60 - G_START) * PXM;
   const localMin = (ms: number) => { const d = new Date(ms); return d.getHours() * 60 + d.getMinutes(); };
+
+  // ── Tap an empty slot → Lucy-peeking "new event" card ───────────────────────
+  // Snap a tap's vertical offset (px from the top of the grid) to a clock time on day `k`,
+  // rounded to the nearest 30 min, then open the create card prefilled there (default 60 min).
+  const openCreateAt = (k: number, locationY: number) => {
+    const rawMin = G_START + locationY / PXM;
+    const snapped = Math.round(rawMin / 30) * 30;
+    const clamped = Math.max(G_START, Math.min(snapped, 24 * 60 - 30));
+    const start = dayKey(k) + clamped * 60000;
+    setCreateDraft({ startMs: start, durationMin: 60, title: '' });
+  };
+  // Nudge the draft start time by ±15 min, kept inside the visible grid hours.
+  const nudgeDraft = (deltaMin: number) => {
+    setCreateDraft((d) => {
+      if (!d) return d;
+      const min0 = localMin(d.startMs);
+      const min1 = Math.max(G_START, Math.min(min0 + deltaMin, 24 * 60 - 15));
+      return { ...d, startMs: dayKey(d.startMs) + min1 * 60000 };
+    });
+  };
+  const addCreatedEvent = async () => {
+    if (!createDraft) return;
+    const title = createDraft.title.trim() || 'New event';
+    const startMs = createDraft.startMs;
+    const endMs = startMs + createDraft.durationMin * 60000;
+    setBusy(true);
+    try {
+      const db = await getDatabase();
+      // Classify so the event joins the conflict/effort model. An empty resource axis set means it
+      // can run alongside other things (lunch, laundry); anything exclusive holds focus/self.
+      const meta = classifyTask(title, { durationMin: createDraft.durationMin });
+      const parallelizable = (meta.resources.axes ?? []).length === 0;
+      // The user picked this slot deliberately, so force-add it (ground truth); any overlap just
+      // shows up in the plan's overlap card for one-tap resolve — nothing scary is surfaced here.
+      await addFixedBlock(db, { title, startMs, endMs, parallelizable, location: meta.location ?? meta.resources.location ?? null });
+      setCreateDraft(null);
+      setRef(dayKey(startMs));
+      await load();
+    } finally { setBusy(false); }
+  };
+
   type Item = { id?: number; title: string; start: number; end: number; resources: Block['resources']; habit: boolean; device?: boolean };
   const habitsFor = (k: number): Item[] => {
     const dow = new Date(k).getDay();
@@ -370,9 +423,17 @@ export function ScheduleTab() {
     } catch { setResolveSugg({ a: [], b: [], loading: false }); }
   };
 
-  const DayCol = ({ k, w }: { k: number; w?: number }) => (
+  const DayCol = ({ k, w, creatable }: { k: number; w?: number; creatable?: boolean }) => (
     <View style={[styles.dayCol, { height: G_H }, w ? { width: w } : { flex: 1 }]}>
       {HOURS.map((h) => <View key={h} style={[styles.hourLine, { top: (h * 60 - G_START) * PXM }]} />)}
+      {/* Tap-to-create layer (day view): full-height, sits BEHIND the event blocks so existing events
+          win the touch. Tapping empty time opens the Lucy-peeking "new event" card at that hour. */}
+      {creatable ? (
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={(e) => openCreateAt(k, e.nativeEvent.locationY)}
+        />
+      ) : null}
       {dayItems(k).map((it, i) => {
         const top = Math.max(0, (localMin(it.start) - G_START) * PXM);
         const ht = Math.max(20, ((it.end - it.start) / 60000) * PXM);
@@ -453,7 +514,12 @@ export function ScheduleTab() {
         </View>
       );
     }
-    if (view === 'day') return <View style={styles.gridWrap}><HourLabels /><DayCol k={ref} /></View>;
+    if (view === 'day') return (
+      <>
+        <View style={styles.gridWrap}><HourLabels /><DayCol k={ref} creatable /></View>
+        <Text style={styles.gridHint}>Tap any open time to add an event</Text>
+      </>
+    );
     if (view === 'week') {
       return (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.weekScroll} contentContainerStyle={styles.weekContent}>
@@ -678,6 +744,87 @@ export function ScheduleTab() {
         </>
       ) : null}
       {busy ? <View style={styles.busy}><ActivityIndicator color={LUCY_COLORS.primary} /></View> : null}
+
+      {/* New-event card — appears when you tap an empty slot in Day view. Lucy peeks over the top edge
+          and asks; the slot you tapped is prefilled, and you pick a duration before adding. */}
+      <Modal visible={!!createDraft} transparent animationType="fade" onRequestClose={() => setCreateDraft(null)}>
+        <Pressable style={styles.createBackdrop} onPress={() => setCreateDraft(null)}>
+          {/* Outer wrapper keeps overflow visible so Lucy isn't clipped; tap inside is swallowed. */}
+          <Pressable style={styles.createOuter} onPress={() => { /* swallow */ }}>
+            <Animated.View
+              style={{
+                opacity: createAnim,
+                transform: [
+                  { translateY: createAnim.interpolate({ inputRange: [0, 1], outputRange: [22, 0] }) },
+                  { scale: createAnim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) },
+                ],
+              }}
+            >
+              <View style={styles.createCard}>
+                {/* LUCY peeks over the top edge of the pop-up — this is exactly where she belongs.
+                    Re-keyed per opened slot so her pop-up entrance replays each time. */}
+                <LucyPeek key={`peek-create-${createDraft?.startMs ?? 0}`} />
+                <Text style={styles.createEyebrow}>New event</Text>
+                <Text style={styles.createPrompt}>When works for you?</Text>
+
+                <TextInput
+                  style={styles.createTitleInput}
+                  value={createDraft?.title ?? ''}
+                  onChangeText={(t) => setCreateDraft((d) => (d ? { ...d, title: t } : d))}
+                  placeholder="What's the event?"
+                  placeholderTextColor={LUCY_COLORS.textFaint}
+                  autoFocus
+                  returnKeyType="done"
+                  onSubmitEditing={addCreatedEvent}
+                />
+
+                <Text style={styles.createSection}>Starts</Text>
+                <View style={styles.createStartRow}>
+                  <TouchableOpacity style={styles.stepBtn} activeOpacity={0.7} onPress={() => nudgeDraft(-15)} hitSlop={8}>
+                    <Text style={styles.stepBtnT}>−15m</Text>
+                  </TouchableOpacity>
+                  <View style={styles.startDisplay}>
+                    <Text style={styles.startDay}>{createDraft ? dayLabel(createDraft.startMs) : ''}</Text>
+                    <Text style={styles.startTime}>{createDraft ? clock(createDraft.startMs) : ''}</Text>
+                  </View>
+                  <TouchableOpacity style={styles.stepBtn} activeOpacity={0.7} onPress={() => nudgeDraft(15)} hitSlop={8}>
+                    <Text style={styles.stepBtnT}>+15m</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.createSection}>How long?</Text>
+                <View style={styles.eventChipRow}>
+                  {[30, 60, 90, 120].map((m) => {
+                    const on = createDraft?.durationMin === m;
+                    return (
+                      <TouchableOpacity
+                        key={m}
+                        style={[styles.durChip, on && styles.durChipOn]}
+                        activeOpacity={0.8}
+                        onPress={() => setCreateDraft((d) => (d ? { ...d, durationMin: m } : d))}
+                      >
+                        <Text style={[styles.durChipT, on && styles.durChipTOn]}>{m < 60 ? `${m} min` : m === 60 ? '1 hr' : `${m / 60} hr`}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={styles.createEndHint}>
+                  {createDraft ? `Ends ${clock(createDraft.startMs + createDraft.durationMin * 60000)}` : ''}
+                </Text>
+
+                <View style={styles.eventActions}>
+                  <TouchableOpacity style={styles.sheetSecondary} activeOpacity={0.7} onPress={() => setCreateDraft(null)}>
+                    <Text style={styles.sheetSecondaryT}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.eventDone} activeOpacity={0.85} onPress={addCreatedEvent} disabled={busy}>
+                    <Text style={styles.eventDoneT}>Add to calendar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </Animated.View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Event detail card — rename / recurring / reschedule / delete */}
       <Modal visible={!!detail} transparent animationType="slide" onRequestClose={() => setDetail(null)}>
@@ -1016,4 +1163,31 @@ const styles = StyleSheet.create({
   sheetSecondary: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 15, borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surfaceRaised },
   sheetSecondaryFull: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 15, borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surfaceRaised },
   sheetSecondaryT: { color: LUCY_COLORS.textMuted, fontWeight: '800', fontSize: 14.5 },
+
+  // ── Tap-to-create: hint + Lucy-peeking "new event" card ──────────────────────
+  gridHint: { color: LUCY_COLORS.textSubtle, fontSize: 11.5, fontWeight: '700', textAlign: 'center', marginTop: 10, letterSpacing: 0.2 },
+  // Centered (not a bottom sheet) so Lucy can peek over the top edge; dimmed, tap-to-dismiss backdrop.
+  createBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.62)', alignItems: 'center', justifyContent: 'center', padding: 22 },
+  // Outer wrapper keeps overflow visible (Lucy hangs above the card) + reserves headroom for her.
+  createOuter: { width: '100%', maxWidth: 420, paddingTop: 34, overflow: 'visible' },
+  createCard: {
+    backgroundColor: LUCY_COLORS.surfaceSheet, borderRadius: 28, paddingHorizontal: 22, paddingTop: 16, paddingBottom: 22,
+    borderWidth: 1, borderColor: LUCY_COLORS.border, overflow: 'visible',
+    shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.22, shadowRadius: 28, elevation: 18,
+  },
+  createEyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
+  createPrompt: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '900', lineHeight: 26, marginTop: 4, marginBottom: 16 },
+  createTitleInput: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '800' },
+  createSection: { color: LUCY_COLORS.textSubtle, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase', marginTop: 20, marginBottom: 10 },
+  createStartRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stepBtn: { minHeight: 44, minWidth: 60, alignItems: 'center', justifyContent: 'center', backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 14, paddingHorizontal: 12 },
+  stepBtnT: { color: LUCY_COLORS.textDark, fontSize: 13.5, fontWeight: '900' },
+  startDisplay: { flex: 1, alignItems: 'center', backgroundColor: LUCY_COLORS.primaryMist, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, borderRadius: 14, paddingVertical: 9 },
+  startDay: { color: LUCY_COLORS.primaryGlow, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.4, textTransform: 'uppercase' },
+  startTime: { color: LUCY_COLORS.textDark, fontSize: 19, fontWeight: '900', marginTop: 2 },
+  durChip: { minHeight: 44, justifyContent: 'center', backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11 },
+  durChipOn: { backgroundColor: LUCY_COLORS.primaryMist, borderColor: LUCY_COLORS.primary },
+  durChipT: { color: LUCY_COLORS.textMuted, fontSize: 13.5, fontWeight: '800' },
+  durChipTOn: { color: LUCY_COLORS.primaryGlow, fontWeight: '900' },
+  createEndHint: { color: LUCY_COLORS.textSubtle, fontSize: 12, fontWeight: '700', marginTop: 10 },
 });

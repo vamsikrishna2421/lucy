@@ -31,6 +31,7 @@ export interface SchedTaskMeta {
   recurrence?: 'daily' | 'weekdays' | 'weekly' | null; // "every day", "every weekday", "every week"
   splittable?: boolean;
   confidence?: number;      // 0-1 classification confidence (low ⇒ treated conservatively)
+  domain?: 'office' | 'personal' | null; // work vs life — keeps personal tasks out of office hours
 }
 
 export type BlockSource = 'calendar' | 'scheduled' | 'protected' | 'sleep';
@@ -67,6 +68,9 @@ export interface AvailabilityProfile {
   protectedWindows: DailyWindow[]; // includes suggested healthy-habit windows (walk/lunch/gym/dinner)
   peakWindows: DailyWindow[]; // high-energy (deep work fits best here)
   lowWindows: DailyWindow[];  // low-energy dips (the "afternoon crash") — keep deep work OUT, light work OK
+  // User-shaped capacity curves — 24 hourly levels (0..1) per effort. When set, these OVERRIDE the
+  // learned peak/dip for the time-varying threshold (everyone's lifestyle differs). null ⇒ use learned.
+  energyCurves?: { brain: number[]; muscle: number[]; attention: number[] } | null;
   inferred: boolean;
   confirmedAt: string | null;
 }

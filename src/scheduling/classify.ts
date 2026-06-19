@@ -30,6 +30,19 @@ function detectLocation(text: string): string | null {
   return null;
 }
 
+// Work vs life signals — used to keep personal tasks out of office hours (and vice-versa). Generic so
+// it isn't tied to one person's projects; returns null (unconstrained) when there's no clear signal.
+const OFFICE_RE = /\b(meeting|standup|stand-up|sync|1:1|one on one|client|stakeholder|deploy|deployment|release|pipeline|prod|staging|qa|jira|ticket|sprint|backlog|pull request|\bpr\b|merge|code review|deck|presentation|report|spreadsheet|manager|colleague|team|office|work|boss|interview|onboarding|kpi|okrs?|standup|api|database|\bsql\b|server|config|migration|dbt|snowflake|databricks|alation|tidal|ad group|genie|poc)\b/i;
+const PERSONAL_RE = /\b(gym|workout|exercise|run|yoga|grocery|groceries|family|mom|dad|mum|wife|husband|partner|kids?|friend|doctor|dentist|clinic|home|clean|laundry|cook|dinner|lunch with|movie|youtube|netflix|date night|birthday|anniversary|rent|lease|move|moving|vacation|trip|hobby|church|temple|personal|haircut|shopping|pharmacy)\b/i;
+
+function detectDomain(text: string): 'office' | 'personal' | null {
+  const office = OFFICE_RE.test(text);
+  const personal = PERSONAL_RE.test(text);
+  if (office && !personal) return 'office';
+  if (personal && !office) return 'personal';
+  return null; // ambiguous or unknown → leave unconstrained
+}
+
 /** Parse an explicit duration ("for 2 hours", "30 min", "45m", "1.5h"). */
 export function parseDuration(text: string): number | null {
   let m = /\b(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)\b/i.exec(text);
@@ -152,5 +165,6 @@ export function classifyTask(text: string, opts?: { durationMin?: number; deadli
     recurrence: detectRecurrence(lower),
     splittable: isDeep && durationMin >= 90,
     confidence,
+    domain: detectDomain(lower),
   };
 }

@@ -47,6 +47,21 @@ ok('call classified voice', (() => { const m = classifyTask('call the dentist');
 ok('gym classified location', (() => { const m = classifyTask('go to the gym'); return m.resources.location === 'gym'; })());
 ok('unknown defaults conservative', (() => { const m = classifyTask('xyzzy plugh'); return m.resources.axes.includes('focus') && m.resources.axes.includes('self'); })());
 
+// ── office/personal domain ───────────────────────────────────────────────────────
+ok('domain: standup is office', classifyTask('standup with the team').domain === 'office');
+ok('domain: gym is personal', classifyTask('go to the gym').domain === 'personal');
+ok('domain: ambiguous is null', classifyTask('xyzzy plugh').domain == null);
+// A personal task must NOT land inside office hours on a workday; an office task must stay in them.
+const wed = (() => { let x = startOfLocalDay(Date.now()); while (new Date(x).getDay() !== 3) x += 24 * 60 * MIN; return x; })();
+const wedNow = wed - 24 * 60 * MIN;
+const hardW = nonWorkingBlocks(AV, wedNow, wed + 2 * 24 * 60 * MIN);
+const onWed = (s: { start: number }) => startOfLocalDay(s.start) === wed;
+const lmOf = (s: { start: number }) => new Date(s.start).getHours() * 60 + new Date(s.start).getMinutes();
+const gymSl = findSlots({ meta: { ...classifyTask('go to the gym'), durationMin: 60 }, hardBlocks: hardW, resourceBlocks: [], availability: AV, now: wedNow });
+ok('personal task avoids office hours on a workday', gymSl.filter(onWed).every((s) => lmOf(s) < AV.workStartMin || lmOf(s) >= AV.workEndMin));
+const deckSl = findSlots({ meta: { ...classifyTask('prepare the standup deck for the team'), durationMin: 60 }, hardBlocks: hardW, resourceBlocks: [], availability: AV, now: wedNow });
+ok('office task stays in office hours', deckSl.filter(onWed).length > 0 && deckSl.filter(onWed).every((s) => lmOf(s) >= AV.workStartMin && lmOf(s) < AV.workEndMin));
+
 // ── findSlots respects the invariant ────────────────────────────────────────────
 const day = startOfLocalDay(Date.now()) + 24 * 60 * MIN; // tomorrow midnight
 const now = startOfLocalDay(Date.now()) + 8 * 60 * MIN;   // today 08:00 baseline

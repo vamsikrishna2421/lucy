@@ -61,5 +61,13 @@ const stackPeak = scoreLoad({ brain: 0.9, muscle: 0.1, attention: 0.85 }, 0, HOU
 const stackDip = scoreLoad({ brain: 0.9, muscle: 0.1, attention: 0.85 }, 0, HOUR, priorDeep, capacityAt(AV, at(16)));
 ok('dip penalizes deep work more than peak', stackDip.delta < stackPeak.delta);
 
+// ── user-shaped custom curves override the learned peak/dip ───────────────────────
+const flat = new Array(24).fill(0.5);
+const customLow = [...flat]; customLow[8] = 0.2; // brain dips hard at 8am in the user's own curve
+const AV2: AvailabilityProfile = { ...AV, energyCurves: { brain: customLow, muscle: flat, attention: flat } };
+ok('custom curve used at 8am', Math.abs(capacityAt(AV2, at(8)).brain - 0.2) < 1e-9);
+ok('custom curve used midday', Math.abs(capacityAt(AV2, at(12)).brain - 0.5) < 1e-9);
+ok('sleep still zero with custom curve', capacityAt(AV2, at(3)).brain === 0);
+
 console.log(`\nload model: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

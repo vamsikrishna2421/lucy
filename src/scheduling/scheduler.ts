@@ -54,7 +54,9 @@ export function findSlots(input: FindSlotsInput): SlotSuggestion[] {
   // Allowed time-of-day window. Work hours bound WORK tasks on WORKDAYS; personal/evening/
   // explicitly-timed/passive tasks (and ANY task on a non-workday/weekend) may use the awake window.
   const nightEnd = av.sleepStartMin > av.sleepEndMin ? av.sleepStartMin : 22 * 60;
-  const personal = meta.earliestMin != null || meta.latestMin != null || meta.timeWindow === 'evening' || meta.energy === 'passive';
+  // Personal tasks (incl. explicitly-evening/timed/passive) use the awake window; office tasks stay in
+  // office hours. Domain is the explicit signal; the older heuristics remain for unclassified tasks.
+  const personal = meta.domain === 'personal' || meta.earliestMin != null || meta.latestMin != null || meta.timeWindow === 'evening' || meta.energy === 'passive';
   const workDays = av.workDays && av.workDays.length ? av.workDays : [1, 2, 3, 4, 5];
 
   // Start search at the next STEP boundary after lead.
@@ -71,14 +73,19 @@ export function findSlots(input: FindSlotsInput): SlotSuggestion[] {
 
     // Per-day window: weekends + personal tasks use the awake window; workdays bound work tasks.
     const isWorkday = workDays.includes(localDow(s));
+    // Office tasks belong in office hours on workdays — never on weekends.
+    if (meta.domain === 'office' && !isWorkday) continue;
     let winStart = (personal || !isWorkday) ? av.sleepEndMin : av.workStartMin;
     let winEnd = (personal || !isWorkday) ? nightEnd : av.workEndMin;
+    if (meta.domain === 'office' && isWorkday) { winStart = av.workStartMin; winEnd = av.workEndMin; } // keep work in work hours
     if (meta.earliestMin != null) winStart = Math.max(winStart, meta.earliestMin);
     if (meta.latestMin != null) winEnd = Math.min(winEnd, meta.latestMin + Math.max(5, meta.durationMin));
 
     const lm = localMinutes(s);
     const lmEnd = localMinutes(e - 1);
     if (lm < winStart || lmEnd >= winEnd) continue;
+    // Don't let personal things intercept office hours on a workday.
+    if (meta.domain === 'personal' && isWorkday && lm < av.workEndMin && lmEnd >= av.workStartMin) continue;
     if (startOfLocalDay(s) !== startOfLocalDay(e - 1)) continue; // no midnight spanning
     if (!inWindow(s, meta.timeWindow ?? null, av)) continue;
     if (meta.latestMin != null && lm > meta.latestMin) continue; // start must be before the ceiling

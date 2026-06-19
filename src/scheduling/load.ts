@@ -38,9 +38,38 @@ export const BASE_CAPACITY: TaskLoad = { brain: BRAIN_CAP, muscle: MUSCLE_CAP, a
  */
 export function capacityAt(av: AvailabilityProfile, ms: number): TaskLoad {
   if (isAsleepAt(av, ms)) return { brain: 0, muscle: 0, attention: 0 };
+  // A user-shaped curve (per effort, 24 hourly levels) wins over the learned peak/dip.
+  const cur = av.energyCurves;
+  if (cur && cur.brain?.length === 24 && cur.muscle?.length === 24 && cur.attention?.length === 24) {
+    const h = new Date(ms).getHours();
+    const clamp = (v: number) => (Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : BRAIN_CAP);
+    return { brain: clamp(cur.brain[h]), muscle: clamp(cur.muscle[h]), attention: clamp(cur.attention[h]) };
+  }
   if (isInPeakWindow(av, ms, ms)) return { brain: 0.85, muscle: 0.65, attention: 0.9 };
   if (isInLowWindow(av, ms, ms)) return { brain: 0.4, muscle: 0.55, attention: 0.5 };
   return BASE_CAPACITY;
+}
+
+/**
+ * A sensible STARTING set of 3 curves (24 hourly levels each) for the user to tweak in the editor —
+ * seeded from what LUCY already knows: sleep → 0, learned peak → high, learned dip → low, else baseline.
+ * Muscle skews a touch later in the day than brain. Lets the editor open from inference, not a flat line.
+ */
+export function suggestedEnergyCurves(av: AvailabilityProfile): { brain: number[]; muscle: number[]; attention: number[] } {
+  const brain: number[] = [], muscle: number[] = [], attention: number[] = [];
+  for (let h = 0; h < 24; h++) {
+    const mid = new Date(); mid.setHours(h, 30, 0, 0);
+    const ms = mid.getTime();
+    if (isAsleepAt(av, ms)) { brain.push(0); muscle.push(0); attention.push(0); continue; }
+    const peak = isInPeakWindow(av, ms, ms);
+    const low = isInLowWindow(av, ms, ms);
+    const base = peak ? 0.85 : low ? 0.4 : 0.6;
+    brain.push(base);
+    attention.push(peak ? 0.9 : low ? 0.5 : 0.65);
+    // Muscle is flatter and a bit stronger midday/evening (less tied to the mental peak).
+    muscle.push(h >= 16 && h <= 20 ? Math.max(base, 0.7) : Math.max(0.45, base - 0.1));
+  }
+  return { brain, muscle, attention };
 }
 
 const BODY_RE = /\b(gym|work ?out|workout|exercise|run|running|jog|jogging|yoga|lift|lifting|weights?|sport|swim|swimming|cycl(e|ing)|bike|biking|hike|hiking|walk|pilates|cardio|stretch|basketball|soccer|football|tennis|climb|dance)\b/i;

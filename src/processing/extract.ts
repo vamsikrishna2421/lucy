@@ -281,12 +281,19 @@ async function persistExtraction(
     for (const fu of extraction.follow_ups) {
       await insertFollowUp(db, capture.id, fu.assignee, fu.action, extraction.privacy_level);
     }
-    // Persist mood entry
-    if (extraction.mood) {
-      await db.runAsync(
-        'INSERT INTO mood_entries (capture_id, tone, energy) VALUES (?, ?, ?)',
-        capture.id, extraction.mood.tone, extraction.mood.energy,
-      );
+    // Persist mood entry — EVERY capture contributes a mood point. When the LLM returned only the bare
+    // 'neutral/medium' default, run the free on-device sentiment so a real feeling isn't lost.
+    {
+      let tone = extraction.mood?.tone ?? 'neutral';
+      let energy = extraction.mood?.energy ?? 'medium';
+      try {
+        const { analyzeSentiment, isDefaultMood } = await import('./sentiment');
+        if (isDefaultMood(extraction.mood)) {
+          const s = analyzeSentiment(capture.raw_transcript ?? '');
+          if (s.confidence > 0) { tone = s.tone; energy = s.energy; }
+        }
+      } catch { /* heuristic is best-effort */ }
+      await db.runAsync('INSERT INTO mood_entries (capture_id, tone, energy) VALUES (?, ?, ?)', capture.id, tone, energy);
     }
     for (const clarification of extraction.clarifications) {
       await insertContextRequest(
@@ -642,6 +649,15 @@ export async function processQueue(onChange?: () => void, maxCaptures = Number.P
         // Structural failures (no JSON), billing/quota, or exhausted retries: never strand the user
         // on a scary "tap to retry" badge. Keep their words as a plain note instead.
         await saveCaptureAsPlainNote(db, capture.id, capture.raw_transcript ?? '');
+        // Even a degraded note still carries a feeling — log on-device sentiment so the mood graph
+        // stays densely sampled (this is the path that previously contributed nothing).
+        try {
+          const { analyzeSentiment } = await import('./sentiment');
+          const s = analyzeSentiment(capture.raw_transcript ?? '');
+          if (s.confidence > 0) {
+            await db.runAsync('INSERT INTO mood_entries (capture_id, tone, energy) VALUES (?, ?, ?)', capture.id, s.tone, s.energy);
+          }
+        } catch { /* non-critical */ }
       }
       void logError(`processQueue#${capture.id}`, error, db);
     }

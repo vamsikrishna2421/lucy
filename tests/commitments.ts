@@ -1,5 +1,5 @@
 /* Pure tests for the commitment/deadline extractor. Run: npx tsx tests/commitments.ts */
-import { extractCommitments, atRiskCommitments, resolveCommitmentDue } from '../src/processing/commitments';
+import { extractCommitments, atRiskCommitments, resolveCommitmentDue, formatCommitmentLine } from '../src/processing/commitments';
 import { normalizeExtraction } from '../src/processing/schema';
 
 let pass = 0, fail = 0;
@@ -61,6 +61,27 @@ ok('schema maps counterparty + direction', ext.commitments[0].counterparty === '
 ok('schema empty counterparty → null', ext.commitments[2].counterparty === null);
 ok('schema bad direction → i-owe', ext.commitments[2].direction === 'i-owe');
 ok('schema missing commitments → []', normalizeExtraction({}).commitments.length === 0);
+
+// ── formatCommitmentLine (display) — the IMG_0912/0913 bugs ───────────────────────
+{
+  const nowD = new Date(2026, 5, 20, 12, 0, 0).getTime();
+  const inDays = (d: number) => new Date(nowD + d * 86400000).toISOString();
+  ok('no double "to X" + clean "in N days" (not "by in N days")',
+    formatCommitmentLine({ action: 'send the deck to Raghavendra', counterparty: 'Raghavendra', due_at: inDays(6), direction: 'i-owe' }, nowD)
+      === "You said you'd send the deck to Raghavendra in 6 days.");
+  ok('strips a baked-in "by Friday" from the action',
+    formatCommitmentLine({ action: 'send the deck by Friday', counterparty: null, due_at: inDays(1), direction: 'i-owe' }, nowD)
+      === "You said you'd send the deck tomorrow.");
+  ok('overdue reads naturally',
+    formatCommitmentLine({ action: 'pay rent', counterparty: null, due_at: inDays(-1), direction: 'i-owe' }, nowD)
+      === 'You promised to pay rent — that was due yesterday.');
+  ok('owed-to-me reads naturally',
+    formatCommitmentLine({ action: 'send the invoice', counterparty: 'Priya', due_at: inDays(6), direction: 'owed-to-me' }, nowD)
+      === "You're waiting on Priya to send the invoice (due in 6 days).");
+  ok('no date → no dangling "by"',
+    formatCommitmentLine({ action: 'call the bank', counterparty: null, due_at: null, direction: 'i-owe' }, nowD)
+      === "You said you'd call the bank.");
+}
 
 console.log(`\ncommitments: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

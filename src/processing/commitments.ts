@@ -148,3 +148,72 @@ export function atRiskCommitments(commitments: Commitment[], now = Date.now(), w
     return Number.isFinite(due) && due <= now + withinMs;
   });
 }
+
+// ── Display (pure — used by the guardian surface + nudges; lives here so it's unit-testable) ──────────
+const DISPLAY_DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface CommitmentDisplay {
+  action: string;
+  counterparty: string | null;
+  due_at: string | null;
+  direction: CommitmentDirection;
+}
+
+function isPastISO(dueISO: string | null, now: number): boolean {
+  const due = Date.parse(dueISO ?? '');
+  return Number.isFinite(due) && due < now;
+}
+
+/** "today" / "tomorrow" / "yesterday" / "in 3 days" / "3 days ago" / "on Jun 24" — a phrase that reads
+ *  naturally on its own (no leading "by", so we never produce "by in 6 days"). */
+function relativeDue(dueISO: string | null, now: number): string {
+  if (!dueISO) return '';
+  const due = Date.parse(dueISO);
+  if (!Number.isFinite(due)) return '';
+  const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
+  const startDue = new Date(due); startDue.setHours(0, 0, 0, 0);
+  const diff = Math.round((startDue.getTime() - startToday.getTime()) / DISPLAY_DAY_MS);
+  if (diff === 0) return 'today';
+  if (diff === 1) return 'tomorrow';
+  if (diff === -1) return 'yesterday';
+  if (diff > 1 && diff <= 7) return `in ${diff} days`;
+  if (diff < -1 && diff >= -7) return `${-diff} days ago`;
+  return `on ${new Date(due).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+}
+
+const TEMPORAL_TAIL = /\s*\b(?:by|before|due)\s+(?:next |this |the |end of |eod\b)?(?:mon|tue|wed|thu|fri|sat|sun|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|today|tonight|tomorrow|\d)[^,.;]*$/i;
+function escRe(s: string): string { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+/** Clean a stored action for display: drop a baked-in trailing date ("…by Friday") and a duplicate
+ *  trailing "to <counterparty>" (the LLM sometimes includes both) so we never render "to X to X". */
+function sanitizeAction(action: string, counterparty: string | null): string {
+  let a = (action || '').trim();
+  a = a.replace(TEMPORAL_TAIL, '').trim() || a;
+  if (counterparty) {
+    a = a.replace(new RegExp(`\\s*\\bto\\s+${escRe(counterparty)}\\s*$`, 'i'), '').trim() || a;
+  }
+  return a || 'follow up';
+}
+
+/** One warm, human sentence for a commitment. */
+export function formatCommitmentLine(c: CommitmentDisplay, now = Date.now()): string {
+  const rel = relativeDue(c.due_at, now);
+  const overdue = isPastISO(c.due_at, now);
+  const cp = c.counterparty?.trim() || null;
+  const action = sanitizeAction(c.action || '', cp);
+
+  if (c.direction === 'i-owe') {
+    const who = cp ? ` to ${cp}` : '';
+    if (!rel) return `You said you'd ${action}${who}.`;
+    return overdue
+      ? `You promised to ${action}${who} — that was due ${rel}.`
+      : `You said you'd ${action}${who} ${rel}.`;
+  }
+  const who = cp ?? 'someone';
+  const act = action.replace(/^waiting for\s*/i, '').trim();
+  const base = act ? `${who} to ${act}` : who;
+  if (!rel) return `You're waiting on ${base}.`;
+  return overdue
+    ? `You're still waiting on ${base} — that was due ${rel}.`
+    : `You're waiting on ${base} (due ${rel}).`;
+}

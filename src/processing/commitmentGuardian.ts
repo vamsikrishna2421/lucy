@@ -11,55 +11,10 @@ import {
   markCommitmentNudged,
 } from '../db/commitments';
 import { sendGuardianNotification } from './notifications';
+import { formatCommitmentLine } from './commitments';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function isPast(dueISO: string | null, now: number): boolean {
-  const due = Date.parse(dueISO ?? '');
-  return Number.isFinite(due) && due < now;
-}
-
-/** "today" / "tomorrow" / "yesterday" / "in 3 days" / "3 days ago" / "Jun 24". */
-function relativeDue(dueISO: string | null, now: number): string {
-  if (!dueISO) return '';
-  const due = Date.parse(dueISO);
-  if (!Number.isFinite(due)) return '';
-  const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
-  const startDue = new Date(due); startDue.setHours(0, 0, 0, 0);
-  const diffDays = Math.round((startDue.getTime() - startToday.getTime()) / DAY_MS);
-  if (diffDays === 0) return 'today';
-  if (diffDays === 1) return 'tomorrow';
-  if (diffDays === -1) return 'yesterday';
-  if (diffDays > 1 && diffDays <= 7) return `in ${diffDays} days`;
-  if (diffDays < -1 && diffDays >= -7) return `${-diffDays} days ago`;
-  return new Date(due).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-type CommitmentLike = Pick<CommitmentRow, 'action' | 'counterparty' | 'due_at' | 'direction'>;
-
-/** One warm, human sentence for a commitment. */
-export function formatCommitmentLine(c: CommitmentLike, now = Date.now()): string {
-  const rel = relativeDue(c.due_at, now);
-  const overdue = isPast(c.due_at, now);
-  const action = (c.action || '').trim() || 'follow up';
-
-  if (c.direction === 'i-owe') {
-    const who = c.counterparty ? ` to ${c.counterparty}` : '';
-    if (!rel) return `You said you'd ${action}${who}.`;
-    return overdue
-      ? `You promised to ${action}${who} — that was due ${rel}.`
-      : `You said you'd ${action}${who} by ${rel}.`;
-  }
-
-  // owed-to-me
-  const who = c.counterparty ?? 'someone';
-  const act = action.replace(/^waiting for\s*/i, '').trim();
-  const base = act ? `${who} to ${act}` : who;
-  if (!rel) return `You're waiting on ${base}.`;
-  return overdue
-    ? `You're still waiting on ${base} — that was due ${rel}.`
-    : `You're waiting on ${base} (due ${rel}).`;
-}
+// Re-exported so existing importers (morning brief, web server, tools) keep working unchanged.
+export { formatCommitmentLine };
 
 /** Prose + data for the `commitments` Ask tool. */
 export async function buildCommitmentSummary(db: SQLiteDatabase, now = Date.now()): Promise<{ prose: string; data: { commitments: CommitmentRow[]; atRisk: CommitmentRow[] } }> {

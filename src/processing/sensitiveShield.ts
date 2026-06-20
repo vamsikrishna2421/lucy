@@ -229,6 +229,7 @@ export function rehydrateExtraction(r: ExtractionResult, map: ShieldEntry[]): Ex
     })),
     open_loops: arr(r.open_loops).map((o) => ({ ...o, description: R(o.description) })),
     follow_ups: arr(r.follow_ups).map((f) => ({ ...f, assignee: R(f.assignee), action: R(f.action) })),
+    commitments: arr(r.commitments).map((c) => ({ ...c, action: R(c.action), counterparty: c.counterparty ? R(c.counterparty) : c.counterparty })),
     detected_action: r.detected_action
       ? {
           ...r.detected_action,

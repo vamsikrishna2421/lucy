@@ -288,17 +288,23 @@ async function persistExtraction(
       const { extractCommitments, resolveCommitmentDue } = await import('./commitments');
       const { insertCommitment } = await import('../db/commitments');
       const baseNow = Date.parse(capture.created_at ?? '') || Date.now();
-      for (const lc of extraction.commitments ?? []) {
-        await insertCommitment(db, capture.id, {
-          text: lc.action,
-          action: lc.action,
-          counterparty: lc.counterparty,
-          dueISO: resolveCommitmentDue(lc.due, baseNow),
-          direction: lc.direction,
-        }, extraction.privacy_level);
-      }
-      for (const c of extractCommitments(capture.raw_transcript ?? '', baseNow)) {
-        await insertCommitment(db, capture.id, c, extraction.privacy_level);
+      const llmCommitments = extraction.commitments ?? [];
+      if (llmCommitments.length > 0) {
+        // Prefer the LLM-typed commitments — they're split per-clause and already token-restored.
+        for (const lc of llmCommitments) {
+          await insertCommitment(db, capture.id, {
+            text: lc.action,
+            action: lc.action,
+            counterparty: lc.counterparty,
+            dueISO: resolveCommitmentDue(lc.due, baseNow),
+            direction: lc.direction,
+          }, extraction.privacy_level);
+        }
+      } else {
+        // Offline / on-device fallback: the regex extractor over the raw (un-shielded) text.
+        for (const c of extractCommitments(capture.raw_transcript ?? '', baseNow)) {
+          await insertCommitment(db, capture.id, c, extraction.privacy_level);
+        }
       }
     } catch { /* non-critical — commitment tracking never blocks a capture */ }
     // Move/lease autopilot: if this capture signals a move, remember it so the Projects tab can offer

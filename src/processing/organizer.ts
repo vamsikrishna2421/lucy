@@ -1,189 +1,19 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { listAnsweredContextRequests } from '../db/contextRequests';
 import { updateCaptureStructuredText } from '../db/captures';
-import { listLatestExtractionEvidence, type ExtractionEvidenceRow } from '../db/extractions';
-import {
-  replaceKnowledgeProjection,
-  type KnowledgeConfidence,
-  type KnowledgeConnectionDraft,
-  type KnowledgeEntityDraft,
-  type KnowledgeInsightDraft,
-} from '../db/knowledge';
+import { listLatestExtractionEvidence } from '../db/extractions';
+import { replaceKnowledgeProjection, type KnowledgeInsightDraft } from '../db/knowledge';
 import { listRecognizedQuestionIntentSummaries } from '../db/questions';
-import type { ExtractionResult, PrivacyLevel } from '../types/extraction';
+import type { ExtractionResult } from '../types/extraction';
 import { formatStructuredMemory } from './structuredMemory';
 import { sendGuardianNotification } from './notifications';
+import { confidenceFromEvidence, deriveKnowledgeProjection } from './knowledgeProjection';
 
-interface EntityAccumulator {
-  key: string;
-  entityType: string;
-  name: string;
-  captureIds: Set<number>;
-  latestCaptureId: number;
-  privacyLevel: PrivacyLevel;
-}
+// The pure knowledge-graph projection (entities + honest co-occurrence connections) lives in
+// ./knowledgeProjection (no DB/native imports, unit-tested in tests/organizer.ts). This module wires it
+// into the database + the daily organize pass.
 
-interface ConnectionAccumulator {
-  sourceKey: string;
-  relation: string;
-  targetKey: string;
-  captureIds: Set<number>;
-  latestCaptureId: number;
-  privacyLevel: PrivacyLevel;
-}
-
-const typeOrder: Record<string, number> = { project: 0, area: 1, person: 2, interest: 3 };
-
-function normalizeEntityName(value: string): string {
-  return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
-}
-
-function privacyWeight(level: PrivacyLevel): number {
-  return level === 'private' ? 2 : level === 'local' ? 1 : 0;
-}
-
-function mostRestricted(left: PrivacyLevel, right: PrivacyLevel): PrivacyLevel {
-  return privacyWeight(left) >= privacyWeight(right) ? left : right;
-}
-
-export function confidenceFromEvidence(count: number): KnowledgeConfidence {
-  return count >= 3 ? 'confirmed' : count >= 2 ? 'supported' : 'emerging';
-}
-
-function relationFor(sourceType: string, targetType: string): string {
-  const pair = `${sourceType}:${targetType}`;
-  if (pair === 'project:area') return 'belongs to area';
-  if (pair === 'project:person') return 'involves';
-  if (pair === 'project:interest') return 'relates to';
-  if (pair === 'area:person') return 'includes';
-  if (pair === 'area:interest') return 'relates to';
-  if (pair === 'person:interest') return 'connected through';
-  return 'appears with';
-}
-
-function addEntity(
-  entities: Map<string, EntityAccumulator>,
-  entityType: string,
-  name: string,
-  row: ExtractionEvidenceRow,
-): EntityAccumulator | null {
-  const normalized = normalizeEntityName(name);
-  if (!normalized) {
-    return null;
-  }
-  const key = `${entityType}:${normalized}`;
-  const current = entities.get(key);
-  if (current) {
-    current.captureIds.add(row.capture_id);
-    current.latestCaptureId = row.capture_id;
-    current.privacyLevel = mostRestricted(current.privacyLevel, row.privacy_level);
-    return current;
-  }
-  const created: EntityAccumulator = {
-    key,
-    entityType,
-    name: name.trim(),
-    captureIds: new Set([row.capture_id]),
-    latestCaptureId: row.capture_id,
-    privacyLevel: row.privacy_level,
-  };
-  entities.set(key, created);
-  return created;
-}
-
-function addConnection(
-  connections: Map<string, ConnectionAccumulator>,
-  source: EntityAccumulator,
-  target: EntityAccumulator,
-  row: ExtractionEvidenceRow,
-): void {
-  const relation = relationFor(source.entityType, target.entityType);
-  const key = `${source.key}|${relation}|${target.key}`;
-  const current = connections.get(key);
-  if (current) {
-    current.captureIds.add(row.capture_id);
-    current.latestCaptureId = row.capture_id;
-    current.privacyLevel = mostRestricted(current.privacyLevel, row.privacy_level);
-    return;
-  }
-  connections.set(key, {
-    sourceKey: source.key,
-    relation,
-    targetKey: target.key,
-    captureIds: new Set([row.capture_id]),
-    latestCaptureId: row.capture_id,
-    privacyLevel: row.privacy_level,
-  });
-}
-
-export function deriveKnowledgeProjection(evidence: ExtractionEvidenceRow[]): {
-  entities: KnowledgeEntityDraft[];
-  connections: KnowledgeConnectionDraft[];
-} {
-  const entities = new Map<string, EntityAccumulator>();
-  const connections = new Map<string, ConnectionAccumulator>();
-
-  for (const row of evidence) {
-    let extraction: ExtractionResult;
-    try {
-      extraction = JSON.parse(row.structured_json) as ExtractionResult;
-    } catch {
-      continue;
-    }
-    const captureEntities: EntityAccumulator[] = [];
-    const values: Array<[string, string[]]> = [
-      ['project', extraction.projects ?? []],
-      ['area', extraction.areas ?? []],
-      ['person', extraction.people ?? []],
-      ['interest', (extraction.interests ?? []).map((interest) => interest.topic)],
-    ];
-    for (const [type, names] of values) {
-      const distinct = new Set(names.map((name) => name.trim()).filter(Boolean));
-      for (const name of distinct) {
-        const entity = addEntity(entities, type, name, row);
-        if (entity) {
-          captureEntities.push(entity);
-        }
-      }
-    }
-    captureEntities.sort((left, right) => (typeOrder[left.entityType] ?? 9) - (typeOrder[right.entityType] ?? 9));
-    for (let sourceIndex = 0; sourceIndex < captureEntities.length; sourceIndex += 1) {
-      for (let targetIndex = sourceIndex + 1; targetIndex < captureEntities.length; targetIndex += 1) {
-        addConnection(connections, captureEntities[sourceIndex], captureEntities[targetIndex], row);
-      }
-    }
-  }
-
-  return {
-    entities: [...entities.values()].map((entity) => ({
-      key: entity.key,
-      entityType: entity.entityType,
-      name: entity.name,
-      evidenceCount: entity.captureIds.size,
-      confidence: confidenceFromEvidence(entity.captureIds.size),
-      latestCaptureId: entity.latestCaptureId,
-      privacyLevel: entity.privacyLevel,
-    })),
-    connections: [...connections.values()]
-      // Cut graph noise: a generic co-occurrence ("appears with"/"relates to") only counts
-      // if two things showed up together in 2+ captures. Structural relations (belongs to
-      // area, includes, involves, …) are meaningful even from a single capture, so keep them.
-      .filter((connection) => {
-        const generic = connection.relation === 'appears with' || connection.relation === 'relates to';
-        return !generic || connection.captureIds.size >= 2;
-      })
-      .map((connection) => ({
-        sourceKey: connection.sourceKey,
-        relation: connection.relation,
-        targetKey: connection.targetKey,
-        evidenceCount: connection.captureIds.size,
-        confidence: confidenceFromEvidence(connection.captureIds.size),
-        explanation: `Seen together in ${connection.captureIds.size} remembered thought${connection.captureIds.size === 1 ? '' : 's'}.`,
-        latestCaptureId: connection.latestCaptureId,
-        privacyLevel: connection.privacyLevel,
-      })),
-  };
-}
+export { confidenceFromEvidence, deriveKnowledgeProjection } from './knowledgeProjection';
 
 export async function organizeMemory(db: SQLiteDatabase, trigger: string): Promise<void> {
   const [evidence, clarified, questionIntents] = await Promise.all([

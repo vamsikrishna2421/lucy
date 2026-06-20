@@ -272,7 +272,7 @@ export async function archiveCapture(db: SQLiteDatabase, id: number, reason: str
  *  purge these so it disappears from the Brain/Library and Ask, not just the timeline. */
 const CAPTURE_DERIVED_TABLES = [
   'todos', 'expenses', 'ideas', 'places', 'reminders',
-  'open_loops', 'follow_ups', 'context_requests', 'mood_entries',
+  'open_loops', 'follow_ups', 'commitments', 'context_requests', 'mood_entries',
   'extractions', 'capture_embeddings', 'pending_actions',
 ] as const;
 

@@ -93,3 +93,7 @@ ruvector.db
 
 # Codemagic cert files
 codemagic_cert.pem
+
+# Memory exports / scratch dumps at repo root — contain personal data, must NOT be committed
+/mem*.json
+/mem_tmp.json

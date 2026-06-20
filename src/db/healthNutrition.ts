@@ -125,14 +125,17 @@ export async function getFrequentFoods(db: SQLiteDatabase, limit = 6): Promise<s
   return rows.map((r) => r.name);
 }
 
-/** Per-day calorie+macro totals for the last N days (for trends / net-calorie rolling avg). */
-export async function dailyIntakeTotals(db: SQLiteDatabase, days = 7): Promise<Array<{ date_key: string; calories: number; protein_g: number; carbs_g: number; fat_g: number }>> {
+/** Per-day calorie+macro totals for the last N days (for trends / net-calorie rolling avg).
+ *  `meals` = distinct meal slots logged that day — lets callers tell a complete day from a single snack
+ *  (so a partially-logged day isn't mistaken for a real, steep calorie deficit). */
+export async function dailyIntakeTotals(db: SQLiteDatabase, days = 7): Promise<Array<{ date_key: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; meals: number }>> {
   return db.getAllAsync(
     `SELECT date_key,
        ROUND(SUM(COALESCE(calories,0)))  AS calories,
        ROUND(SUM(COALESCE(protein_g,0))) AS protein_g,
        ROUND(SUM(COALESCE(carbs_g,0)))   AS carbs_g,
-       ROUND(SUM(COALESCE(fat_g,0)))     AS fat_g
+       ROUND(SUM(COALESCE(fat_g,0)))     AS fat_g,
+       COUNT(DISTINCT NULLIF(TRIM(COALESCE(meal_type,'')),'')) AS meals
      FROM food_log
      WHERE date_key >= date('now', ?)
      GROUP BY date_key ORDER BY date_key DESC`,

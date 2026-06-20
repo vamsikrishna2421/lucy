@@ -22,7 +22,7 @@ export interface HealthSummary {
   goals: { calorie_goal: number; protein_g: number; carbs_g: number; fat_g: number } | null;
   remaining: number | null;        // goal − intake (calories)
   net: number | null;              // intake − tdee today (null when nothing logged — intake unknown)
-  net_rolling_7: number | null;    // 7-day rolling average net (trend, not a verdict)
+  net_rolling_7: number | null;    // 7-day rolling avg net over SUBSTANTIALLY-logged days only (trend, not a verdict; null if <2 such days)
   drLucy: import('./drLucy').GuardianGuidance[]; // gentle, grounded guardian guidance (may be empty)
 }
 
@@ -63,7 +63,7 @@ export async function buildHealthContextPrefix(db: SQLiteDatabase): Promise<stri
         : s.intakeCompleteness === 'partial'
           ? `- Today so far: ${s.intake.calories} kcal across only a couple of logged meals — this is likely INCOMPLETE (they probably ate more but didn't log it). Do NOT treat ${s.intake.calories} as the full day or infer a deficit/weight-loss from it. Logged: ${s.intake.items.map((i) => i.name).slice(0, 6).join(', ')}. Gently ask if they missed logging any meals or snacks. Steps ${s.activity.steps}${s.activity.sleep_hours ? `, slept ${s.activity.sleep_hours}h` : ''}.`
           : `- Today so far: ${s.intake.calories} kcal eaten${s.remaining != null ? `, ${s.remaining} remaining` : ''}; steps ${s.activity.steps}${s.activity.sleep_hours ? `, slept ${s.activity.sleep_hours}h` : ''}.`,
-      s.net_rolling_7 != null ? `- 7-day net average (ONLY across days they actually logged food): ${s.net_rolling_7} kcal/day (trend only — never a verdict; days with no log are excluded, not counted as zero).` : '',
+      s.net_rolling_7 != null ? `- 7-day net average (ONLY across days with reasonably complete logging): ${s.net_rolling_7} kcal/day (trend only — never a verdict; under-logged/empty days are excluded, not counted as zero).` : '',
       medsLine,
       `When estimating weight change: ~7700 kcal ≈ 1 kg. Use their TDEE + intake ONLY for days with logged food; never infer fasting or weight loss from missing logs. Be encouraging and ED-safe; never suggest unsafe deficits.`,
       '',
@@ -148,9 +148,14 @@ export async function getHealthSummary(db: SQLiteDatabase, dateKey = todayKey())
   ).catch(() => null);
 
   // 7-day rolling net needs both intake and a per-day TDEE; we approximate TDEE as today's TDEE
-  // (body profile is stable) and pair it with each day's logged intake (only days with food logged).
-  const net7 = (tdeeVal != null)
-    ? rollingAverage(intakeDays.filter((d) => d.calories > 0).map((d) => netCalorie(d.calories, tdeeVal!)))
+  // (body profile is stable) and pair it with each day's logged intake. CRITICAL: only count days that
+  // were SUBSTANTIALLY logged — 3+ meal slots, or enough calories to plausibly be most of a day. A day
+  // where the user logged just a snack is NOT a real ~2500-kcal deficit (that fabricates a scary "steep
+  // deficit" verdict from mere under-logging). Need ≥2 such days before claiming any trend at all.
+  const substantialCal = bmr ? Math.round(bmr * 0.7) : 1000;
+  const trendDays = intakeDays.filter((d) => d.calories > 0 && (d.meals >= 3 || d.calories >= substantialCal));
+  const net7 = (tdeeVal != null && trendDays.length >= 2)
+    ? rollingAverage(trendDays.map((d) => netCalorie(d.calories, tdeeVal!)))
     : null;
 
   const summary: HealthSummary = {

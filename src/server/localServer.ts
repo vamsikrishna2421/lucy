@@ -913,12 +913,13 @@ async function persistServerAutostart(on: boolean): Promise<void> {
   } catch { /* non-critical */ }
 }
 
-/** Did the user leave the LAN server on? Used to auto-start it on app boot so it survives OTA reloads
- *  (and the app reload triggered by /api/dev/reload), keeping the dashboard reachable unattended. */
+/** Whether to auto-start the LAN dashboard server on app boot. ON BY DEFAULT (user opted into an
+ *  always-on test rig); only an explicit toggle-OFF (flag '0') disables it. Survives OTA reloads
+ *  (incl. /api/dev/reload) and reboots, keeping the dashboard reachable unattended. */
 export async function shouldAutostartServer(): Promise<boolean> {
   try {
     const db = await getDatabase();
     const { getSetting } = await import('../db/settings');
-    return (await getSetting(db, AUTOSTART_KEY)) === '1';
-  } catch { return false; }
+    return (await getSetting(db, AUTOSTART_KEY)) !== '0';
+  } catch { return true; }
 }

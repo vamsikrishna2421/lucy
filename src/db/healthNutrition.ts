@@ -113,6 +113,18 @@ export async function deleteFoodLog(db: SQLiteDatabase, id: number): Promise<boo
   return r.changes > 0;
 }
 
+/** The user's most-logged foods over the last few weeks — powers the one-tap "quick add" chips so
+ *  repetitive Indian meals re-log instantly. Returns display names, most frequent + recent first. */
+export async function getFrequentFoods(db: SQLiteDatabase, limit = 6): Promise<string[]> {
+  const rows = await db.getAllAsync<{ name: string }>(
+    `SELECT name FROM food_log
+     WHERE date_key >= date('now', '-21 days') AND name IS NOT NULL AND TRIM(name) != ''
+     GROUP BY LOWER(name) ORDER BY COUNT(*) DESC, MAX(created_at) DESC LIMIT ?`,
+    limit,
+  );
+  return rows.map((r) => r.name);
+}
+
 /** Per-day calorie+macro totals for the last N days (for trends / net-calorie rolling avg). */
 export async function dailyIntakeTotals(db: SQLiteDatabase, days = 7): Promise<Array<{ date_key: string; calories: number; protein_g: number; carbs_g: number; fat_g: number }>> {
   return db.getAllAsync(

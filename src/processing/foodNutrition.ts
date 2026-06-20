@@ -103,8 +103,24 @@ function mealLabel(text: string): string {
  *  Never drops the meal: if estimation is empty (vague description or no remote AI), a placeholder
  *  row is logged with unknown calories so the meal still appears and totals stay honest. */
 export async function logFoodFromText(db: SQLiteDatabase, text: string, mealType?: string | null, dateKey?: string): Promise<FoodLogResult> {
-  const items = await estimateNutritionFromText(text);
   const meal = mealType ?? inferMealType();
+  // Local Indian-food DB first — instant, offline, consistent. Only when it fully resolves the meal
+  // (every fragment is a known food); anything novel/partial falls through to the LLM estimator.
+  try {
+    const { lookupMeal } = await import('./foodDb');
+    const dbMeal = lookupMeal(text);
+    if (dbMeal.items.length > 0 && dbMeal.unresolved.length === 0) {
+      for (const it of dbMeal.items) {
+        await insertFoodLog(db, {
+          dateKey, mealType: meal, name: it.name, qty: it.qty, unit: it.unit,
+          calories: it.calories, protein_g: it.protein_g, carbs_g: it.carbs_g, fat_g: it.fat_g,
+          source: 'text', confidence: it.confidence,
+        });
+      }
+      return { logged: dbMeal.items.length, items: dbMeal.items, estimated: true };
+    }
+  } catch { /* fall through to LLM */ }
+  const items = await estimateNutritionFromText(text);
   for (const it of items) {
     const row: NewFoodLog = {
       dateKey, mealType: meal, name: it.name, qty: it.qty, unit: it.unit,

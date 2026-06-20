@@ -1319,6 +1319,8 @@ function HealthView() {
   const [profileRow, setProfileRow] = useState<import('../db/healthNutrition').BodyProfileRow | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [mealText, setMealText] = useState('');
+  const [quickFoods, setQuickFoods] = useState<string[]>([]); // one-tap re-log chips (frequent foods)
+  const [quickBusy, setQuickBusy] = useState<string | null>(null); // chip being logged (double-tap guard)
   const [logging, setLogging] = useState(false);          // text/voice logging spinner
   const [reading, setReading] = useState(false);          // photo vision spinner
   const [netExpanded, setNetExpanded] = useState(false);  // ED-safe: net trend is opt-in
@@ -1333,6 +1335,25 @@ function HealthView() {
     const [s, p] = await Promise.all([getHealthSummary(db), getBodyProfile(db)]);
     setSummary(s);
     setProfileRow(p);
+    try { const { getFrequentFoods } = await import('../db/healthNutrition'); setQuickFoods(await getFrequentFoods(db, 6)); } catch { /* non-critical */ }
+  };
+
+  // One-tap re-log of a frequent food. Local food DB resolves common foods instantly (no AI wait),
+  // so no spinner — just a brief per-chip pressed/disabled state to swallow double-taps.
+  const logQuick = async (name: string) => {
+    if (quickBusy) return;
+    setQuickBusy(name);
+    try {
+      const db = await getDatabase();
+      const { logFoodFromText } = await import('../processing/foodNutrition');
+      await logFoodFromText(db, name);
+      await refreshNutrition();
+      setToast('Logged ' + name);
+    } catch (e) {
+      setSheet({ title: 'Could not log', message: e instanceof Error ? e.message : 'Please try again.' });
+    } finally {
+      setQuickBusy(null);
+    }
   };
 
   const logText = async () => {
@@ -1534,6 +1555,41 @@ function HealthView() {
       {summary && summary.profileComplete ? (
         <View style={{ gap: 10 }}>
           <Text style={{ color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '900', letterSpacing: 1.4 }}>LOG A MEAL</Text>
+          {/* Quick add — one-tap re-log of frequent foods (Indian home meals repeat daily) */}
+          {quickFoods.length > 0 ? (
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '700', letterSpacing: 0.3 }}>Quick add</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ gap: 8, paddingRight: 4 }}
+              >
+                {quickFoods.map((name) => {
+                  const busy = quickBusy === name;
+                  return (
+                    <TouchableOpacity
+                      key={name}
+                      activeOpacity={0.7}
+                      disabled={!!quickBusy}
+                      onPress={() => { void logQuick(name); }}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', gap: 6,
+                        paddingVertical: 9, paddingHorizontal: 14,
+                        borderRadius: 999,
+                        backgroundColor: busy ? LUCY_COLORS.primarySoft : LUCY_COLORS.primaryMist,
+                        borderWidth: 1, borderColor: LUCY_COLORS.primaryLine,
+                        opacity: quickBusy && !busy ? 0.45 : 1,
+                      }}
+                    >
+                      <Ionicons name={busy ? 'checkmark' : 'add'} size={15} color={LUCY_COLORS.primaryGlow} />
+                      <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700' }} numberOfLines={1}>{name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <TouchableOpacity onPress={logPhoto} disabled={reading}
               style={{ flex: 1, minHeight: 44, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 14, alignItems: 'center', gap: 6 }}>

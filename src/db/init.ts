@@ -417,6 +417,12 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
   if (!existingTodoColumns.has('list_name')) {
     await db.execAsync('ALTER TABLE todos ADD COLUMN list_name TEXT;');
   }
+  // Explicit project membership (Workspace → Projects). NULL = gather by name/alias match as before;
+  // a set project_id PINS the task to that project — it survives text edits and fixes false name-matches.
+  // Purely additive: existing tasks stay NULL and keep gathering exactly as they do today.
+  if (!existingTodoColumns.has('project_id')) {
+    await db.execAsync('ALTER TABLE todos ADD COLUMN project_id INTEGER;');
+  }
 
   // Recurring reminders: a recurrence rule ('daily'|'weekdays'|'weekly'|'monthly'); NULL = one-shot.
   // When a recurring reminder is acknowledged/fires, its remind_at advances to the next occurrence

@@ -729,6 +729,15 @@ async function route(req: ParsedRequest): Promise<string> {
       await renameProject(db, id, name, typeof payload.description === 'string' ? payload.description : undefined);
       return json(200, { ok: true });
     }
+    // Explicitly pin/unpin a task to a project (projectId null = unpin → back to name-match gathering).
+    if (req.method === 'POST' && req.path === '/api/projects/assign') {
+      const todoId = Number(payload.todoId);
+      if (!todoId) return json(400, { error: 'todoId required' });
+      const projectId = payload.projectId == null ? null : Number(payload.projectId);
+      const { assignTodoToProject } = await import('../db/projects');
+      await assignTodoToProject(db, todoId, projectId);
+      return json(200, { ok: true });
+    }
 
     // ─── Intelligent Calendar ─────────────────────────────────────────────────
     if (req.method === 'GET' && req.path === '/api/schedule/availability') {

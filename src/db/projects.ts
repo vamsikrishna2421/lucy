@@ -77,17 +77,29 @@ async function projectMatchTerms(db: SQLiteDatabase, name: string): Promise<stri
   return [...new Set(terms.map((t) => t.trim()).filter(Boolean))];
 }
 
-/** Counts of items linked to a project by name match (lightweight v1 — tasks + scheduled blocks
- *  whose text mentions the project OR any of its merged aliases), so each project shows live activity. */
+/** Counts of items linked to a project, so each project shows live activity. A task counts if it is
+ *  EXPLICITLY pinned (todos.project_id) OR its text mentions the project name / a merged alias — so the
+ *  zero-effort auto-gather still works while an explicit pin survives edits and fixes false matches.
+ *  (Scheduled blocks remain name-match only for now.) */
 export async function projectActivity(db: SQLiteDatabase, name: string): Promise<{ tasks: number; blocks: number }> {
-  const terms = await projectMatchTerms(db, name);
-  const todoWhere = terms.map(() => '(task LIKE ? OR context LIKE ?)').join(' OR ');
-  const todoArgs = terms.flatMap((term) => [`%${term}%`, `%${term}%`]);
+  const row = await db.getFirstAsync<ProjectRow>('SELECT * FROM projects WHERE name = ?', name);
+  const terms = [...new Set([name, ...(row ? projectAliases(row) : [])].map((t) => t.trim()).filter(Boolean))];
+
+  const todoClauses = terms.map(() => '(task LIKE ? OR context LIKE ?)');
+  const todoArgs: Array<string | number> = terms.flatMap((term) => [`%${term}%`, `%${term}%`]);
+  if (row?.id) { todoClauses.unshift('project_id = ?'); todoArgs.unshift(row.id); }
   const blockWhere = terms.map(() => 'title LIKE ?').join(' OR ');
   const blockArgs = terms.map((term) => `%${term}%`);
-  const t = await db.getFirstAsync<{ n: number }>(`SELECT COUNT(*) n FROM todos WHERE status='pending' AND (${todoWhere})`, ...todoArgs);
+
+  const t = await db.getFirstAsync<{ n: number }>(`SELECT COUNT(*) n FROM todos WHERE status='pending' AND (${todoClauses.join(' OR ')})`, ...todoArgs);
   const b = await db.getFirstAsync<{ n: number }>(`SELECT COUNT(*) n FROM scheduled_blocks WHERE status='committed' AND (${blockWhere})`, ...blockArgs);
   return { tasks: t?.n ?? 0, blocks: b?.n ?? 0 };
+}
+
+/** Pin (or unpin, with null) a task to a project explicitly — a stable link that survives text edits and
+ *  overrides name-matching. Additive: tasks left unpinned (NULL) still gather by name as before. */
+export async function assignTodoToProject(db: SQLiteDatabase, todoId: number, projectId: number | null): Promise<void> {
+  await db.runAsync('UPDATE todos SET project_id = ? WHERE id = ?', projectId, todoId);
 }
 
 export interface ProjectNote { id: number; title: string | null; snippet: string; created_at: string; }

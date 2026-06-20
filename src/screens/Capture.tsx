@@ -646,7 +646,13 @@ export function CaptureScreen({
         return;
       }
 
-      if (ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+      // iOS keeps its proven strict gate (on-device only, otherwise "type instead"); Android proceeds
+      // on availability alone and resolveSpeechMode picks on-device vs the OS recognizer. This leaves
+      // iOS behavior exactly as shipped.
+      const recognitionReady = Platform.OS === 'ios'
+        ? ExpoSpeechRecognitionModule.isRecognitionAvailable() && ExpoSpeechRecognitionModule.supportsOnDeviceRecognition()
+        : ExpoSpeechRecognitionModule.isRecognitionAvailable();
+      if (recognitionReady) {
         const { getOnDeviceSpeechLocale, getUserProfile } = await import('../db/userProfile');
         const db = await getDatabase();
         const profile = await getUserProfile(db);

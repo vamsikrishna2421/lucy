@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Easing, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { PrivacyBadge } from '../components/PrivacyBadge';
 import { ReviewCardDeck, type ReviewCard } from '../components/ReviewCardDeck';
+import { CollapsibleSection } from '../components/CollapsibleSection';
 import { MeetingShareBar } from '../components/MeetingShareBar';
 import { formatMeetingRowText } from '../processing/meetingFormat';
 import { LUCY_COLORS } from '../config/colors';
@@ -2011,16 +2012,18 @@ function NowView({
         ) : null}
       </View>
       {onThisDay.length > 0 ? (
-        <View style={styles.otdCard}>
-          <Text style={styles.otdLabel}>On this day</Text>
-          <Text style={styles.otdTitle}>
-            {onThisDay[0].yearsAgo === 1 ? 'A year ago' : `${onThisDay[0].yearsAgo} years ago`} — {onThisDay[0].title}
-          </Text>
-          {onThisDay[0].snippet ? <Text style={styles.otdSnippet} numberOfLines={2}>{onThisDay[0].snippet}</Text> : null}
-          {onThisDay.length > 1 ? (
-            <Text style={styles.otdMore}>+ {onThisDay.length - 1} more from this day</Text>
-          ) : null}
-        </View>
+        <CollapsibleSection title="On this day" count={onThisDay.length}>
+          <View style={styles.otdCard}>
+            <Text style={styles.otdLabel}>On this day</Text>
+            <Text style={styles.otdTitle}>
+              {onThisDay[0].yearsAgo === 1 ? 'A year ago' : `${onThisDay[0].yearsAgo} years ago`} — {onThisDay[0].title}
+            </Text>
+            {onThisDay[0].snippet ? <Text style={styles.otdSnippet} numberOfLines={2}>{onThisDay[0].snippet}</Text> : null}
+            {onThisDay.length > 1 ? (
+              <Text style={styles.otdMore}>+ {onThisDay.length - 1} more from this day</Text>
+            ) : null}
+          </View>
+        </CollapsibleSection>
       ) : null}
       {/* Brain Pulse — 6-hour cross-domain insight synthesis */}
       <BrainPulseSection />

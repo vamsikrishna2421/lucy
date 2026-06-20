@@ -1886,20 +1886,14 @@ function BrainPulseSection() {
   return (
     <>
       {pulses.length > 0 ? (
-        <View style={{ marginBottom: 6 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <Text style={{ color: PULSE_ACCENT, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 }}>LUCY PULSE</Text>
-            <View style={{ backgroundColor: PULSE_ACCENT, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{pulses.filter((p) => !p.seen_at).length || pulses.length}</Text>
-            </View>
-          </View>
+        <CollapsibleSection title="Lucy Pulse" count={pulses.filter((p) => !p.seen_at).length || pulses.length} accent={PULSE_ACCENT}>
           {pulses.map((p) => (
             <PulseCard key={p.id} pulse={p} onDismiss={() => void dismiss(p.id)} />
           ))}
           <TouchableOpacity onPress={() => void openArchive()} style={{ alignSelf: 'flex-start', marginBottom: 8 }}>
             <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12 }}>View archived pulses</Text>
           </TouchableOpacity>
-        </View>
+        </CollapsibleSection>
       ) : null}
 
       {/* Archive modal */}
@@ -2030,8 +2024,7 @@ function NowView({
 
       {/* Staleness reviews — shown before Follow-ups so the user cleans house first */}
       {stalenessReviews.length > 0 ? (
-        <>
-          <SectionTitle title="Quick Review" count={stalenessReviews.length} />
+        <CollapsibleSection title="Quick Review" count={stalenessReviews.length}>
           {stalenessReviews.map((review) => (
             <StalenessReviewCard
               key={review.id}
@@ -2039,15 +2032,14 @@ function NowView({
               onDone={() => onStalenessResolved?.()}
             />
           ))}
-        </>
+        </CollapsibleSection>
       ) : null}
 
       {/* Commitment guardian — promises to keep + things owed; at-risk ranks above generic follow-ups. */}
       <CommitmentsSection onChange={onLoopResolved} />
 
       {followUps.length > 0 ? (
-        <>
-          <SectionTitle title="Follow-ups" count={followUps.length} />
+        <CollapsibleSection title="Follow-ups" count={followUps.length}>
           {followUps.map((item) => (
             <View style={styles.loopCard} key={item.id}>
               <Text style={styles.cardTitle}>{item.assignee ? `${item.assignee}: ` : ''}{protectedPreview(item.action)}</Text>
@@ -2056,7 +2048,7 @@ function NowView({
               </TouchableOpacity>
             </View>
           ))}
-        </>
+        </CollapsibleSection>
       ) : null}
       <SectionTitle title="Reminders" count={scheduledReminders.length || undefined} />
       {scheduledReminders.length ? scheduledReminders.map((item) => <ReminderCard item={item} key={item.id} />) : <EmptyLine text="No scheduled reminders yet." />}
@@ -2073,8 +2065,7 @@ function NowView({
       {/* Needs Context — moved to bottom so it doesn't clutter the main focus.
           Shows only when there are unanswered clarification requests. */}
       {contextCount > 0 && !contextBatch ? (
-        <View style={{ marginTop: 10 }}>
-          <SectionTitle title="Needs Context" />
+        <CollapsibleSection title="Needs Context" count={contextCount}>
           <TouchableOpacity style={styles.contextPrompt} onPress={onOpenContext}>
             <Text style={styles.contextPromptTitle}>
               {contextCount > 5
@@ -2083,13 +2074,12 @@ function NowView({
             </Text>
             <Text style={styles.tonightDetail}>Add context when you have time — LUCY folds your answer into that memory and re-organizes it.</Text>
           </TouchableOpacity>
-        </View>
+        </CollapsibleSection>
       ) : null}
       {contextBatch ? (
-        <View style={{ marginTop: 10 }}>
-          <SectionTitle title="Needs Context" />
+        <CollapsibleSection title="Needs Context" count={contextBatch.total}>
           <ContextBatchCard batch={contextBatch} onDone={() => onStalenessResolved?.()} />
-        </View>
+        </CollapsibleSection>
       ) : null}
     </ScrollView>
   );

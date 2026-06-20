@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { LUCY_COLORS } from '../config/colors';
 import { LucyEmptyState } from '../components/LucyEmptyState';
+import { CollapsibleSection } from '../components/CollapsibleSection';
 import { FadeInUp, PressableScale, Stagger } from '../components/Motion';
 import { getDatabase } from '../db';
 import {
@@ -535,36 +536,46 @@ function InsightsView({
         </View>
       ) : (
         <>
-          {healthInsights.length > 0 ? (
-            <>
-              <Text style={icStyles.sectionLabel}>♡  Health & Activity</Text>
-              {healthInsights.map((insight, i) => (
+          {/* Top patterns — the freshest few, always visible; the rest tuck into collapsed groups. */}
+          {otherInsights.slice(0, 3).map((insight) => (
+            <InsightCard
+              key={`top-${insights.indexOf(insight)}`}
+              insight={insight}
+              index={insights.indexOf(insight)}
+              expanded={expanded === insights.indexOf(insight)}
+              onToggle={() => onToggle(insights.indexOf(insight))}
+              onAskThis={onAskThis}
+            />
+          ))}
+
+          {otherInsights.length > 3 ? (
+            <CollapsibleSection title="More patterns" count={otherInsights.length - 3}>
+              {otherInsights.slice(3).map((insight) => (
                 <InsightCard
-                  key={`health-${i}`}
+                  key={`more-${insights.indexOf(insight)}`}
                   insight={insight}
-                  index={i}
+                  index={insights.indexOf(insight)}
                   expanded={expanded === insights.indexOf(insight)}
                   onToggle={() => onToggle(insights.indexOf(insight))}
                   onAskThis={onAskThis}
                 />
               ))}
-            </>
+            </CollapsibleSection>
           ) : null}
 
-          {otherInsights.length > 0 ? (
-            <>
-              {healthInsights.length > 0 ? <Text style={[icStyles.sectionLabel, { marginTop: 8 }]}>✦  Memory & Patterns</Text> : null}
-              {otherInsights.map((insight, i) => (
+          {healthInsights.length > 0 ? (
+            <CollapsibleSection title="Health & Activity" count={healthInsights.length}>
+              {healthInsights.map((insight) => (
                 <InsightCard
-                  key={`insight-${i}`}
+                  key={`health-${insights.indexOf(insight)}`}
                   insight={insight}
-                  index={healthInsights.length + i}
+                  index={insights.indexOf(insight)}
                   expanded={expanded === insights.indexOf(insight)}
                   onToggle={() => onToggle(insights.indexOf(insight))}
                   onAskThis={onAskThis}
                 />
               ))}
-            </>
+            </CollapsibleSection>
           ) : null}
         </>
       )}

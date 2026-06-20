@@ -2,6 +2,7 @@
  *  findSimilarCaptures) and returns them as context for synthesis. The default catch-all tool. */
 import type { LucyTool } from '../types';
 import { findSimilarCaptures } from '../../vectorSearch';
+import { parseDbDate } from '../../../utils/datetime';
 
 export const memoryTool: LucyTool = {
   name: 'memory',
@@ -16,7 +17,7 @@ export const memoryTool: LucyTool = {
     }));
     const context = hits
       .map((h) => {
-        const date = new Date(h.capture.created_at.includes('T') ? h.capture.created_at : `${h.capture.created_at.replace(' ', 'T')}Z`).toLocaleDateString();
+        const date = parseDbDate(h.capture.created_at).toLocaleDateString();
         return `[${date}${h.capture.extracted_title ? ` · ${h.capture.extracted_title}` : ''}] ${(h.capture.raw_transcript ?? '').slice(0, 400)}`;
       })
       .join('\n---\n');

@@ -8,13 +8,13 @@
  */
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { ExpenseRow } from '../db/expenses';
+import { dbDateMs } from '../utils/datetime';
 
 const DAY = 86_400_000;
 
 /** Parse the stored "YYYY-MM-DD HH:MM:SS" (UTC) timestamp to ms, or NaN. */
 function ts(createdAt: string): number {
-  const iso = createdAt.includes('T') ? createdAt : createdAt.replace(' ', 'T');
-  return new Date(iso.endsWith('Z') ? iso : `${iso}Z`).getTime();
+  return dbDateMs(createdAt);
 }
 
 /** A stable "merchant" key from a free-text description — drop amounts, dates, ids; keep the words. */

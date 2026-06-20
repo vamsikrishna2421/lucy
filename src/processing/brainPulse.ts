@@ -19,6 +19,7 @@ import { resolveRemoteAvailability } from '../ai/provider';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
 import { insertBrainPulse, pruneOldPulses } from '../db/brainPulses';
 import { recordAiCall, isAiCallCapReached } from '../ai/rateLimit';
+import { daysSinceDb } from '../utils/datetime';
 
 const PULSE_LAST_RUN_KEY = 'brain_pulse_last_run';
 const PULSE_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
@@ -134,7 +135,7 @@ async function buildPulseContext(db: SQLiteDatabase): Promise<string> {
   if (todos.length > 0) {
     parts.push('\nPENDING TASKS:');
     parts.push(todos.map((t) => {
-      const ageDays = Math.floor((Date.now() - new Date(t.created_at.includes('T') ? t.created_at : `${t.created_at.replace(' ', 'T')}Z`).getTime()) / 86400000);
+      const ageDays = daysSinceDb(t.created_at);
       return `- [${t.urgency}] ${t.task} (${ageDays}d old)`;
     }).join('\n'));
   }

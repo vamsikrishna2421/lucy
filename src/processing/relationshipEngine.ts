@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { daysSinceDb } from '../utils/datetime';
 
 export interface PersonContext {
   name: string;
@@ -74,10 +75,7 @@ export async function getPersonInsights(db: SQLiteDatabase): Promise<string[]> {
   for (const person of people) {
     if (!person.lastMentioned) continue;
 
-    const lastDate = new Date(
-      person.lastMentioned.includes('T') ? person.lastMentioned : `${person.lastMentioned.replace(' ', 'T')}Z`,
-    );
-    const daysSince = Math.floor((now - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+    const daysSince = daysSinceDb(person.lastMentioned, now);
 
     if (person.pendingFollowUps > 0) {
       insights.push(
@@ -118,8 +116,7 @@ export async function getKeepWarmNudges(db: SQLiteDatabase): Promise<KeepWarmNud
   for (const p of people) {
     if (!p.lastMentioned || p.pendingFollowUps > 0) continue; // pending follow-ups are their own surface
     if (p.mentionCount < 3) continue; // only people who clearly matter to the user
-    const last = new Date(p.lastMentioned.includes('T') ? p.lastMentioned : `${p.lastMentioned.replace(' ', 'T')}Z`);
-    const ago = Math.floor((now - last.getTime()) / 86_400_000);
+    const ago = daysSinceDb(p.lastMentioned, now);
     // The more often they normally come up, the sooner "quiet" feels notable.
     const threshold = p.mentionCount >= 8 ? 14 : p.mentionCount >= 5 ? 21 : 30;
     if (ago < threshold) continue;

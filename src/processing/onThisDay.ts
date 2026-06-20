@@ -9,6 +9,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getSetting, setSetting } from '../db/settings';
 import { sendGuardianNotification } from './notifications';
+import { parseDbDate } from '../utils/datetime';
 
 export interface OnThisDayMemory {
   captureId: number;
@@ -43,9 +44,7 @@ export async function getOnThisDayMemories(db: SQLiteDatabase): Promise<OnThisDa
   );
 
   return rows.map((row) => {
-    const captureYear = new Date(
-      row.created_at.includes('T') ? row.created_at : `${row.created_at.replace(' ', 'T')}Z`,
-    ).getFullYear();
+    const captureYear = parseDbDate(row.created_at).getFullYear();
     return {
       captureId:  row.id,
       title:      row.extracted_title ?? 'A memory',

@@ -1,10 +1,11 @@
 /** Shared expense-window helpers (used by the spending answer + the spending tool). Pure. */
 import type { ExpenseRow } from '../db/expenses';
 import type { SpendingWindow } from './askIntent';
+import { dbDateMs } from '../utils/datetime';
 
 export function expenseInWindow(createdAt: string, win: SpendingWindow, now = new Date()): boolean {
   if (win.kind === 'all') return true;
-  const t = new Date(`${createdAt.replace(' ', 'T')}Z`).getTime();
+  const t = dbDateMs(createdAt);
   if (!Number.isFinite(t)) return false;
   const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
   switch (win.kind) {

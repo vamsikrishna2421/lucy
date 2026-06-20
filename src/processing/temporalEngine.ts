@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { TodoRow } from '../db/todos';
 import type { OpenLoopRow } from '../db/openLoops';
+import { daysSinceDb } from '../utils/datetime';
 
 export interface UrgentItem {
   type: 'task' | 'loop' | 'followup';
@@ -17,8 +18,7 @@ export interface RelationshipGap {
 }
 
 function ageInDays(dateStr: string): number {
-  const d = new Date(dateStr.includes('T') ? dateStr : `${dateStr.replace(' ', 'T')}Z`);
-  return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+  return daysSinceDb(dateStr);
 }
 
 export function scoreUrgency(urgency: string, ageDays: number): number {

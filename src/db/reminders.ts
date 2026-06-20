@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { ExtractedReminder, PrivacyLevel } from '../types/extraction';
 import { asReminderRecurrence, nextFutureOccurrence, type ReminderRecurrence } from '../processing/reminderRecurrence';
+import { dbDateMs } from '../utils/datetime';
 
 export interface ReminderRow extends ExtractedReminder {
   id: number;
@@ -80,7 +81,7 @@ export async function advanceRecurringReminder(db: SQLiteDatabase, id: number, n
   if (!row) return null;
   const recurrence = asReminderRecurrence(row.recurrence);
   if (!recurrence || !row.remind_at) return null;
-  const currentMs = new Date(row.remind_at.includes('T') ? row.remind_at : `${row.remind_at.replace(' ', 'T')}Z`).getTime();
+  const currentMs = dbDateMs(row.remind_at);
   if (!Number.isFinite(currentMs)) return null;
   const next = nextFutureOccurrence(currentMs, recurrence, now);
   if (next === null) return null;

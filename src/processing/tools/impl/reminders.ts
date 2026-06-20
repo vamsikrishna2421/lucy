@@ -1,6 +1,7 @@
 /** Reminders tool — the user's pending reminders + when they fire. Wraps listReminders. */
 import type { LucyTool } from '../types';
 import { listReminders } from '../../../db/reminders';
+import { parseDbDate } from '../../../utils/datetime';
 
 export const remindersTool: LucyTool = {
   name: 'reminders',
@@ -10,7 +11,7 @@ export const remindersTool: LucyTool = {
     const rows = await listReminders(ctx.db);
     const when = (iso: string | null) => {
       if (!iso) return 'no time set';
-      const d = new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`);
+      const d = parseDbDate(iso);
       return Number.isNaN(d.getTime()) ? 'no time set' : d.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     };
     const lines = rows.slice(0, 12).map((r) => `- ${r.text} · ${when(r.remind_at ?? null)}${r.recurrence ? ` (repeats ${r.recurrence})` : ''}`);

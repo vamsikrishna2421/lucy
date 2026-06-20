@@ -14,6 +14,7 @@ import { organizeMemory } from './organizer';
 import { promptAI } from '../ai/openai';
 import { resolveRemoteAvailability } from '../ai/provider';
 import { promptDevice } from '../ai/device';
+import { parseDbDate } from '../utils/datetime';
 import { shieldText, restoreText, PLACEHOLDER_NOTE } from './sensitiveShield';
 import { memoryAnswerSystemPrompt } from '../ai/prompts';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
@@ -314,7 +315,7 @@ async function answerWithLLM(question: string, history: AskTurn[] = [], screenCo
 
   const context = contextCaptures
     .map((c) => {
-      const date = new Date(c.created_at.includes('T') ? c.created_at : `${c.created_at.replace(' ', 'T')}Z`).toLocaleDateString();
+      const date = parseDbDate(c.created_at).toLocaleDateString();
       const title = c.extracted_title ? `[${c.extracted_title}]` : '';
       return `[ID:${c.id}] ${date} ${title}\n${c.raw_transcript?.slice(0, 400) ?? ''}`;
     })

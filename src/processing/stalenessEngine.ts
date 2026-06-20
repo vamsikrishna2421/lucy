@@ -15,6 +15,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { archiveReminder, listReminders } from '../db/reminders';
 import { archiveTodo, listPendingTodos } from '../db/todos';
 import { cosineSimilarity, generateEmbedding } from '../ai/embeddings';
+import { parseDbDate, dbDateMs } from '../utils/datetime';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ const REVIEW_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
  *  Returns null if no time reference is found. */
 export function extractScheduledDate(text: string, createdAt: string): Date | null {
   const t = text.toLowerCase();
-  const created = new Date(createdAt.includes('T') ? createdAt : `${createdAt.replace(' ', 'T')}Z`);
+  const created = parseDbDate(createdAt);
 
   // "tomorrow at 3pm" / "tomorrow at 15:00"
   const tomorrowMatch = t.match(/\btomorrow\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i);
@@ -213,7 +214,7 @@ async function processStaleReminders(db: SQLiteDatabase): Promise<number> {
   for (const r of reminders) {
     if (!r.remind_at) {
       // No time set — if the reminder is very old and unscheduled, flag it
-      const age = now - new Date(r.created_at.includes('T') ? r.created_at : `${r.created_at.replace(' ', 'T')}Z`).getTime();
+      const age = now - dbDateMs(r.created_at);
       if (age > 7 * 24 * 60 * 60 * 1000) {
         await insertReview(db, 'reminder_expired', r.id, r.text, null, null, null);
         count++;

@@ -5,10 +5,10 @@
  */
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { DailyWindow } from './types';
+import { parseDbDate } from '../utils/datetime';
 
 function hourOf(ts: string): number {
-  const iso = ts.includes('T') ? ts : ts.replace(' ', 'T');
-  const d = new Date(iso + (iso.endsWith('Z') ? '' : 'Z'));
+  const d = parseDbDate(ts);
   return Number.isNaN(d.getTime()) ? -1 : d.getHours();
 }
 

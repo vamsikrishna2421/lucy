@@ -17,6 +17,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { listRecentCaptures, type CaptureRow } from '../db/captures';
 import { cosineSimilarity, generateEmbedding, loadEmbeddingsFor, reembedStaleCaptures } from '../ai/embeddings';
 import { isEmbeddingStale } from '../ai/embeddingModel';
+import { parseDbDate, dbDateMs } from '../utils/datetime';
 
 export interface SimilarCapture {
   capture: CaptureRow;
@@ -80,7 +81,7 @@ function entityScore(queryText: string, captureText: string): number {
 
 function temporalScore(captureDate: string): number {
   const now = Date.now();
-  const created = new Date(captureDate.includes('T') ? captureDate : `${captureDate.replace(' ', 'T')}Z`).getTime();
+  const created = dbDateMs(captureDate);
   const ageMs = now - created;
   const ageDays = ageMs / (1000 * 60 * 60 * 24);
   // Exponential decay: 1.0 today, 0.5 at 7 days, ~0.1 at 30 days, ~0 at 90 days
@@ -196,9 +197,7 @@ export async function getRelatedContext(
     .filter((s) => s.capture.id !== excludeCaptureId && s.capture.raw_transcript)
     .slice(0, limit)
     .map((s) => {
-      const date = new Date(
-        s.capture.created_at.includes('T') ? s.capture.created_at : `${s.capture.created_at.replace(' ', 'T')}Z`,
-      ).toLocaleDateString();
+      const date = parseDbDate(s.capture.created_at).toLocaleDateString();
       const title = s.capture.extracted_title ?? '';
       const snippet = (s.capture.raw_transcript ?? '').slice(0, 200);
       return `[${date}${title ? ` — ${title}` : ''}]: ${snippet}`;

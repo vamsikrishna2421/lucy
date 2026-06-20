@@ -5,6 +5,7 @@
  * the event that changed it. Pure mapping (tested) + a thin DB reader.
  */
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { dbDateMs } from '../utils/datetime';
 
 const DAY = 86_400_000;
 
@@ -39,8 +40,7 @@ function localMidnight(ms: number): number {
   const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime();
 }
 function parseTs(s: string): number {
-  const iso = s.includes('T') ? s : s.replace(' ', 'T');
-  return new Date(iso.endsWith('Z') ? iso : `${iso}Z`).getTime();
+  return dbDateMs(s);
 }
 
 /** Build a continuous per-day series over the last `days` (empty days carry score=null for graph gaps).

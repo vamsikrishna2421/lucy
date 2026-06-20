@@ -49,37 +49,9 @@ yarn-error.*
 /benchmarks/kaggle-eleanor/results/
 /dist/
 
-# Shell/terminal artifacts that accidentally get created as files
-# (fragments of commands, variable names, syntax fragments)
-[*
-{*
-(*
-0)
-80
-uri
-void
-void)
-,+
-,+,
-k.includes*
-capture.id*
-e.todo.id
-Boolean*
-setVoiceRecording*
-setShowSplash*
-datetime*
-text.includes*
-[])*
-,
-,-
-,*
-*.confidence
-*.answer
-*.id
-*.includes*
-*.urgency
-*.doneAt
-*.allowsModifications*
+# NOTE: a previous block here tried to ignore shell-accident junk files with broad globs
+# (datetime*, uri, *.id, Boolean*, *.confidence, …). Those silently swallowed real source files,
+# so they were removed. Junk fragments are avoided by staging files explicitly, not by gitignore.
 
 # Build logs
 *.log

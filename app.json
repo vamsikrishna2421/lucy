@@ -129,6 +129,7 @@
       "favicon": "./assets/lucy-icon.png"
     },
     "plugins": [
+      "./plugins/withExecutorchJar",
       [
         "expo-live-activity",
         {

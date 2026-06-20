@@ -11,6 +11,8 @@ export interface TodoRow extends ExtractedTask {
   archive_reason?: string | null;
   /** Persistent list assignment (set by user or LUCY). NULL = auto-categorized. */
   list_name?: string | null;
+  /** Explicit project pin (Workspace → Projects). NULL = gather by name/alias match. */
+  project_id?: number | null;
 }
 
 // ── Task QA: meta/dev tasks must never enter the user's personal list ──

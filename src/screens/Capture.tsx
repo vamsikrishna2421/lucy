@@ -31,6 +31,7 @@ import { LUCY_COLORS } from '../config/colors';
 import { FadeInUp, Stagger } from '../components/Motion';
 import { getDatabase } from '../db';
 import { listPendingTodos, archiveTodo, type TodoRow } from '../db/todos';
+import { listProjects, assignTodoToProject, type ProjectRow } from '../db/projects';
 import { enqueueTranscript, analyzeTranscript } from '../processing/extract';
 import { getRemoteAccessState } from '../ai/remoteAccess';
 import { CaptureReplay } from '../components/CaptureReplay';
@@ -468,6 +469,7 @@ export function CaptureScreen({
   const [pendingTodo, setPendingTodo] = useState<TodoRow | null>(null);
   const [doneNotes, setDoneNotes] = useState('');
   const [editTodo, setEditTodo] = useState<TodoRow | null>(null);
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [editText, setEditText] = useState('');
   const [capturedToday, setCapturedToday] = useState(0);
   const [captureStreak, setCaptureStreak] = useState(0);
@@ -491,11 +493,13 @@ export function CaptureScreen({
   useEffect(() => {
     void (async () => {
       const db = await getDatabase();
-      const [pendingTodosResult, { getUserProfile }] = await Promise.all([
+      const [pendingTodosResult, projectsResult, { getUserProfile }] = await Promise.all([
         listPendingTodos(db),
+        listProjects(db),
         import('../db/userProfile'),
       ]);
       setTodos(pendingTodosResult);
+      setProjects(projectsResult);
       const profile = await getUserProfile(db);
       setUserName(profile.name || '');
       // Today's capture count + streak
@@ -551,6 +555,15 @@ export function CaptureScreen({
     await db.runAsync('UPDATE todos SET task = ? WHERE id = ?', editText.trim(), editTodo.id);
     setTodos((prev) => prev.map((t) => t.id === editTodo.id ? { ...t, task: editText.trim() } : t));
     setEditTodo(null);
+  };
+
+  // Pin (or unpin with null) the task being edited to a project — explicit membership that survives edits.
+  const assignProject = async (projectId: number | null) => {
+    if (!editTodo) return;
+    const db = await getDatabase();
+    await assignTodoToProject(db, editTodo.id, projectId);
+    setTodos((prev) => prev.map((t) => t.id === editTodo.id ? { ...t, project_id: projectId } : t));
+    setEditTodo((prev) => (prev ? { ...prev, project_id: projectId } : prev));
   };
 
   const deleteTodo = async (todo: TodoRow) => {
@@ -968,6 +981,31 @@ export function CaptureScreen({
               autoFocus
               multiline
             />
+            {projects.length > 0 && (
+              <View style={styles.projectPicker}>
+                <Text style={styles.projectEyebrow}>Project</Text>
+                <View style={styles.projectChips}>
+                  <TouchableOpacity
+                    style={[styles.projectChip, !editTodo?.project_id && styles.projectChipActive]}
+                    onPress={() => void assignProject(null)}
+                  >
+                    <Text style={[styles.projectChipText, !editTodo?.project_id && styles.projectChipTextActive]}>None</Text>
+                  </TouchableOpacity>
+                  {projects.map((p) => {
+                    const active = editTodo?.project_id === p.id;
+                    return (
+                      <TouchableOpacity
+                        key={p.id}
+                        style={[styles.projectChip, active && styles.projectChipActive]}
+                        onPress={() => void assignProject(p.id)}
+                      >
+                        <Text style={[styles.projectChipText, active && styles.projectChipTextActive]} numberOfLines={1}>{p.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
             <View style={styles.modalButtons}>
               <TouchableOpacity style={[styles.modalSkip, { flex: 1, borderColor: '#ef4444' }]} onPress={() => void deleteTodo(editTodo!)}>
                 <Text style={[styles.modalSkipText, { color: '#ef4444' }]}>Delete</Text>
@@ -1232,6 +1270,13 @@ const styles = StyleSheet.create({
   modalTask: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '700', lineHeight: 23 },
   modalInput: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 12, color: LUCY_COLORS.textDark, fontSize: 15, minHeight: 72, textAlignVertical: 'top' },
   modalButtons: { flexDirection: 'row', gap: 10 },
+  projectPicker: { gap: 8 },
+  projectEyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  projectChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  projectChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, maxWidth: 220 },
+  projectChipActive: { backgroundColor: LUCY_COLORS.primaryMist, borderColor: LUCY_COLORS.primary },
+  projectChipText: { color: LUCY_COLORS.textMuted, fontSize: 13, fontWeight: '700' },
+  projectChipTextActive: { color: LUCY_COLORS.primary },
   modalSkip: { flex: 1, paddingVertical: 13, borderRadius: 12, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center' },
   modalSkipText: { color: LUCY_COLORS.textMuted, fontSize: 15, fontWeight: '600' },
   modalDone: { flex: 2, paddingVertical: 13, borderRadius: 12, backgroundColor: LUCY_COLORS.primary, alignItems: 'center' },

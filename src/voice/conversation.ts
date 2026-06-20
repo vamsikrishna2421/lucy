@@ -15,6 +15,7 @@ import {
 } from 'expo-speech-recognition';
 import { acquireMic, releaseMic } from '../audio/micCoordinator';
 import { speak, stopSpeaking } from './tts';
+import { resolveSpeechMode } from './onDeviceSpeech';
 
 export type ConvoState = 'off' | 'listening' | 'thinking' | 'speaking';
 export interface ConvoTurn { role: 'user' | 'lucy'; text: string }
@@ -30,6 +31,7 @@ class ConversationManager {
   private error: string | null = null;
   private active = false;
   private locale = 'en-US';
+  private onDevice = false; // whether an on-device model is ready for this.locale (else OS recognizer)
   private context: string | undefined;
   private getContext: (() => string) | null = null;
   private onNavigate: ((section: string) => void) | null = null;
@@ -94,14 +96,13 @@ class ConversationManager {
       const { getUserProfile, getOnDeviceSpeechLocale } = await import('../db/userProfile');
       this.locale = getOnDeviceSpeechLocale(await getUserProfile(await getDatabase()));
     } catch { /* default en-US */ }
+    // Prefer on-device transcription; if the model for this locale isn't downloaded yet, this also
+    // kicks off its download so the device self-heals to fully-private. Until then the OS recognizer
+    // handles it (same pragmatic stance as the wake word) so the conversation still works.
     try {
-      const supported = await ExpoSpeechRecognitionModule.getSupportedLocales({});
-      const installed = (supported?.installedLocales ?? []) as string[];
-      if (installed.length > 0 && !installed.includes(this.locale)) {
-        console.warn(`[Convo] Locale ${this.locale} not installed on-device; falling back to en-US`);
-        this.locale = 'en-US';
-      }
-    } catch { /* not critical */ }
+      const mode = await resolveSpeechMode(this.locale);
+      this.onDevice = mode.onDevice;
+    } catch { this.onDevice = false; }
 
     this.configureListeners();
     if (opts?.initialText) {
@@ -157,7 +158,7 @@ class ConversationManager {
         lang: this.locale,
         interimResults: true,
         continuous: true,
-        requiresOnDeviceRecognition: true,
+        requiresOnDeviceRecognition: this.onDevice,
         addsPunctuation: true,
         iosCategory: { category: 'playAndRecord', categoryOptions: ['defaultToSpeaker', 'allowBluetooth'], mode: 'measurement' },
       });

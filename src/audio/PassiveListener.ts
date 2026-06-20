@@ -8,6 +8,7 @@ import * as Crypto from 'expo-crypto';
 import { config } from '../config';
 import { enqueueTranscript } from '../processing/extract';
 import { acquireMic, releaseMic } from './micCoordinator';
+import { isOnDeviceLocaleInstalled, triggerOnDeviceModelDownload } from '../voice/onDeviceSpeech';
 
 export type ListeningStatus = 'off' | 'starting' | 'listening' | 'stopping';
 
@@ -161,14 +162,14 @@ class PassiveListenerManager {
       );
       return;
     }
-    // Confirm the chosen locale has an on-device model installed. Forcing
-    // requiresOnDeviceRecognition for an uninstalled locale can fail hard, so we
-    // fall back to en-US (always installed) when the locale isn't ready.
+    // Listen mode is continuous/background, so it stays STRICTLY on-device — it must never stream
+    // background audio to the cloud. Confirm the chosen locale's on-device model is installed; if it
+    // isn't, kick off its download (Android) so the device self-heals to private listening next time,
+    // and fall back to en-US for this attempt.
     try {
-      const supported = await ExpoSpeechRecognitionModule.getSupportedLocales({});
-      const installed = (supported?.installedLocales ?? []) as string[];
-      if (installed.length > 0 && !installed.includes(this.deviceSpeechLocale)) {
-        console.warn(`[Listen] Locale ${this.deviceSpeechLocale} not installed on-device; falling back to en-US`);
+      if (!(await isOnDeviceLocaleInstalled(this.deviceSpeechLocale))) {
+        console.warn(`[Listen] Locale ${this.deviceSpeechLocale} not installed on-device; downloading + falling back to en-US`);
+        void triggerOnDeviceModelDownload(this.deviceSpeechLocale);
         this.deviceSpeechLocale = 'en-US';
       }
     } catch { /* getSupportedLocales not critical — proceed with chosen locale */ }
@@ -202,7 +203,7 @@ class PassiveListenerManager {
         if (!this.active || event.error === 'aborted' || event.error === 'no-speech') return;
         this.deviceSpeechFatalError = true;
         void this.failDeviceSpeech(
-          `On-device transcription failed (${event.error}). ${event.message || 'Please try again.'}`,
+          'Private listening was interrupted. If this is a new device, on-device voice may still be downloading — please try again in a moment.',
         );
       }),
       ExpoSpeechRecognitionModule.addListener('end', () => {

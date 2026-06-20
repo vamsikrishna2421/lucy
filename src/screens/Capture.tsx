@@ -20,6 +20,7 @@ import {
 import type { PassiveListenerState } from '../audio/PassiveListener';
 import { acquireMic, releaseMic } from '../audio/micCoordinator';
 import { wakeWord } from '../voice/wakeWord';
+import { resolveSpeechMode } from '../voice/onDeviceSpeech';
 import { haptic } from '../config/haptics';
 import {
   ExpoSpeechRecognitionModule,
@@ -645,11 +646,15 @@ export function CaptureScreen({
         return;
       }
 
-      if (ExpoSpeechRecognitionModule.isRecognitionAvailable() && ExpoSpeechRecognitionModule.supportsOnDeviceRecognition()) {
+      if (ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
         const { getOnDeviceSpeechLocale, getUserProfile } = await import('../db/userProfile');
         const db = await getDatabase();
         const profile = await getUserProfile(db);
         const locale = getOnDeviceSpeechLocale(profile);
+        // Prefer on-device transcription; if its model isn't downloaded yet, this kicks off the
+        // download so the device self-heals to fully-private, and we let the OS recognizer handle
+        // this attempt so dictation still works (matches the wake word's pragmatic stance).
+        const { onDevice } = await resolveSpeechMode(locale);
         clearSpeechSubscriptions();
         speechSubscriptions.current = [
           ExpoSpeechRecognitionModule.addListener('result', (event: ExpoSpeechRecognitionResultEvent) => {
@@ -663,7 +668,9 @@ export function CaptureScreen({
             animateMicToIdle();
             setVoiceRecording(false);
             releaseMic('capture');
-            Alert.alert('On-device transcription failed', `${event.error}: ${event.message}`);
+            // Never surface a raw recognizer error code (No Scary States). On-device voice may still
+            // be downloading; the user can just type, or tap the mic to try again.
+            Alert.alert("Didn't catch that", 'You can tap the mic to try again, or type your thought below.');
           }),
           ExpoSpeechRecognitionModule.addListener('end', () => {
             clearSpeechSubscriptions();
@@ -677,15 +684,15 @@ export function CaptureScreen({
           interimResults: false,
           maxAlternatives: 1,
           continuous: false,
-          requiresOnDeviceRecognition: true,
+          requiresOnDeviceRecognition: onDevice,
           addsPunctuation: true,
         });
       } else {
-        // LUCY transcribes on-device only — no cloud fallback.
+        // No speech recognizer on this device at all — let the user type instead (non-scary).
         releaseMic('capture');
         Alert.alert(
-          'On-device dictation unavailable',
-          'This device does not support private on-device speech recognition. You can still type your thought.',
+          'Voice input unavailable',
+          'This device doesn’t have a speech recognizer available. You can still type your thought below.',
         );
         return;
       }

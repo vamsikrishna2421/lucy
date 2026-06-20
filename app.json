@@ -219,9 +219,10 @@
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 33,
+            "minSdkVersion": 24,
             "enableMinifyInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "-keep class org.pytorch.** { *; }\n-keep class com.swmansion.rnexecutorch.** { *; }\n-keep class com.facebook.jni.** { *; }\n-dontwarn org.pytorch.**",
             "useLegacyPackaging": true,
             "abiFilters": ["arm64-v8a"],
             "manifestQueries": {

@@ -24,7 +24,7 @@ import { upsertPerson, looksLikePerson } from '../db/people';
 import { getSetting } from '../db/settings';
 import { insertPlace } from '../db/places';
 import { insertOpenLoop } from '../db/openLoops';
-import { insertFollowUp } from '../db/followUps';
+import { insertFollowUp, listFollowUps } from '../db/followUps';
 import { insertReminder, markReminderScheduled, reminderAlreadyExists, recurringReminderExists } from '../db/reminders';
 import { deleteTodo, insertTodo, listPendingTodos } from '../db/todos';
 import type { CaptureSource, ExtractionResult } from '../types/extraction';
@@ -278,8 +278,19 @@ async function persistExtraction(
     for (const loop of extraction.open_loops) {
       await insertOpenLoop(db, capture.id, loop.description, extraction.privacy_level);
     }
-    for (const fu of extraction.follow_ups) {
-      await insertFollowUp(db, capture.id, fu.assignee, fu.action, extraction.privacy_level);
+    {
+      // Dedup follow-ups: one capture (esp. a run-on) can yield several near-identical follow_ups
+      // ("Priya: send the invoice" / "send Vamsi the invoice" / "send invoice"). Collapse against what's
+      // already pending AND within this round so the Focus Now list stays clean.
+      const { isSimilarFollowUp } = await import('./followUpDedup');
+      const existingFu = await listFollowUps(db);
+      const fuThisRound: Array<{ assignee: string; action: string }> = [];
+      for (const fu of extraction.follow_ups) {
+        const dup = existingFu.some((e) => isSimilarFollowUp(e, fu)) || fuThisRound.some((s) => isSimilarFollowUp(s, fu));
+        if (dup) continue;
+        await insertFollowUp(db, capture.id, fu.assignee, fu.action, extraction.privacy_level);
+        fuThisRound.push({ assignee: fu.assignee, action: fu.action });
+      }
     }
     // Commitment guardian: detect promises the user made ("I'll send the deck to Raghavendra by Thu")
     // and things they're owed, with deadlines, so LUCY can chase the at-risk ones. The LLM-typed

@@ -553,6 +553,18 @@ export default function App() {
     })();
   }, []);
 
+  // LAN companion: if the user left the dashboard server ON, auto-start it on boot so it survives an OTA
+  // reload (incl. the self-reload from /api/dev/reload) and reboots — lets a laptop reconnect and apply
+  // updates unattended, no manual restart needed.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { shouldAutostartServer, startServer } = await import('./src/server/localServer');
+        if (await shouldAutostartServer()) await startServer();
+      } catch { /* non-critical */ }
+    })();
+  }, []);
+
   // Once the app is ready (past splash + not onboarding), surface the approval-cards inbox a beat
   // after Home renders, so pending review items greet the user when they open the app.
   useEffect(() => {

@@ -129,6 +129,29 @@ async function route(req: ParsedRequest): Promise<string> {
     let payload: Record<string, unknown> = {};
     try { payload = req.body ? JSON.parse(req.body) : {}; } catch { payload = {}; }
 
+    // Dev/automation (LAN-only): report the running JS bundle, and remotely pull+apply an OTA so a
+    // shipped fix can take effect WITHOUT a manual phone restart (the app reloads itself; the server
+    // auto-restarts via shouldAutostartServer).
+    if (req.method === 'GET' && req.path === '/api/dev/version') {
+      try {
+        const Updates = await import('expo-updates');
+        return json(200, {
+          ok: true,
+          updateId: Updates.updateId ?? null,
+          createdAt: Updates.createdAt ?? null,
+          runtimeVersion: Updates.runtimeVersion ?? null,
+          channel: Updates.channel ?? null,
+          embedded: Updates.isEmbeddedLaunch ?? null,
+        });
+      } catch (e) { return json(200, { ok: false, error: e instanceof Error ? e.message : 'updates unavailable' }); }
+    }
+    if (req.method === 'POST' && req.path === '/api/dev/reload') {
+      const Updates = await import('expo-updates');
+      let fetched = false;
+      try { const r = await Updates.fetchUpdateAsync(); fetched = !!(r && (r as { isNew?: boolean }).isNew); } catch { /* offline / already current */ }
+      setTimeout(() => { void Updates.reloadAsync().catch(() => { /* ignore */ }); }, 600); // flush HTTP response first
+      return json(200, { ok: true, fetched, reloading: true });
+    }
     if (req.method === 'GET' && req.path === '/api/memory') {
       const { buildMemoryExport } = await import('../processing/memoryExport');
       return json(200, await buildMemoryExport(db));
@@ -852,6 +875,7 @@ export async function startServer(): Promise<ServerState> {
     server?.on?.('error', (e: unknown) => setState({ error: e instanceof Error ? e.message : 'Server error', running: false }));
 
     setState({ running: true, ip, pin: null, error: null });
+    void persistServerAutostart(true); // remember so the server auto-restarts after an OTA reload / reboot
     void fetchRemoteDashboard(); // pull the latest dashboard in the background
     return state;
   } catch (e) {
@@ -877,4 +901,24 @@ export function stopServer(): void {
   try { server?.close(); } catch { /* ignore */ }
   server = null;
   setState({ running: false, pin: null, error: null });
+  void persistServerAutostart(false);
+}
+
+const AUTOSTART_KEY = 'lan_server_autostart';
+async function persistServerAutostart(on: boolean): Promise<void> {
+  try {
+    const db = await getDatabase();
+    const { setSetting } = await import('../db/settings');
+    await setSetting(db, AUTOSTART_KEY, on ? '1' : '0');
+  } catch { /* non-critical */ }
+}
+
+/** Did the user leave the LAN server on? Used to auto-start it on app boot so it survives OTA reloads
+ *  (and the app reload triggered by /api/dev/reload), keeping the dashboard reachable unattended. */
+export async function shouldAutostartServer(): Promise<boolean> {
+  try {
+    const db = await getDatabase();
+    const { getSetting } = await import('../db/settings');
+    return (await getSetting(db, AUTOSTART_KEY)) === '1';
+  } catch { return false; }
 }

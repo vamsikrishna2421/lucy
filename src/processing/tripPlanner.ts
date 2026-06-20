@@ -80,13 +80,37 @@ export async function dismissTripSignal(db: SQLiteDatabase): Promise<void> {
   await setSetting(db, SIGNAL_KEY, '');
 }
 
-export interface TripPlanResult { projectId: number; projectName: string; steps: number; departISO: string | null; reminderAt: string | null }
+export interface TripPlanResult { projectId: number; projectName: string; steps: number; departISO: string | null; reminderAt: string | null; peopleToSee: number; bookings: number }
 
 export async function createTripPlan(db: SQLiteDatabase, signal: StoredTripSignal): Promise<TripPlanResult> {
   const captureId = signal.captureId ?? 0;
   const projectName = projectNameFor(signal.destination);
   const existing = (await listProjects(db)).find((p) => p.name.trim().toLowerCase() === projectName.toLowerCase());
-  const projectId = existing?.id ?? await createProject(db, projectName, 'Your trip — the pre-trip checklist, dates, and a check-in nudge.');
+
+  // Enrich from what LUCY already knows: people the user mentioned alongside the destination, and saved
+  // vault bookings that name it. Best-effort — the plan still stands if any of this fails.
+  let enrich = { peopleToSee: [] as string[], bookings: [] as string[] };
+  try {
+    const { enrichTrip } = await import('./tripEnrichment');
+    const { listRecentCaptures } = await import('../db/captures');
+    const { getAllPersonContexts } = await import('./relationshipEngine');
+    const { listVaultItems } = await import('./documentVault');
+    const [caps, people, vault] = await Promise.all([
+      listRecentCaptures(db, 150), getAllPersonContexts(db), listVaultItems(db),
+    ]);
+    enrich = enrichTrip({
+      destination: signal.destination,
+      captures: caps.map((c) => c.raw_transcript ?? '').filter(Boolean),
+      people: people.map((p) => p.name),
+      vault: vault.map((v) => ({ title: v.title, description: v.description, keywords: v.keywords, bucket: v.bucket })),
+    });
+  } catch { /* enrichment is best-effort */ }
+
+  const baseDesc = 'Your trip — the pre-trip checklist, dates, and a check-in nudge.';
+  const description = enrich.bookings.length
+    ? `${baseDesc}\n\nSaved bookings on file: ${enrich.bookings.join(', ')}.`
+    : baseDesc;
+  const projectId = existing?.id ?? await createProject(db, projectName, description);
 
   const departISO = signal.dates.find((d) => d.label === 'Departure')?.dueISO
     ?? signal.dates.find((d) => !!d.dueISO)?.dueISO
@@ -102,6 +126,17 @@ export async function createTripPlan(db: SQLiteDatabase, signal: StoredTripSigna
       ? `${projectName} · by ${new Date(due).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
       : projectName;
     await insertTodo(db, captureId, { task: step.task, category: 'errand', urgency: isKey ? 'high' : 'medium', context }, 'normal');
+  }
+
+  // Make the generic "who to meet" step concrete: the people you've mentioned alongside this place.
+  if (enrich.peopleToSee.length) {
+    const names = enrich.peopleToSee.join(', ');
+    const where = signal.destination ? ` to ${signal.destination}` : '';
+    await insertTodo(
+      db, captureId,
+      { task: `Reach out to ${names} about your trip${where}`, category: 'errand', urgency: 'medium', context: `${projectName} · people to see` },
+      'normal',
+    );
   }
 
   // A check-in / leave-for-airport reminder on departure day.
@@ -120,5 +155,5 @@ export async function createTripPlan(db: SQLiteDatabase, signal: StoredTripSigna
   }
 
   await setSetting(db, SIGNAL_KEY, '');
-  return { projectId, projectName, steps: TRIP_CHECKLIST.length, departISO, reminderAt };
+  return { projectId, projectName, steps: TRIP_CHECKLIST.length, departISO, reminderAt, peopleToSee: enrich.peopleToSee.length, bookings: enrich.bookings.length };
 }

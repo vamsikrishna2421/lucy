@@ -8,7 +8,7 @@ import * as Crypto from 'expo-crypto';
 import { config } from '../config';
 import { enqueueTranscript } from '../processing/extract';
 import { acquireMic, releaseMic } from './micCoordinator';
-import { isOnDeviceLocaleInstalled, triggerOnDeviceModelDownload } from '../voice/onDeviceSpeech';
+import { resolveSpeechMode } from '../voice/onDeviceSpeech';
 
 export type ListeningStatus = 'off' | 'starting' | 'listening' | 'stopping';
 
@@ -42,6 +42,7 @@ class PassiveListenerManager {
   private secondTimer: ReturnType<typeof setInterval> | null = null;
   private active = false;
   private meetingMode = false;
+  private onDeviceReady = false; // whether an on-device model is ready for deviceSpeechLocale
   private deviceSpeechLocale = 'en-US';
   private deviceSpeechFatalError = false;
   private deviceSpeechSubscriptions: Array<{ remove(): void }> = [];
@@ -156,23 +157,21 @@ class PassiveListenerManager {
       );
       return;
     }
-    if (!onDeviceSupported) {
+    // Pure ambient Listen requires on-device (it must never stream to the cloud). An explicit meeting /
+    // hold-to-talk may proceed without it and use the OS recognizer so it still transcribes.
+    if (!onDeviceSupported && !this.meetingMode) {
       await this.failDeviceSpeech(
         'This device does not currently support private on-device speech recognition.',
       );
       return;
     }
-    // Listen mode is continuous/background, so it stays STRICTLY on-device — it must never stream
-    // background audio to the cloud. Confirm the chosen locale's on-device model is installed; if it
-    // isn't, kick off its download (Android) so the device self-heals to private listening next time,
-    // and fall back to en-US for this attempt.
+    // Prefer on-device. An explicit meeting / hold-to-talk may fall back to the OS recognizer when no
+    // on-device model is installed yet (so it still transcribes, and the model downloads to self-heal).
+    // Pure ambient Listen stays STRICTLY on-device — it must never stream background audio to the cloud.
     try {
-      if (!(await isOnDeviceLocaleInstalled(this.deviceSpeechLocale))) {
-        console.warn(`[Listen] Locale ${this.deviceSpeechLocale} not installed on-device; downloading + falling back to en-US`);
-        void triggerOnDeviceModelDownload(this.deviceSpeechLocale);
-        this.deviceSpeechLocale = 'en-US';
-      }
-    } catch { /* getSupportedLocales not critical — proceed with chosen locale */ }
+      const mode = await resolveSpeechMode(this.deviceSpeechLocale);
+      this.onDeviceReady = mode.onDevice;
+    } catch { this.onDeviceReady = false; }
     this.patch({ mode: 'stt', noApiKey: false });
     this.configureDeviceSpeechListeners();
     if (!this.startDeviceSpeech()) return;
@@ -229,7 +228,9 @@ class PassiveListenerManager {
         interimResults: this.state.quickCapture,
         maxAlternatives: 1,
         continuous: true,
-        requiresOnDeviceRecognition: true,
+        // Ambient Listen stays strictly on-device; an explicit meeting falls back to the OS recognizer
+        // when no on-device model is installed yet, so it still transcribes (iOS stays on-device).
+        requiresOnDeviceRecognition: this.meetingMode ? this.onDeviceReady : true,
         addsPunctuation: true,
         // Explicit audio session config (the library's documented default) so the
         // AVAudioSession category/mode are set deterministically and don't collide

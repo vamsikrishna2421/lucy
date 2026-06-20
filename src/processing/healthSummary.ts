@@ -179,5 +179,37 @@ export async function getHealthSummary(db: SQLiteDatabase, dateKey = todayKey())
     summary.drLucy = evaluateGuardian(summary, { resting_hr: baseRow?.rhr ?? null, sleep_hours: baseRow?.sleep ?? null });
   } catch { /* guidance is non-critical */ }
 
+  // Contextual guardian: connect meals ↔ mood ↔ sleep into grounded cross-domain observations.
+  try {
+    const { contextualGuidance } = await import('./drLucyContext');
+    const localDate = (s: string): string => {
+      const d = new Date((s || '').replace(' ', 'T') + 'Z');
+      return Number.isNaN(d.getTime()) ? (s || '').slice(0, 10)
+        : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const localHour = (s: string): number => { const d = new Date((s || '').replace(' ', 'T') + 'Z'); return Number.isNaN(d.getTime()) ? 12 : d.getHours(); };
+    const [foods, moods, snaps] = await Promise.all([
+      db.getAllAsync<{ date_key: string; meal_type: string | null; calories: number | null; carbs_g: number | null; created_at: string }>(
+        "SELECT date_key, meal_type, calories, carbs_g, created_at FROM food_log WHERE date_key >= date('now','-10 days')").catch(() => []),
+      db.getAllAsync<{ tone: string; created_at: string }>(
+        "SELECT tone, created_at FROM mood_entries WHERE created_at >= datetime('now','-10 days')").catch(() => []),
+      db.getAllAsync<{ date_key: string; sleep_hours: number | null }>(
+        "SELECT date_key, sleep_hours FROM health_snapshots WHERE date_key >= date('now','-10 days')").catch(() => []),
+    ]);
+    type Acc = { calories: number; carbs: number; meals: Array<{ mealType: string; hour: number }>; sleep: number | null; stressedN: number; calmN: number };
+    const byDate = new Map<string, Acc>();
+    const acc = (d: string): Acc => { let g = byDate.get(d); if (!g) { g = { calories: 0, carbs: 0, meals: [], sleep: null, stressedN: 0, calmN: 0 }; byDate.set(d, g); } return g; };
+    for (const f of foods) { const g = acc(f.date_key); g.calories += f.calories ?? 0; g.carbs += f.carbs_g ?? 0; g.meals.push({ mealType: (f.meal_type || '').toLowerCase(), hour: localHour(f.created_at) }); }
+    for (const s of snaps) { if (s.sleep_hours != null) acc(s.date_key).sleep = s.sleep_hours; }
+    const STRESS = new Set(['stressed', 'negative', 'frustrated']); const CALM = new Set(['positive', 'excited', 'calm']);
+    for (const m of moods) { const g = acc(localDate(m.created_at)); if (STRESS.has(m.tone)) g.stressedN += 1; else if (CALM.has(m.tone)) g.calmN += 1; }
+    const contexts = [...byDate.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([dateKey, g]) => ({
+      dateKey, calories: Math.round(g.calories), carbs_g: Math.round(g.carbs), meals: g.meals,
+      stressed: g.stressedN > 0 && g.stressedN >= g.calmN, sleep_hours: g.sleep,
+    }));
+    const ctx = contextualGuidance(contexts);
+    if (ctx.length) summary.drLucy = [...summary.drLucy, ...ctx].slice(0, 3);
+  } catch { /* contextual guidance is non-critical */ }
+
   return summary;
 }

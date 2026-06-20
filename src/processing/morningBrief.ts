@@ -105,6 +105,14 @@ export async function sendMorningBrief(db: SQLiteDatabase): Promise<void> {
     if (behind) parts.push(goalGuidance(behind.label, behind.progress, behind.currency));
   } catch { /* non-critical */ }
 
+  // Errands piling up — propose knocking them out together.
+  try {
+    const { listPendingTodos } = await import('../db/todos');
+    const { errandBatchNudge } = await import('./errandBatch');
+    const nudge = errandBatchNudge(await listPendingTodos(db));
+    if (nudge) parts.push(nudge);
+  } catch { /* non-critical */ }
+
   // Mood trend
   if (moodTrend.recentTones.length > 0) {
     const stressed = moodTrend.recentTones.filter((t) => ['stressed', 'frustrated', 'negative'].includes(t)).length;

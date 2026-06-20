@@ -385,6 +385,10 @@ export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
     // source-of-truth so the user can review the real image from the capture node. On-device only.
     await db.execAsync('ALTER TABLE captures ADD COLUMN source_image_path TEXT;');
   }
+  if (!existing.has('project_id')) {
+    // Explicit project pin for a NOTE (capture). NULL = gather by name/alias match as before. Additive.
+    await db.execAsync('ALTER TABLE captures ADD COLUMN project_id INTEGER;');
+  }
   if (!existing.has('archived_at')) {
     await db.execAsync('ALTER TABLE captures ADD COLUMN archived_at DATETIME;');
   }

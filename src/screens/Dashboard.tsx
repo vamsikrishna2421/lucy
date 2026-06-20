@@ -7,7 +7,8 @@ import { formatMeetingRowText } from '../processing/meetingFormat';
 import { LUCY_COLORS } from '../config/colors';
 import { FadeInUp } from '../components/Motion';
 import { getDatabase } from '../db';
-import { captureStatus, listCaptureUpdates, listRecentCaptures, listListenSessions, type CaptureRow, type ListenSessionGroup } from '../db/captures';
+import { captureStatus, listCaptureUpdates, listRecentCaptures, listListenSessions, assignCaptureToProject, type CaptureRow, type ListenSessionGroup } from '../db/captures';
+import { listProjects, type ProjectRow } from '../db/projects';
 import { answerContextRequest, listOpenContextRequests, type ContextRequestRow } from '../db/contextRequests';
 import { listExpenses, type ExpenseRow } from '../db/expenses';
 import { listIdeas, type IdeaRow } from '../db/ideas';
@@ -2382,6 +2383,14 @@ function TimelineView({
   const [pendingAction, setPendingAction] = useState<import('../processing/automationEngine').ExtractedAction | null>(null);
   const [executingAction, setExecutingAction] = useState(false);
   const [menuTarget, setMenuTarget] = useState<CaptureRow | null>(null);
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
+  useEffect(() => { void (async () => { try { const db = await getDatabase(); setProjects(await listProjects(db)); } catch { /* projects optional */ } })(); }, []);
+  // Pin (or unpin) the menu's note to a project — explicit membership shown in the action sheet.
+  const pinNoteToProject = async (projectId: number | null) => {
+    if (!menuTarget) return;
+    try { const db = await getDatabase(); await assignCaptureToProject(db, menuTarget.id, projectId); } catch { /* non-critical */ }
+    setMenuTarget((prev) => (prev ? { ...prev, project_id: projectId } : prev));
+  };
   // LLM-detected actions: map from capture_id → parsed action object
   const [llmActions, setLlmActions] = useState<Record<number, import('../processing/automationEngine').ExtractedAction>>({});
   // Extraction chips: map from capture_id → parsed ExtractionResult (loaded lazily on expand)
@@ -2960,6 +2969,31 @@ function TimelineView({
                 <Text style={[styles.actionSheetIcon, { color: LUCY_COLORS.primary }]}>↻</Text>
                 <Text style={styles.actionSheetLabel}>Reprocess</Text>
               </TouchableOpacity>
+            ) : null}
+            {projects.length > 0 ? (
+              <View style={styles.actionSheetPin}>
+                <Text style={styles.actionSheetPinLabel}>Pin to project</Text>
+                <View style={styles.actionSheetPinChips}>
+                  <TouchableOpacity
+                    style={[styles.actionSheetChip, !menuTarget?.project_id && styles.actionSheetChipActive]}
+                    onPress={() => void pinNoteToProject(null)}
+                  >
+                    <Text style={[styles.actionSheetChipText, !menuTarget?.project_id && styles.actionSheetChipTextActive]}>None</Text>
+                  </TouchableOpacity>
+                  {projects.map((p) => {
+                    const active = menuTarget?.project_id === p.id;
+                    return (
+                      <TouchableOpacity
+                        key={p.id}
+                        style={[styles.actionSheetChip, active && styles.actionSheetChipActive]}
+                        onPress={() => void pinNoteToProject(p.id)}
+                      >
+                        <Text style={[styles.actionSheetChipText, active && styles.actionSheetChipTextActive]} numberOfLines={1}>{p.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
             ) : null}
             <TouchableOpacity
               style={styles.actionSheetItem}
@@ -4008,6 +4042,13 @@ const styles = StyleSheet.create({
   actionSheetItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 14 },
   actionSheetIcon: { width: 22, textAlign: 'center', color: LUCY_COLORS.textMuted, fontSize: 16, fontWeight: '700' },
   actionSheetLabel: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '600' },
+  actionSheetPin: { paddingHorizontal: 20, paddingVertical: 12, gap: 8, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider },
+  actionSheetPinLabel: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  actionSheetPinChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  actionSheetChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, maxWidth: 220 },
+  actionSheetChipActive: { backgroundColor: LUCY_COLORS.primaryMist, borderColor: LUCY_COLORS.primary },
+  actionSheetChipText: { color: LUCY_COLORS.textMuted, fontSize: 13, fontWeight: '700' },
+  actionSheetChipTextActive: { color: LUCY_COLORS.primary },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   feedbackModal: { backgroundColor: LUCY_COLORS.surfaceElevated ?? '#2A2219', borderRadius: 20, padding: 24, width: '100%', borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.40, shadowRadius: 16, elevation: 12 },
   feedbackModalTitle: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },

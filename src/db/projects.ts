@@ -107,13 +107,17 @@ export interface ProjectNote { id: number; title: string | null; snippet: string
 /** The actual captures/notes that mention this project (by name or any merged alias) — so the project
  *  space can SHOW them, not just count tasks. Newest first. */
 export async function projectNotes(db: SQLiteDatabase, name: string, limit = 50): Promise<ProjectNote[]> {
-  const terms = await projectMatchTerms(db, name);
+  const row = await db.getFirstAsync<ProjectRow>('SELECT * FROM projects WHERE name = ?', name);
+  const terms = [...new Set([name, ...(row ? projectAliases(row) : [])].map((t) => t.trim()).filter(Boolean))];
   if (terms.length === 0) return [];
-  const where = terms.map(() => '(extracted_title LIKE ? OR raw_transcript LIKE ? OR structured_text LIKE ?)').join(' OR ');
-  const args = terms.flatMap((term) => { const like = `%${term}%`; return [like, like, like]; });
+  // A note belongs to the project if it's EXPLICITLY pinned (captures.project_id) OR its text mentions
+  // the project name / a merged alias — explicit pin survives edits and fixes false name-matches.
+  const clauses = terms.map(() => '(extracted_title LIKE ? OR raw_transcript LIKE ? OR structured_text LIKE ?)');
+  const args: Array<string | number> = terms.flatMap((term) => { const like = `%${term}%`; return [like, like, like]; });
+  if (row?.id) { clauses.unshift('project_id = ?'); args.unshift(row.id); }
   const rows = await db.getAllAsync<{ id: number; extracted_title: string | null; raw_transcript: string | null; structured_text: string | null; created_at: string }>(
     `SELECT id, extracted_title, raw_transcript, structured_text, created_at FROM captures
-     WHERE archived_at IS NULL AND (${where}) ORDER BY created_at DESC LIMIT ?`,
+     WHERE archived_at IS NULL AND (${clauses.join(' OR ')}) ORDER BY created_at DESC LIMIT ?`,
     ...args,
     limit,
   );

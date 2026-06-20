@@ -24,6 +24,7 @@ export interface CaptureRow {
   listen_session_id: string | null;
   protected_values: string | null;
   source_image_path: string | null;
+  project_id: number | null;
   importance: 'low' | 'normal' | 'high' | null;
 }
 
@@ -64,6 +65,12 @@ export async function getLowImportanceCaptures(db: SQLiteDatabase, limit = 200):
 /** Links the on-device original photo (LUCY Lens source-of-truth) to a capture. */
 export async function setCaptureSourceImage(db: SQLiteDatabase, id: number, path: string): Promise<void> {
   await db.runAsync('UPDATE captures SET source_image_path = ? WHERE id = ?', path, id);
+}
+
+/** Pin (or unpin with null) a NOTE to a project explicitly — a stable link that survives text edits and
+ *  overrides name-matching. Additive: notes left unpinned (NULL) still gather by name as before. */
+export async function assignCaptureToProject(db: SQLiteDatabase, captureId: number, projectId: number | null): Promise<void> {
+  await db.runAsync('UPDATE captures SET project_id = ? WHERE id = ?', projectId, captureId);
 }
 
 export type CaptureStatus = 'queued' | 'processing' | 'complete' | 'retrying' | 'archived';

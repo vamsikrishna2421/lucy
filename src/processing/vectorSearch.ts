@@ -15,7 +15,8 @@
 
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { listRecentCaptures, type CaptureRow } from '../db/captures';
-import { cosineSimilarity, generateEmbedding, loadAllEmbeddings } from '../ai/embeddings';
+import { cosineSimilarity, generateEmbedding, loadEmbeddingsFor, reembedStaleCaptures } from '../ai/embeddings';
+import { isEmbeddingStale } from '../ai/embeddingModel';
 
 export interface SimilarCapture {
   capture: CaptureRow;
@@ -96,29 +97,39 @@ export async function findSimilarCaptures(
   limit = 5,
   minScore = 0.12,
 ): Promise<SimilarCapture[]> {
-  const [allEmbeddings, recentCaptures] = await Promise.all([
-    loadAllEmbeddings(db),
+  const [recentCaptures, queryEmb] = await Promise.all([
     listRecentCaptures(db, 200), // wider window for better recall
+    generateEmbedding(query),
   ]);
+  const { vector: queryVec, model: currentModel } = queryEmb;
 
-  if (allEmbeddings.length === 0) {
+  // Retrieval only scores the recent window, so load embeddings for exactly those captures (not the
+  // whole table — that scaled with total history and was mostly discarded here).
+  const recentEmbeddings = await loadEmbeddingsFor(db, recentCaptures.map((c) => c.id));
+  if (recentEmbeddings.length === 0) {
     // No embeddings yet — fall back to BM25+entity only
     return bm25FallbackSearch(query, recentCaptures, limit, minScore);
   }
 
-  const { vector: queryVec } = await generateEmbedding(query);
   const captureMap = new Map(recentCaptures.map((c) => [c.id, c]));
   const queryTokens = tokenise(query);
   const scored: SimilarCapture[] = [];
+  const stale: Array<{ captureId: number; text: string }> = [];
 
-  for (const emb of allEmbeddings) {
+  for (const emb of recentEmbeddings) {
     const capture = captureMap.get(emb.captureId);
     if (!capture) continue;
-    if (emb.vector.length !== queryVec.length) continue;
 
     const docText = [capture.raw_transcript ?? '', capture.extracted_title ?? '', capture.structured_text ?? ''].join(' ');
-    const docTokens = tokenise(docText);
 
+    // Embedding produced by a DIFFERENT model (the user toggled remote AI): its vector can't be compared
+    // to this query's. Queue a lazy re-embed instead of silently dropping the memory forever.
+    if (isEmbeddingStale(emb.model, emb.vector.length, currentModel, queryVec.length)) {
+      stale.push({ captureId: emb.captureId, text: docText });
+      continue;
+    }
+
+    const docTokens = tokenise(docText);
     const semantic = Math.max(0, cosineSimilarity(queryVec, emb.vector));
     const bm25     = bm25Score(queryTokens, docTokens);
     const entity   = entityScore(query, docText);
@@ -133,6 +144,15 @@ export async function findSimilarCaptures(
     if (combined >= minScore) {
       scored.push({ capture, score: combined, signals: { semantic, bm25, entity, temporal } });
     }
+  }
+
+  // Heal mismatched embeddings in the background so these memories return to semantic search next time.
+  if (stale.length > 0) void reembedStaleCaptures(db, stale).catch(() => {});
+
+  // If staleness left us with nothing comparable this round (just toggled models), don't return an
+  // empty result while re-embedding catches up — serve BM25+entity so the user still gets answers.
+  if (scored.length === 0 && stale.length > 0) {
+    return bm25FallbackSearch(query, recentCaptures, limit, minScore);
   }
 
   return scored.sort((a, b) => b.score - a.score).slice(0, limit);

@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getRemoteAccessState, getRemoteOpenAIKey } from './remoteAccess';
+import { OPENAI_EMBED_MODEL, KEYWORD_EMBED_MODEL } from './embeddingModel';
 
 export type EmbeddingVector = number[];
 
@@ -73,10 +74,18 @@ export async function generateEmbedding(text: string): Promise<{ vector: Embeddi
     const apiKey = await getRemoteOpenAIKey();
     if (apiKey) {
       const vec = await openAIEmbed(text, apiKey);
-      if (vec) return { vector: vec, model: 'openai-3-small-512' };
+      if (vec) return { vector: vec, model: OPENAI_EMBED_MODEL };
     }
   }
-  return { vector: keywordFingerprint(text), model: 'keyword-256' };
+  return { vector: keywordFingerprint(text), model: KEYWORD_EMBED_MODEL };
+}
+
+/** The model generateEmbedding WOULD use right now (without embedding any text). Lets retrieval detect
+ *  rows produced by a different model after the user toggles remote AI on/off. */
+export async function currentEmbeddingModel(): Promise<string> {
+  const remote = await getRemoteAccessState();
+  if (remote.enabled && remote.hasKey && (await getRemoteOpenAIKey())) return OPENAI_EMBED_MODEL;
+  return KEYWORD_EMBED_MODEL;
 }
 
 export async function storeEmbedding(
@@ -106,4 +115,47 @@ export async function loadAllEmbeddings(
     vector: JSON.parse(row.embedding) as EmbeddingVector,
     model: row.model,
   }));
+}
+
+/** Load embeddings for a SPECIFIC set of captures. Retrieval only scores the recent window, so loading
+ *  the whole table every search is wasteful — this scopes the read (chunked to stay under SQLite's
+ *  variable limit) and skips any corrupt rows. */
+export async function loadEmbeddingsFor(
+  db: SQLiteDatabase,
+  captureIds: number[],
+): Promise<Array<{ captureId: number; vector: EmbeddingVector; model: string }>> {
+  if (captureIds.length === 0) return [];
+  const out: Array<{ captureId: number; vector: EmbeddingVector; model: string }> = [];
+  const CHUNK = 400;
+  for (let i = 0; i < captureIds.length; i += CHUNK) {
+    const ids = captureIds.slice(i, i + CHUNK);
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = await db.getAllAsync<{ capture_id: number; embedding: string; model: string }>(
+      `SELECT capture_id, embedding, model FROM capture_embeddings WHERE capture_id IN (${placeholders})`,
+      ...ids,
+    );
+    for (const row of rows) {
+      try {
+        out.push({ captureId: row.capture_id, vector: JSON.parse(row.embedding) as EmbeddingVector, model: row.model });
+      } catch { /* skip a corrupt embedding row */ }
+    }
+  }
+  return out;
+}
+
+/** Re-embed captures whose stored embedding came from a DIFFERENT model than the current one, so old
+ *  memories stay searchable after the user switches embedding models (remote ↔ on-device). Bounded and
+ *  safe to fire-and-forget; a handful per search means the store converges over a few searches. */
+export async function reembedStaleCaptures(
+  db: SQLiteDatabase,
+  stale: Array<{ captureId: number; text: string }>,
+  limit = 15,
+): Promise<number> {
+  let healed = 0;
+  for (const { captureId, text } of stale.slice(0, limit)) {
+    if (!text.trim()) continue;
+    await storeEmbedding(db, captureId, text); // INSERT OR REPLACE with the CURRENT model
+    healed += 1;
+  }
+  return healed;
 }

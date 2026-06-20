@@ -94,7 +94,12 @@ export async function smartCapturePhoto(db: SQLiteDatabase, uri: string): Promis
     if (r.category) parts.push(`category ${r.category}`);
     const text = parts.length ? parts.join(', ') : 'Receipt scanned';
     const { enqueueTranscript, processQueue } = await import('./extract');
-    await enqueueTranscript(text, 'text'); void processQueue();
+    const capId = await enqueueTranscript(text, 'text'); void processQueue();
+    // Keep the receipt photo — reachable from the expense via its capture.
+    try {
+      const stored = await persistOriginalImage(uri);
+      if (stored) { const { setCaptureSourceImage } = await import('../db/captures'); await setCaptureSourceImage(db, capId, stored); }
+    } catch { /* image link optional */ }
     return { type: 'receipt', message: `Logged a receipt${r.amount ? ` for ${r.amount}` : ''}.` };
   }
 
@@ -117,7 +122,7 @@ function inferMealType(d = new Date()): string {
   return 'snack';
 }
 
-async function persistOriginalImage(uri: string): Promise<string | null> {
+export async function persistOriginalImage(uri: string): Promise<string | null> {
   try {
     const { documentDirectory, makeDirectoryAsync, copyAsync, getInfoAsync } = await import('expo-file-system/legacy');
     const dir = `${documentDirectory}lens_images/`;

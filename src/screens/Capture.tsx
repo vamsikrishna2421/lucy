@@ -457,6 +457,7 @@ export function CaptureScreen({
   const micScale = useRef(new Animated.Value(1)).current;
   const micRadius = useRef(new Animated.Value(23)).current;
   const sendScale = useRef(new Animated.Value(1)).current;
+  const pendingReceiptImage = useRef<string | null>(null); // persisted receipt photo to attach on next send
   const ackAnim = useRef(new Animated.Value(20)).current;
   const ackOpacity = useRef(new Animated.Value(0)).current;
   const [done, setDone] = useState<DoneEntry[]>([]);
@@ -569,8 +570,8 @@ export function CaptureScreen({
     setScanningReceipt(true);
     try {
       const { scanReceiptToText } = await import('../processing/receiptScan');
-      const captureText = await scanReceiptToText();
-      if (captureText) setText(captureText);
+      const scanned = await scanReceiptToText();
+      if (scanned) { setText(scanned.text); pendingReceiptImage.current = scanned.imagePath; }
     } finally {
       setScanningReceipt(false);
     }
@@ -688,6 +689,9 @@ export function CaptureScreen({
   const sendCapture = async () => {
     const outgoing = text.trim();
     if (!outgoing) return;
+    // A receipt scan (if any) to attach to the capture we're about to create. Consume it now so it
+    // can never carry over to a later, unrelated capture.
+    const receiptImg = pendingReceiptImage.current; pendingReceiptImage.current = null;
 
     // Detect automation intent FIRST — if high confidence, show confirmation instead of queuing
     const autoAction = detectAutomationIntent(outgoing);
@@ -704,7 +708,10 @@ export function CaptureScreen({
 
     try {
       setSending(true);
-      await enqueueTranscript(outgoing, 'text', markedPrivate);
+      const capId = await enqueueTranscript(outgoing, 'text', markedPrivate);
+      if (receiptImg && capId) {
+        try { const db = await getDatabase(); const { setCaptureSourceImage } = await import('../db/captures'); await setCaptureSourceImage(db, capId, receiptImg); } catch { /* image link optional */ }
+      }
       haptic.capture(); // success — the most important haptic in the app
       setText('');
       const msg = markedPrivate ? 'Protected thought queued' : 'Got it ✓';

@@ -2375,6 +2375,7 @@ function TimelineView({
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [quickText, setQuickText] = useState('');
   const [quickSending, setQuickSending] = useState(false);
+  const pendingReceiptImage = useRef<string | null>(null); // persisted receipt photo to attach on next quick send
   const [quickAck, setQuickAck] = useState('');
   const [readingImage, setReadingImage] = useState(false); // vision OCR in progress (snap-a-note)
   const [viewerImage, setViewerImage] = useState<string | null>(null); // original photo being viewed
@@ -2538,6 +2539,8 @@ function TimelineView({
   const sendQuick = async () => {
     const t = quickText.trim();
     if (!t || quickSending) return;
+    // A receipt scan (if any) to attach to this capture; consume now so it can't carry to a later one.
+    const receiptImg = pendingReceiptImage.current; pendingReceiptImage.current = null;
 
     // Check for automation intent first
     const { detectAutomationIntent } = await import('../processing/automationEngine');
@@ -2552,7 +2555,10 @@ function TimelineView({
 
     setQuickSending(true);
     try {
-      await enqueueTranscript(t, 'text', false);
+      const capId = await enqueueTranscript(t, 'text', false);
+      if (receiptImg && capId) {
+        try { const db = await getDatabase(); const { setCaptureSourceImage } = await import('../db/captures'); await setCaptureSourceImage(db, capId, receiptImg); } catch { /* image link optional */ }
+      }
       setQuickText('');
       setQuickAck('Got it ✓');
       setTimeout(() => setQuickAck(''), 2000);
@@ -2602,8 +2608,8 @@ function TimelineView({
                 text: '🧾 Receipt (expense)',
                 onPress: async () => {
                   const { scanReceiptToText } = await import('../processing/receiptScan');
-                  const text = await scanReceiptToText();
-                  if (text) setQuickText(text);
+                  const scanned = await scanReceiptToText();
+                  if (scanned) { setQuickText(scanned.text); pendingReceiptImage.current = scanned.imagePath; }
                 },
               },
               {

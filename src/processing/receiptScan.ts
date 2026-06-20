@@ -23,8 +23,11 @@ async function fromLibrary(): Promise<string | null> {
   return r.canceled || !r.assets[0] ? null : r.assets[0].uri;
 }
 
-/** Lets the user take a photo or pick one, then OCRs the receipt and returns capture text. */
-export async function scanReceiptToText(): Promise<string | null> {
+export interface ScannedReceipt { text: string; imagePath: string | null }
+
+/** Lets the user take a photo or pick one, then OCRs the receipt and returns the capture text PLUS a
+ *  persisted copy of the receipt image (so the caller can attach it to the capture → expense on send). */
+export async function scanReceiptToText(): Promise<ScannedReceipt | null> {
   const uri = await new Promise<string | null>((resolve) => {
     Alert.alert('Scan a receipt', 'Capture an expense from a receipt photo.', [
       { text: 'Take photo', onPress: () => void fromCamera().then(resolve) },
@@ -33,6 +36,9 @@ export async function scanReceiptToText(): Promise<string | null> {
     ]);
   });
   if (!uri) return null;
+  // Keep a durable copy of the receipt photo (the picker URI is temporary) to attach to the expense.
+  let imagePath: string | null = null;
+  try { const { persistOriginalImage } = await import('./smartPhotoCapture'); imagePath = await persistOriginalImage(uri); } catch { /* image is optional */ }
   try {
     const { processReceiptImage, receiptToCapture } = await import('./receiptOCR');
     const receipt = await processReceiptImage(uri);
@@ -47,10 +53,10 @@ export async function scanReceiptToText(): Promise<string | null> {
           ? 'I couldn\'t make out the merchant or amount. Try a clearer, well-lit photo — or type the expense.'
           : 'Receipt scanning reads the photo with OpenAI vision. Add an OpenAI key in Settings → Remote intelligence, then try again.',
       );
-      return text; // still return the placeholder so the user can edit
+      return { text, imagePath }; // still return the placeholder so the user can edit
     }
     Alert.alert('Receipt read ✓', `${text}\n\nReview it in the capture box and tap send to save the expense.`);
-    return text;
+    return { text, imagePath };
   } catch (e) {
     Alert.alert('Could not read receipt', e instanceof Error ? e.message : 'Try a clearer photo, or type the expense instead.');
     return null;

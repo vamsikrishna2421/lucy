@@ -784,6 +784,10 @@ export default function App() {
       const { smartCapturePhoto } = await import('./src/processing/smartPhotoCapture');
       const r = await smartCapturePhoto(db, uri);
       goToDashView('Timeline');
+      // A receipt/note photo creates a capture — refresh the timeline (and finish extraction) so it
+      // actually appears, instead of silently landing in the DB while the view stays stale.
+      setRefreshToken((v) => v + 1);
+      void drainQueue();
       let extra = '';
       if (r.type === 'meal') {
         try {
@@ -794,7 +798,7 @@ export default function App() {
       }
       Alert.alert(r.type === 'meal' ? 'Meal logged ✓' : r.type === 'receipt' ? 'Receipt logged ✓' : 'Saved ✓', r.message + extra);
     } catch { Alert.alert('Could not read that', 'Please try again with a clearer photo.'); } finally { setSnapBusy(false); }
-  }, [goToDashView]);
+  }, [goToDashView, drainQueue]);
 
   // LUCY's animated face + live "Hey Lucy" status pill. Rendered fresh per call (a function, not a
   // shared element, since both the header and the always-mounted dashboard may render it). It's placed

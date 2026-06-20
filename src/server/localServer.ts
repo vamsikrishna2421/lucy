@@ -685,6 +685,22 @@ async function route(req: ParsedRequest): Promise<string> {
       const done = await deleteProject(db, id);
       return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such project' }) });
     }
+    // Trip co-pilot — the pending offer + confirm/dismiss (web parity; mirrors the in-app ProjectsTab).
+    if (req.method === 'GET' && req.path === '/api/trip/signal') {
+      const { getTripSignal } = await import('../processing/tripPlanner');
+      return json(200, { ok: true, signal: await getTripSignal(db) });
+    }
+    if (req.method === 'POST' && req.path === '/api/trip/plan') {
+      const { getTripSignal, createTripPlan } = await import('../processing/tripPlanner');
+      const signal = await getTripSignal(db);
+      if (!signal) return json(400, { error: 'No trip offer to plan' });
+      return json(200, { ok: true, plan: await createTripPlan(db, signal) });
+    }
+    if (req.method === 'POST' && req.path === '/api/trip/dismiss') {
+      const { dismissTripSignal } = await import('../processing/tripPlanner');
+      await dismissTripSignal(db);
+      return json(200, { ok: true });
+    }
     // Project autopilot — suggestions LUCY noticed, plus merge-into-existing (web parity).
     if (req.method === 'GET' && req.path === '/api/projects/suggestions') {
       const { deriveProjectSuggestions } = await import('../processing/projectAutopilot');

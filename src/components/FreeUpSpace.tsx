@@ -157,6 +157,15 @@ export function FreeUpSpace({
 
   const allLowSelected = lowCount > 0 && items.filter((i) => i.importance === 'low').every((i) => selected.has(i.id));
 
+  const allSelected = items.length > 0 && items.every((i) => selected.has(i.id));
+  const toggleSelectAll = () => {
+    if (Platform.OS !== 'web') void haptic.tab();
+    setSelected((prev) => {
+      const everyPicked = items.length > 0 && items.every((i) => prev.has(i.id));
+      return everyPicked ? new Set() : new Set(items.map((i) => i.id));
+    });
+  };
+
   // ── Delete every selected note in ONE batched transaction (fast even for hundreds) ──
   const performDelete = async () => {
     const ids = items.filter((i) => selected.has(i.id)).map((i) => i.id);
@@ -232,17 +241,30 @@ export function FreeUpSpace({
                       {items.length === 1 ? 'note can be cleared' : 'notes can be cleared'}
                     </Text>
                   </View>
-                  {lowCount > 0 ? (
+                  <View style={styles.chipGroup}>
+                    {/* Low-only shortcut — only when there's a meaningful low subset to single out. */}
+                    {lowCount > 0 && lowCount < items.length ? (
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        style={[styles.selectAllChip, allLowSelected && styles.selectAllChipOn]}
+                        onPress={selectAllLow}
+                      >
+                        <Text style={[styles.selectAllText, allLowSelected && styles.selectAllTextOn]}>
+                          {allLowSelected ? '✓ Low' : `Low · ${lowCount}`}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    {/* Select all (every loaded note), toggles to Clear. Always available. */}
                     <TouchableOpacity
                       activeOpacity={0.85}
-                      style={[styles.selectAllChip, allLowSelected && styles.selectAllChipOn]}
-                      onPress={selectAllLow}
+                      style={[styles.selectAllChip, allSelected && styles.selectAllChipOn]}
+                      onPress={toggleSelectAll}
                     >
-                      <Text style={[styles.selectAllText, allLowSelected && styles.selectAllTextOn]}>
-                        {allLowSelected ? '✓ All low selected' : `Select all low · ${lowCount}`}
+                      <Text style={[styles.selectAllText, allSelected && styles.selectAllTextOn]}>
+                        {allSelected ? '✓ Clear all' : `Select all · ${items.length}`}
                       </Text>
                     </TouchableOpacity>
-                  ) : null}
+                  </View>
                 </View>
 
                 <ScrollView
@@ -414,6 +436,7 @@ const styles = StyleSheet.create({
   countBlock: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexShrink: 1 },
   countValue: { color: LUCY_COLORS.textDark, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
   countLabel: { color: LUCY_COLORS.textSubtle, fontSize: 12.5, fontWeight: '700', flexShrink: 1 },
+  chipGroup: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
   selectAllChip: { borderRadius: 999, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingHorizontal: 13, paddingVertical: 8 },
   selectAllChipOn: { backgroundColor: LUCY_COLORS.primarySoft, borderColor: LUCY_COLORS.primary },
   selectAllText: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '800' },

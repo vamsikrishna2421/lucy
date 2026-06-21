@@ -32,19 +32,29 @@ let lastDashboardFetchAt = 0; // for the auto-refresh debounce on page load
 interface TcpServer { close: () => void; listen?: (opts: unknown) => void; on?: (e: string, cb: (a: unknown) => void) => void; }
 let server: TcpServer | null = null;
 
-/** Pulls the latest dashboard from the repo and caches it. Returns bytes (0 on failure). */
+/** Pulls the latest dashboard from the repo and caches it. Returns bytes (0 on failure).
+ *  Tries the GitHub API first, then falls back to raw.githubusercontent (different rate-limit bucket)
+ *  so a 403 on the shared-WiFi IP's API quota doesn't strand the phone on the baked-in fallback. */
 async function fetchRemoteDashboard(): Promise<number> {
   lastDashboardFetchAt = Date.now(); // mark the attempt up front so concurrent loads don't stampede
-  try {
-    const res = await fetch(`${DASHBOARD_API_URL}&t=${Date.now()}`, {
-      // GitHub API requires a User-Agent; Accept: raw returns the file content directly.
-      headers: { Accept: 'application/vnd.github.raw', 'User-Agent': 'LUCY-app', 'Cache-Control': 'no-cache' },
-    });
-    if (!res.ok) return 0;
-    const html = await res.text();
-    if (html && html.includes('</html>')) { dashboardCache = html; return html.length; }
-    return 0;
-  } catch { return 0; }
+  const sources = [
+    { url: `${DASHBOARD_API_URL}&t=${Date.now()}`, accept: 'application/vnd.github.raw' },
+    { url: `https://raw.githubusercontent.com/vamsikrishna2421/lucy/master/web/dashboard.html?t=${Date.now()}`, accept: 'text/html' },
+  ];
+  for (const src of sources) {
+    try {
+      const res = await fetch(src.url, {
+        headers: { Accept: src.accept, 'User-Agent': 'LUCY-app', 'Cache-Control': 'no-cache' },
+      });
+      if (!res.ok) continue;
+      const html = await res.text();
+      if (html && html.includes('</html>')) { dashboardCache = html; return html.length; }
+    } catch { /* try the next source */ }
+  }
+  // All sources failed — clear the debounce stamp so the very next page load retries immediately
+  // instead of serving the bare fallback for 15s.
+  lastDashboardFetchAt = 0;
+  return 0;
 }
 let state: ServerState = { running: false, ip: null, port: PORT, pin: null, error: null };
 const listeners = new Set<(s: ServerState) => void>();
@@ -114,10 +124,10 @@ const json = (status: number, obj: unknown) => httpResponse(status, 'application
 async function route(req: ParsedRequest): Promise<string> {
   if (req.method === 'OPTIONS') return httpResponse(204, 'text/plain', '');
   if (req.method === 'GET' && req.path === '/') {
-    // Auto-refresh from the repo on page load (debounced ~15s so rapid reloads stay instant and we
-    // don't hammer GitHub's rate limit). Combined with the no-store header below, a browser refresh
-    // always shows the latest dashboard — no manual force-pull needed.
-    if (Date.now() - lastDashboardFetchAt > 15000) {
+    // Auto-refresh from the repo on page load. ALWAYS try when we've never cached the real dashboard
+    // (so a failed boot fetch never strands the user on the baked-in fallback); otherwise debounce
+    // ~15s so rapid reloads stay instant and we don't hit GitHub's rate limit.
+    if (dashboardCache === null || Date.now() - lastDashboardFetchAt > 15000) {
       try { await fetchRemoteDashboard(); } catch { /* keep cache */ }
     }
     return httpResponse(200, 'text/html; charset=utf-8', dashboardCache ?? DASHBOARD_HTML);
@@ -878,12 +888,25 @@ export async function startServer(): Promise<ServerState> {
     let ip: string | null = null;
     try { ip = await Network.getIpAddressAsync(); } catch { /* ignore */ }
 
-    server = TcpSocket.createServer((socket: { on: (e: string, cb: (d?: unknown) => void) => void; write: (s: string) => void; end: (s?: string) => void; destroy: () => void }) => {
+    server = TcpSocket.createServer((socket: { on: (e: string, cb: (d?: unknown) => void) => void; write: (s: string, enc?: string, cb?: (e?: unknown) => void) => boolean; end: (s?: string) => void; destroy: () => void }) => {
       let buffer = '';
       const send = (res: string) => {
-        // write() then end() flushes the full response before the FIN, so large
-        // payloads (the whole memory export) aren't truncated.
-        try { socket.write(res); socket.end(); } catch { try { socket.destroy(); } catch { /* ignore */ } }
+        // The OS socket buffer is ~64KB, so writing a big payload and IMMEDIATELY calling end()
+        // truncates it — the FIN closes the connection before the buffer drains. That silently broke
+        // the web dashboard's data load + the memory export on slower devices (client got an
+        // IncompleteRead). Fix: write in 16KB chunks, waiting for each to flush (write callback)
+        // before the next, and only FIN after the last chunk. Respects backpressure for any size and
+        // keeps each cross-bridge write small.
+        const CHUNK = 16384;
+        let i = 0;
+        const writeNext = () => {
+          if (i >= res.length) { try { socket.end(); } catch { /* ignore */ } return; }
+          const piece = res.slice(i, i + CHUNK);
+          i += CHUNK;
+          try { socket.write(piece, 'utf8', writeNext); }
+          catch { try { socket.destroy(); } catch { /* ignore */ } }
+        };
+        writeNext();
       };
       socket.on('data', (data?: unknown) => {
         buffer += typeof data === 'string' ? data : String(data);

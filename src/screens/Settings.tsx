@@ -66,11 +66,25 @@ function modelLabel(id: string): string {
   return MODEL_LABELS[id] ?? roleChoice(id)?.label ?? id;
 }
 
-// The three model roles, in display order, with their human framing.
-const ROLE_CARDS: { role: ModelRole; title: string; desc: string }[] = [
-  { role: 'capture',   title: 'Capture & organize', desc: 'Turns every note into tasks, expenses, reminders, and topics.' },
-  { role: 'insight',   title: 'Insight & synthesis', desc: 'Weekly brain pulse, reflections, and your daily brief.' },
-  { role: 'assistant', title: 'Assistant',           desc: 'Ask Lucy and voice conversations.' },
+// The three model roles, in display order, with their human framing + a leading glyph.
+const ROLE_CARDS: { role: ModelRole; title: string; desc: string; icon: string }[] = [
+  { role: 'capture',   title: 'Capture & organize',  desc: 'Turns every note into tasks, expenses, reminders, and topics.', icon: '🗂️' },
+  { role: 'insight',   title: 'Insight & synthesis', desc: 'Weekly brain pulse, reflections, and your daily brief.',        icon: '💡' },
+  { role: 'assistant', title: 'Assistant',           desc: 'Ask Lucy and voice conversations.',                             icon: '💬' },
+];
+
+// Model ids used for the segmented toggle + presets.
+const M_OPUS = 'claude-opus-4-8';
+const M_SONNET = 'claude-sonnet-4-6';
+const M_HAIKU = 'claude-haiku-4-5-20251001';
+// Segmented-control order (matches the reference: best → cheapest, left → right).
+const MODEL_DISPLAY_ORDER = [M_OPUS, M_SONNET, M_HAIKU];
+
+// One-tap presets that set every agent at once.
+const MODEL_PRESETS: { id: 'quality' | 'balanced' | 'economy'; label: string; blurb: string; models: Record<ModelRole, string> }[] = [
+  { id: 'quality',  label: 'Best quality', blurb: 'Top models everywhere — deepest reasoning, highest cost.', models: { capture: M_SONNET, insight: M_OPUS,   assistant: M_OPUS } },
+  { id: 'balanced', label: 'Balanced',     blurb: 'Lucy picks the cheapest model that still nails each job.',  models: { capture: M_HAIKU,  insight: M_SONNET, assistant: M_SONNET } },
+  { id: 'economy',  label: 'Economy',      blurb: 'Haiku & Sonnet only — fastest and cheapest.',               models: { capture: M_HAIKU,  insight: M_HAIKU,  assistant: M_SONNET } },
 ];
 
 export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll, onOpenWrapped, wakeWordEnabled, onChangeWakeWord, onStartTour }: SettingsScreenProps) {
@@ -256,6 +270,17 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
     await persistRoleModel(db, role, modelId);
     setRoleModels(getRoleModels());
   };
+
+  const selectPreset = async (models: Record<ModelRole, string>) => {
+    const db = await getDatabase();
+    await Promise.all((Object.keys(models) as ModelRole[]).map((r) => persistRoleModel(db, r, models[r])));
+    setRoleModels(getRoleModels());
+  };
+
+  // Which preset (if any) the current per-agent picks exactly match.
+  const activePreset = MODEL_PRESETS.find((p) =>
+    (Object.keys(p.models) as ModelRole[]).every((r) => roleModels[r] === p.models[r]),
+  )?.id ?? null;
 
   const runBenchmark = async () => {
     setBenchmarkRunning(true);
@@ -504,8 +529,30 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         {/* Intelligence & models — one role card per job, Claude-first */}
         <View style={styles.intelBlock}>
           <Text style={styles.intelEyebrow}>INTELLIGENCE & MODELS</Text>
-          <Text style={styles.intelSubtitle}>
-            Balanced for least cost, best results — Lucy picks the right model for each job.
+          <Text style={styles.intelSubtitle}>Pick which model powers each agent.</Text>
+
+          {/* Quick presets — set every agent at once */}
+          <View style={styles.presetRow}>
+            {MODEL_PRESETS.map((p) => {
+              const active = activePreset === p.id;
+              const locked = tokenMode === 'managed';
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active, disabled: locked }}
+                  disabled={locked}
+                  activeOpacity={0.8}
+                  onPress={() => void selectPreset(p.models)}
+                  style={[styles.presetPill, active && styles.presetPillActive, locked && styles.dim]}
+                >
+                  <Text style={[styles.presetPillText, active && styles.presetPillTextActive]}>{p.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={styles.presetBlurb}>
+            {MODEL_PRESETS.find((p) => p.id === activePreset)?.blurb ?? 'Custom mix — tap a preset, or fine-tune each agent below.'}
           </Text>
 
           {tokenMode === 'managed' ? (
@@ -516,18 +563,38 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           ) : null}
 
           <View style={styles.roleStack}>
-            {ROLE_CARDS.map(({ role, title, desc }) => {
-              const choice = roleChoice(roleModels[role]);
+            {ROLE_CARDS.map(({ role, title, desc, icon }) => {
+              const locked = tokenMode === 'managed';
               return (
-                <RoleCard
-                  key={role}
-                  title={title}
-                  desc={desc}
-                  modelLabel={choice?.short ?? modelLabel(roleModels[role])}
-                  modelTier={choice?.tier ?? 'Custom'}
-                  locked={tokenMode === 'managed'}
-                  onPress={() => setPickerRole(role)}
-                />
+                <View key={role} style={styles.agentRow}>
+                  <View style={styles.agentHead}>
+                    <Text style={styles.agentIcon}>{icon}</Text>
+                    <View style={styles.flex}>
+                      <Text style={styles.agentTitle}>{title}</Text>
+                      <Text style={styles.agentDesc}>{desc}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.segment}>
+                    {MODEL_DISPLAY_ORDER.map((id) => {
+                      const selected = roleModels[role] === id;
+                      return (
+                        <TouchableOpacity
+                          key={id}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected, disabled: locked }}
+                          disabled={locked}
+                          activeOpacity={0.8}
+                          onPress={() => void selectRoleModel(role, id)}
+                          style={[styles.segBtn, selected && styles.segBtnActive, locked && !selected && styles.dim]}
+                        >
+                          <Text style={[styles.segText, selected && styles.segTextActive]} numberOfLines={1}>
+                            {roleChoice(id)?.short ?? id}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
               );
             })}
           </View>
@@ -1916,6 +1983,26 @@ const styles = StyleSheet.create({
   roleChipTier: { color: LUCY_COLORS.textMuted, fontSize: 11.5, fontWeight: '700' },
   roleChevron: { color: LUCY_COLORS.textSubtle, fontSize: 18, fontWeight: '900', marginTop: 2, width: 20, textAlign: 'center' },
   roleLock: { fontSize: 14, marginTop: 3, width: 20, textAlign: 'center' },
+
+  // ─── Preset shortcut pills (Best quality / Balanced / Economy) ──────────
+  presetRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  presetPill: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 11, borderRadius: 13, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  presetPillActive: { backgroundColor: LUCY_COLORS.primary, borderColor: LUCY_COLORS.primary },
+  presetPillText: { color: LUCY_COLORS.textMuted, fontSize: 12.5, fontWeight: '800', letterSpacing: -0.1 },
+  presetPillTextActive: { color: '#1A1206' },
+  presetBlurb: { color: LUCY_COLORS.textSubtle, fontSize: 12, lineHeight: 17, marginTop: 8 },
+
+  // ─── Per-agent row + inline segmented model toggle ──────────────────────
+  agentRow: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 12, gap: 11 },
+  agentHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  agentIcon: { fontSize: 17, width: 24, textAlign: 'center' },
+  agentTitle: { color: LUCY_COLORS.textDark, fontSize: 14.5, fontWeight: '800', letterSpacing: -0.2 },
+  agentDesc: { color: LUCY_COLORS.textMuted, fontSize: 11.5, lineHeight: 16, marginTop: 2 },
+  segment: { flexDirection: 'row', gap: 3, padding: 3, borderRadius: 12, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  segBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 9 },
+  segBtnActive: { backgroundColor: LUCY_COLORS.primary },
+  segText: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '800', letterSpacing: -0.2 },
+  segTextActive: { color: '#1A1206' },
 
   // ─── Your Anthropic key (BYOK) ──────────────────────────────────────────
   keyBlock: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider },

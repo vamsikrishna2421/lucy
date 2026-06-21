@@ -99,7 +99,7 @@ Rules:
 - 2-3 sentences max, conversational, specific, first-person. Plain text only — no markdown.`;
 
   try {
-    const raw = await promptAI(systemPrompt, contextStr, apiKey);
+    const raw = await promptAI(systemPrompt, contextStr, apiKey, 'insight');
     const start = raw.indexOf('[');
     const end   = raw.lastIndexOf(']');
     if (start === -1 || end === -1) return [];

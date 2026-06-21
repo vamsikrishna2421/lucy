@@ -26,7 +26,7 @@ Write in a warm, direct, conversational tone — like a trusted friend checking 
 Use plain text only (no markdown, no asterisks). Keep it under 120 words.
 Be specific about what matters today. Start with their name.`;
 
-    const result = await promptAI(system, `Morning brief data:\n${rawBrief}\n\nWrite the morning brief now.`, openAIKey);
+    const result = await promptAI(system, `Morning brief data:\n${rawBrief}\n\nWrite the morning brief now.`, openAIKey, 'insight');
     return result.trim();
   } catch {
     return rawBrief;

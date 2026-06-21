@@ -63,7 +63,7 @@ async function generateAndSendWeeklyInsight(db: SQLiteDatabase): Promise<void> {
     if (available) {
       const system = `You are LUCY giving ${name} their weekly insight. Write 2-3 sentences in a warm, direct tone. Plain text only, no markdown. Be specific and actionable. Notice patterns, delays, or things worth reflecting on.`;
       const data = `Week captures:\n${capturesSummary}\n\nOverdue items:\n${overdueText}\n\nMood trend: ${moodTrend.dominant} (${Math.round(moodTrend.positiveRatio * 100)}% positive)\n\nRelationship notes: ${personInsights.join('; ')}`;
-      insightText = await promptAI(system, data, openAIKey);
+      insightText = await promptAI(system, data, openAIKey, 'insight');
     }
   } catch { /* fall through to fallback */ }
 

@@ -22,7 +22,7 @@ import { recordAiCall, isAiCallCapReached } from '../ai/rateLimit';
 import { daysSinceDb } from '../utils/datetime';
 
 const PULSE_LAST_RUN_KEY = 'brain_pulse_last_run';
-const PULSE_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const PULSE_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // weekly (cost control; was 6h)
 const MIN_CAPTURES_SINCE_LAST = 3; // don't run if user has been inactive
 
 interface PulseSignal {
@@ -85,7 +85,7 @@ export async function runBrainPulseIfDue(db: SQLiteDatabase): Promise<number> {
 
   let parsed: PulseResponse = { signals: [] };
   try {
-    const raw = await promptAI(`${userPrefix}${BRAIN_PULSE_SYSTEM}`, context, openAIKey);
+    const raw = await promptAI(`${userPrefix}${BRAIN_PULSE_SYSTEM}`, context, openAIKey, 'insight');
     void recordAiCall(db);
     const start = raw.indexOf('{');
     const end = raw.lastIndexOf('}');

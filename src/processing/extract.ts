@@ -579,7 +579,7 @@ async function segmentAndIngestDayJournal(
 ): Promise<number> {
   let segments: string[] = [];
   try {
-    const raw = await AIProvider.prompt(journalSegmentationPrompt, text);
+    const raw = await AIProvider.prompt(journalSegmentationPrompt, text, 'segment');
     const start = raw.indexOf('{');
     const end = raw.lastIndexOf('}');
     if (start === -1 || end === -1) return 0;

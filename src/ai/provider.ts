@@ -6,7 +6,7 @@ import { analyzeWithOpenAI, promptAI } from './openai';
 import { dailySummaryPrompt, urgentScanPrompt } from './prompts';
 import { getRemoteAccessState, getRemoteOpenAIKey, getClaudeApiKey } from './remoteAccess';
 import { shieldText, restoreText, rehydrateExtraction, PLACEHOLDER_NOTE } from '../processing/sensitiveShield';
-import { getPreferredModel } from './modelPreference';
+import { getPreferredModel, modelForTask, type AiTask } from './modelPreference';
 import { getDatabase } from '../db';
 import { getUserProfile, buildUserContextPrefix } from '../db/userProfile';
 import type { SQLiteDatabase } from 'expo-sqlite';
@@ -98,7 +98,7 @@ export const AIProvider = {
     const llmNames = await detectNamesOnDevice(transcript);
     const { redacted, map } = shieldText(transcript, [...contacts, ...llmNames]);
     const userContextPrefix = buildUserContextPrefix(profile) + (map.length ? PLACEHOLDER_NOTE : '');
-    const model = getPreferredModel(config.openAIModel);
+    const model = modelForTask('extraction', config.openAIModel);
     const t0 = Date.now();
     let result: ExtractionResult;
     try {
@@ -130,7 +130,7 @@ export const AIProvider = {
       return localPrompt(`${urgentScanPrompt}\nTranscript:\n${transcript}`);
     }
     const { redacted, map } = await shieldInput(transcript);
-    const out = await promptAI(urgentScanPrompt + (map.length ? PLACEHOLDER_NOTE : ''), redacted, openAIKey);
+    const out = await promptAI(urgentScanPrompt + (map.length ? PLACEHOLDER_NOTE : ''), redacted, openAIKey, 'summary');
     return restoreText(out, map);
   },
   async summarize(notes: string, _privacyLevel: PrivacyLevel = 'normal'): Promise<string> {
@@ -139,17 +139,19 @@ export const AIProvider = {
       return localPrompt(`${dailySummaryPrompt}\nNotes:\n${notes}`);
     }
     const { redacted, map } = await shieldInput(notes);
-    const out = await promptAI(dailySummaryPrompt + (map.length ? PLACEHOLDER_NOTE : ''), redacted, openAIKey);
+    const out = await promptAI(dailySummaryPrompt + (map.length ? PLACEHOLDER_NOTE : ''), redacted, openAIKey, 'summary');
     return restoreText(out, map);
   },
-  /** Generic provider-aware prompt (Claude or OpenAI based on selected model). */
-  async prompt(system: string, input: string): Promise<string> {
+  /** Generic provider-aware prompt (Claude or OpenAI based on selected model).
+   *  `task` selects the cost tier — pass 'insight' for synthesis, 'segment'/'summary' for routine work,
+   *  and leave the default 'chat' for interactive Ask/voice (honors the user's exact model pick). */
+  async prompt(system: string, input: string, task: AiTask = 'chat'): Promise<string> {
     const { available, openAIKey } = await resolveRemoteAvailability();
     if (!available) {
       return localPrompt(`${system}\n${input}`);
     }
     const { redacted, map } = await shieldInput(input);
-    const out = await promptAI(system + (map.length ? PLACEHOLDER_NOTE : ''), redacted, openAIKey);
+    const out = await promptAI(system + (map.length ? PLACEHOLDER_NOTE : ''), redacted, openAIKey, task);
     return restoreText(out, map);
   },
 };

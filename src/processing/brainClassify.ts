@@ -77,7 +77,7 @@ export async function classifyItem(
 
   try {
     const input = `EXISTING TOPICS:\n${serializeTopicTree(topics)}\n\nNOTE:\n${text.slice(0, 400)}`;
-    const raw = await promptAI(CLASSIFY_SYSTEM, input, openAIKey);
+    const raw = await promptAI(CLASSIFY_SYSTEM, input, openAIKey, 'classify');
     void recordAiCall(db);
 
     let parsed: { topic_id?: number | null; new_path?: string | null; confidence?: number; reason?: string } = {};
@@ -151,7 +151,7 @@ export async function generateSeedProposal(db: SQLiteDatabase): Promise<string |
   if (notesBlob.length < 50) return null;
 
   try {
-    const raw = await promptAI(SEED_SYSTEM, notesBlob, openAIKey);
+    const raw = await promptAI(SEED_SYSTEM, notesBlob, openAIKey, 'insight');
     void recordAiCall(db);
     const captureCount = evidence.length;
     await recordSeedingRun(db, captureCount, raw, 'pending');

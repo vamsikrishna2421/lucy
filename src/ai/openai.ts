@@ -1,10 +1,11 @@
 import { config } from '../config';
-import { getPreferredModel } from './modelPreference';
+import { getPreferredModel, modelForTask, type AiTask } from './modelPreference';
 import type { ExtractionResult } from '../types/extraction';
 
-/** Routes to Claude or OpenAI depending on the active model. Use this everywhere instead of promptOpenAI directly. */
-export async function promptAI(system: string, input: string, apiKey: string): Promise<string> {
-  const model = getPreferredModel(config.openAIModel);
+/** Routes to Claude or OpenAI depending on the active model. Use this everywhere instead of promptOpenAI directly.
+ *  `task` selects the cost tier (cheap for routine work, mid for insight, user's pick for chat). */
+export async function promptAI(system: string, input: string, apiKey: string, task: AiTask = 'chat'): Promise<string> {
+  const model = modelForTask(task, config.openAIModel);
   // Count this remote call toward the hourly cost guard.
   void import('./rateLimit').then((m) => m.recordAiCall()).catch(() => {});
   if (model.startsWith('claude-')) {
@@ -81,6 +82,7 @@ export async function analyzeWithOpenAI(
     `${userContextPrefix}${extractionSystemPrompt}\nReference local timestamp: ${localReferenceTimestamp()}\n${extractionSchemaPrompt}`,
     transcript,
     apiKey,
+    'extraction',
   );
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');

@@ -35,8 +35,14 @@ const REFLECTION_SYSTEM =
  */
 export async function reflectOnUser(db: SQLiteDatabase, force = false): Promise<number> {
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    if (!force && (await getSetting(db, REFLECT_DATE_KEY)) === today) return 0;
+    // Weekly cadence (cost control): only reflect if it hasn't run in the last 7 days. Manual triggers
+    // (Learned Profile panel / web "reflect now") pass force=true to bypass.
+    const lastRun = await getSetting(db, REFLECT_DATE_KEY);
+    if (!force && lastRun) {
+      const daysSince = (Date.now() - new Date(lastRun).getTime()) / 86_400_000;
+      if (daysSince < 7) return 0;
+    }
+    const nowIso = new Date().toISOString();
 
     const captures = await listRecentCaptures(db, 40);
     const usable = captures.filter((c) => c.privacy_level !== 'private' && (c.raw_transcript ?? '').trim());
@@ -63,10 +69,10 @@ export async function reflectOnUser(db: SQLiteDatabase, force = false): Promise<
     ].filter(Boolean).join('\n\n');
 
     const { AIProvider } = await import('../ai/provider');
-    const raw = await AIProvider.prompt(REFLECTION_SYSTEM, input);
+    const raw = await AIProvider.prompt(REFLECTION_SYSTEM, input, 'insight');
     const start = raw.indexOf('[');
     const end = raw.lastIndexOf(']');
-    if (start === -1 || end === -1) { await setSetting(db, REFLECT_DATE_KEY, today); return 0; }
+    if (start === -1 || end === -1) { await setSetting(db, REFLECT_DATE_KEY, nowIso); return 0; }
 
     let parsed: Array<{ category?: string; statement?: string }> = [];
     try { parsed = JSON.parse(raw.slice(start, end + 1)); } catch { parsed = []; }
@@ -83,7 +89,7 @@ export async function reflectOnUser(db: SQLiteDatabase, force = false): Promise<
     }
 
     await decayStaleLearnedFacts(db);
-    await setSetting(db, REFLECT_DATE_KEY, today);
+    await setSetting(db, REFLECT_DATE_KEY, nowIso);
     return learned;
   } catch {
     return 0;

@@ -5,9 +5,10 @@ import * as Clipboard from 'expo-clipboard';
 import { Alert, Animated, Linking, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { clearDownloadedDeviceModels, getDeviceModelState, prepareDeviceModel, selectDeviceModel, subscribeToDeviceModel, type DeviceModelState } from '../ai/device';
 import { localModelOptions, type LocalModelId } from '../ai/modelCatalog';
-import { getRemoteAccessState, removeRemoteOpenAIKey, setRemoteEnabled, storeRemoteOpenAIKey, type RemoteAccessState } from '../ai/remoteAccess';
+import { getRemoteAccessState, type RemoteAccessState } from '../ai/remoteAccess';
+import { getRoleModels, getTokenMode, persistRoleModel, type ModelRole } from '../ai/modelPreference';
 import { config } from '../config';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 import { getDatabase } from '../db';
 import { getCaptureQueueSummary, getLowImportanceCaptures, type CaptureQueueSummary } from '../db/captures';
 import { getLatestOrganizationRun, type OrganizationRunRow } from '../db/knowledge';
@@ -36,31 +37,41 @@ interface SettingsScreenProps {
   onStartTour?: () => void;
 }
 
-type SettingsPanel = 'intelligence' | 'remote' | 'background' | 'organization' | 'queue' | 'privacy' | 'profile' | 'connectors' | null;
+type SettingsPanel = 'intelligence' | 'background' | 'organization' | 'queue' | 'privacy' | 'profile' | 'connectors' | null;
 
 const emptyQueue: CaptureQueueSummary = { queued: 0, processing: 0, retrying: 0, complete: 0, archived: 0 };
 const emptyRemote: RemoteAccessState = { enabled: false, hasKey: false, usingDevelopmentKey: false, modelName: 'claude-sonnet-4-6' };
 
-interface ModelOption { id: string; label: string; desc: string; provider: 'openai' | 'anthropic'; }
-const OPENAI_MODELS: ModelOption[] = [
-  { id: 'gpt-4o-mini',   label: 'gpt-4o-mini',   desc: 'Fast · affordable',     provider: 'openai' },
-  { id: 'gpt-4o',        label: 'gpt-4o',         desc: 'Smarter · higher cost', provider: 'openai' },
-  { id: 'gpt-4.1-mini',  label: 'gpt-4.1-mini',  desc: 'Fast · latest mini',    provider: 'openai' },
-  { id: 'gpt-4.1',       label: 'gpt-4.1',        desc: 'Most capable GPT-4',    provider: 'openai' },
-  { id: 'gpt-5-mini',    label: 'gpt-5-mini',     desc: 'Fast GPT-5',            provider: 'openai' },
-  { id: 'gpt-5',         label: 'gpt-5',          desc: 'GPT-5 full',            provider: 'openai' },
-  { id: 'gpt-5.4',       label: 'gpt-5.4',        desc: 'GPT-5.4',               provider: 'openai' },
-  { id: 'gpt-5.5',       label: 'gpt-5.5',        desc: 'GPT-5.5 latest',        provider: 'openai' },
+// Claude-only model menu for the per-role pickers (this is a Claude-first app). `short` is the chip
+// label shown on a role card; `desc` is the cost/quality line in the picker.
+interface RoleModelChoice { id: string; label: string; short: string; tier: string; desc: string; }
+const ROLE_MODEL_CHOICES: RoleModelChoice[] = [
+  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',  short: 'Haiku 4.5',  tier: 'Fast · lowest cost',          desc: 'Fastest, most affordable — great for routine work.' },
+  { id: 'claude-sonnet-4-6',          label: 'Claude Sonnet 4.6', short: 'Sonnet 4.6', tier: 'Balanced',                    desc: 'The sweet spot of quality and cost.' },
+  { id: 'claude-opus-4-8',            label: 'Claude Opus 4.8',   short: 'Opus 4.8',   tier: 'Most capable · highest cost', desc: 'Deepest reasoning — use when quality matters most.' },
 ];
-const CLAUDE_MODELS: ModelOption[] = [
-  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',  desc: 'Fastest · cheapest Claude', provider: 'anthropic' },
-  { id: 'claude-sonnet-4-6',          label: 'Claude Sonnet 4.6', desc: 'Balanced · recommended',    provider: 'anthropic' },
-  { id: 'claude-opus-4-7',            label: 'Claude Opus 4.7',   desc: 'Most capable Claude',       provider: 'anthropic' },
-];
-const ALL_MODELS: ModelOption[] = [...OPENAI_MODELS, ...CLAUDE_MODELS];
-function findModel(id: string): ModelOption | undefined {
-  return ALL_MODELS.find((m) => m.id === id);
+function roleChoice(id: string): RoleModelChoice | undefined {
+  return ROLE_MODEL_CHOICES.find((m) => m.id === id);
 }
+
+// Lookup table used only to render a friendly model name in the processing-queue diagnostic
+// (the active model id can still be any historical OpenAI/Claude value).
+const MODEL_LABELS: Record<string, string> = {
+  'gpt-4o-mini': 'gpt-4o-mini', 'gpt-4o': 'gpt-4o', 'gpt-4.1-mini': 'gpt-4.1-mini',
+  'gpt-4.1': 'gpt-4.1', 'gpt-5-mini': 'gpt-5-mini', 'gpt-5': 'gpt-5', 'gpt-5.4': 'gpt-5.4', 'gpt-5.5': 'gpt-5.5',
+  'claude-haiku-4-5-20251001': 'Claude Haiku 4.5', 'claude-sonnet-4-6': 'Claude Sonnet 4.6',
+  'claude-opus-4-7': 'Claude Opus 4.7', 'claude-opus-4-8': 'Claude Opus 4.8',
+};
+function modelLabel(id: string): string {
+  return MODEL_LABELS[id] ?? roleChoice(id)?.label ?? id;
+}
+
+// The three model roles, in display order, with their human framing.
+const ROLE_CARDS: { role: ModelRole; title: string; desc: string }[] = [
+  { role: 'capture',   title: 'Capture & organize', desc: 'Turns every note into tasks, expenses, reminders, and topics.' },
+  { role: 'insight',   title: 'Insight & synthesis', desc: 'Weekly brain pulse, reflections, and your daily brief.' },
+  { role: 'assistant', title: 'Assistant',           desc: 'Ask Lucy and voice conversations.' },
+];
 
 export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll, onOpenWrapped, wakeWordEnabled, onChangeWakeWord, onStartTour }: SettingsScreenProps) {
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
@@ -77,8 +88,6 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [clearingModel, setClearingModel] = useState(false);
   const [selectingModel, setSelectingModel] = useState(false);
   const [remote, setRemote] = useState<RemoteAccessState>(emptyRemote);
-  const [remoteKey, setRemoteKey] = useState('');
-  const [changingRemote, setChangingRemote] = useState(false);
   const [benchmarkRunning, setBenchmarkRunning] = useState(false);
   const [benchmarkProgress, setBenchmarkProgress] = useState('');
   const [benchmarkResults, setBenchmarkResults] = useState<BenchmarkResult[]>([]);
@@ -92,8 +101,9 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [alarmStyle, setAlarmStyle] = useState(false);
   const [semanticRouter, setSemanticRouter] = useState(false);
   const [mealReminders, setMealReminders] = useState(false);
-  const [aiModel, setAiModel] = useState('claude-sonnet-4-6');
-  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [roleModels, setRoleModels] = useState<Record<ModelRole, string>>(getRoleModels());
+  const [tokenMode, setTokenMode] = useState(getTokenMode());
+  const [pickerRole, setPickerRole] = useState<ModelRole | null>(null);
   const [claudeKey, setClaudeKey] = useState('');
   const [hasClaudeKey, setHasClaudeKey] = useState(false);
   const [savingClaudeKey, setSavingClaudeKey] = useState(false);
@@ -129,9 +139,11 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         getRemoteAccessState(),
         getUserProfile(db),
       ]);
-      const { getSetting: gs } = await import('../db/settings');
-      const storedModel = await gs(db, 'ai_model_override');
-      if (storedModel) setAiModel(storedModel);
+      // Hydrate the per-role model preferences + token mode from the DB, then mirror into local state.
+      const { loadRoleModels } = await import('../ai/modelPreference');
+      await loadRoleModels(db);
+      setRoleModels(getRoleModels());
+      setTokenMode(getTokenMode());
 
       const { getClaudeApiKey } = await import('../ai/remoteAccess');
       const ck = await getClaudeApiKey();
@@ -237,17 +249,12 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
     setShieldLlm(next);
   };
 
-  const chooseAiModel = async (m: ModelOption) => {
-    if (m.provider === 'anthropic' && !hasClaudeKey) {
-      Alert.alert('Claude API key required', 'Add your Anthropic API key below first, then pick a Claude model.');
-      return;
-    }
-    setAiModel(m.id);
-    setModelMenuOpen(false);
+  // Pick a model for a role (BYOK). Persists + applies immediately, then mirrors into local state.
+  const selectRoleModel = async (role: ModelRole, modelId: string) => {
+    setPickerRole(null);
     const db = await getDatabase();
-    await setSetting(db, 'ai_model_override', m.id);
-    const { setPreferredModel } = await import('../ai/modelPreference');
-    setPreferredModel(m.id);
+    await persistRoleModel(db, role, modelId);
+    setRoleModels(getRoleModels());
   };
 
   const runBenchmark = async () => {
@@ -262,53 +269,6 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       setBenchmarkProgress(`${results.filter((result) => result.passed).length} of ${results.length} checks passed`);
     } finally {
       setBenchmarkRunning(false);
-    }
-  };
-
-  const saveRemoteKey = async () => {
-    setChangingRemote(true);
-    try {
-      // Test the key before saving
-      const testRes = await fetch('https://api.openai.com/v1/models', {
-        headers: { Authorization: `Bearer ${remoteKey.trim()}` },
-      });
-      if (!testRes.ok) {
-        const err = await testRes.json().catch(() => ({})) as { error?: { message?: string } };
-        throw new Error(err.error?.message ?? `OpenAI returned status ${testRes.status}`);
-      }
-      await storeRemoteOpenAIKey(remoteKey);
-      await setRemoteEnabled(true);
-      setRemoteKey('');
-      setRemote(await getRemoteAccessState());
-      Alert.alert('✓ OpenAI key verified', 'Key is valid and saved. LUCY will now use OpenAI for extraction.');
-    } catch (error) {
-      Alert.alert('Key invalid', error instanceof Error ? error.message : 'Could not verify key.');
-    } finally {
-      setChangingRemote(false);
-    }
-  };
-
-  const toggleRemote = async () => {
-    if (!remote.hasKey && !remote.enabled) {
-      Alert.alert('Add an API key first', 'Enter your OpenAI API key in this panel before turning on remote intelligence.');
-      return;
-    }
-    setChangingRemote(true);
-    try {
-      await setRemoteEnabled(!remote.enabled);
-      setRemote(await getRemoteAccessState());
-    } finally {
-      setChangingRemote(false);
-    }
-  };
-
-  const removeRemoteKey = async () => {
-    setChangingRemote(true);
-    try {
-      await removeRemoteOpenAIKey();
-      setRemote(await getRemoteAccessState());
-    } finally {
-      setChangingRemote(false);
     }
   };
 
@@ -538,69 +498,49 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       <SettingsGroup
         icon="✨"
         title="AI & intelligence"
-        summary="Model, remote & on-device intelligence, organizing"
-        pill={remote.enabled ? 'On' : undefined}
+        summary="Models, on-device intelligence & organizing"
+        pill={hasClaudeKey ? 'Claude' : undefined}
       >
-        {/* AI Model Picker */}
-        <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
-          <Text style={{ color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700', marginBottom: 4 }}>AI extraction model</Text>
-          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginBottom: 6 }}>
-            Select which model LUCY uses to understand your captures. Claude models require an Anthropic API key.
-          </Text>
-          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, marginBottom: 12, fontStyle: 'italic' }}>
-            Note: semantic search and voice transcription always use OpenAI (Anthropic has no embeddings or speech API), so an OpenAI key is still recommended even when extracting with Claude.
+        {/* Intelligence & models — one role card per job, Claude-first */}
+        <View style={styles.intelBlock}>
+          <Text style={styles.intelEyebrow}>INTELLIGENCE & MODELS</Text>
+          <Text style={styles.intelSubtitle}>
+            Balanced for least cost, best results — Lucy picks the right model for each job.
           </Text>
 
-          {/* Dropdown trigger — shows the currently selected model */}
-          {(() => {
-            const current = findModel(aiModel);
-            const accent = current?.provider === 'anthropic' ? '#60A5FA' : LUCY_COLORS.primary;
-            return (
-              <TouchableOpacity
-                onPress={() => setModelMenuOpen(true)}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 14, backgroundColor: LUCY_COLORS.surface, borderRadius: 12, borderWidth: 1, borderColor: accent }}
-              >
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: accent }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700' }}>{current?.label ?? aiModel}</Text>
-                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>
-                    {current ? `${current.provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} · ${current.desc}` : 'Tap to choose a model'}
-                  </Text>
-                </View>
-                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 16, fontWeight: '700' }}>⌄</Text>
-              </TouchableOpacity>
-            );
-          })()}
+          {tokenMode === 'managed' ? (
+            <View style={styles.managedNote}>
+              <Text style={styles.managedNoteIcon}>🔒</Text>
+              <Text style={styles.managedNoteText}>Managed by your Lucy plan for the best price.</Text>
+            </View>
+          ) : null}
 
-          {/* Model dropdown menu */}
-          <Modal transparent animationType="fade" visible={modelMenuOpen} onRequestClose={() => setModelMenuOpen(false)}>
-            <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', alignItems: 'center', padding: 24 }} onPress={() => setModelMenuOpen(false)}>
-              <Pressable style={{ backgroundColor: LUCY_COLORS.surface, borderRadius: 18, padding: 16, width: '100%', maxHeight: '80%', borderWidth: 1, borderColor: LUCY_COLORS.border }}>
-                <Text style={{ color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '800', marginBottom: 10 }}>Choose AI model</Text>
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 6 }}>OPENAI</Text>
-                  {OPENAI_MODELS.map((m) => (
-                    <ModelRow key={m.id} m={m} selected={aiModel === m.id} color={LUCY_COLORS.primary} onSelect={() => void chooseAiModel(m)} />
-                  ))}
-                  <Text style={{ color: '#60A5FA', fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginTop: 14, marginBottom: 6 }}>
-                    ANTHROPIC {hasClaudeKey ? '' : '(add Claude API key below first)'}
-                  </Text>
-                  {CLAUDE_MODELS.map((m) => (
-                    <ModelRow key={m.id} m={m} selected={aiModel === m.id} color="#60A5FA" onSelect={() => void chooseAiModel(m)} />
-                  ))}
-                </ScrollView>
-              </Pressable>
-            </Pressable>
-          </Modal>
+          <View style={styles.roleStack}>
+            {ROLE_CARDS.map(({ role, title, desc }) => {
+              const choice = roleChoice(roleModels[role]);
+              return (
+                <RoleCard
+                  key={role}
+                  title={title}
+                  desc={desc}
+                  modelLabel={choice?.short ?? modelLabel(roleModels[role])}
+                  modelTier={choice?.tier ?? 'Custom'}
+                  locked={tokenMode === 'managed'}
+                  onPress={() => setPickerRole(role)}
+                />
+              );
+            })}
+          </View>
 
-          {/* Claude API key */}
-          <View style={{ marginTop: 14, gap: 8 }}>
-            <Text style={{ color: '#60A5FA', fontSize: 12, fontWeight: '700' }}>
-              Anthropic API key {hasClaudeKey ? '· saved ✓' : '· not set'}
+          {/* Your Anthropic key (BYOK) — reframed, same verify/save logic */}
+          <View style={styles.keyBlock}>
+            <Text style={styles.keyHeading}>Your Anthropic key</Text>
+            <Text style={styles.keyCaption}>
+              Bring your own key (BYOK){hasClaudeKey ? ' · saved' : ''}
             </Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={styles.keyRow}>
               <TextInput
-                style={[styles.keyInput, { flex: 1, fontSize: 12 }]}
+                style={[styles.keyInput, { flex: 1, fontSize: 13 }]}
                 placeholder={hasClaudeKey ? '••••••••••••••••' : 'sk-ant-...'}
                 placeholderTextColor={LUCY_COLORS.textSubtle}
                 value={claudeKey}
@@ -610,7 +550,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
                 autoCorrect={false}
               />
               <TouchableOpacity
-                style={{ backgroundColor: '#60A5FA', borderRadius: 10, paddingHorizontal: 14, justifyContent: 'center', opacity: (!claudeKey.trim() && !hasClaudeKey) ? 0.4 : 1 }}
+                style={[styles.keySaveBtn, (!claudeKey.trim() && !hasClaudeKey) && styles.dim]}
                 onPress={async () => {
                   setSavingClaudeKey(true);
                   try {
@@ -642,14 +582,14 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
                       await storeClaudeApiKey(claudeKey.trim());
                       setHasClaudeKey(true);
                       setClaudeKey('');
-                      Alert.alert('✓ Claude key verified', 'Key is valid and saved. Select a Claude model above to use it.');
+                      Alert.alert('✓ Claude key verified', 'Key is valid and saved. Lucy will use it for the models above.');
                     }
                   } catch (e) { Alert.alert('Error', String(e)); }
                   finally { setSavingClaudeKey(false); }
                 }}
               >
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
-                  {savingClaudeKey ? '...' : hasClaudeKey && !claudeKey.trim() ? 'Remove' : 'Save'}
+                <Text style={styles.keySaveText}>
+                  {savingClaudeKey ? '…' : hasClaudeKey && !claudeKey.trim() ? 'Remove' : 'Save'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -662,13 +602,6 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
           badge={usesDeviceModel && deviceModel.status === 'ready' ? 'Local' : usesDeviceModel ? 'Setup' : 'Dev'}
           active={usesDeviceModel && deviceModel.status === 'ready'}
           onInfo={() => setActivePanel('intelligence')}
-        />
-        <SettingsRow
-          title="Remote intelligence"
-          value={remote.enabled ? 'OpenAI key saved · active' : remote.hasKey ? 'OpenAI key saved · tap to manage' : 'No key — required for voice & search'}
-          badge={remote.enabled ? 'On' : 'Off'}
-          active={remote.enabled}
-          onInfo={() => setActivePanel('remote')}
         />
         <SettingsRow
           title="Background organizing"
@@ -952,6 +885,12 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         onClose={() => setFreeUpSpaceVisible(false)}
         onChanged={() => setLocalRefresh((v) => v + 1)}
       />
+      <RolePickerModal
+        role={pickerRole}
+        selectedId={pickerRole ? roleModels[pickerRole] : null}
+        onClose={() => setPickerRole(null)}
+        onSelect={(id) => { if (pickerRole) void selectRoleModel(pickerRole, id); }}
+      />
       <SettingsSheet title={panelTitle(activePanel)} visible={activePanel !== null} onClose={() => setActivePanel(null)}>
         {activePanel === 'intelligence' ? (
           <>
@@ -1035,59 +974,6 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
             ) : (
               <Text style={styles.hint}>Set `EXPO_PUBLIC_LOCAL_INFERENCE=device` before validating phone-only privacy.</Text>
             )}
-          </>
-        ) : null}
-
-        {activePanel === 'remote' ? (
-          <>
-            <Text style={styles.detail}>GPT-5.4 Nano can help organize thoughts quickly. When a thought is marked private or detected as sensitive, on-device intelligence masks details first; only placeholder text may be sent remotely.</Text>
-            {remote.hasKey ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(110,231,183,0.12)', borderRadius: 10, padding: 10, marginVertical: 8, borderWidth: 1, borderColor: 'rgba(110,231,183,0.3)' }}>
-                <Text style={{ color: '#6EE7B7', fontSize: 16 }}>✓</Text>
-                <Text style={{ color: '#6EE7B7', fontWeight: '700', fontSize: 13 }}>OpenAI key saved</Text>
-                <Text style={{ color: '#6EE7B7', fontSize: 12, opacity: 0.8 }}>· {remote.enabled ? 'active' : 'key saved, toggle off'}</Text>
-              </View>
-            ) : (
-              <View style={{ backgroundColor: 'rgba(245,158,11,0.10)', borderRadius: 10, padding: 10, marginVertical: 8, borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)' }}>
-                <Text style={{ color: '#F59E0B', fontWeight: '700', fontSize: 13 }}>No OpenAI key — add one below</Text>
-                <Text style={{ color: '#F59E0B', fontSize: 11, opacity: 0.8, marginTop: 2 }}>Required for voice transcription (Listen/Meeting) and semantic search</Text>
-              </View>
-            )}
-            <Text style={styles.keyLabel}>OpenAI API key</Text>
-            <Text style={styles.hint}>LUCY uses your OpenAI key for GPT extraction and summaries. Voice is transcribed on-device — no key needed for that. Do not enter Claude or other provider tokens here.</Text>
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder={remote.hasKey ? '••••••••••••••••  (tap to replace)' : 'Paste OpenAI key (sk-...)'}
-              placeholderTextColor={remote.hasKey ? '#6EE7B7' : LUCY_COLORS.textSubtle}
-              secureTextEntry
-              style={styles.keyInput}
-              value={remoteKey}
-              onChangeText={setRemoteKey}
-            />
-            <PrimaryButton
-              disabled={changingRemote || !remoteKey.trim()}
-              label={changingRemote ? 'Saving...' : 'Save key and turn on'}
-              onPress={() => void saveRemoteKey()}
-            />
-            {remote.hasKey ? (
-              <>
-                <SecondaryButton
-                  disabled={changingRemote}
-                  label={remote.enabled ? 'Turn off remote intelligence' : 'Turn on remote intelligence'}
-                  onPress={() => void toggleRemote()}
-                />
-                {!remote.usingDevelopmentKey ? (
-                  <SecondaryButton disabled={changingRemote} label="Remove saved key" onPress={() => void removeRemoteKey()} />
-                ) : null}
-              </>
-            ) : null}
-            <Text style={styles.hint}>
-              Your key is stored using secure device storage. Test builds may use a development key configured during local installation; shared beta builds should ask each tester for their own key.
-            </Text>
-            <Text style={styles.hint}>
-              Protected remote masking is experimental. Use fake sensitive details during this beta while its accuracy is evaluated.
-            </Text>
           </>
         ) : null}
 
@@ -1261,7 +1147,6 @@ function panelTitle(panel: SettingsPanel): string {
     case 'connectors': return 'Connectors & permissions';
     case 'profile': return 'About you';
     case 'intelligence': return 'On-device intelligence';
-    case 'remote': return 'Remote intelligence';
     case 'background': return 'Background organizing';
     case 'organization': return 'Re-organize now';
     case 'queue': return 'Processing queue';
@@ -1619,19 +1504,96 @@ function SecondaryButton({ disabled, label, onPress }: { disabled: boolean; labe
   );
 }
 
-function ModelRow({ m, selected, color, onSelect }: { m: { id: string; label: string; desc: string }; selected: boolean; color: string; onSelect: () => void }) {
+/**
+ * A premium per-role model card. Surface-raised, with an accent dot, a title/description/meta
+ * hierarchy, and the current model shown as a chip on the trailing edge. Tapping opens the
+ * model picker (BYOK); when LUCY-managed it shows a lock and is not interactive.
+ */
+function RoleCard({
+  title, desc, modelLabel, modelTier, locked, onPress,
+}: {
+  title: string;
+  desc: string;
+  modelLabel: string;
+  modelTier: string;
+  locked: boolean;
+  onPress: () => void;
+}) {
   return (
     <TouchableOpacity
-      style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 12, backgroundColor: selected ? color + '18' : LUCY_COLORS.surface, borderRadius: 10, marginBottom: 5, borderWidth: 1, borderColor: selected ? color : LUCY_COLORS.border }}
-      onPress={onSelect}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. Using ${modelLabel}, ${modelTier}.${locked ? ' Managed by your Lucy plan.' : ' Tap to change model.'}`}
+      activeOpacity={locked ? 1 : 0.78}
+      disabled={locked}
+      onPress={onPress}
+      style={styles.roleCard}
     >
-      <View style={{ width: 13, height: 13, borderRadius: 7, borderWidth: 2, borderColor: color, backgroundColor: selected ? color : 'transparent' }} />
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700' }}>{m.label}</Text>
-        <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>{m.desc}</Text>
+      <View style={styles.roleDot} />
+      <View style={styles.flex}>
+        <Text style={styles.roleTitle}>{title}</Text>
+        <Text style={styles.roleDesc}>{desc}</Text>
+        <View style={styles.roleChip}>
+          <Text style={styles.roleChipModel}>{modelLabel}</Text>
+          <Text style={styles.roleChipDot}>·</Text>
+          <Text style={styles.roleChipTier}>{modelTier}</Text>
+        </View>
       </View>
-      {selected ? <Text style={{ color, fontSize: 13, fontWeight: '800' }}>✓</Text> : null}
+      {locked
+        ? <Text style={styles.roleLock}>🔒</Text>
+        : <Text style={styles.roleChevron}>⌄</Text>}
     </TouchableOpacity>
+  );
+}
+
+/**
+ * Centered fade dialog (per the design system) listing the Claude-only model choices for a role.
+ * One filled radio = the active model; tapping a row selects + persists it.
+ */
+function RolePickerModal({
+  role, selectedId, onSelect, onClose,
+}: {
+  role: ModelRole | null;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  const roleTitle = role ? ROLE_CARDS.find((r) => r.role === role)?.title ?? '' : '';
+  return (
+    <Modal transparent animationType="fade" visible={role !== null} onRequestClose={onClose}>
+      <Pressable style={styles.pickerScrim} onPress={onClose}>
+        <Pressable style={styles.pickerCard}>
+          <Text style={styles.pickerEyebrow}>MODEL FOR</Text>
+          <Text style={styles.pickerTitle}>{roleTitle}</Text>
+          <View style={styles.pickerList}>
+            {ROLE_MODEL_CHOICES.map((m) => {
+              const selected = selectedId === m.id;
+              return (
+                <TouchableOpacity
+                  key={m.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  activeOpacity={0.8}
+                  onPress={() => onSelect(m.id)}
+                  style={[styles.pickerRow, selected && styles.pickerRowSelected]}
+                >
+                  <View style={[styles.pickerRadio, selected && styles.pickerRadioOn]}>
+                    {selected ? <View style={styles.pickerRadioInner} /> : null}
+                  </View>
+                  <View style={styles.flex}>
+                    <Text style={styles.pickerModel}>{m.label}</Text>
+                    <Text style={styles.pickerTier}>{m.tier}</Text>
+                    <Text style={styles.pickerDesc}>{m.desc}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <TouchableOpacity onPress={onClose} style={styles.pickerClose}>
+            <Text style={styles.pickerCloseText}>Done</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -1755,12 +1717,12 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
         <View style={{ marginTop: 10, padding: 10, borderRadius: 10, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: diag.available ? LUCY_COLORS.border : '#ef4444' }}>
           <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 }}>PROCESSING WITH</Text>
           <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700', marginTop: 3 }}>
-            {findModel(diag.model)?.label ?? diag.model}
+            {modelLabel(diag.model)}
           </Text>
           <Text style={{ color: diag.available ? '#4ADE80' : '#ef4444', fontSize: 11, fontWeight: '600', marginTop: 2 }}>
             {diag.available
-              ? 'Remote ready — captures will process'
-              : 'Remote unavailable — captures will stay queued. Check your API key / Remote intelligence toggle.'}
+              ? 'Ready — captures will process'
+              : 'Not ready — captures will stay queued. Add your Anthropic key under AI & intelligence.'}
           </Text>
         </View>
       ) : null}
@@ -1935,4 +1897,48 @@ const styles = StyleSheet.create({
   modelName: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700', marginBottom: 3 },
   modelChoice: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700' },
   keyInput: { borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, color: LUCY_COLORS.textDark, backgroundColor: LUCY_COLORS.surface, paddingHorizontal: 13, paddingVertical: 12, fontSize: 14 },
+
+  // ─── Intelligence & models ──────────────────────────────────────────────
+  intelBlock: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
+  intelEyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
+  intelSubtitle: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 19, marginTop: 6 },
+  managedNote: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  managedNoteIcon: { fontSize: 13 },
+  managedNoteText: { flex: 1, color: LUCY_COLORS.textMuted, fontSize: 12.5, fontWeight: '600', lineHeight: 17 },
+  roleStack: { gap: 10, marginTop: 14 },
+  roleCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 14, borderRadius: 18, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  roleDot: { width: 9, height: 9, borderRadius: 5, marginTop: 5, backgroundColor: LUCY_COLORS.primary },
+  roleTitle: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '900', letterSpacing: -0.2 },
+  roleDesc: { color: LUCY_COLORS.textMuted, fontSize: 12.5, lineHeight: 18, marginTop: 3 },
+  roleChip: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 9, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 12, backgroundColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine },
+  roleChipModel: { color: LUCY_COLORS.primaryGlow, fontSize: 12.5, fontWeight: '800' },
+  roleChipDot: { color: LUCY_COLORS.primaryLine, fontSize: 12, fontWeight: '800' },
+  roleChipTier: { color: LUCY_COLORS.textMuted, fontSize: 11.5, fontWeight: '700' },
+  roleChevron: { color: LUCY_COLORS.textSubtle, fontSize: 18, fontWeight: '900', marginTop: 2, width: 20, textAlign: 'center' },
+  roleLock: { fontSize: 14, marginTop: 3, width: 20, textAlign: 'center' },
+
+  // ─── Your Anthropic key (BYOK) ──────────────────────────────────────────
+  keyBlock: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider },
+  keyHeading: { color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '800' },
+  keyCaption: { color: LUCY_COLORS.textSubtle, fontSize: 11.5, fontWeight: '700', marginTop: 3, marginBottom: 10 },
+  keyRow: { flexDirection: 'row', gap: 8 },
+  keySaveBtn: { minWidth: 64, borderRadius: 14, backgroundColor: LUCY_COLORS.primary, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
+  keySaveText: { color: LUCY_COLORS.white, fontWeight: '800', fontSize: 13 },
+
+  // ─── Role model picker (centered fade dialog) ───────────────────────────
+  pickerScrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  pickerCard: { width: '100%', maxWidth: 420, backgroundColor: LUCY_COLORS.surfaceElevated, borderRadius: 24, padding: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, ...LUCY_SHADOWS.lg },
+  pickerEyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
+  pickerTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '900', letterSpacing: -0.3, marginTop: 4 },
+  pickerList: { gap: 8, marginTop: 16 },
+  pickerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 13, borderRadius: 16, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  pickerRowSelected: { backgroundColor: LUCY_COLORS.primarySoft, borderColor: LUCY_COLORS.primary },
+  pickerRadio: { width: 20, height: 20, borderRadius: 10, marginTop: 1, borderWidth: 2, borderColor: LUCY_COLORS.textFaint, alignItems: 'center', justifyContent: 'center' },
+  pickerRadioOn: { borderColor: LUCY_COLORS.primary },
+  pickerRadioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: LUCY_COLORS.primary },
+  pickerModel: { color: LUCY_COLORS.textDark, fontSize: 14.5, fontWeight: '800' },
+  pickerTier: { color: LUCY_COLORS.primaryGlow, fontSize: 11.5, fontWeight: '800', marginTop: 2 },
+  pickerDesc: { color: LUCY_COLORS.textMuted, fontSize: 12, lineHeight: 17, marginTop: 4 },
+  pickerClose: { marginTop: 16, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', paddingVertical: 12 },
+  pickerCloseText: { color: LUCY_COLORS.textMuted, fontSize: 14, fontWeight: '800' },
 });

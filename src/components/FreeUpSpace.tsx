@@ -33,7 +33,7 @@ import {
 import { LUCY_COLORS } from '../config/colors';
 import { haptic } from '../config/haptics';
 import { getDatabase } from '../db';
-import { getLowImportanceCaptures, hardDeleteCapture, type CleanupCapture } from '../db/captures';
+import { getLowImportanceCaptures, hardDeleteCaptures, type CleanupCapture } from '../db/captures';
 import { ActionSheet, Toast } from './ActionSheet';
 import { LucyEmptyState } from './LucyEmptyState';
 
@@ -157,27 +157,29 @@ export function FreeUpSpace({
 
   const allLowSelected = lowCount > 0 && items.filter((i) => i.importance === 'low').every((i) => selected.has(i.id));
 
-  // ── Perform the deletes sequentially; skip failures quietly (no scary states) ──
+  // ── Delete every selected note in ONE batched transaction (fast even for hundreds) ──
   const performDelete = async () => {
     const ids = items.filter((i) => selected.has(i.id)).map((i) => i.id);
     if (ids.length === 0) return;
     setDeleting(true);
     if (Platform.OS !== 'web') void haptic.destructive();
     const db = await getDatabase();
-    const removed = new Set<number>();
-    for (const id of ids) {
-      try {
-        const ok = await hardDeleteCapture(db, id);
-        if (ok) removed.add(id);
-      } catch {
-        // One bad row never blocks the rest — skip it silently and keep going.
-      }
+    let ok = false;
+    try {
+      await hardDeleteCaptures(db, ids);
+      ok = true;
+    } catch {
+      // Atomic transaction — on any failure nothing was removed; degrade gently (no scary state).
+      ok = false;
     }
-    setItems((prev) => prev.filter((i) => !removed.has(i.id)));
+    if (ok) {
+      const removed = new Set(ids);
+      setItems((prev) => prev.filter((i) => !removed.has(i.id)));
+    }
     setSelected(new Set());
     setDeleting(false);
-    const n = removed.size;
-    setToast(n > 0 ? `Freed ${n} note${n === 1 ? '' : 's'}.` : 'Nothing to remove.');
+    const n = ok ? ids.length : 0;
+    setToast(n > 0 ? `Freed ${n} note${n === 1 ? '' : 's'}.` : 'Couldn’t free those — please try again.');
     if (n > 0) onChanged?.();
   };
 

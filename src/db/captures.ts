@@ -335,6 +335,47 @@ export async function hardDeleteCapture(db: SQLiteDatabase, id: number): Promise
 }
 
 /**
+ * Batch hard-delete — removes MANY captures (and their descendants) in a SINGLE transaction.
+ * The per-id `hardDeleteCapture` runs one transaction touching ~15 tables EACH, so deleting e.g. 60
+ * notes fired ~900 statements over ~14s (the "Free up space" delete looked frozen / "didn't work").
+ * This does set-based `DELETE ... WHERE id IN (...)` per table in one transaction → effectively instant.
+ * `defer_foreign_keys` lets us delete parents+children together without ordering games. Returns how
+ * many capture rows were removed.
+ */
+export async function hardDeleteCaptures(db: SQLiteDatabase, ids: number[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  // Expand to include every descendant (children via parent_capture_id) so nothing is orphaned.
+  const all = new Set<number>(ids);
+  const frontier = [...ids];
+  for (let i = 0; i < frontier.length; i++) {
+    const kids = await db.getAllAsync<{ id: number }>('SELECT id FROM captures WHERE parent_capture_id = ?', frontier[i]);
+    for (const k of kids) if (!all.has(k.id)) { all.add(k.id); frontier.push(k.id); }
+  }
+  const list = [...all];
+  let removed = 0;
+  await db.withTransactionAsync(async () => {
+    // Defer FK checks to COMMIT so deleting a parent + its child in the same set never trips a constraint.
+    await db.runAsync('PRAGMA defer_foreign_keys = ON');
+    const CHUNK = 400; // keep bound-parameter count well under SQLite's 999 limit
+    for (let i = 0; i < list.length; i += CHUNK) {
+      const slice = list.slice(i, i + CHUNK);
+      const ph = slice.map(() => '?').join(',');
+      for (const table of CAPTURE_DERIVED_TABLES) {
+        await db.runAsync(`DELETE FROM ${table} WHERE capture_id IN (${ph})`, ...slice);
+      }
+      await db.runAsync(`UPDATE knowledge_entities SET latest_capture_id = NULL WHERE latest_capture_id IN (${ph})`, ...slice);
+      await db.runAsync(`UPDATE knowledge_connections SET latest_capture_id = NULL WHERE latest_capture_id IN (${ph})`, ...slice);
+      try {
+        await db.runAsync(`DELETE FROM memory_update_proposals WHERE new_capture_id IN (${ph}) OR old_capture_id IN (${ph})`, ...slice, ...slice);
+      } catch { /* table may predate this feature */ }
+      const r = await db.runAsync(`DELETE FROM captures WHERE id IN (${ph})`, ...slice);
+      removed += r.changes ?? 0;
+    }
+  });
+  return removed;
+}
+
+/**
  * Resets a capture for reprocessing: purges its previously-extracted derived rows and
  * clears the extracted result so re-running extraction starts clean (no duplicates),
  * then re-queues it. Returns it to the processing queue (processed = 0).

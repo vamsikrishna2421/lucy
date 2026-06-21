@@ -22,6 +22,7 @@ import { CheckInScheduler } from '../components/CheckInScheduler';
 import { DayShaper } from '../components/DayShaper';
 import { FreeUpSpace } from '../components/FreeUpSpace';
 import { ScheduledRemindersManager } from '../components/ScheduledRemindersManager';
+import { ColorCustomizer } from '../components/ColorCustomizer';
 import { LearnedProfilePanel } from '../components/LearnedProfilePanel';
 import { LaptopAccessPanel } from '../components/LaptopAccessPanel';
 import { getUserProfile, saveUserProfile, type UserProfile } from '../db/userProfile';
@@ -115,6 +116,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
   const [dayShaped, setDayShaped] = useState(false);
   const [freeUpSpaceVisible, setFreeUpSpaceVisible] = useState(false);
   const [lowNoteCount, setLowNoteCount] = useState(0);
+  const [colorCustomizerVisible, setColorCustomizerVisible] = useState(false);
 
   useEffect(() => wakeWord.onStatusChange(setWakeStatus), []);
 
@@ -849,6 +851,21 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
         />
       </SettingsGroup>
 
+      {/* ─── Appearance ────────────────────────────────────────────────── */}
+      <SettingsGroup
+        icon="🎨"
+        title="Appearance"
+        summary="Make Lucy yours — recolor every part of the app"
+      >
+        <SettingsRow
+          title="Customize colors"
+          value="Pick your own colors for accents, surfaces, text and more"
+          actionLabel="Open"
+          onAction={() => setColorCustomizerVisible(true)}
+          onInfo={() => setColorCustomizerVisible(true)}
+        />
+      </SettingsGroup>
+
       {/* ─── Developer ─────────────────────────────────────────────────── */}
       <SettingsGroup
         icon="🛠️"
@@ -864,6 +881,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
       </SettingsGroup>
 
       <DevLogViewer visible={devLogVisible} onClose={() => setDevLogVisible(false)} />
+      <ColorCustomizer visible={colorCustomizerVisible} onClose={() => setColorCustomizerVisible(false)} />
       <SiriShortcutGuide visible={siriGuideVisible} onClose={() => setSiriGuideVisible(false)} />
       <VoicePicker visible={voicePickerVisible} onClose={() => setVoicePickerVisible(false)} />
       <CheckInScheduler

@@ -6,8 +6,15 @@
  *   - Amber glow system for active/important states
  *   - Warm cream text, never cold grey
  *   - Borders that define depth without harsh contrast
+ *
+ * USER CUSTOMIZATION: every token below is the *default*. At module load we synchronously read any saved
+ * user overrides (see colors/colorPrefs.ts) and merge them in, so `LUCY_COLORS.x` everywhere — including
+ * values baked into StyleSheet.create — reflects the user's chosen colors. Edited in Settings → Appearance;
+ * applied on a clean app reload. `DEFAULT_LUCY_COLORS` is preserved so the customizer can show/restore it.
  */
-export const LUCY_COLORS = {
+import { readColorOverridesSync } from './colorPrefs';
+
+export const DEFAULT_LUCY_COLORS = {
   // ─── Core amber ──────────────────────────────────────────────────────────
   primary:      '#FF8C42',   // main CTA, highlights
   primaryGlow:  '#FFA05C',   // hover/active state, a touch lighter
@@ -55,11 +62,34 @@ export const LUCY_COLORS = {
   yield:      '#FDDCB0',
 } as const;
 
+/** A LUCY palette token name. Derived from the defaults so the union stays exact. */
+export type ColorKey = keyof typeof DEFAULT_LUCY_COLORS;
+
+/** Build the live palette = defaults + validated user overrides (read synchronously at boot). */
+function buildLucyColors(): Record<ColorKey, string> {
+  const base: Record<string, string> = { ...DEFAULT_LUCY_COLORS };
+  try {
+    const overrides = readColorOverridesSync();
+    for (const [key, value] of Object.entries(overrides)) {
+      if (key in base) base[key] = value;
+    }
+  } catch {
+    /* fall back to defaults on any error — never block startup over a color pref */
+  }
+  return base as Record<ColorKey, string>;
+}
+
+/**
+ * The LIVE palette the whole app reads. Same token keys as before, so every consumer re-skins
+ * automatically when the user customizes colors (after a reload). For the originals, see DEFAULT_LUCY_COLORS.
+ */
+export const LUCY_COLORS: Record<ColorKey, string> = buildLucyColors();
+
 /** Shadow presets for depth — use on elevated cards, modals, active states. */
 export const LUCY_SHADOWS = {
   /** Subtle elevation — secondary cards */
   sm: {
-    shadowColor: '#FF8C42',
+    shadowColor: LUCY_COLORS.primary,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
@@ -67,7 +97,7 @@ export const LUCY_SHADOWS = {
   },
   /** Standard card elevation */
   md: {
-    shadowColor: '#FF8C42',
+    shadowColor: LUCY_COLORS.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.10,
     shadowRadius: 8,
@@ -75,7 +105,7 @@ export const LUCY_SHADOWS = {
   },
   /** Modal / sheet elevation */
   lg: {
-    shadowColor: '#FF8C42',
+    shadowColor: LUCY_COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
@@ -83,15 +113,14 @@ export const LUCY_SHADOWS = {
   },
   /** Active / focus glow — primary interactive elements */
   glow: {
-    shadowColor: '#FF8C42',
+    shadowColor: LUCY_COLORS.primary,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
     elevation: 6,
   },
-} as const;
+};
 
-export type ColorKey = keyof typeof LUCY_COLORS;
 export type ShadowKey = keyof typeof LUCY_SHADOWS;
 
 export const getPillarColor = (pillar: 'listen' | 'understand' | 'connect' | 'yield'): string => {

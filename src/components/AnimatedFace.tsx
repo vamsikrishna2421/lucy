@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
+
+// The warm amber the orb is drawn in (kept across the rebrand as Lucy's signature). Used for the orb's
+// own soft halo shadow + the floating music notes, so they glow amber regardless of the indigo theme.
+const LUCY_AMBER = '#FAB23A';
 
 type Mood = 'awake' | 'sleeping';
 type DayPhase = 'morning' | 'day' | 'evening' | 'night';
@@ -31,11 +35,14 @@ const STATUS_META: Record<Exclude<LucyStatus, 'idle'>, { marker: string; label: 
   music: { marker: 'tune', label: 'Listening' },
 };
 
-const PHASE_PALETTE: Record<DayPhase, { orb: string; glow: string; highlight: string; cloud: string; ring: string }> = {
-  morning: { orb: '#FFB064', glow: '#FFD09A', highlight: 'rgba(255,248,230,0.72)', cloud: '#2B1D10', ring: '#FFD09A' },
-  day: { orb: LUCY_COLORS.primary, glow: LUCY_COLORS.primaryGlow, highlight: 'rgba(255,245,230,0.62)', cloud: '#241A10', ring: LUCY_COLORS.primaryGlow },
-  evening: { orb: '#F06F3C', glow: '#FF9B6A', highlight: 'rgba(255,220,190,0.56)', cloud: '#26150F', ring: '#FF9B6A' },
-  night: { orb: '#8A5A2B', glow: '#D69A5B', highlight: 'rgba(245,210,170,0.42)', cloud: '#17120D', ring: '#A87949' },
+// The warm amber ORB is kept across the day phases (amber is a lovely accent on light). Only the
+// glow/highlight/ring track the time of day. The status "cloud" pill is a WHITE card on the light theme
+// (see styles.cloud) — its color comes from tokens, not this map.
+const PHASE_PALETTE: Record<DayPhase, { orb: string; glow: string; highlight: string; ring: string }> = {
+  morning: { orb: '#FFB064', glow: '#FFD09A', highlight: 'rgba(255,248,230,0.72)', ring: '#FFC081' },
+  day: { orb: '#FAB23A', glow: '#FFD78A', highlight: 'rgba(255,245,225,0.7)', ring: '#FFC766' },
+  evening: { orb: '#F2864A', glow: '#FFB07A', highlight: 'rgba(255,225,200,0.6)', ring: '#FFA877' },
+  night: { orb: '#C98A4E', glow: '#E9BE86', highlight: 'rgba(250,225,195,0.5)', ring: '#D9A871' },
 };
 
 // Deep warm-brown for the eye whites/lids — reads as a friendly dark eye on the amber orb.
@@ -65,7 +72,7 @@ function Particle({ delay, x }: { delay: number; x: number }) {
         width: 3,
         height: 3,
         borderRadius: 1.5,
-        backgroundColor: LUCY_COLORS.primaryGlow,
+        backgroundColor: LUCY_AMBER,
         opacity: t.interpolate({ inputRange: [0, 0.2, 0.8, 1], outputRange: [0, 0.9, 0.6, 0] }),
         transform: [
           { translateY: t.interpolate({ inputRange: [0, 1], outputRange: [0, -34] }) },
@@ -749,7 +756,6 @@ export function AnimatedFace({
             style={[
               styles.cloud,
               {
-                backgroundColor: palette.cloud,
                 opacity: cloudAnim,
                 transform: [
                   { scale: cloudAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) },
@@ -796,9 +802,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     borderWidth: 1,
-    shadowColor: LUCY_COLORS.primary,
+    shadowColor: LUCY_AMBER,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
+    shadowOpacity: 0.55,
     shadowRadius: 9,
   },
   shimmer: { position: 'absolute', width: 56, height: 12, backgroundColor: 'rgba(255,235,200,0.35)', top: 14, left: -8 },
@@ -884,8 +890,8 @@ const styles = StyleSheet.create({
 
   // Floating music note — stem + filled head.
   note: { position: 'absolute', bottom: 12, width: 8, height: 10, alignItems: 'flex-end' },
-  noteStem: { width: 1.6, height: 8, backgroundColor: LUCY_COLORS.primaryGlow, borderRadius: 1 },
-  noteHead: { position: 'absolute', bottom: 0, left: 0, width: 4.5, height: 3.5, borderRadius: 2, backgroundColor: LUCY_COLORS.primaryGlow, transform: [{ rotate: '-18deg' }] },
+  noteStem: { width: 1.6, height: 8, backgroundColor: LUCY_AMBER, borderRadius: 1 },
+  noteHead: { position: 'absolute', bottom: 0, left: 0, width: 4.5, height: 3.5, borderRadius: 2, backgroundColor: LUCY_AMBER, transform: [{ rotate: '-18deg' }] },
 
   // Thought bubble — rounded bubble with three dots + a two-dot tail.
   thought: { position: 'absolute', top: -10, right: -10, alignItems: 'center' },
@@ -900,6 +906,7 @@ const styles = StyleSheet.create({
   // Celebrate sparkle — small warm diamond.
   sparkle: { position: 'absolute', width: 5, height: 5, borderRadius: 1, backgroundColor: LUCY_COLORS.gold, transform: [{ rotate: '45deg' }] },
   sleepMark: { position: 'absolute', top: -8, right: 4, color: LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '900' },
+  // Status "cloud" — a small WHITE pill on the light theme: indigo marker + dark label, soft shadow.
   cloud: {
     position: 'absolute',
     top: -17,
@@ -910,17 +917,14 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     paddingHorizontal: 7,
     paddingVertical: 3,
+    backgroundColor: LUCY_COLORS.surfaceElevated,
     borderWidth: 1,
-    borderColor: 'rgba(255,140,66,0.45)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 8,
+    borderColor: LUCY_COLORS.primaryLine,
+    ...LUCY_SHADOWS.sm,
   },
-  cloudMarker: { color: LUCY_COLORS.primaryGlow, fontSize: 8, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.2 },
-  cloudText: { color: LUCY_COLORS.primaryGlow, fontSize: 9, fontWeight: '800', letterSpacing: 0.2, flexShrink: 0 },
-  tailDot1: { position: 'absolute', top: 1, right: 5, width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,140,66,0.45)' },
+  cloudMarker: { color: LUCY_COLORS.primary, fontSize: 8, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.2 },
+  cloudText: { color: LUCY_COLORS.textMuted, fontSize: 9, fontWeight: '800', letterSpacing: 0.2, flexShrink: 0 },
+  tailDot1: { position: 'absolute', top: 1, right: 5, width: 4, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.primaryLine },
   badge: {
     position: 'absolute',
     bottom: -2,
@@ -928,12 +932,12 @@ const styles = StyleSheet.create({
     minWidth: 15,
     height: 15,
     borderRadius: 8,
-    backgroundColor: '#ef4444',
+    backgroundColor: LUCY_COLORS.error,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 3,
     borderWidth: 1.5,
     borderColor: LUCY_COLORS.background,
   },
-  badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
+  badgeText: { color: LUCY_COLORS.white, fontSize: 9, fontWeight: '800' },
 });

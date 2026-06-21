@@ -15,6 +15,9 @@ const EYE_WHITE = '#FBF1E2';
 const IRIS = '#241606';
 const LID = '#1A1206';
 const ORB = 64;
+// Lucy's signature warm amber (kept across the light rebrand); only the surfaces around her are light.
+const LUCY_AMBER = '#FAB23A';
+const LUCY_AMBER_GLOW = '#FFD78A';
 
 /** A small, alive LUCY orb for empty/idle moments — breathes, blinks, holds a soft smile. */
 function EmptyOrb() {
@@ -164,14 +167,14 @@ const styles = StyleSheet.create({
 
   // Orb
   orbWrap: { width: ORB + 24, height: ORB + 24, alignItems: 'center', justifyContent: 'center' },
-  halo: { position: 'absolute', width: ORB + 18, height: ORB + 18, borderRadius: (ORB + 18) / 2, backgroundColor: LUCY_COLORS.primaryGlow },
+  halo: { position: 'absolute', width: ORB + 18, height: ORB + 18, borderRadius: (ORB + 18) / 2, backgroundColor: LUCY_AMBER_GLOW },
   orb: {
     width: ORB, height: ORB, borderRadius: ORB / 2,
-    backgroundColor: LUCY_COLORS.primary,
+    backgroundColor: LUCY_AMBER,
     borderWidth: 1, borderColor: 'rgba(255,245,230,0.62)',
     alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12,
     overflow: 'hidden',
-    shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 12, elevation: 8,
+    shadowColor: LUCY_AMBER, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 8,
   },
   specular: { position: 'absolute', top: 9, left: 14, width: 14, height: 9, borderRadius: 7, backgroundColor: 'rgba(255,245,230,0.55)' },
   face: { alignItems: 'center', justifyContent: 'center', gap: 4 },

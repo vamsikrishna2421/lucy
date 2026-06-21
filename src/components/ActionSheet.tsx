@@ -12,7 +12,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 
 export type SheetAction = {
   label: string;
@@ -166,7 +166,7 @@ export function Toast({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)' },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,22,40,0.40)' },
   anchor: { flex: 1, justifyContent: 'flex-end' },
   card: {
     backgroundColor: LUCY_COLORS.surfaceSheet,
@@ -177,10 +177,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 30,
-    shadowColor: LUCY_COLORS.primary,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 18,
+    shadowColor: '#1A1B2E',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
     elevation: 12,
   },
   grip: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.border, marginBottom: 14 },
@@ -193,16 +193,12 @@ const styles = StyleSheet.create({
   actionPrimary: {
     backgroundColor: LUCY_COLORS.primary,
     borderColor: LUCY_COLORS.primary,
-    shadowColor: LUCY_COLORS.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
+    ...LUCY_SHADOWS.glow,
   },
-  actionDestructive: { backgroundColor: 'transparent', borderColor: 'rgba(251,113,133,0.45)' },
+  actionDestructive: { backgroundColor: 'transparent', borderColor: LUCY_COLORS.error + '5C' },
   actionDefault: { backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.border },
   actionText: { fontSize: 15, fontWeight: '800', color: LUCY_COLORS.textDark },
-  actionTextPrimary: { color: '#1A1206' },
+  actionTextPrimary: { color: LUCY_COLORS.white },
   actionTextDestructive: { color: LUCY_COLORS.error },
   cancelBtn: { paddingVertical: 13, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   cancelText: { fontSize: 14.5, fontWeight: '700', color: LUCY_COLORS.textSubtle },
@@ -220,16 +216,12 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 10,
+    ...LUCY_SHADOWS.lg,
   },
   toastIconWrap: {
     width: 22, height: 22, borderRadius: 11, backgroundColor: LUCY_COLORS.primary,
     alignItems: 'center', justifyContent: 'center',
   },
-  toastIcon: { color: '#1A1206', fontSize: 13, fontWeight: '900' },
+  toastIcon: { color: LUCY_COLORS.white, fontSize: 13, fontWeight: '900' },
   toastText: { color: LUCY_COLORS.textDark, fontSize: 13.5, fontWeight: '700', flexShrink: 1 },
 });

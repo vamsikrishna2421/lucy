@@ -12,7 +12,7 @@ import { MeetingMode } from './src/components/MeetingMode';
 import { Onboarding } from './src/components/Onboarding';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { LUCY_COLORS } from './src/config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from './src/config/colors';
 import { getDatabase } from './src/db';
 import { resetInterruptedCaptures } from './src/db/captures';
 import { getSetting, setSetting } from './src/db/settings';
@@ -809,9 +809,9 @@ export default function App() {
       {wakeWordEnabled && wakeStatus !== 'disabled' ? (
         <View style={styles.wakePill}>
           <View style={[styles.wakeDot, {
-            backgroundColor: wakeStatus === 'listening' ? '#4ADE80'
-              : wakeStatus === 'unavailable' ? '#EF4444'
-              : '#F59E0B',
+            backgroundColor: wakeStatus === 'listening' ? LUCY_COLORS.success
+              : wakeStatus === 'unavailable' ? LUCY_COLORS.error
+              : LUCY_COLORS.warning,
           }]} />
           <Text style={styles.wakePillText}>
             {wakeStatus === 'listening' ? 'Listening'
@@ -844,7 +844,7 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         {/* Unified header shown on all screens — consistent controls everywhere */}
         <View style={styles.brand}>
           <View style={styles.brandRow}>
@@ -913,15 +913,15 @@ export default function App() {
         </View>
         {/* No-key warning banner — shows when Listen is active but transcription can't run */}
         {listenActive && passiveState.noApiKey ? (
-          <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderBottomWidth: 1, borderBottomColor: 'rgba(245,158,11,0.25)', paddingHorizontal: 16, paddingVertical: 7 }}>
-            <Text style={{ color: '#F59E0B', fontSize: 12, fontWeight: '600', textAlign: 'center' }}>
+          <View style={styles.warnBanner}>
+            <Text style={styles.warnBannerText}>
               ⚠ Listen mode is recording but cannot transcribe — add an OpenAI key in Settings → Remote intelligence.
             </Text>
           </View>
         ) : null}
         {shareToast ? (
-          <Animated.View style={{ opacity: shareToastAnim, transform: [{ translateY: shareToastAnim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) }], backgroundColor: 'rgba(110,231,183,0.14)', borderBottomWidth: 1, borderBottomColor: 'rgba(110,231,183,0.3)', paddingHorizontal: 16, paddingVertical: 8 }}>
-            <Text style={{ color: '#6EE7B7', fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
+          <Animated.View style={[styles.shareBanner, { opacity: shareToastAnim, transform: [{ translateY: shareToastAnim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) }] }]}>
+            <Text style={styles.shareBannerText}>
               ✓ {shareToast} — organizing…
             </Text>
           </Animated.View>
@@ -1081,7 +1081,7 @@ export default function App() {
             <Text style={styles.snapPickerTitle}>Snap it</Text>
             <Text style={styles.snapPickerBody}>A meal, a receipt, or a note — I’ll figure out what it is and file it.</Text>
             <TouchableOpacity style={styles.snapPickerPrimary} activeOpacity={0.9} onPress={() => void runSnap('camera')}>
-              <Ionicons name="camera" size={18} color="#0B0B0F" />
+              <Ionicons name="camera" size={18} color={LUCY_COLORS.white} />
               <Text style={styles.snapPickerPrimaryText}>Take photo</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.snapPickerSecondary} activeOpacity={0.85} onPress={() => void runSnap('library')}>
@@ -1180,40 +1180,40 @@ const styles = StyleSheet.create({
   brand: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.borderSoft, zIndex: 5 },
   brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 42, position: 'relative' },
   logoWrap: { position: 'relative', alignSelf: 'flex-start', marginTop: 8, paddingLeft: 2 },
-  logoStar: { position: 'absolute', top: -8, right: -14, color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '800', textShadowColor: 'rgba(255,139,61,0.7)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
+  logoStar: { position: 'absolute', top: -8, right: -14, color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '800', textShadowColor: 'rgba(92,80,220,0.45)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
   headerPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 48 },
   globalFace: { position: 'absolute', right: 16, top: 118, zIndex: 30, elevation: 30, alignItems: 'flex-end' },
-  cameraFab: { position: 'absolute', right: 18, bottom: 104, width: 52, height: 52, borderRadius: 26, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center', zIndex: 40, elevation: 8, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
-  updateOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', alignItems: 'center', justifyContent: 'center', padding: 30 },
+  cameraFab: { position: 'absolute', right: 18, bottom: 104, width: 52, height: 52, borderRadius: 26, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center', zIndex: 40, ...LUCY_SHADOWS.glow },
+  updateOverlay: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', alignItems: 'center', justifyContent: 'center', padding: 30 },
   // overflow visible + extra top room so the peeking Lucy (who grips the top edge) isn't clipped.
-  updateCard: { width: '100%', maxWidth: 360, backgroundColor: LUCY_COLORS.surface, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingTop: 34, paddingHorizontal: 26, paddingBottom: 26, alignItems: 'center', overflow: 'visible' },
-  updateIconRing: { width: 60, height: 60, borderRadius: 30, backgroundColor: LUCY_COLORS.primarySoft, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  updateCard: { width: '100%', maxWidth: 360, backgroundColor: LUCY_COLORS.surface, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingTop: 34, paddingHorizontal: 26, paddingBottom: 26, alignItems: 'center', overflow: 'visible', ...LUCY_SHADOWS.lg },
+  updateIconRing: { width: 60, height: 60, borderRadius: 30, backgroundColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   updateTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '800', textAlign: 'center' },
   updateBody: { color: LUCY_COLORS.textMuted, fontSize: 14.5, lineHeight: 21, textAlign: 'center', marginTop: 10, marginBottom: 22 },
   updatePrimary: { backgroundColor: LUCY_COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', alignSelf: 'stretch' },
-  updatePrimaryText: { color: '#0B0B0F', fontWeight: '800', fontSize: 16 },
+  updatePrimaryText: { color: LUCY_COLORS.white, fontWeight: '800', fontSize: 16 },
   updateLater: { paddingVertical: 12, alignItems: 'center', alignSelf: 'stretch', marginTop: 4 },
   updateLaterText: { color: LUCY_COLORS.textMuted, fontWeight: '600', fontSize: 14 },
-  eventCardOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', alignItems: 'center', justifyContent: 'center', padding: 30 },
-  eventCardBox: { width: '100%', maxWidth: 340, backgroundColor: LUCY_COLORS.surface, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 24, alignItems: 'center' },
+  eventCardOverlay: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', alignItems: 'center', justifyContent: 'center', padding: 30 },
+  eventCardBox: { width: '100%', maxWidth: 340, backgroundColor: LUCY_COLORS.surface, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 24, alignItems: 'center', ...LUCY_SHADOWS.lg },
   eventCardIconRing: { width: 52, height: 52, borderRadius: 26, backgroundColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   eventCardKicker: { color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800', letterSpacing: 1.4 },
   eventCardTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '800', textAlign: 'center', marginTop: 6 },
   eventCardWhen: { color: LUCY_COLORS.textMuted, fontSize: 14.5, fontWeight: '600', textAlign: 'center', marginTop: 8 },
   eventCardDivider: { height: 1, alignSelf: 'stretch', backgroundColor: LUCY_COLORS.border, marginTop: 18, marginBottom: 12 },
   eventCardDismiss: { color: LUCY_COLORS.textSubtle, fontSize: 13, fontWeight: '600' },
-  snapPickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', alignItems: 'center', justifyContent: 'center', padding: 30 },
-  snapPickerCard: { width: '100%', maxWidth: 360, backgroundColor: LUCY_COLORS.surface, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingTop: 40, paddingHorizontal: 22, paddingBottom: 18, overflow: 'visible' },
+  snapPickerOverlay: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', alignItems: 'center', justifyContent: 'center', padding: 30 },
+  snapPickerCard: { width: '100%', maxWidth: 360, backgroundColor: LUCY_COLORS.surface, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingTop: 40, paddingHorizontal: 22, paddingBottom: 18, overflow: 'visible', ...LUCY_SHADOWS.lg },
   snapPickerTitle: { color: LUCY_COLORS.textDark, fontSize: 21, fontWeight: '800' },
   snapPickerBody: { color: LUCY_COLORS.textMuted, fontSize: 14.5, lineHeight: 21, marginTop: 8, marginBottom: 18 },
   snapPickerPrimary: { flexDirection: 'row', gap: 8, backgroundColor: LUCY_COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
-  snapPickerPrimaryText: { color: '#0B0B0F', fontWeight: '800', fontSize: 16 },
+  snapPickerPrimaryText: { color: LUCY_COLORS.white, fontWeight: '800', fontSize: 16 },
   snapPickerSecondary: { flexDirection: 'row', gap: 8, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', marginTop: 10, borderWidth: 1, borderColor: LUCY_COLORS.border },
   snapPickerSecondaryText: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 15 },
   snapPickerCancel: { paddingVertical: 12, alignItems: 'center', marginTop: 4 },
   snapPickerCancelText: { color: LUCY_COLORS.textMuted, fontWeight: '600', fontSize: 14 },
-  snapBusyOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
-  snapBusyCard: { backgroundColor: LUCY_COLORS.surface, borderRadius: 18, padding: 26, alignItems: 'center', gap: 12, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  snapBusyOverlay: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', alignItems: 'center', justifyContent: 'center' },
+  snapBusyCard: { backgroundColor: LUCY_COLORS.surface, borderRadius: 18, padding: 26, alignItems: 'center', gap: 12, borderWidth: 1, borderColor: LUCY_COLORS.border, ...LUCY_SHADOWS.lg },
   snapBusyText: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '600' },
   faceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   wakePill: {
@@ -1221,18 +1221,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     marginTop: 2,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 9,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: LUCY_COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: LUCY_COLORS.border,
+    ...LUCY_SHADOWS.sm,
   },
   wakeDot: { width: 6, height: 6, borderRadius: 3 },
-  wakePillText: { color: '#E5E7EB', fontSize: 9, fontWeight: '600', letterSpacing: 0.2 },
+  wakePillText: { color: LUCY_COLORS.textMuted, fontSize: 9, fontWeight: '700', letterSpacing: 0.2 },
+  // Inline notice banners under the header (light-theme tinted backgrounds + semantic text).
+  warnBanner: { backgroundColor: LUCY_COLORS.warning + '1A', borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.warning + '40', paddingHorizontal: 16, paddingVertical: 7 },
+  warnBannerText: { color: LUCY_COLORS.warning, fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  shareBanner: { backgroundColor: LUCY_COLORS.success + '1A', borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.success + '40', paddingHorizontal: 16, paddingVertical: 8 },
+  shareBannerText: { color: LUCY_COLORS.success, fontSize: 12, fontWeight: '700', textAlign: 'center' },
   brandLogo: { height: 32, width: 160 },
   brandName: { color: LUCY_COLORS.textDark, fontSize: 25, fontWeight: '900', letterSpacing: 1.2 },
   brandNameAccent: { color: LUCY_COLORS.primary },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
-  meetingPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', flexDirection: 'row', alignItems: 'center', gap: 5 },
+  meetingPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: LUCY_COLORS.error + '1A', borderWidth: 1, borderColor: LUCY_COLORS.error + '4D', flexDirection: 'row', alignItems: 'center', gap: 5 },
   // Notifications bell — pinned to the top-right of the header, sitting in the reserved gap
   // (headerPillRow has paddingRight: 48) so it never overlaps the Meeting/Listen pills.
   bellBtn: { position: 'absolute', top: 8, right: 0, width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
@@ -1241,13 +1249,13 @@ const styles = StyleSheet.create({
   listenPill: { minHeight: 34, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 17, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, flexDirection: 'row', alignItems: 'center', gap: 6 },
   listenPillActive: { backgroundColor: LUCY_COLORS.primaryMist, borderColor: LUCY_COLORS.primaryLine },
   listenDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: LUCY_COLORS.textSubtle },
-  listenDotActive: { backgroundColor: '#ef4444' },
+  listenDotActive: { backgroundColor: LUCY_COLORS.error },
   listenText: { color: LUCY_COLORS.textMuted, fontWeight: '700', fontSize: 12 },
   listenTextActive: { color: LUCY_COLORS.primary },
   localPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: LUCY_COLORS.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 5 },
   localDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: LUCY_COLORS.primary },
   localText: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 11 },
-  meetingHeaderPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', flexDirection: 'row', alignItems: 'center', gap: 5 },
+  meetingHeaderPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: LUCY_COLORS.error + '1A', borderWidth: 1, borderColor: LUCY_COLORS.error + '4D', flexDirection: 'row', alignItems: 'center', gap: 5 },
   brainHeaderPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: LUCY_COLORS.primarySoft, flexDirection: 'row', alignItems: 'center' },
   brainHeaderText: { color: LUCY_COLORS.primary, fontWeight: '700', fontSize: 11 },
   container: { flex: 1, paddingHorizontal: 16, paddingTop: 0 },
@@ -1268,7 +1276,7 @@ const styles = StyleSheet.create({
     shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.42, shadowRadius: 14, elevation: 8,
     borderWidth: 4, borderColor: LUCY_COLORS.surfaceSheet,
   },
-  voiceButtonRecording: { backgroundColor: '#ef4444', shadowColor: '#ef4444' },
+  voiceButtonRecording: { backgroundColor: LUCY_COLORS.error, shadowColor: LUCY_COLORS.error },
   voiceButtonBusy: { backgroundColor: LUCY_COLORS.primaryGlow },
   voiceButtonIcon: { color: '#fff', fontSize: 22, fontWeight: '800' },
   voiceStopSquare: { width: 16, height: 16, borderRadius: 3, backgroundColor: '#fff' },
@@ -1283,5 +1291,5 @@ const styles = StyleSheet.create({
   bottomTabLabel: { fontSize: 11, fontWeight: '600', color: LUCY_COLORS.textSubtle },
   bottomTabLabelActive: { color: LUCY_COLORS.primary, fontWeight: '700' },
   loading: { color: LUCY_COLORS.textMuted, textAlign: 'center', marginTop: 50 },
-  error: { color: '#FDA4AF', backgroundColor: '#3B1722', borderRadius: 12, padding: 15 },
+  error: { color: LUCY_COLORS.error, backgroundColor: LUCY_COLORS.error + '14', borderWidth: 1, borderColor: LUCY_COLORS.error + '33', borderRadius: 12, padding: 15, fontWeight: '600' },
 });

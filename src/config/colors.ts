@@ -1,93 +1,96 @@
 /**
- * LUCY brand palette — premium dark, warm journal feel with vibrant amber intelligence.
+ * LUCY brand palette — clean, modern, calm LIGHT theme with an indigo intelligence accent.
+ * (Redesign 2026-06-20, inspired by the scuts reference: light surfaces, white soft-shadow cards,
+ *  indigo primary with violet/pink/teal/amber accents.)
  *
  * Design principles:
- *   - 4-level surface depth (background → surface → surfaceRaised → surfaceElevated)
- *   - Amber glow system for active/important states
- *   - Warm cream text, never cold grey
- *   - Borders that define depth without harsh contrast
+ *   - Light surface depth (background → surface(white) → raised), separated by soft shadow + hairline border.
+ *   - Indigo accent system for active/important states (replaces the old amber glow).
+ *   - Near-black text hierarchy on light surfaces.
+ *   - Borders that define depth with a soft hairline, never harsh contrast.
+ * Token KEYS are unchanged from the old dark palette, so every consumer re-skins automatically.
  */
 export const LUCY_COLORS = {
-  // ─── Core amber ──────────────────────────────────────────────────────────
-  primary:      '#FF8C42',   // main CTA, highlights
-  primaryGlow:  '#FFA05C',   // hover/active state, a touch lighter
-  primaryDeep:  '#E8722A',   // pressed state, 10% darker
-  primarySoft:  '#3D1D08',   // subtle tinted backgrounds
-  primaryMist:  '#2A1205',   // very subtle tint, almost invisible
-  primaryLine:  '#6F3515',   // warm outlines on active surfaces
+  // ─── Core indigo (primary intelligence accent) ───────────────────────────
+  primary:      '#5C50DC',   // main CTA, highlights (indigo)
+  primaryGlow:  '#7468E6',   // hover/active — a touch lighter
+  primaryDeep:  '#4A3FC2',   // pressed state — darker
+  primarySoft:  '#ECEAFB',   // subtle indigo-tinted backgrounds / chips
+  primaryMist:  '#F4F3FD',   // very subtle tint, almost white
+  primaryLine:  '#D9D5F6',   // indigo outline on active surfaces
 
-  // ─── Surface depth (4 levels, each ~8% lighter) ──────────────────────────
-  background:       '#0C0B09',   // deepest — screen background
-  surface:          '#161310',   // card backgrounds
-  surfaceRaised:    '#1F1A14',   // elevated cards, input backgrounds
-  surfaceElevated:  '#2A2219',   // tooltips, dropdowns, highest layer
-  surfaceSheet:     '#131108',   // bottom sheet backgrounds (slightly cooler)
-  surfaceGlass:     '#211A13',   // translucent-feeling panels
+  // ─── Surface depth (light) ───────────────────────────────────────────────
+  background:       '#F1F2F8',   // screen background — light lavender-gray
+  surface:          '#FFFFFF',   // card backgrounds — white
+  surfaceRaised:    '#F6F7FC',   // elevated cards, input backgrounds
+  surfaceElevated:  '#FFFFFF',   // tooltips, dropdowns (white + shadow)
+  surfaceSheet:     '#FFFFFF',   // bottom sheet backgrounds
+  surfaceGlass:     '#F6F7FC',   // translucent-feeling panels
 
-  // ─── Text — warm cream hierarchy ─────────────────────────────────────────
-  textDark:   '#F5EFE6',   // primary text — warm white
-  textMuted:  '#C4A882',   // secondary text — warm tan
-  textSubtle: '#8A7560',   // tertiary text — warm brown
-  textFaint:  '#5C4A38',   // disabled / placeholder
+  // ─── Text — near-black hierarchy ─────────────────────────────────────────
+  textDark:   '#15161B',   // primary text
+  textMuted:  '#6A6E7D',   // secondary text
+  textSubtle: '#9AA0B0',   // tertiary text
+  textFaint:  '#B8BCC8',   // disabled / placeholder
 
   // ─── Borders ─────────────────────────────────────────────────────────────
-  border:     '#2D2218',   // standard card border
-  borderSoft: '#221B12',   // subtle dividers
-  divider:    '#1E1710',   // list separators
+  border:     '#E6E8F1',   // standard card border / hairline
+  borderSoft: '#EDEFF5',   // subtle dividers
+  divider:    '#EEF0F6',   // list separators
 
   // ─── Semantic ────────────────────────────────────────────────────────────
-  success:  '#4ADE80',
-  warning:  '#F59E0B',
-  error:    '#FB7185',
-  info:     '#60A5FA',
-  violet:   '#A78BFA',
-  cyan:     '#4DA3FF',
-  teal:     '#34D399',
-  gold:     '#F5C451',
-  rose:     '#FB7185',
+  success:  '#2EB56B',
+  warning:  '#EE9A1C',
+  error:    '#E54D4D',
+  info:     '#5B8CFF',
+  violet:   '#8C5CEB',
+  cyan:     '#1FBDAB',
+  teal:     '#1FBDAB',
+  gold:     '#FAB23A',
+  rose:     '#ED66AE',
 
   white: '#FFFFFF',
 
-  // ─── Pillar colors ────────────────────────────────────────────────────────
-  listen:     '#FDBA74',
-  understand: '#FFA05C',
-  connect:    '#FF8C42',
-  yield:      '#FDDCB0',
+  // ─── Pillar colors (multi-accent on light) ──────────────────────────────────
+  listen:     '#1FBDAB',   // teal
+  understand: '#8C5CEB',   // violet
+  connect:    '#5C50DC',   // indigo
+  yield:      '#FAB23A',   // amber
 } as const;
 
-/** Shadow presets for depth — use on elevated cards, modals, active states. */
+/** Shadow presets for depth — soft neutral elevation on the light theme (no more amber glow). */
 export const LUCY_SHADOWS = {
   /** Subtle elevation — secondary cards */
   sm: {
-    shadowColor: '#FF8C42',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowColor: '#1A1B2E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
   /** Standard card elevation */
   md: {
-    shadowColor: '#FF8C42',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.10,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: '#1A1B2E',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 2,
   },
   /** Modal / sheet elevation */
   lg: {
-    shadowColor: '#FF8C42',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  /** Active / focus glow — primary interactive elements */
-  glow: {
-    shadowColor: '#FF8C42',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
+    shadowColor: '#1A1B2E',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
     elevation: 6,
+  },
+  /** Active / focus — a soft indigo lift on primary interactive elements */
+  glow: {
+    shadowColor: '#5C50DC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 5,
   },
 } as const;
 

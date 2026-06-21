@@ -26,8 +26,13 @@ const EYE_WHITE = '#FBF1E2';
 const IRIS = '#241606';
 const LID = '#1A1206';
 
+// Lucy's signature warm amber (kept across the light rebrand). The orb, hands, halo + shadow all use it
+// so she stays the same warm character — only the surfaces AROUND her are light.
+const LUCY_AMBER = '#FAB23A';
+const LUCY_AMBER_GLOW = '#FFD78A';
+
 // Warm amber body shading for the hands so they read as the same material as the orb.
-const HAND_FILL = LUCY_COLORS.primary;          // amber palm/fingers
+const HAND_FILL = LUCY_AMBER;                    // amber palm/fingers
 const HAND_EDGE = 'rgba(120,52,15,0.55)';       // soft darker outline so fingers read on the card
 const NAIL_HI = 'rgba(255,244,228,0.5)';        // knuckle highlight (top of each finger)
 
@@ -241,22 +246,22 @@ const styles = StyleSheet.create({
     width: ORB + 22,
     height: ORB + 22,
     borderRadius: (ORB + 22) / 2,
-    backgroundColor: LUCY_COLORS.primaryGlow,
+    backgroundColor: LUCY_AMBER_GLOW,
   },
   orb: {
     width: ORB,
     height: ORB,
     borderRadius: ORB / 2,
-    backgroundColor: LUCY_COLORS.primary,
+    backgroundColor: LUCY_AMBER,
     borderWidth: 1,
     borderColor: 'rgba(255,245,230,0.62)',
     alignItems: 'center',
     justifyContent: 'flex-end',
     paddingBottom: 6,
     overflow: 'hidden',
-    shadowColor: LUCY_COLORS.primary,
+    shadowColor: LUCY_AMBER,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7,
+    shadowOpacity: 0.5,
     shadowRadius: 10,
     elevation: 8,
   },
@@ -348,14 +353,15 @@ const styles = StyleSheet.create({
 
   // Soft contact shadow the fingertips cast on the card face below the grip (local to the hand wrapper:
   // knuckle ~11 tall + fingers hang below, so the tips land ~18-24 down).
+  // Soft neutral contact shadow the fingertips cast on the WHITE card face — gentle on the light theme.
   handContactShadow: {
     position: 'absolute',
     top: 16,
     width: 23,
     height: FINGER_DROP,
     borderRadius: 9,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    opacity: 0.4,
+    backgroundColor: 'rgba(26,27,46,0.16)',
+    opacity: 0.5,
     zIndex: 0,
   },
 });

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 import { getDatabase } from '../db';
 import { listReminders, archiveReminder } from '../db/reminders';
 import { recurrenceLabel } from '../processing/reminderRecurrence';
@@ -162,17 +162,17 @@ export function ScheduledRemindersManager({ visible, onClose }: { visible: boole
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: LUCY_COLORS.border, padding: 20 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: LUCY_COLORS.border, padding: 20, ...LUCY_SHADOWS.lg },
   header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
   title: { color: LUCY_COLORS.textDark, fontSize: 18, fontWeight: '800' },
   subtitle: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 3 },
-  clear: { color: '#FB7185', fontSize: 13, fontWeight: '700' },
+  clear: { color: LUCY_COLORS.error, fontSize: 13, fontWeight: '700' },
   close: { color: LUCY_COLORS.primary, fontSize: 15, fontWeight: '700' },
   empty: { color: LUCY_COLORS.textSubtle, textAlign: 'center', padding: 32, fontSize: 13 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 12, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, marginBottom: 8 },
   rowKind: { color: LUCY_COLORS.primaryGlow, fontSize: 9, fontWeight: '800', letterSpacing: 0.8 },
   rowTitle: { color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700' },
   rowWhen: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 2 },
-  remove: { color: '#ef4444', fontSize: 16, fontWeight: '700' },
+  remove: { color: LUCY_COLORS.error, fontSize: 16, fontWeight: '700' },
 });

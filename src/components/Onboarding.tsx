@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Animated, Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -103,7 +103,7 @@ export function Onboarding({ visible, onComplete }: { visible: boolean; onComple
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  container: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   card: {
     backgroundColor: LUCY_COLORS.surface,
     borderRadius: 24,
@@ -112,6 +112,7 @@ const styles = StyleSheet.create({
     maxWidth: 380,
     borderWidth: 1,
     borderColor: LUCY_COLORS.border,
+    ...LUCY_SHADOWS.lg,
   },
   logoRow: { alignItems: 'center', marginBottom: 28 },
   logo: { fontSize: 36, fontWeight: '900', letterSpacing: 2, color: LUCY_COLORS.textDark },
@@ -124,7 +125,7 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: LUCY_COLORS.border },
   dotActive: { backgroundColor: LUCY_COLORS.primary, width: 22 },
   btn: { backgroundColor: LUCY_COLORS.primary, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginBottom: 12 },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  btnText: { color: LUCY_COLORS.white, fontSize: 16, fontWeight: '700' },
   skip: { alignItems: 'center', paddingVertical: 6 },
   skipText: { color: LUCY_COLORS.textSubtle, fontSize: 14 },
   settingsNote: { color: LUCY_COLORS.textSubtle, fontSize: 12, textAlign: 'center', marginTop: 10, lineHeight: 17 },

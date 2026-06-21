@@ -3,7 +3,7 @@ import {
   Animated, Modal, Pressable, ScrollView, StyleSheet,
   Text, TouchableOpacity, View, useWindowDimensions,
 } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 import { getDatabase } from '../db';
 import {
   dismissNotif, getNotifDiagnostics, getTotalUnreadCount, listNotifLog, markAllInsightsRead, markNotifRead,
@@ -29,9 +29,9 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 const TIER_COLOR: Record<number, string> = {
-  1: LUCY_COLORS.primary,    // #FF8C42 — urgent amber
-  2: '#C084FC',              // violet — insights
-  3: LUCY_COLORS.textSubtle, // #8A7560 — muted
+  1: LUCY_COLORS.primary,    // indigo — urgent
+  2: LUCY_COLORS.violet,     // violet — insights
+  3: LUCY_COLORS.textSubtle, // muted
 };
 
 function formatAge(iso: string): string {
@@ -259,10 +259,10 @@ export function NotificationCenter({ visible, onClose, onCountChange }: { visibl
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    borderTopWidth: 1, borderColor: LUCY_COLORS.border,
+    borderTopWidth: 1, borderColor: LUCY_COLORS.border, ...LUCY_SHADOWS.lg,
   },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.border, alignSelf: 'center', marginTop: 10, marginBottom: 6 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
   list: { flex: 1 },
   separator: { height: 1, backgroundColor: LUCY_COLORS.divider, marginLeft: 68 },
   row: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingVertical: 13, position: 'relative' },
-  rowUnread: { backgroundColor: '#1F180E' },
+  rowUnread: { backgroundColor: LUCY_COLORS.primaryMist },
   unreadBar: { position: 'absolute', left: 0, top: 13, bottom: 13, width: 3, borderRadius: 2 },
   iconWrap: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12, flexShrink: 0 },
   iconGlyph: { fontSize: 18 },

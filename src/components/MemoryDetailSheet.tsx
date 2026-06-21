@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 import { getDatabase } from '../db';
 import { ShieldedText, type ProtectedValueLite } from './ShieldedText';
 
@@ -171,8 +171,8 @@ export function MemoryDetailSheet({ captureId, visible, onClose }: { captureId: 
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: LUCY_COLORS.border, padding: 20 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: LUCY_COLORS.border, padding: 20, ...LUCY_SHADOWS.lg },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   kicker: { color: LUCY_COLORS.primaryGlow, fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
   close: { color: LUCY_COLORS.primary, fontSize: 15, fontWeight: '700' },
@@ -185,15 +185,15 @@ const s = StyleSheet.create({
   viewerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', alignItems: 'center', justifyContent: 'center' },
   viewerImg: { width: '100%', height: '82%' },
   viewerHint: { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 14 },
-  shieldNote: { backgroundColor: 'rgba(52,199,89,0.10)', borderRadius: 10, padding: 10, marginTop: 12, borderWidth: 1, borderColor: 'rgba(52,199,89,0.28)' },
-  shieldNoteText: { color: '#2FBF71', fontSize: 12, fontWeight: '600', lineHeight: 17 },
+  shieldNote: { backgroundColor: LUCY_COLORS.success + '18', borderRadius: 10, padding: 10, marginTop: 12, borderWidth: 1, borderColor: LUCY_COLORS.success + '33' },
+  shieldNoteText: { color: LUCY_COLORS.success, fontSize: 12, fontWeight: '600', lineHeight: 17 },
   muted: { color: LUCY_COLORS.textSubtle, fontSize: 13, fontStyle: 'italic' },
-  insightCard: { backgroundColor: 'rgba(255,140,66,0.08)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(255,140,66,0.25)' },
+  insightCard: { backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine },
   insightText: { color: LUCY_COLORS.textDark, fontSize: 14, lineHeight: 21 },
   askRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   askInput: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, color: LUCY_COLORS.textDark, fontSize: 14, borderWidth: 1, borderColor: LUCY_COLORS.border },
   askBtn: { backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 11 },
-  askBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  askBtnText: { color: LUCY_COLORS.white, fontSize: 14, fontWeight: '700' },
   answerCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, padding: 14, marginTop: 12, gap: 6 },
   answerLabel: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   answerText: { color: LUCY_COLORS.textDark, fontSize: 14, lineHeight: 21 },

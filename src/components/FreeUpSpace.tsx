@@ -376,7 +376,7 @@ function CleanupRow({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,22,40,0.40)' },
   anchor: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: LUCY_COLORS.surfaceSheet,
@@ -387,10 +387,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
     maxHeight: '92%',
-    shadowColor: LUCY_COLORS.primary,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
+    shadowColor: '#1A1B2E',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
     elevation: 14,
   },
   grip: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.border, marginBottom: 12 },
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxOn: { backgroundColor: LUCY_COLORS.primary, borderColor: LUCY_COLORS.primary },
-  checkmark: { color: '#1A1206', fontSize: 14, fontWeight: '900', marginTop: -1 },
+  checkmark: { color: LUCY_COLORS.white, fontSize: 14, fontWeight: '900', marginTop: -1 },
   rowBody: { flex: 1 },
   rowTitle: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '800', letterSpacing: -0.2 },
   rowSnippet: { color: LUCY_COLORS.textMuted, fontSize: 12.5, lineHeight: 17, marginTop: 3 },
@@ -476,5 +476,5 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   deleteBtnDim: { opacity: 0.5 },
-  deleteBtnText: { color: '#2A0B10', fontSize: 16, fontWeight: '900', letterSpacing: -0.2 },
+  deleteBtnText: { color: LUCY_COLORS.white, fontSize: 16, fontWeight: '900', letterSpacing: -0.2 },
 });

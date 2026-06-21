@@ -15,7 +15,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { LUCY_COLORS as C } from '../config/colors';
+import { LUCY_COLORS as C, LUCY_SHADOWS } from '../config/colors';
 import { conversation, type ConvoSnapshot } from '../voice/conversation';
 
 interface Props {
@@ -131,7 +131,7 @@ export default function ConversationModal({
     <View style={styles.container} pointerEvents="box-none">
       {/* Floating panel — non-blocking, hovers above the bottom nav */}
       <Animated.View style={[styles.panel, { transform: [{ translateY: slideY }] }]}>
-        {/* Amber glow line + glow strip at the very top of the panel */}
+        {/* Indigo accent strip at the very top of the panel */}
         <View style={styles.glowStrip} />
 
         {/* Tap the message area while Lucy is speaking to take over (barge-in). */}
@@ -148,7 +148,7 @@ export default function ConversationModal({
             )}
             {snap.state === 'listening' && (
               <View style={styles.stateInlineRow}>
-                <View style={[styles.stateDot, { backgroundColor: '#4ADE80' }]} />
+                <View style={[styles.stateDot, { backgroundColor: C.success }]} />
                 <Text style={styles.stateText}>Listening…</Text>
               </View>
             )}
@@ -209,26 +209,22 @@ const styles = StyleSheet.create({
 
   // Compact floating card pinned near the bottom but ABOVE the nav, so the app stays usable.
   panel: {
-    backgroundColor: 'rgba(12, 8, 18, 0.97)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 140, 0, 0.55)',
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.primaryLine,
     borderRadius: 20,
     marginHorizontal: 14,
     marginBottom: 100, // clear the bottom nav / mic button
     paddingBottom: 2,
     paddingHorizontal: 16,
     paddingTop: 2,
-    shadowColor: '#FF8C00',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 18,
-    elevation: 12,
+    ...LUCY_SHADOWS.lg,
   },
 
-  // Thin warm glow strip at the top of the card.
+  // Thin indigo accent strip at the top of the card.
   glowStrip: {
     height: 8,
-    backgroundColor: 'rgba(255, 120, 0, 0.08)',
+    backgroundColor: C.primarySoft,
     marginHorizontal: -16,
     marginTop: -2,
     marginBottom: 4,
@@ -245,7 +241,7 @@ const styles = StyleSheet.create({
 
   // Pulsing thinking dots.
   stateThinking: {
-    color: C.gold,
+    color: C.primary,
     fontSize: 16,
     letterSpacing: 4,
   },
@@ -293,7 +289,7 @@ const styles = StyleSheet.create({
 
   // User's live partial transcript.
   partialText: {
-    color: '#F59E0B',
+    color: C.primary,
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 4,

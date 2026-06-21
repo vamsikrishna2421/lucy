@@ -72,7 +72,7 @@ const EFFORTS: Array<{
     tab: 'Body',
     noun: 'physical effort',
     color: LUCY_COLORS.teal,
-    glow: '#5FE3B0',
+    glow: LUCY_COLORS.teal,
     helper: 'Higher = a better time for the gym, chores, anything physical.',
   },
   {
@@ -80,7 +80,7 @@ const EFFORTS: Array<{
     tab: 'Focus',
     noun: 'sustained attention',
     color: LUCY_COLORS.violet,
-    glow: '#C4B0FF',
+    glow: LUCY_COLORS.violet,
     helper: 'Higher = you can stay sharp and present (calls, fiddly tasks).',
   },
 ];
@@ -983,7 +983,7 @@ const SEG_INNER_W = SCREEN_W - 40 - 8; // sheet padding (40) + segment padding (
 const SEG_ITEM_W = SEG_INNER_W / EFFORTS.length;
 
 const styles = StyleSheet.create({
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,22,40,0.40)' },
   anchor: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: LUCY_COLORS.surfaceSheet,
@@ -994,10 +994,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
     maxHeight: '94%',
-    shadowColor: LUCY_COLORS.primary,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
+    shadowColor: '#1A1B2E',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
     elevation: 14,
   },
   grip: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.border, marginBottom: 12 },
@@ -1077,7 +1077,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   primaryBtnDim: { opacity: 0.5 },
-  primaryBtnText: { color: '#1A1206', fontSize: 16, fontWeight: '900', letterSpacing: -0.2 },
+  primaryBtnText: { color: LUCY_COLORS.white, fontSize: 16, fontWeight: '900', letterSpacing: -0.2 },
   secondaryBtn: { borderRadius: 16, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surfaceRaised },
   secondaryBtnText: { color: LUCY_COLORS.textMuted, fontSize: 14.5, fontWeight: '700' },
 

@@ -22,7 +22,7 @@ import {
 const SUMMARY_SCROLL_H = Math.round(Dimensions.get('window').height * 0.85) - 260;
 import * as Clipboard from 'expo-clipboard';
 import { captureRef } from 'react-native-view-shot';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 import { passiveListener } from '../audio/PassiveListener';
 import { generateMeetingSummary, saveMeetingToMemory, saveRawTranscriptAsMeeting, type MeetingSummary } from '../processing/meetingMode';
 import { getDatabase } from '../db';

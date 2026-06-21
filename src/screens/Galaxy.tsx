@@ -3,14 +3,20 @@
  *
  * Navigation: Home → Life Areas → Topics → Sub-topics → Items
  * Uses a simple in-component stack (no navigator required).
+ *
+ * Visual: LIGHT + INDIGO system — white radius-22 cards, soft neutral shadow, tinted icon rings + pills,
+ * crisp near-black hierarchy (see docs/LUCY_DESIGN_SYSTEM.md). Logic/data/handlers are unchanged.
  */
 
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert, Animated, Easing, FlatList, Modal, Pressable,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
+import { Pill, RADIUS } from '../components/ui';
+import { LucyEmptyState } from '../components/LucyEmptyState';
 import { getDatabase } from '../db';
 import {
   archiveTopic, insertTopic, listChildTopics, listItemsInSubtree,
@@ -26,15 +32,25 @@ type GalaxyFrame =
   | { kind: 'home' }
   | { kind: 'topic'; topicId: number; name: string; breadcrumb: string };
 
-// ─── Life-area colour palette ─────────────────────────────────────────────────
+// ─── Life-area colour palette (token accents, multi-color on light) ─────────────
 
 const AREA_COLORS = [
-  '#FF8C42', '#4ADE80', '#60A5FA', '#C084FC',
-  '#F59E0B', '#FB7185', '#2DD4BF', '#FFA05C',
+  LUCY_COLORS.primary, LUCY_COLORS.teal, LUCY_COLORS.info, LUCY_COLORS.violet,
+  LUCY_COLORS.gold, LUCY_COLORS.rose, LUCY_COLORS.cyan, LUCY_COLORS.primaryGlow,
 ];
 
 function areaColor(index: number): string {
   return AREA_COLORS[index % AREA_COLORS.length];
+}
+
+// A small per-item meaning chip (color = source/category).
+function itemTypeMeta(table: string): { label: string; color: string; icon: keyof typeof Ionicons.glyphMap } {
+  switch (table) {
+    case 'todos': return { label: 'Task', color: LUCY_COLORS.info, icon: 'checkmark-circle' };
+    case 'ideas': return { label: 'Idea', color: LUCY_COLORS.gold, icon: 'bulb' };
+    case 'captures': return { label: 'Memory', color: LUCY_COLORS.violet, icon: 'sparkles' };
+    default: return { label: table, color: LUCY_COLORS.textSubtle, icon: 'ellipse' };
+  }
 }
 
 // ─── Seeding modal ────────────────────────────────────────────────────────────
@@ -58,25 +74,35 @@ function SeedingModal({
     <Modal transparent animationType="slide" visible onRequestClose={onDismiss}>
       <Pressable style={styles.modalBackdrop} onPress={onDismiss}>
         <Pressable style={styles.modalSheet}>
+          <View style={styles.grip} />
+          <Text style={styles.seedEyebrow}>Proposed from your captures</Text>
           <Text style={styles.seedTitle}>Your brain, organised</Text>
           <Text style={styles.seedSub}>
             LUCY found these areas in your captures. Approve to build your Galaxy.
           </Text>
           <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
             {areas.map((area, i) => (
-              <View key={i} style={[styles.seedArea, { borderLeftColor: areaColor(i) }]}>
-                <Text style={styles.seedAreaName}>{area.emoji} {area.name}</Text>
-                {(area.topics ?? []).map((t, j) => (
-                  <Text key={j} style={styles.seedTopicChip}>{t.name}</Text>
-                ))}
+              <View key={i} style={styles.seedArea}>
+                <View style={styles.seedAreaHead}>
+                  <View style={[styles.seedAreaDot, { backgroundColor: areaColor(i) }]} />
+                  <Text style={styles.seedAreaName}>{area.emoji ? `${area.emoji} ` : ''}{area.name}</Text>
+                </View>
+                <View style={styles.seedChipWrap}>
+                  {(area.topics ?? []).map((t, j) => (
+                    <View key={j} style={styles.seedTopicChip}>
+                      <Text style={styles.seedTopicChipText}>{t.name}</Text>
+                    </View>
+                  ))}
+                </View>
               </View>
             ))}
           </ScrollView>
-          <TouchableOpacity style={styles.seedAcceptBtn} onPress={() => { haptic.capture(); onAccept(); }}>
-            <Text style={styles.seedAcceptText}>Looks good →</Text>
+          <TouchableOpacity style={styles.seedAcceptBtn} activeOpacity={0.85} onPress={() => { haptic.capture(); onAccept(); }}>
+            <Ionicons name="checkmark" size={18} color={LUCY_COLORS.white} style={{ marginRight: 8 }} />
+            <Text style={styles.seedAcceptText}>Looks good</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={onDismiss} style={{ paddingVertical: 10, alignItems: 'center' }}>
-            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 13 }}>Not now</Text>
+          <TouchableOpacity onPress={onDismiss} style={{ paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={styles.seedDismiss}>Not now</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>
@@ -241,32 +267,34 @@ export function GalaxyView() {
             onDismiss={() => setShowSeed(false)}
           />
         ) : null}
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.content} contentContainerStyle={styles.contentPad} showsVerticalScrollIndicator={false}>
           {roots.length === 0 ? (
-            <View style={styles.emptyWrap}>
-              <View style={styles.amberPulse}>
-                <View style={styles.amberRing3} /><View style={styles.amberRing2} />
-                <View style={styles.amberRing1} /><View style={styles.amberDot} />
-              </View>
-              <Text style={styles.emptyTitle}>Your galaxy is forming</Text>
-              <Text style={styles.emptySub}>LUCY will propose your life areas once you've captured 30+ thoughts. Or add one manually.</Text>
-            </View>
+            <LucyEmptyState
+              title="Your galaxy is forming"
+              message="LUCY will propose your life areas once you've captured 30+ thoughts. Or add one manually below."
+            />
           ) : (
             <View style={styles.areaGrid}>
-              {roots.map((t, i) => (
-                <TouchableOpacity
-                  key={t.id}
-                  style={[styles.areaCard, { borderColor: areaColor(i) + '55' }]}
-                  onPress={() => push({ kind: 'topic', topicId: t.id, name: t.name, breadcrumb: t.name })}
-                  onLongPress={() => handleLongPressTopic(t)}
-                  activeOpacity={0.75}
-                >
-                  <View style={[styles.areaAccent, { backgroundColor: areaColor(i) }]} />
-                  <Text style={styles.areaEmoji}>{t.emoji ?? '◆'}</Text>
-                  <Text style={styles.areaName} numberOfLines={2}>{t.name}</Text>
-                  <Text style={styles.areaCount}>{t.item_count > 0 ? `${t.item_count}` : '—'}</Text>
-                </TouchableOpacity>
-              ))}
+              {roots.map((t, i) => {
+                const color = areaColor(i);
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={styles.areaCard}
+                    onPress={() => push({ kind: 'topic', topicId: t.id, name: t.name, breadcrumb: t.name })}
+                    onLongPress={() => handleLongPressTopic(t)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.areaTop}>
+                      <View style={[styles.areaIconRing, { backgroundColor: color + '1A', borderColor: color + '33' }]}>
+                        <Text style={[styles.areaEmoji, { color }]}>{t.emoji ?? '◆'}</Text>
+                      </View>
+                      <Text style={styles.areaCount}>{t.item_count > 0 ? `${t.item_count}` : '—'}</Text>
+                    </View>
+                    <Text style={styles.areaName} numberOfLines={2}>{t.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           )}
 
@@ -276,7 +304,7 @@ export function GalaxyView() {
               <TextInput
                 style={styles.addInput}
                 placeholder="Life area name…"
-                placeholderTextColor={LUCY_COLORS.textSubtle}
+                placeholderTextColor={LUCY_COLORS.textFaint}
                 value={newTopicName}
                 onChangeText={setNewTopicName}
                 autoFocus
@@ -284,15 +312,16 @@ export function GalaxyView() {
                 onSubmitEditing={() => void handleAddTopic()}
               />
               <TouchableOpacity onPress={() => void handleAddTopic()} style={styles.addBtn}>
-                <Text style={{ color: '#fff', fontWeight: '800' }}>+</Text>
+                <Ionicons name="add" size={22} color={LUCY_COLORS.white} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setAddingTopic(false)} style={{ paddingHorizontal: 10 }}>
-                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 14 }}>✕</Text>
+              <TouchableOpacity onPress={() => setAddingTopic(false)} style={styles.addCancel} hitSlop={8}>
+                <Ionicons name="close" size={18} color={LUCY_COLORS.textSubtle} />
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity style={styles.addAreaBtn} onPress={() => setAddingTopic(true)}>
-              <Text style={styles.addAreaText}>+ Add life area</Text>
+            <TouchableOpacity style={styles.addAreaBtn} activeOpacity={0.8} onPress={() => setAddingTopic(true)}>
+              <Ionicons name="add" size={18} color={LUCY_COLORS.primary} />
+              <Text style={styles.addAreaText}>Add life area</Text>
             </TouchableOpacity>
           )}
         </ScrollView>
@@ -305,17 +334,19 @@ export function GalaxyView() {
   return (
     <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
       {/* Breadcrumb back button */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 16 }}>
-        <TouchableOpacity style={styles.backRow} onPress={pop}>
-          <Text style={styles.backChevron}>‹</Text>
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.backRow} onPress={pop} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={20} color={LUCY_COLORS.primary} />
           <Text style={styles.backLabel}>{stack.length > 2 ? stack[stack.length - 2]?.kind === 'topic' ? (stack[stack.length - 2] as { name: string }).name : 'Galaxy' : 'Galaxy'}</Text>
         </TouchableOpacity>
         {/* "View story" — opens StoryView for this topic name */}
         <TouchableOpacity
           onPress={() => setStorySubject({ kind: 'topic', name: current.kind === 'topic' ? current.name : '', emoji: '◆' })}
-          style={{ paddingVertical: 6, paddingHorizontal: 10, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 10 }}
+          style={styles.storyBtn}
+          activeOpacity={0.8}
         >
-          <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '700' }}>View story ›</Text>
+          <Ionicons name="book-outline" size={13} color={LUCY_COLORS.primary} style={{ marginRight: 5 }} />
+          <Text style={styles.storyBtnText}>View story</Text>
         </TouchableOpacity>
       </View>
 
@@ -323,6 +354,7 @@ export function GalaxyView() {
         data={[...children]}
         keyExtractor={(item) => `t-${item.id}`}
         style={styles.content}
+        contentContainerStyle={styles.listPad}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           children.length > 0 ? (
@@ -334,14 +366,16 @@ export function GalaxyView() {
             style={styles.topicRow}
             onPress={() => push({ kind: 'topic', topicId: t.id, name: t.name, breadcrumb: `${current.name} / ${t.name}` })}
             onLongPress={() => handleLongPressTopic(t)}
-            activeOpacity={0.75}
+            activeOpacity={0.85}
           >
-            <Text style={styles.topicEmoji}>{t.emoji ?? '◈'}</Text>
+            <View style={styles.topicIconRing}>
+              <Text style={styles.topicEmoji}>{t.emoji ?? '◈'}</Text>
+            </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.topicName}>{t.name}</Text>
               {t.item_count > 0 ? <Text style={styles.topicCount}>{t.item_count} item{t.item_count !== 1 ? 's' : ''}</Text> : null}
             </View>
-            <Text style={styles.topicChevron}>›</Text>
+            <Ionicons name="chevron-forward" size={18} color={LUCY_COLORS.textFaint} />
           </TouchableOpacity>
         )}
         ListFooterComponent={<TopicItemList topicId={current.topicId} onOpenStory={setStorySubject} />}
@@ -354,7 +388,7 @@ export function GalaxyView() {
             <TextInput
               style={[styles.addInput, { flex: 1 }]}
               placeholder="Sub-topic name…"
-              placeholderTextColor={LUCY_COLORS.textSubtle}
+              placeholderTextColor={LUCY_COLORS.textFaint}
               value={newTopicName}
               onChangeText={setNewTopicName}
               autoFocus
@@ -362,15 +396,16 @@ export function GalaxyView() {
               onSubmitEditing={() => void handleAddTopic()}
             />
             <TouchableOpacity onPress={() => void handleAddTopic()} style={styles.addBtn}>
-              <Text style={{ color: '#fff', fontWeight: '800' }}>+</Text>
+              <Ionicons name="add" size={22} color={LUCY_COLORS.white} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setAddingTopic(false)} style={{ paddingHorizontal: 10 }}>
-              <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 14 }}>✕</Text>
+            <TouchableOpacity onPress={() => setAddingTopic(false)} style={styles.addCancel} hitSlop={8}>
+              <Ionicons name="close" size={18} color={LUCY_COLORS.textSubtle} />
             </TouchableOpacity>
           </>
         ) : (
-          <TouchableOpacity style={styles.addAreaBtn} onPress={() => setAddingTopic(true)}>
-            <Text style={styles.addAreaText}>+ Add sub-topic</Text>
+          <TouchableOpacity style={styles.addAreaBtn} activeOpacity={0.8} onPress={() => setAddingTopic(true)}>
+            <Ionicons name="add" size={18} color={LUCY_COLORS.primary} />
+            <Text style={styles.addAreaText}>Add sub-topic</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -415,29 +450,36 @@ function TopicItemList({ topicId, onOpenStory }: { topicId: number; onOpenStory:
     );
   };
 
-  if (loading) return <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, padding: 16 }}>Loading…</Text>;
+  if (loading) return (
+    <View style={styles.loadingRow}>
+      <Text style={styles.loadingText}>Loading…</Text>
+    </View>
+  );
   if (items.length === 0) return null;
   return (
     <View>
-      <Text style={[styles.sectionLabel, { marginTop: 16 }]}>ITEMS</Text>
+      <Text style={[styles.sectionLabel, { marginTop: 20 }]}>ITEMS</Text>
       <Text style={styles.itemsHint}>Tap to open · long-press to delete</Text>
-      {items.map((item) => (
-        <TouchableOpacity
-          key={`${item.table_name}-${item.row_id}`}
-          style={styles.itemRow}
-          activeOpacity={item.table_name === 'captures' ? 0.75 : 1}
-          onPress={() => {
-            // Tapping a captured memory opens its detail (summary + LUCY insight + ask).
-            if (item.table_name === 'captures') setSelectedCaptureId(item.row_id);
-          }}
-          onLongPress={() => handleLongPressItem(item)}
-          delayLongPress={350}
-        >
-          <Text style={styles.itemTableBadge}>{item.table_name.toUpperCase()}</Text>
-          <Text style={styles.itemLabel} numberOfLines={2}>{item.label}</Text>
-          {item.subtitle ? <Text style={styles.itemSub} numberOfLines={1}>{item.subtitle}</Text> : null}
-        </TouchableOpacity>
-      ))}
+      {items.map((item) => {
+        const meta = itemTypeMeta(item.table_name);
+        return (
+          <TouchableOpacity
+            key={`${item.table_name}-${item.row_id}`}
+            style={styles.itemRow}
+            activeOpacity={item.table_name === 'captures' ? 0.85 : 1}
+            onPress={() => {
+              // Tapping a captured memory opens its detail (summary + LUCY insight + ask).
+              if (item.table_name === 'captures') setSelectedCaptureId(item.row_id);
+            }}
+            onLongPress={() => handleLongPressItem(item)}
+            delayLongPress={350}
+          >
+            <Pill label={meta.label} color={meta.color} icon={meta.icon} />
+            <Text style={styles.itemLabel} numberOfLines={2}>{item.label}</Text>
+            {item.subtitle ? <Text style={styles.itemSub} numberOfLines={1}>{item.subtitle}</Text> : null}
+          </TouchableOpacity>
+        );
+      })}
       <MemoryDetailSheet
         captureId={selectedCaptureId}
         visible={selectedCaptureId !== null}
@@ -451,53 +493,59 @@ function TopicItemList({ topicId, onOpenStory }: { topicId: number; onOpenStory:
 
 const styles = StyleSheet.create({
   content: { flex: 1 },
-  emptyWrap: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40, gap: 14 },
-  amberPulse: { alignItems: 'center', justifyContent: 'center', width: 80, height: 80, marginBottom: 4 },
-  amberRing3: { position: 'absolute', width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,140,66,0.06)' },
-  amberRing2: { position: 'absolute', width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,140,66,0.10)' },
-  amberRing1: { position: 'absolute', width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,140,66,0.16)' },
-  amberDot:  { width: 8, height: 8, borderRadius: 4, backgroundColor: LUCY_COLORS.primary },
-  emptyTitle: { color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '700', textAlign: 'center' },
-  emptySub: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21, textAlign: 'center' },
-  // Area grid (2-col)
-  areaGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 12, gap: 10 },
-  areaCard: { width: '47%', backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 18, borderWidth: 1, padding: 16, gap: 6, overflow: 'hidden', position: 'relative', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 5, elevation: 4 },
-  areaAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, borderTopLeftRadius: 18, borderTopRightRadius: 18 },
-  areaEmoji: { fontSize: 28, marginTop: 4 },
-  areaName: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700', lineHeight: 20 },
-  areaCount: { color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '600' },
-  // Breadcrumb
-  backRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10 },
-  backChevron: { color: LUCY_COLORS.primary, fontSize: 22, fontWeight: '600', lineHeight: 26, marginTop: -2 },
-  backLabel: { color: LUCY_COLORS.textMuted, fontSize: 14, fontWeight: '600' },
-  sectionLabel: { color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.4, marginHorizontal: 16, marginBottom: 8, marginTop: 8 },
+  contentPad: { padding: 14, paddingBottom: 40 },
+  listPad: { paddingHorizontal: 14, paddingBottom: 40 },
+  // Area grid (2-col) — clean white tiles
+  areaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
+  areaCard: { width: '48%', backgroundColor: LUCY_COLORS.surface, borderRadius: RADIUS.card, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 16, gap: 14, minHeight: 124, justifyContent: 'space-between', ...LUCY_SHADOWS.md },
+  areaTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  areaIconRing: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  areaEmoji: { fontSize: 22, fontWeight: '700' },
+  areaName: { color: LUCY_COLORS.textDark, fontSize: 15.5, fontWeight: '800', lineHeight: 20 },
+  areaCount: { color: LUCY_COLORS.textSubtle, fontSize: 13, fontWeight: '800' },
+  // Top bar / breadcrumb
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingTop: 6 },
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 10, marginLeft: -4 },
+  backLabel: { color: LUCY_COLORS.textMuted, fontSize: 14, fontWeight: '700' },
+  storyBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, paddingHorizontal: 12, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: RADIUS.pill, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine },
+  storyBtnText: { color: LUCY_COLORS.primary, fontSize: 12, fontWeight: '800' },
+  sectionLabel: { color: LUCY_COLORS.textSubtle, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.2, marginBottom: 10, marginTop: 6 },
   // Sub-topic rows
-  topicRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: LUCY_COLORS.surfaceRaised, marginHorizontal: 12, marginBottom: 8, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border },
-  topicEmoji: { fontSize: 22, width: 32, textAlign: 'center' },
-  topicName: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700' },
-  topicCount: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 2 },
-  topicChevron: { color: LUCY_COLORS.textSubtle, fontSize: 18, fontWeight: '600' },
+  topicRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13, backgroundColor: LUCY_COLORS.surface, marginBottom: 10, borderRadius: RADIUS.control, borderWidth: 1, borderColor: LUCY_COLORS.border, ...LUCY_SHADOWS.sm },
+  topicIconRing: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine },
+  topicEmoji: { fontSize: 18, color: LUCY_COLORS.primary },
+  topicName: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '800' },
+  topicCount: { color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 2, fontWeight: '600' },
   // Items
-  itemsHint: { color: LUCY_COLORS.textSubtle, fontSize: 11, marginHorizontal: 16, marginTop: -4, marginBottom: 8 },
-  itemRow: { marginHorizontal: 12, marginBottom: 8, backgroundColor: LUCY_COLORS.surface, borderRadius: 12, padding: 12, gap: 4, borderWidth: 1, borderColor: LUCY_COLORS.border },
-  itemTableBadge: { color: LUCY_COLORS.textSubtle, fontSize: 9, fontWeight: '800', letterSpacing: 1 },
-  itemLabel: { color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '600' },
-  itemSub: { color: LUCY_COLORS.textMuted, fontSize: 12 },
+  itemsHint: { color: LUCY_COLORS.textSubtle, fontSize: 11.5, marginTop: -4, marginBottom: 10, fontWeight: '600' },
+  itemRow: { marginBottom: 10, backgroundColor: LUCY_COLORS.surface, borderRadius: RADIUS.control, padding: 14, gap: 7, borderWidth: 1, borderColor: LUCY_COLORS.border, ...LUCY_SHADOWS.sm },
+  itemLabel: { color: LUCY_COLORS.textDark, fontSize: 14.5, fontWeight: '700', lineHeight: 20 },
+  itemSub: { color: LUCY_COLORS.textMuted, fontSize: 12.5, lineHeight: 17 },
+  loadingRow: { paddingVertical: 18, alignItems: 'center' },
+  loadingText: { color: LUCY_COLORS.textSubtle, fontSize: 13, fontWeight: '600' },
   // Add controls
-  addAreaBtn: { margin: 12, paddingVertical: 12, alignItems: 'center', borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: LUCY_COLORS.border },
-  addAreaText: { color: LUCY_COLORS.textSubtle, fontSize: 13, fontWeight: '600' },
-  addRow: { flexDirection: 'row', alignItems: 'center', margin: 12, gap: 8 },
-  addBarRow: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.border, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center' },
-  addInput: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, color: LUCY_COLORS.textDark, fontSize: 14, borderWidth: 1, borderColor: LUCY_COLORS.border },
-  addBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center' },
-  // Seeding modal
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: LUCY_COLORS.surfaceRaised, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 16, borderTopWidth: 1, borderColor: LUCY_COLORS.border },
-  seedTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  seedSub: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21 },
-  seedArea: { borderLeftWidth: 3, paddingLeft: 12, marginBottom: 12, gap: 4 },
-  seedAreaName: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700' },
-  seedTopicChip: { color: LUCY_COLORS.textSubtle, fontSize: 12 },
-  seedAcceptBtn: { backgroundColor: LUCY_COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
-  seedAcceptText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  addAreaBtn: { marginTop: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: RADIUS.control, borderWidth: 1, borderStyle: 'dashed', borderColor: LUCY_COLORS.primaryLine, backgroundColor: LUCY_COLORS.primaryMist },
+  addAreaText: { color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '800' },
+  addRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
+  addBarRow: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.borderSoft, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: LUCY_COLORS.surface },
+  addInput: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: RADIUS.control, paddingHorizontal: 14, paddingVertical: 12, color: LUCY_COLORS.textDark, fontSize: 15, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  addBtn: { width: 46, height: 46, borderRadius: RADIUS.control, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center' },
+  addCancel: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  // Seeding modal — light bottom sheet
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: LUCY_COLORS.surfaceSheet, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 30, gap: 8, ...LUCY_SHADOWS.lg },
+  grip: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.border, marginBottom: 12 },
+  seedEyebrow: { color: LUCY_COLORS.primary, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
+  seedTitle: { color: LUCY_COLORS.textDark, fontSize: 22, fontWeight: '900', letterSpacing: -0.3, marginTop: 2 },
+  seedSub: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21, marginBottom: 6 },
+  seedArea: { marginBottom: 14, gap: 8 },
+  seedAreaHead: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  seedAreaDot: { width: 9, height: 9, borderRadius: 5 },
+  seedAreaName: { color: LUCY_COLORS.textDark, fontSize: 15.5, fontWeight: '800' },
+  seedChipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, paddingLeft: 18 },
+  seedTopicChip: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: RADIUS.chip, paddingHorizontal: 10, paddingVertical: 5 },
+  seedTopicChipText: { color: LUCY_COLORS.textMuted, fontSize: 12.5, fontWeight: '600' },
+  seedAcceptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: LUCY_COLORS.primary, borderRadius: RADIUS.control, paddingVertical: 15, marginTop: 8 },
+  seedAcceptText: { color: LUCY_COLORS.white, fontSize: 15, fontWeight: '800' },
+  seedDismiss: { color: LUCY_COLORS.textSubtle, fontSize: 13.5, fontWeight: '700' },
 });

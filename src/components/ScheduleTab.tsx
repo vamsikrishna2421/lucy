@@ -4,7 +4,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 import { getDatabase } from '../db';
 import {
   getPlan, suggestForText, suggestForTodo, commitBlock, cancelBlock, commitSeries, autoPlanDay,
@@ -29,17 +30,18 @@ function dayLabel(ms: number): string {
 }
 function hm(min: number): string { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`; }
 
+// Category accents come from LUCY's token palette (color = meaning), not raw hex.
 const CATS: Array<[string, RegExp]> = [
-  ['#22C55E', /walk|gym|run|workout|yoga|exercise|meditat/],
-  ['#F5C451', /lunch|dinner|breakfast|meal|coffee|brunch/],
-  ['#FF8C42', /call|meeting|standup|sync|interview|brief|1:1/],
-  ['#A78BFA', /errand|buy|pick|store|grocery|bank|clinic|@/],
-  ['#4DA3FF', /focus|deep|write|code|study|design|review|plan|research|report/],
+  [LUCY_COLORS.success, /walk|gym|run|workout|yoga|exercise|meditat/],
+  [LUCY_COLORS.gold,    /lunch|dinner|breakfast|meal|coffee|brunch/],
+  [LUCY_COLORS.rose,    /call|meeting|standup|sync|interview|brief|1:1/],
+  [LUCY_COLORS.violet,  /errand|buy|pick|store|grocery|bank|clinic|@/],
+  [LUCY_COLORS.info,    /focus|deep|write|code|study|design|review|plan|research|report/],
 ];
 function catColor(title: string, label: string): string {
   const s = `${title} ${label}`.toLowerCase();
   for (const [c, re] of CATS) if (re.test(s)) return c;
-  return '#8AA4FF';
+  return LUCY_COLORS.primary;
 }
 
 const CAL_VIEW_OPTIONS: SegmentOption<'agenda' | 'day' | 'week' | 'month'>[] = [
@@ -369,7 +371,7 @@ export function ScheduleTab() {
     if (view === 'day') return dayLabel(ref);
     return 'Next 7 days';
   };
-  const DEVICE_COLOR = '#5B8CFF'; // connected Google/Teams/Outlook events
+  const DEVICE_COLOR = LUCY_COLORS.info; // connected Google/Teams/Outlook events (= #5B8CFF)
   const onBlockPress = (it: Item) => {
     if (it.habit) {
       setHabitSuggest({ title: it.title, start: it.start, end: it.end, resources: it.resources });
@@ -380,7 +382,7 @@ export function ScheduleTab() {
         context: `${clock(it.start)} – ${clock(it.end)}`,
         title: it.title,
         message: 'From a calendar you connected (Google / Teams / Outlook). LUCY schedules around it but won\'t change it.',
-        accent: '#5B8CFF',
+        accent: LUCY_COLORS.info,
         actions: [{ label: 'Close', style: 'primary' }],
         cancelLabel: null,
       });
@@ -479,7 +481,10 @@ export function ScheduleTab() {
         const tall = ht > 30;
         return (
           <TouchableOpacity key={i} activeOpacity={0.82} onPress={() => onBlockPress(it)} style={[styles.gridEvent, { top, height: ht, backgroundColor: `${c}1F`, borderColor: `${c}3A`, borderLeftColor: c }, it.habit && styles.gridHabit]}>
-            <Text numberOfLines={tall ? 2 : 1} style={[styles.gridEventTitle, { color: it.habit ? LUCY_COLORS.textMuted : LUCY_COLORS.textDark }]}>{it.habit ? '✓ ' : it.device ? '📅 ' : ''}{it.title}</Text>
+            <View style={styles.gridEventTitleRow}>
+              {it.habit ? <Ionicons name="checkmark" size={10} color={LUCY_COLORS.textMuted} style={{ marginRight: 3 }} /> : it.device ? <Ionicons name="calendar" size={10} color={DEVICE_COLOR} style={{ marginRight: 3 }} /> : null}
+              <Text numberOfLines={tall ? 2 : 1} style={[styles.gridEventTitle, { color: it.habit ? LUCY_COLORS.textMuted : LUCY_COLORS.textDark, flex: 1 }]}>{it.title}</Text>
+            </View>
             {tall ? <Text style={styles.gridEventTime}>{clock(it.start)}</Text> : null}
           </TouchableOpacity>
         );
@@ -575,7 +580,9 @@ export function ScheduleTab() {
     const any = ds.some((k) => dayItems(k).length);
     if (!any) return (
       <View style={styles.emptyState}>
-        <Text style={styles.emptyEmoji}>🌤️</Text>
+        <View style={styles.emptyIconRing}>
+          <Ionicons name="sunny-outline" size={30} color={LUCY_COLORS.primary} />
+        </View>
         <Text style={styles.emptyTitle}>The week ahead is clear</Text>
         <Text style={styles.emptyBody}>Nothing scheduled for the next 7 days. Open “Plan with Lucy” below to place a task or auto-plan your day.</Text>
       </View>
@@ -590,7 +597,7 @@ export function ScheduleTab() {
               <Text style={styles.dayH}>{dayLabel(k)}</Text>
               {items.map((b, i) => {
                 const conf = conflictTitles.has(b.title);
-                const c = b.habit ? '#8a8a8a' : b.device ? DEVICE_COLOR : catColor(b.title, describeResources(b.resources));
+                const c = b.habit ? LUCY_COLORS.textSubtle : b.device ? DEVICE_COLOR : catColor(b.title, describeResources(b.resources));
                 return (
                   <TouchableOpacity key={i} activeOpacity={0.85} onPress={() => onBlockPress(b)} style={[styles.block, { borderLeftColor: c }, conf && styles.blockConflict, b.habit && styles.blockHabit]}>
                     <View style={styles.blockTimeWrap}>
@@ -598,7 +605,10 @@ export function ScheduleTab() {
                       <Text style={styles.blockTimeEnd}>{clock(b.end)}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.blockT}>{b.device ? '📅 ' : ''}{b.title}{conf ? ' • conflict' : ''}</Text>
+                      <View style={styles.blockTitleRow}>
+                        {b.device ? <Ionicons name="calendar" size={13} color={DEVICE_COLOR} style={{ marginRight: 5 }} /> : null}
+                        <Text style={styles.blockT} numberOfLines={2}>{b.title}{conf ? ' • conflict' : ''}</Text>
+                      </View>
                       <Text style={styles.rowD}>{b.habit ? 'Suggested from your routine' : b.device ? 'From your calendar' : `${describeResources(b.resources)} • Lucy`}</Text>
                     </View>
                     {b.habit
@@ -663,12 +673,14 @@ export function ScheduleTab() {
 
       {calPerm === false ? (
         <TouchableOpacity style={styles.connectCard} onPress={connectCalendars} activeOpacity={0.85}>
-          <Text style={styles.connectIcon}>📅</Text>
+          <View style={styles.connectIcon}>
+            <Ionicons name="calendar" size={20} color={DEVICE_COLOR} />
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.connectTitle}>Connect Google, Teams & Outlook</Text>
             <Text style={styles.connectSub}>Show your real meetings here and let Lucy schedule around them. Tap to connect.</Text>
           </View>
-          <Text style={styles.connectChevron}>›</Text>
+          <Ionicons name="chevron-forward" size={20} color={DEVICE_COLOR} />
         </TouchableOpacity>
       ) : calPerm ? (
         <TouchableOpacity style={styles.syncedPill} activeOpacity={0.7} onPress={toggleCalSync}>
@@ -1127,19 +1139,18 @@ const styles = StyleSheet.create({
   wsNumTOn: { color: '#fff' },
   wsDots: { flexDirection: 'row', gap: 3, height: 5, alignItems: 'center' },
   wsDot: { width: 4, height: 4, borderRadius: 2 },
-  planToggle: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 18, padding: 15, marginTop: 12 },
+  planToggle: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 18, padding: 15, marginTop: 12, ...LUCY_SHADOWS.sm },
   planToggleT: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '900' },
   planToggleSub: { color: LUCY_COLORS.textMuted, fontSize: 12.5, marginTop: 2 },
   planBadge: { backgroundColor: LUCY_COLORS.primary, borderRadius: 999, minWidth: 22, height: 22, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   planBadgeT: { color: '#fff', fontSize: 12, fontWeight: '900' },
   planChevron: { color: LUCY_COLORS.textMuted, fontSize: 16, fontWeight: '900' },
-  connectCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: '#5B8CFF55', borderRadius: 18, padding: 14, marginBottom: 12 },
-  connectIcon: { fontSize: 22 },
+  connectCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.info + '55', borderRadius: 18, padding: 14, marginBottom: 12, ...LUCY_SHADOWS.sm },
+  connectIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: LUCY_COLORS.info + '1A', borderWidth: 1, borderColor: LUCY_COLORS.info + '33' },
   connectTitle: { color: LUCY_COLORS.textDark, fontWeight: '900', fontSize: 14.5 },
   connectSub: { color: LUCY_COLORS.textMuted, fontSize: 12.5, lineHeight: 17, marginTop: 3 },
-  connectChevron: { color: '#5B8CFF', fontSize: 26, fontWeight: '300' },
   syncedPill: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12, paddingHorizontal: 5 },
-  syncedDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#5B8CFF' },
+  syncedDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: LUCY_COLORS.info },
   syncedText: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '700' },
   nowLine: { position: 'absolute', left: 0, right: 0, height: 1.5, backgroundColor: '#FF4D4D', opacity: 0.92 },
   nowDot: { position: 'absolute', left: -4, top: -3.5, width: 9, height: 9, borderRadius: 5, backgroundColor: '#FF4D4D', borderWidth: 2, borderColor: LUCY_COLORS.surfaceRaised, shadowColor: '#FF4D4D', shadowOpacity: 0.6, shadowRadius: 4, shadowOffset: { width: 0, height: 0 } },
@@ -1154,14 +1165,14 @@ const styles = StyleSheet.create({
   btnGhost: { borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: LUCY_COLORS.surface },
   btnGhostT: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700' },
   resultCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 20, padding: 15, marginBottom: 12 },
-  queueCard: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 22, padding: 16, marginBottom: 12 },
+  queueCard: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 22, padding: 16, marginBottom: 12, ...LUCY_SHADOWS.md },
   boxHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   boxH: { color: LUCY_COLORS.textDark, fontWeight: '900', fontSize: 15 },
   rowT: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 14, lineHeight: 19 },
   rowD: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 3, lineHeight: 17 },
   emptyText: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 19, marginTop: 10 },
   emptyState: { alignItems: 'center', paddingVertical: 34, paddingHorizontal: 18 },
-  emptyEmoji: { fontSize: 34, marginBottom: 12, opacity: 0.9 },
+  emptyIconRing: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, marginBottom: 14 },
   emptyTitle: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '900', textAlign: 'center' },
   emptyBody: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 6, maxWidth: 300 },
   taskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: LUCY_COLORS.border },
@@ -1188,7 +1199,8 @@ const styles = StyleSheet.create({
   blockTimeWrap: { width: 64 },
   blockTime: { color: LUCY_COLORS.textDark, fontSize: 13.5, fontWeight: '900' },
   blockTimeEnd: { color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '700', marginTop: 2 },
-  blockT: { color: LUCY_COLORS.textDark, fontWeight: '800', fontSize: 14.5, lineHeight: 20 },
+  blockTitleRow: { flexDirection: 'row', alignItems: 'center' },
+  blockT: { flex: 1, color: LUCY_COLORS.textDark, fontWeight: '800', fontSize: 14.5, lineHeight: 20 },
   x: { color: LUCY_COLORS.textSubtle, fontSize: 12, fontWeight: '800', paddingHorizontal: 4 },
   approveBtn: { backgroundColor: LUCY_COLORS.primaryMist, borderWidth: 1, borderColor: LUCY_COLORS.primary, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
   approveT: { color: LUCY_COLORS.primary, fontSize: 13, fontWeight: '900' },
@@ -1205,6 +1217,7 @@ const styles = StyleSheet.create({
   hourLine: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: LUCY_COLORS.border, opacity: 0.5 },
   gridEvent: { position: 'absolute', left: 4, right: 4, borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 4, overflow: 'hidden' },
   gridHabit: { opacity: 0.7, borderStyle: 'dashed' },
+  gridEventTitleRow: { flexDirection: 'row', alignItems: 'center' },
   gridEventTitle: { color: LUCY_COLORS.textDark, fontSize: 11, fontWeight: '800', lineHeight: 14 },
   gridEventTime: { color: LUCY_COLORS.textMuted, fontSize: 9.5, fontWeight: '700', marginTop: 1 },
   monthWrap: { gap: 8 },
@@ -1219,7 +1232,7 @@ const styles = StyleSheet.create({
   monthCellDateToday: { color: LUCY_COLORS.primaryGlow, fontWeight: '900' },
   monthCellCount: { marginTop: 4, backgroundColor: LUCY_COLORS.primary, borderRadius: 999, minWidth: 18, textAlign: 'center', paddingHorizontal: 5, paddingVertical: 1, color: '#fff', fontSize: 10, fontWeight: '900', overflow: 'hidden' },
   busy: { paddingVertical: 16 },
-  cardBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.62)', justifyContent: 'flex-end' },
+  cardBackdrop: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', justifyContent: 'flex-end' },
   // ── Shared sheet family (event detail · habit suggestion · overlap resolver) ──
   eventCard: {
     backgroundColor: LUCY_COLORS.surfaceSheet, borderTopLeftRadius: 28, borderTopRightRadius: 28,
@@ -1278,7 +1291,7 @@ const styles = StyleSheet.create({
   // ── Tap-to-create: hint + Lucy-peeking "new event" card ──────────────────────
   gridHint: { color: LUCY_COLORS.textSubtle, fontSize: 11.5, fontWeight: '700', textAlign: 'center', marginTop: 10, letterSpacing: 0.2 },
   // Centered (not a bottom sheet) so Lucy can peek over the top edge; dimmed, tap-to-dismiss backdrop.
-  createBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.62)', alignItems: 'center', justifyContent: 'center', padding: 22 },
+  createBackdrop: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', alignItems: 'center', justifyContent: 'center', padding: 22 },
   // Outer wrapper keeps overflow visible (Lucy hangs above the card) + reserves headroom for her.
   createOuter: { width: '100%', maxWidth: 420, paddingTop: 34, overflow: 'visible' },
   createCard: {

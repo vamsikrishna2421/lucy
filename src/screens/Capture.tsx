@@ -28,7 +28,7 @@ import {
   type ExpoSpeechRecognitionResultEvent,
 } from 'expo-speech-recognition';
 import { Ionicons } from '@expo/vector-icons';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 import { FadeInUp, Stagger } from '../components/Motion';
 import { getDatabase } from '../db';
 import { listPendingTodos, archiveTodo, type TodoRow } from '../db/todos';
@@ -53,18 +53,20 @@ interface TaskCategory {
   items: TodoRow[];
 }
 
+// Category accent colors map to the LIGHT + INDIGO palette tokens (color = meaning) so the cards
+// re-skin with the theme. The patterns are unchanged logic.
 const CATEGORY_RULES: Array<{ id: string; label: string; icon: string; color: string; pattern: RegExp }> = [
-  { id: 'grocery',  label: 'Grocery List',    icon: '🛒', color: '#4ADE80', pattern: /grocery|groceries|food|milk|vegetable|onion|tomato|garlic|spinach|mango|bread|butter|eggs|cereal|buy.*food|shopping list|produce/i },
-  { id: 'habits',   label: 'Daily Habits',    icon: '✦',  color: '#60A5FA', pattern: /habit|routine|morning|evening|workout|exercise|run\b|yoga|meditation|daily|wake|sleep|stretc|vitamin|water|steps|walk\b|walking/i },
+  { id: 'grocery',  label: 'Grocery List',    icon: '🛒', color: LUCY_COLORS.success, pattern: /grocery|groceries|food|milk|vegetable|onion|tomato|garlic|spinach|mango|bread|butter|eggs|cereal|buy.*food|shopping list|produce/i },
+  { id: 'habits',   label: 'Daily Habits',    icon: '✦',  color: LUCY_COLORS.info, pattern: /habit|routine|morning|evening|workout|exercise|run\b|yoga|meditation|daily|wake|sleep|stretc|vitamin|water|steps|walk\b|walking/i },
   // "work" alone is too broad (matches "work towards", "work on myself"). Require job-context neighbours.
-  { id: 'work',     label: 'Work & Deadlines',icon: '⌘',  color: '#FF8C42', pattern: /\boffice\b|project deadline|work deadline|at work|for work|meeting\b|client\b|team\b|sprint\b|deploy\b|engineering\b|presentation\b|standup\b|code review|pull request|jira|slack|submit.*report|send.*report/i },
-  { id: 'calls',    label: 'Calls & Messages', icon: '◉',  color: '#F472B6', pattern: /call|phone|text|sms|message|whatsapp|ping|contact|follow.up|reach out/i },
-  { id: 'health',   label: 'Health',          icon: '♡',  color: '#FCA5A5', pattern: /health|doctor|dentist|medical|physio|appointment|clinic|pharmacy|medicine|pill|prescription|weight loss|lose weight|diet\b|calories|steps goal|walk more|gym\b|fitness/i },
-  { id: 'personal', label: 'Personal',        icon: '◈',  color: '#A78BFA', pattern: /family|home|personal|mom|dad|kids|children|house|clean|laundry|bills|bank/i },
+  { id: 'work',     label: 'Work & Deadlines',icon: '⌘',  color: LUCY_COLORS.primary, pattern: /\boffice\b|project deadline|work deadline|at work|for work|meeting\b|client\b|team\b|sprint\b|deploy\b|engineering\b|presentation\b|standup\b|code review|pull request|jira|slack|submit.*report|send.*report/i },
+  { id: 'calls',    label: 'Calls & Messages', icon: '◉',  color: LUCY_COLORS.rose, pattern: /call|phone|text|sms|message|whatsapp|ping|contact|follow.up|reach out/i },
+  { id: 'health',   label: 'Health',          icon: '♡',  color: LUCY_COLORS.error, pattern: /health|doctor|dentist|medical|physio|appointment|clinic|pharmacy|medicine|pill|prescription|weight loss|lose weight|diet\b|calories|steps goal|walk more|gym\b|fitness/i },
+  { id: 'personal', label: 'Personal',        icon: '◈',  color: LUCY_COLORS.violet, pattern: /family|home|personal|mom|dad|kids|children|house|clean|laundry|bills|bank/i },
 ];
 
 // Palette for custom (LUCY/user-created) lists, keyed by name hash for stable colors.
-const CUSTOM_LIST_COLORS = ['#FF8C42', '#60A5FA', '#4ADE80', '#A78BFA', '#F472B6', '#FCA5A5', '#FBBF24'];
+const CUSTOM_LIST_COLORS = [LUCY_COLORS.primary, LUCY_COLORS.info, LUCY_COLORS.success, LUCY_COLORS.violet, LUCY_COLORS.rose, LUCY_COLORS.teal, LUCY_COLORS.gold];
 function colorForList(name: string): string {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
@@ -309,7 +311,7 @@ function CategoryModal({
                   // Done item — inline with undo button
                   <View key={todo.id} style={cmStyles.doneInlineRow}>
                     <View style={cmStyles.doneInlineCheck}>
-                      <Text style={{ color: '#4ADE80', fontSize: 13, fontWeight: '900' }}>✓</Text>
+                      <Text style={{ color: LUCY_COLORS.success, fontSize: 13, fontWeight: '900' }}>✓</Text>
                     </View>
                     <Text style={cmStyles.doneInlineText} numberOfLines={1}>{todo.task}</Text>
                     <TouchableOpacity style={cmStyles.undoBtn} onPress={() => handleUndo(todo)}>
@@ -331,7 +333,7 @@ function CategoryModal({
               <TextInput
                 style={cmStyles.addInput}
                 placeholder={`Add to ${category.label}...`}
-                placeholderTextColor={LUCY_COLORS.textSubtle}
+                placeholderTextColor={LUCY_COLORS.textFaint}
                 value={addText}
                 onChangeText={setAddText}
                 returnKeyType="done"
@@ -344,7 +346,7 @@ function CategoryModal({
                 disabled={!addText.trim()}
                 onPress={() => { if (addText.trim()) { onAdd(addText.trim()); setAddText(''); } }}
               >
-                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>+</Text>
+                <Text style={{ color: LUCY_COLORS.white, fontWeight: '800', fontSize: 16 }}>+</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -355,8 +357,8 @@ function CategoryModal({
 }
 
 const cmStyles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', flexDirection: 'column' },
-  sheet: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: LUCY_COLORS.border },
+  backdrop: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', flexDirection: 'column' },
+  sheet: { backgroundColor: LUCY_COLORS.surfaceSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, ...LUCY_SHADOWS.lg },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 20, borderBottomWidth: 1 },
   icon: { fontSize: 26 },
   title: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '800' },
@@ -368,7 +370,7 @@ const cmStyles = StyleSheet.create({
   addInput: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, color: LUCY_COLORS.textDark, fontSize: 15, borderWidth: 1, borderColor: LUCY_COLORS.border },
   addBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center' },
   doneInlineRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 4, opacity: 0.7 },
-  doneInlineCheck: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(74,222,128,0.15)', alignItems: 'center', justifyContent: 'center' },
+  doneInlineCheck: { width: 28, height: 28, borderRadius: 14, backgroundColor: LUCY_COLORS.success + '22', alignItems: 'center', justifyContent: 'center' },
   doneInlineText: { flex: 1, color: LUCY_COLORS.textSubtle, fontSize: 14, textDecorationLine: 'line-through' },
   undoBtn: { paddingHorizontal: 12, paddingVertical: 5, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 8, borderWidth: 1, borderColor: LUCY_COLORS.primary + '55' },
   undoBtnText: { color: LUCY_COLORS.primary, fontSize: 12, fontWeight: '700' },
@@ -417,14 +419,14 @@ function CategoryCard({ category, onPress }: { category: TaskCategory; onPress: 
 }
 
 const ccStyles = StyleSheet.create({
-  card: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, borderTopColor: '#3A3028', borderLeftWidth: 4, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 4 },
-  iconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  card: { backgroundColor: LUCY_COLORS.surface, borderRadius: 18, borderLeftWidth: 4, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, marginBottom: 10, ...LUCY_SHADOWS.md },
+  iconWrap: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   iconText: { fontSize: 20 },
-  label: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700', letterSpacing: -0.1 },
-  preview: { color: LUCY_COLORS.textMuted, fontSize: 12, lineHeight: 17 },
-  count: { color: LUCY_COLORS.textSubtle, fontSize: 11 },
+  label: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '800', letterSpacing: -0.1 },
+  preview: { color: LUCY_COLORS.textMuted, fontSize: 12.5, lineHeight: 17 },
+  count: { color: LUCY_COLORS.textSubtle, fontSize: 11.5, fontWeight: '600' },
   urgentDot: { width: 8, height: 8, borderRadius: 4 },
-  chevron: { color: LUCY_COLORS.textSubtle, fontSize: 22, fontWeight: '300' },
+  chevron: { color: LUCY_COLORS.textFaint, fontSize: 22, fontWeight: '300' },
 });
 
 function getGreeting(): string {
@@ -796,21 +798,21 @@ export function CaptureScreen({
               {signalCount > 0 ? `${signalCount} urgent signal${signalCount !== 1 ? 's' : ''} for you` : 'All caught up'}
             </Text>
             {/* Stats row */}
-            <View style={{ flexDirection: 'row', gap: 16, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,140,66,0.2)' }}>
+            <View style={{ flexDirection: 'row', gap: 16, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider }}>
               <View style={{ alignItems: 'center', gap: 2 }}>
                 <Text style={{ color: LUCY_COLORS.primary, fontSize: 20, fontWeight: '900' }}>{capturedToday}</Text>
-                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '600', letterSpacing: 0.5 }}>today</Text>
+                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>today</Text>
               </View>
               {captureStreak > 1 ? (
                 <View style={{ alignItems: 'center', gap: 2 }}>
-                  <Text style={{ color: '#F59E0B', fontSize: 20, fontWeight: '900' }}>{captureStreak}🔥</Text>
-                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '600', letterSpacing: 0.5 }}>day streak</Text>
+                  <Text style={{ color: LUCY_COLORS.gold, fontSize: 20, fontWeight: '900' }}>{captureStreak}🔥</Text>
+                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>day streak</Text>
                 </View>
               ) : null}
               {todos.length > 0 ? (
                 <View style={{ alignItems: 'center', gap: 2 }}>
-                  <Text style={{ color: '#60A5FA', fontSize: 20, fontWeight: '900' }}>{todos.length}</Text>
-                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '600', letterSpacing: 0.5 }}>tasks</Text>
+                  <Text style={{ color: LUCY_COLORS.info, fontSize: 20, fontWeight: '900' }}>{todos.length}</Text>
+                  <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>tasks</Text>
                 </View>
               ) : null}
             </View>
@@ -822,7 +824,7 @@ export function CaptureScreen({
           <View style={styles.glanceRow}>
             {nextEvent ? (
               <View style={styles.glanceChip}>
-                <Ionicons name="calendar-outline" size={14} color="#5B8CFF" />
+                <Ionicons name="calendar-outline" size={14} color={LUCY_COLORS.info} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.glanceChipLabel}>NEXT UP</Text>
                   <Text style={styles.glanceChipValue} numberOfLines={1}>{nextEvent.title}</Text>
@@ -954,7 +956,7 @@ export function CaptureScreen({
                 borderColor: voiceRecording ? LUCY_COLORS.primary : LUCY_COLORS.border,
               },
             ]}>
-              <Text style={[styles.micIcon, voiceRecording && { color: '#fff' }]}>
+              <Text style={[styles.micIcon, voiceRecording && { color: LUCY_COLORS.white }]}>
                 {voiceRecording ? '⏹' : '🎤'}
               </Text>
             </Animated.View>
@@ -962,7 +964,7 @@ export function CaptureScreen({
           <TextInput
             multiline
             placeholder="Manage todo list"
-            placeholderTextColor={LUCY_COLORS.textSubtle}
+            placeholderTextColor={LUCY_COLORS.textFaint}
             style={styles.input}
             textAlignVertical="top"
             value={text}
@@ -975,7 +977,7 @@ export function CaptureScreen({
             disabled={sending || !text.trim()}
           >
             <Animated.View style={[styles.sendButton, !text.trim() && styles.sendDisabled, { transform: [{ scale: sendScale }] }]}>
-              <Text style={styles.sendText}>{sending ? '...' : 'Send'}</Text>
+              <Text style={[styles.sendText, !text.trim() && styles.sendTextDisabled]}>{sending ? '...' : 'Send'}</Text>
             </Animated.View>
           </TouchableOpacity>
         </View>
@@ -1020,8 +1022,8 @@ export function CaptureScreen({
               </View>
             )}
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={[styles.modalSkip, { flex: 1, borderColor: '#ef4444' }]} onPress={() => void deleteTodo(editTodo!)}>
-                <Text style={[styles.modalSkipText, { color: '#ef4444' }]}>Delete</Text>
+              <TouchableOpacity style={[styles.modalSkip, { flex: 1, borderColor: LUCY_COLORS.error + '5C' }]} onPress={() => void deleteTodo(editTodo!)}>
+                <Text style={[styles.modalSkipText, { color: LUCY_COLORS.error }]}>Delete</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalDone} onPress={() => void saveEditTodo()}>
                 <Text style={styles.modalDoneText}>Save</Text>
@@ -1046,7 +1048,7 @@ export function CaptureScreen({
             <TextInput
               style={styles.modalInput}
               placeholder="Add a note (optional)"
-              placeholderTextColor={LUCY_COLORS.textSubtle}
+              placeholderTextColor={LUCY_COLORS.textFaint}
               value={doneNotes}
               onChangeText={setDoneNotes}
               multiline
@@ -1112,33 +1114,33 @@ const styles = StyleSheet.create({
   controlBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8, paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.divider },
   controlPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
   controlBgPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
-  controlMeetingPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
+  controlMeetingPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: LUCY_COLORS.error + '1A', borderWidth: 1, borderColor: LUCY_COLORS.error + '4D', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
   controlBrainPill: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5, maxWidth: 130 },
-  // Hero
-  hero: { backgroundColor: '#1a0f00', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 16, position: 'relative', overflow: 'hidden' },
-  heroGlow: { position: 'absolute', top: -40, right: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: '#FF8C42' },
-  heroGreeting: { fontSize: 12, fontWeight: '700', color: LUCY_COLORS.primary, letterSpacing: 0.5, marginBottom: 2 },
+  // Hero — light, airy header with the one warm amber halo (the orb's glow) bleeding in
+  hero: { backgroundColor: LUCY_COLORS.background, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 16, position: 'relative', overflow: 'hidden' },
+  heroGlow: { position: 'absolute', top: -60, right: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: LUCY_COLORS.gold },
+  heroGreeting: { fontSize: 12, fontWeight: '800', color: LUCY_COLORS.primary, letterSpacing: 0.5, marginBottom: 2 },
   heroTitle: { fontSize: 42, fontWeight: '900', letterSpacing: -2.5, color: LUCY_COLORS.textDark, lineHeight: 46, marginBottom: 2 },
-  heroPillars: { fontSize: 11, color: LUCY_COLORS.textSubtle, marginBottom: 12 },
-  heroCard: { backgroundColor: 'rgba(255,140,66,0.07)', borderWidth: 1, borderColor: 'rgba(255,140,66,0.25)', borderRadius: 14, padding: 12 },
+  heroPillars: { fontSize: 11, color: LUCY_COLORS.textSubtle, fontWeight: '600', marginBottom: 12 },
+  heroCard: { backgroundColor: LUCY_COLORS.surface, borderRadius: 18, padding: 16, ...LUCY_SHADOWS.md },
   glanceRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 14 },
-  glanceChip: { flex: 1, flexDirection: 'row', gap: 8, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 14, padding: 11 },
-  glanceChipLabel: { color: LUCY_COLORS.textSubtle, fontSize: 9, fontWeight: '800', letterSpacing: 0.8, marginBottom: 3 },
+  glanceChip: { flex: 1, flexDirection: 'row', gap: 8, backgroundColor: LUCY_COLORS.surface, borderRadius: 16, padding: 13, ...LUCY_SHADOWS.sm },
+  glanceChipLabel: { color: LUCY_COLORS.primary, fontSize: 9, fontWeight: '900', letterSpacing: 0.9, marginBottom: 3 },
   glanceChipValue: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '800' },
   glanceChipMeta: { color: LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '600', marginTop: 2 },
-  heroCardLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, color: LUCY_COLORS.primary, marginBottom: 4 },
+  heroCardLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.2, color: LUCY_COLORS.primary, marginBottom: 4, textTransform: 'uppercase' },
   heroCardTitle: { fontSize: 18, fontWeight: '800', color: LUCY_COLORS.textDark },  // was 15 — more punchy
   // Compact header
   compactHeader: { paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: LUCY_COLORS.background, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.border },
   compactLogo: { fontSize: 20, fontWeight: '900', letterSpacing: 1.5, color: LUCY_COLORS.textDark },
   compactPills: { flexDirection: 'row', gap: 8 },
   compactPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
-  compactPillActive: { backgroundColor: '#1a0a00', borderColor: LUCY_COLORS.primary },
+  compactPillActive: { backgroundColor: LUCY_COLORS.primarySoft, borderColor: LUCY_COLORS.primary },
   compactBgPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: LUCY_COLORS.primarySoft, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
-  meetingCompactPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
+  meetingCompactPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: LUCY_COLORS.error + '1A', borderWidth: 1, borderColor: LUCY_COLORS.error + '4D', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
   compactDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: LUCY_COLORS.textSubtle },
   compactPillText: { fontSize: 11, fontWeight: '700', color: LUCY_COLORS.textMuted },
-  emptyBoard: { marginTop: 28, marginHorizontal: 16, alignItems: 'center', gap: 10, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 22, paddingVertical: 28, paddingHorizontal: 18 },
+  emptyBoard: { marginTop: 28, marginHorizontal: 16, alignItems: 'center', gap: 10, backgroundColor: LUCY_COLORS.surface, borderRadius: 22, paddingVertical: 32, paddingHorizontal: 18, ...LUCY_SHADOWS.md },
   emptyTitle: { color: LUCY_COLORS.textDark, fontSize: 18, fontWeight: '900' },
   emptyHint: { color: LUCY_COLORS.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 20, paddingHorizontal: 8 },
   group: { marginBottom: 22, paddingHorizontal: 2 },
@@ -1154,13 +1156,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    backgroundColor: LUCY_COLORS.surfaceRaised,
+    backgroundColor: LUCY_COLORS.surface,
     borderRadius: 16,
     padding: 14,
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: LUCY_COLORS.border,
-    borderTopColor: LUCY_COLORS.primaryLine,
+    ...LUCY_SHADOWS.sm,
   },
   checkboxArea: { paddingTop: 1 },
   checkCircle: {
@@ -1234,23 +1234,23 @@ const styles = StyleSheet.create({
   ack: { alignSelf: 'center', backgroundColor: LUCY_COLORS.primarySoft, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, marginBottom: 8 },
   keyboardDismissBar: { alignSelf: 'flex-end', paddingHorizontal: 18, paddingVertical: 6, marginBottom: 2 },
   keyboardDismissText: { color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '700' },
-  autoCard: { marginHorizontal: 16, marginBottom: 10, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 20, borderWidth: 1, borderColor: LUCY_COLORS.primary + '44', padding: 16, gap: 10 },
-  autoCardLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.4, color: LUCY_COLORS.primary, textTransform: 'uppercase' },
-  autoCardTitle: { fontSize: 17, fontWeight: '700', color: LUCY_COLORS.textDark },
+  autoCard: { marginHorizontal: 16, marginBottom: 10, backgroundColor: LUCY_COLORS.surface, borderRadius: 20, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, padding: 16, gap: 10, ...LUCY_SHADOWS.md },
+  autoCardLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.4, color: LUCY_COLORS.primary, textTransform: 'uppercase' },
+  autoCardTitle: { fontSize: 17, fontWeight: '800', color: LUCY_COLORS.textDark },
   autoCardButtons: { flexDirection: 'row', gap: 10 },
-  autoConfirmBtn: { flex: 1, backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
-  autoConfirmText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  autoCancelBtn: { paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center' },
-  autoCancelText: { color: LUCY_COLORS.textSubtle, fontSize: 14 },
+  autoConfirmBtn: { flex: 1, backgroundColor: LUCY_COLORS.primary, borderRadius: 14, paddingVertical: 13, alignItems: 'center' },
+  autoConfirmText: { color: LUCY_COLORS.white, fontSize: 15, fontWeight: '700' },
+  autoCancelBtn: { paddingHorizontal: 16, paddingVertical: 13, alignItems: 'center' },
+  autoCancelText: { color: LUCY_COLORS.textMuted, fontSize: 14, fontWeight: '600' },
   ackText: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700' },
-  composerDock: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, paddingTop: 6, backgroundColor: LUCY_COLORS.background },
+  composerDock: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.borderSoft, paddingTop: 6, backgroundColor: LUCY_COLORS.surface },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, paddingTop: 8 },
   cameraButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', justifyContent: 'center' },
   cameraIcon: { fontSize: 18 },
   micButton: { width: 46, height: 46, borderRadius: 23, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', justifyContent: 'center' },
-  micButtonActive: { backgroundColor: '#3B0000', borderColor: '#ef4444' },
+  micButtonActive: { backgroundColor: LUCY_COLORS.error + '1A', borderColor: LUCY_COLORS.error },
   micIcon: { fontSize: 18, color: LUCY_COLORS.textMuted },
-  micIconActive: { color: '#ef4444' },
+  micIconActive: { color: LUCY_COLORS.error },
   input: {
     flex: 1,
     maxHeight: 110,
@@ -1266,9 +1266,10 @@ const styles = StyleSheet.create({
     paddingTop: 13,
     paddingBottom: 12,
   },
-  sendButton: { height: 46, paddingHorizontal: 17, borderRadius: 23, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center' },
-  sendDisabled: { backgroundColor: '#3A3531' },
-  sendText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  sendButton: { height: 46, paddingHorizontal: 18, borderRadius: 23, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center', ...LUCY_SHADOWS.glow },
+  sendDisabled: { backgroundColor: LUCY_COLORS.surfaceRaised, shadowOpacity: 0, elevation: 0 },
+  sendText: { color: LUCY_COLORS.white, fontWeight: '700', fontSize: 14 },
+  sendTextDisabled: { color: LUCY_COLORS.textFaint },
   protectionToggle: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 10, paddingHorizontal: 4 },
   check: { width: 19, height: 19, borderRadius: 6, borderWidth: 1, borderColor: LUCY_COLORS.textMuted, alignItems: 'center', justifyContent: 'center' },
   checkSelected: { backgroundColor: LUCY_COLORS.primary, borderColor: LUCY_COLORS.primary },
@@ -1277,8 +1278,8 @@ const styles = StyleSheet.create({
   protectionTitle: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '600' },
   protectionHint: { color: LUCY_COLORS.textMuted, fontSize: 11, marginTop: 1 },
   // Modal
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  modalCard: { backgroundColor: LUCY_COLORS.surface, borderRadius: 20, padding: 24, width: '100%', maxWidth: 380, borderWidth: 1, borderColor: LUCY_COLORS.border, gap: 14 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  modalCard: { backgroundColor: LUCY_COLORS.surface, borderRadius: 24, padding: 24, width: '100%', maxWidth: 380, gap: 14, ...LUCY_SHADOWS.lg },
   modalTitle: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
   modalTask: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '700', lineHeight: 23 },
   modalInput: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 12, color: LUCY_COLORS.textDark, fontSize: 15, minHeight: 72, textAlignVertical: 'top' },
@@ -1293,5 +1294,5 @@ const styles = StyleSheet.create({
   modalSkip: { flex: 1, paddingVertical: 13, borderRadius: 12, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center' },
   modalSkipText: { color: LUCY_COLORS.textMuted, fontSize: 15, fontWeight: '600' },
   modalDone: { flex: 2, paddingVertical: 13, borderRadius: 12, backgroundColor: LUCY_COLORS.primary, alignItems: 'center' },
-  modalDoneText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  modalDoneText: { color: LUCY_COLORS.white, fontSize: 15, fontWeight: '700' },
 });

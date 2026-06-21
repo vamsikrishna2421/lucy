@@ -6,7 +6,7 @@
     "version": "1.2.2",
     "orientation": "portrait",
     "icon": "./assets/lucy-eye-icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "runtimeVersion": "4",
     "updates": {
       "url": "https://u.expo.dev/1a602e40-067f-4786-a9a6-26c6cc15bda6",
@@ -188,7 +188,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0F0E0B",
+          "backgroundColor": "#F1F2F8",
           "image": "./assets/splash-blank.png",
           "imageWidth": 1
         }

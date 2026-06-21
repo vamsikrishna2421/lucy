@@ -5,7 +5,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
+import { RADIUS } from './ui';
 import { getDatabase } from '../db';
 
 type WsKey = 'Calendar' | 'Documents' | 'Resources' | 'Projects';
@@ -175,17 +176,14 @@ export function WorkspaceHome({ onOpen, onPlanDay }: { onOpen: (tab: string) => 
             key={tile.key}
             activeOpacity={0.85}
             onPress={() => tap(tile)}
-            style={[
-              styles.tile,
-              tile.featured && styles.tileFeatured,
-              { backgroundColor: `${tile.color}18`, borderColor: `${tile.color}55` },
-            ]}
+            style={[styles.tile, tile.featured && styles.tileFeatured]}
           >
+            {tile.featured ? <View style={[styles.tileAccent, { backgroundColor: tile.color }]} /> : null}
             <View style={styles.tileTop}>
-              <View style={[styles.tileIconWrap, { backgroundColor: `${tile.color}24` }]}>
+              <View style={[styles.tileIconWrap, { backgroundColor: `${tile.color}1A`, borderColor: `${tile.color}33` }]}>
                 <Ionicons name={tile.icon} size={20} color={tile.color} />
               </View>
-              <Text style={styles.tileCount}>{tile.count}</Text>
+              <Text style={[styles.tileCount, { color: tile.color }]}>{tile.count}</Text>
             </View>
             <View>
               <Text style={styles.tileName}>{tile.label}</Text>
@@ -233,9 +231,9 @@ export function WorkspaceHome({ onOpen, onPlanDay }: { onOpen: (tab: string) => 
             key={b.key}
             activeOpacity={0.85}
             onPress={() => onOpen(b.key)}
-            style={[styles.brainTile, { backgroundColor: `${b.color}14`, borderColor: `${b.color}45` }]}
+            style={styles.brainTile}
           >
-            <View style={[styles.brainIconWrap, { backgroundColor: `${b.color}24` }]}>
+            <View style={[styles.brainIconWrap, { backgroundColor: `${b.color}1A`, borderColor: `${b.color}33` }]}>
               <Ionicons name={b.icon} size={18} color={b.color} />
             </View>
             <View style={{ flex: 1 }}>
@@ -252,38 +250,40 @@ export function WorkspaceHome({ onOpen, onPlanDay }: { onOpen: (tab: string) => 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   wrap: { padding: 14, paddingBottom: 72 },
-  hero: { position: 'relative', overflow: 'hidden', backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 22, padding: 18, marginBottom: 14 },
-  heroGlow: { position: 'absolute', right: -55, top: -65, width: 170, height: 170, borderRadius: 85, backgroundColor: 'rgba(255,140,66,0.13)' },
+  hero: { position: 'relative', overflow: 'hidden', backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: RADIUS.card, padding: 18, marginBottom: 14, ...LUCY_SHADOWS.md },
+  heroGlow: { position: 'absolute', right: -55, top: -65, width: 170, height: 170, borderRadius: 85, backgroundColor: LUCY_COLORS.primarySoft },
   heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  kicker: { color: LUCY_COLORS.primaryGlow, fontSize: 11, letterSpacing: 1.2, fontWeight: '800', textTransform: 'uppercase' },
+  kicker: { color: LUCY_COLORS.primary, fontSize: 11, letterSpacing: 1.2, fontWeight: '900', textTransform: 'uppercase' },
   h: { color: LUCY_COLORS.textDark, fontSize: 28, fontWeight: '900', marginTop: 2, lineHeight: 34 },
   sub: { color: LUCY_COLORS.textMuted, fontSize: 13, marginTop: 7, lineHeight: 19, maxWidth: 310 },
-  localChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  localChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: RADIUS.pill, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border },
   localDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: LUCY_COLORS.teal },
   localChipText: { color: LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '700' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  tile: { width: '48.5%', borderRadius: 18, borderWidth: 1, padding: 14, minHeight: 130, marginBottom: 12, justifyContent: 'space-between' },
-  tileFeatured: { minHeight: 148 },
+  // Lumia-style tile: clean white card, tinted icon ring, big colored count
+  tile: { position: 'relative', overflow: 'hidden', width: '48.5%', backgroundColor: LUCY_COLORS.surface, borderRadius: RADIUS.card, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 15, minHeight: 132, marginBottom: 12, justifyContent: 'space-between', ...LUCY_SHADOWS.md },
+  tileFeatured: { minHeight: 150 },
+  tileAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
   tileTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  tileIconWrap: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  tileCount: { color: LUCY_COLORS.textDark, fontSize: 31, fontWeight: '900', lineHeight: 35 },
-  tileName: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 15, marginTop: 12 },
+  tileIconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  tileCount: { fontSize: 30, fontWeight: '900', lineHeight: 34 },
+  tileName: { color: LUCY_COLORS.textDark, fontWeight: '800', fontSize: 15, marginTop: 12 },
   tileStatus: { color: LUCY_COLORS.textMuted, fontSize: 11.5, marginTop: 4, lineHeight: 16 },
-  planBtn: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: LUCY_COLORS.primary, borderRadius: 18, padding: 16, marginTop: 2, marginBottom: 14, shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 4 },
-  planIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
-  planT: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  planD: { color: 'rgba(255,255,255,0.84)', fontSize: 12, marginTop: 3, lineHeight: 17 },
-  qaBox: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 18, padding: 15 },
+  planBtn: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: LUCY_COLORS.primary, borderRadius: RADIUS.card, padding: 16, marginTop: 2, marginBottom: 14, ...LUCY_SHADOWS.glow },
+  planIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  planT: { color: LUCY_COLORS.white, fontWeight: '800', fontSize: 16 },
+  planD: { color: 'rgba(255,255,255,0.86)', fontSize: 12, marginTop: 3, lineHeight: 17 },
+  qaBox: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: RADIUS.card, padding: 16, ...LUCY_SHADOWS.md },
   qaHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 },
   qaH: { color: LUCY_COLORS.textDark, fontWeight: '800', fontSize: 15 },
   qaSub: { color: LUCY_COLORS.textSubtle, fontSize: 11, fontWeight: '700' },
   qaGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 10 },
-  qaBtn: { width: '47%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: LUCY_COLORS.background, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 13, paddingVertical: 13, paddingHorizontal: 8 },
-  qaLabel: { color: LUCY_COLORS.textDark, fontSize: 12.5, fontWeight: '600' },
-  moreH: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '800', marginTop: 20, marginBottom: 10 },
-  brainTile: { width: '48.5%', minHeight: 80, borderRadius: 16, borderWidth: 1, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 11 },
-  brainIconWrap: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  brainName: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 14 },
-  brainCount: { fontWeight: '800', fontSize: 13 },
+  qaBtn: { width: '47%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: RADIUS.control, paddingVertical: 13, paddingHorizontal: 8 },
+  qaLabel: { color: LUCY_COLORS.textDark, fontSize: 12.5, fontWeight: '700' },
+  moreH: { color: LUCY_COLORS.textDark, fontSize: 18, fontWeight: '800', marginTop: 22, marginBottom: 12 },
+  brainTile: { width: '48.5%', minHeight: 80, backgroundColor: LUCY_COLORS.surface, borderRadius: RADIUS.control, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 13, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 11, ...LUCY_SHADOWS.sm },
+  brainIconWrap: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  brainName: { color: LUCY_COLORS.textDark, fontWeight: '800', fontSize: 14 },
+  brainCount: { fontWeight: '900', fontSize: 13 },
   brainHint: { color: LUCY_COLORS.textMuted, fontSize: 11, marginTop: 3, lineHeight: 15 },
 });

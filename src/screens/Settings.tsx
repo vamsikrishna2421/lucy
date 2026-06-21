@@ -1059,7 +1059,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
             <TextInput
               style={styles.profileInput}
               placeholder="e.g. Vamsy"
-              placeholderTextColor={LUCY_COLORS.textSubtle}
+              placeholderTextColor={LUCY_COLORS.textFaint}
               value={profileDraft.name}
               onChangeText={(v) => setProfileDraft((p) => ({ ...p, name: v }))}
             />
@@ -1067,7 +1067,7 @@ export function SettingsScreen({ backgroundEnabled, refreshToken, onChangeBackgr
             <TextInput
               style={[styles.profileInput, styles.profileInputMulti]}
               placeholder={'e.g. Data engineer, interested in AI, music lover, work at a tech company'}
-              placeholderTextColor={LUCY_COLORS.textSubtle}
+              placeholderTextColor={LUCY_COLORS.textFaint}
               multiline
               value={profileDraft.about}
               onChangeText={(v) => setProfileDraft((p) => ({ ...p, about: v }))}
@@ -1209,8 +1209,8 @@ function SiriShortcutGuide({ visible, onClose }: { visible: boolean; onClose: ()
                 <Text style={{ color: LUCY_COLORS.textDark, fontSize: 12, fontWeight: '600' }}>Smart (commands + notes)</Text>
                 <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>{LUCY_VOICE_URL}</Text>
               </View>
-              <TouchableOpacity onPress={() => void copy('voice')} style={{ marginLeft: 10, backgroundColor: copied === 'voice' ? '#22C55E22' : LUCY_COLORS.surfaceRaised, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
-                <Text style={{ color: copied === 'voice' ? '#22C55E' : LUCY_COLORS.primary, fontSize: 12, fontWeight: '600' }}>{copied === 'voice' ? 'Copied!' : 'Copy'}</Text>
+              <TouchableOpacity onPress={() => void copy('voice')} style={{ marginLeft: 10, backgroundColor: copied === 'voice' ? LUCY_COLORS.success + '22' : LUCY_COLORS.surfaceRaised, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 }}>
+                <Text style={{ color: copied === 'voice' ? LUCY_COLORS.success : LUCY_COLORS.primary, fontSize: 12, fontWeight: '700' }}>{copied === 'voice' ? 'Copied!' : 'Copy'}</Text>
               </TouchableOpacity>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -1218,8 +1218,8 @@ function SiriShortcutGuide({ visible, onClose }: { visible: boolean; onClose: ()
                 <Text style={{ color: LUCY_COLORS.textDark, fontSize: 12, fontWeight: '600' }}>Direct capture (save verbatim)</Text>
                 <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>{LUCY_CAPTURE_URL}</Text>
               </View>
-              <TouchableOpacity onPress={() => void copy('capture')} style={{ marginLeft: 10, backgroundColor: copied === 'capture' ? '#22C55E22' : LUCY_COLORS.surfaceRaised, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
-                <Text style={{ color: copied === 'capture' ? '#22C55E' : LUCY_COLORS.primary, fontSize: 12, fontWeight: '600' }}>{copied === 'capture' ? 'Copied!' : 'Copy'}</Text>
+              <TouchableOpacity onPress={() => void copy('capture')} style={{ marginLeft: 10, backgroundColor: copied === 'capture' ? LUCY_COLORS.success + '22' : LUCY_COLORS.surfaceRaised, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 }}>
+                <Text style={{ color: copied === 'capture' ? LUCY_COLORS.success : LUCY_COLORS.primary, fontSize: 12, fontWeight: '700' }}>{copied === 'capture' ? 'Copied!' : 'Copy'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1228,7 +1228,7 @@ function SiriShortcutGuide({ visible, onClose }: { visible: boolean; onClose: ()
             onPress={() => void Linking.openURL('shortcuts://')}
             style={{ backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginBottom: 12 }}
           >
-            <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>Open Shortcuts App →</Text>
+            <Text style={{ color: LUCY_COLORS.white, fontSize: 15, fontWeight: '700' }}>Open Shortcuts App →</Text>
           </TouchableOpacity>
           <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, textAlign: 'center', lineHeight: 17 }}>
             Replace [Dictated Text] in the URL with the Shortcuts variable by tapping inside the URL field and inserting the variable from the magic wand menu.
@@ -1465,6 +1465,7 @@ function SettingsSheet({ title, visible, children, onClose }: { title: string; v
       >
           <TouchableOpacity accessibilityLabel="Close settings details" activeOpacity={1} onPress={onClose} style={styles.scrim} />
           <View style={styles.sheet}>
+            <View style={styles.sheetGrip} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{title}</Text>
               <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -1679,8 +1680,8 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
     setStuck((prev) => prev.filter((c) => c.id !== id));
   };
 
-  const renderCapture = (c: { id: number; raw_transcript: string | null; extracted_title: string | null; processing_error?: string | null }, color: string = LUCY_COLORS.surface) => (
-    <View key={c.id} style={{ backgroundColor: color, borderRadius: 10, padding: 10, marginTop: 6, gap: 3, flexDirection: 'row', alignItems: 'flex-start' }}>
+  const renderCapture = (c: { id: number; raw_transcript: string | null; extracted_title: string | null; processing_error?: string | null }, color: string = LUCY_COLORS.surfaceRaised) => (
+    <View key={c.id} style={{ backgroundColor: color, borderRadius: 12, padding: 11, marginTop: 6, gap: 3, flexDirection: 'row', alignItems: 'flex-start', borderWidth: 1, borderColor: LUCY_COLORS.border }}>
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '600' }} numberOfLines={1}>
           {c.extracted_title ?? c.raw_transcript?.slice(0, 80) ?? '(no text)'}
@@ -1691,14 +1692,14 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
           </Text>
         ) : null}
         {c.processing_error ? (
-          <Text style={{ color: '#ef4444', fontSize: 11 }} numberOfLines={1}>Error: {c.processing_error}</Text>
+          <Text style={{ color: LUCY_COLORS.error, fontSize: 11 }} numberOfLines={1}>Error: {c.processing_error}</Text>
         ) : null}
       </View>
       <TouchableOpacity
         onPress={() => void deleteQueueItem(c.id)}
         style={{ padding: 4, marginLeft: 6 }}
       >
-        <Text style={{ color: '#ef4444', fontSize: 16, fontWeight: '700' }}>✕</Text>
+        <Text style={{ color: LUCY_COLORS.error, fontSize: 16, fontWeight: '700' }}>✕</Text>
       </TouchableOpacity>
     </View>
   );
@@ -1714,12 +1715,12 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
       </View>
 
       {diag ? (
-        <View style={{ marginTop: 10, padding: 10, borderRadius: 10, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: diag.available ? LUCY_COLORS.border : '#ef4444' }}>
+        <View style={{ marginTop: 10, padding: 12, borderRadius: 14, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: diag.available ? LUCY_COLORS.border : LUCY_COLORS.error + '66' }}>
           <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 }}>PROCESSING WITH</Text>
           <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700', marginTop: 3 }}>
             {modelLabel(diag.model)}
           </Text>
-          <Text style={{ color: diag.available ? '#4ADE80' : '#ef4444', fontSize: 11, fontWeight: '600', marginTop: 2 }}>
+          <Text style={{ color: diag.available ? LUCY_COLORS.success : LUCY_COLORS.error, fontSize: 11, fontWeight: '600', marginTop: 2 }}>
             {diag.available
               ? 'Ready — captures will process'
               : 'Not ready — captures will stay queued. Add your Anthropic key under AI & intelligence.'}
@@ -1728,7 +1729,7 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
       ) : null}
 
       {guard ? (
-        <View style={{ marginTop: 10, padding: 10, borderRadius: 10, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: guard.enabled && guard.used >= guard.max ? '#F59E0B' : LUCY_COLORS.border }}>
+        <View style={{ marginTop: 10, padding: 12, borderRadius: 14, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: guard.enabled && guard.used >= guard.max ? LUCY_COLORS.warning + '88' : LUCY_COLORS.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 }}>COST GUARD</Text>
             <TouchableOpacity onPress={() => void toggleGuard()} style={{ paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8, backgroundColor: guard.enabled ? LUCY_COLORS.primarySoft : LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: guard.enabled ? LUCY_COLORS.primary : LUCY_COLORS.border }}>
@@ -1738,11 +1739,11 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
           {guard.enabled ? (
             <>
               {guard.snoozedUntil ? (
-                <Text style={{ color: '#4ADE80', fontSize: 11, fontWeight: '600', marginTop: 4 }}>
+                <Text style={{ color: LUCY_COLORS.success, fontSize: 11, fontWeight: '600', marginTop: 4 }}>
                   Paused (unlimited) until {new Date(guard.snoozedUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                 </Text>
               ) : (
-                <Text style={{ color: guard.used >= guard.max ? '#F59E0B' : LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '600', marginTop: 4 }}>
+                <Text style={{ color: guard.used >= guard.max ? LUCY_COLORS.warning : LUCY_COLORS.textMuted, fontSize: 11, fontWeight: '600', marginTop: 4 }}>
                   {guard.used} / {guard.max} AI calls this hour{guard.used >= guard.max ? ' — paused until the hour clears' : ''}
                 </Text>
               )}
@@ -1751,7 +1752,7 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
                   <Text style={{ color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '700' }}>Limit: {guard.max}/hr</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => void snoozeGuard()}>
-                  <Text style={{ color: guard.snoozedUntil ? '#4ADE80' : LUCY_COLORS.primary, fontSize: 11, fontWeight: '700' }}>{guard.snoozedUntil ? 'Resume now' : 'Pause for a while'}</Text>
+                  <Text style={{ color: guard.snoozedUntil ? LUCY_COLORS.success : LUCY_COLORS.primary, fontSize: 11, fontWeight: '700' }}>{guard.snoozedUntil ? 'Resume now' : 'Pause for a while'}</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -1770,14 +1771,14 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
 
       {stuck.length > 0 ? (
         <>
-          <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginTop: 12, marginBottom: 2 }}>STUCK — WILL RETRY</Text>
-          {stuck.map((c) => renderCapture(c, 'rgba(245,158,11,0.08)'))}
+          <Text style={{ color: LUCY_COLORS.warning, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginTop: 12, marginBottom: 2 }}>STUCK — WILL RETRY</Text>
+          {stuck.map((c) => renderCapture(c, LUCY_COLORS.warning + '14'))}
           <TouchableOpacity
-            style={{ marginTop: 10, backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingVertical: 12, alignItems: 'center', opacity: retrying ? 0.6 : 1 }}
+            style={{ marginTop: 10, backgroundColor: LUCY_COLORS.primary, borderRadius: 14, paddingVertical: 13, alignItems: 'center', opacity: retrying ? 0.6 : 1 }}
             disabled={retrying}
             onPress={async () => { setRetrying(true); await onRetry().finally(() => setRetrying(false)); }}
           >
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{retrying ? 'Retrying...' : `Retry now (${queue.retrying})`}</Text>
+            <Text style={{ color: LUCY_COLORS.white, fontWeight: '700', fontSize: 14 }}>{retrying ? 'Retrying...' : `Retry now (${queue.retrying})`}</Text>
           </TouchableOpacity>
         </>
       ) : null}
@@ -1800,9 +1801,9 @@ function QueuePanel({ queue, onRetry }: { queue: CaptureQueueSummary; onRetry: (
           {showErrors ? (
             <>
               {errors.map((e) => (
-                <View key={e.id} style={{ backgroundColor: LUCY_COLORS.surface, borderRadius: 8, padding: 8, marginTop: 6, borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)' }}>
+                <View key={e.id} style={{ backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 10, padding: 10, marginTop: 6, borderWidth: 1, borderColor: LUCY_COLORS.error + '3D' }}>
                   <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 10 }}>{e.context} · {e.occurred_at}</Text>
-                  <Text style={{ color: '#ef4444', fontSize: 11 }} numberOfLines={3}>{e.message}</Text>
+                  <Text style={{ color: LUCY_COLORS.error, fontSize: 11 }} numberOfLines={3}>{e.message}</Text>
                 </View>
               ))}
               <TouchableOpacity
@@ -1829,74 +1830,75 @@ function Metric({ label, value, warm }: { label: string; value: number; warm?: b
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  listContent: { paddingTop: 18, paddingBottom: 48 },
-  title: { fontSize: 30, letterSpacing: -0.8, fontWeight: '700', color: LUCY_COLORS.textDark, marginBottom: 6 },
+  container: { flex: 1, backgroundColor: LUCY_COLORS.background },
+  listContent: { paddingTop: 18, paddingBottom: 48, paddingHorizontal: 18 },
+  title: { fontSize: 32, letterSpacing: -0.8, fontWeight: '900', color: LUCY_COLORS.textDark, marginBottom: 4 },
   subtitle: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 4, marginBottom: 18, lineHeight: 20 },
   list: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 21, borderWidth: 1, borderColor: LUCY_COLORS.border, overflow: 'hidden' },
   // ─── Collapsible group (accordion) ──────────────────────────────────────
-  group: { backgroundColor: LUCY_COLORS.surface, borderRadius: 20, borderWidth: 1, borderColor: LUCY_COLORS.border, marginBottom: 12, overflow: 'hidden' },
-  groupExpanded: { borderColor: LUCY_COLORS.primaryLine, backgroundColor: LUCY_COLORS.surfaceRaised },
+  group: { backgroundColor: LUCY_COLORS.surface, borderRadius: 20, marginBottom: 12, overflow: 'hidden', ...LUCY_SHADOWS.md },
+  groupExpanded: { },
   groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 16, minHeight: 64 },
-  groupIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: LUCY_COLORS.primaryMist, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, alignItems: 'center', justifyContent: 'center' },
+  groupIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: LUCY_COLORS.primarySoft, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, alignItems: 'center', justifyContent: 'center' },
   groupIconText: { fontSize: 18 },
   groupTitle: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
   groupSummary: { color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 3 },
   groupPill: { borderRadius: 999, backgroundColor: LUCY_COLORS.primarySoft, paddingHorizontal: 10, paddingVertical: 5 },
-  groupPillText: { color: LUCY_COLORS.primaryGlow, fontWeight: '800', fontSize: 11 },
-  groupChevron: { color: LUCY_COLORS.textMuted, fontSize: 18, fontWeight: '800', width: 20, textAlign: 'center' },
+  groupPillText: { color: LUCY_COLORS.primary, fontWeight: '800', fontSize: 11 },
+  groupChevron: { color: LUCY_COLORS.textSubtle, fontSize: 18, fontWeight: '800', width: 20, textAlign: 'center' },
   groupBody: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, backgroundColor: LUCY_COLORS.surfaceRaised, overflow: 'hidden' },
-  settingRow: { minHeight: 66, paddingLeft: 15, paddingRight: 11, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.border, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  rowDetails: { flex: 1, minHeight: 66, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  settingRow: { minHeight: 66, paddingLeft: 16, paddingRight: 12, borderBottomWidth: 1, borderBottomColor: LUCY_COLORS.divider, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  rowDetails: { flex: 1, minHeight: 66, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 9 },
   flex: { flex: 1 },
   cardTitle: { color: LUCY_COLORS.textDark, fontSize: 15, fontWeight: '700' },
-  settingValue: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 4 },
+  settingValue: { color: LUCY_COLORS.textMuted, fontSize: 12.5, marginTop: 4, lineHeight: 17 },
   detail: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21 },
   hint: { color: LUCY_COLORS.textSubtle, fontSize: 12, lineHeight: 18, marginBottom: 12 },
   fieldLabel: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, marginTop: 12 },
-  profileInput: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 12, padding: 12, color: LUCY_COLORS.textDark, fontSize: 15 },
+  profileInput: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 14, padding: 13, color: LUCY_COLORS.textDark, fontSize: 15 },
   profileInputMulti: { minHeight: 80, textAlignVertical: 'top' },
   keyLabel: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700' },
   activity: { color: LUCY_COLORS.textDark, fontSize: 14, lineHeight: 20, fontWeight: '600' },
-  failure: { color: '#FDA4AF', fontSize: 12, lineHeight: 18 },
-  statusPill: { borderRadius: 15, backgroundColor: LUCY_COLORS.surface, paddingHorizontal: 9, paddingVertical: 6 },
-  statusPillActive: { backgroundColor: LUCY_COLORS.primarySoft },
-  statusText: { color: LUCY_COLORS.textMuted, fontWeight: '700', fontSize: 11 },
-  statusTextActive: { color: LUCY_COLORS.primaryGlow },
-  rowAction: { borderRadius: 14, backgroundColor: LUCY_COLORS.primarySoft, paddingHorizontal: 12, paddingVertical: 8 },
-  rowActionText: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 12 },
-  rowActionDestructive: { backgroundColor: 'rgba(251,113,133,0.12)' },
-  rowActionTextDestructive: { color: '#FB7185' },
+  failure: { color: LUCY_COLORS.error, fontSize: 12, lineHeight: 18 },
+  statusPill: { borderRadius: 999, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingHorizontal: 10, paddingVertical: 5 },
+  statusPillActive: { backgroundColor: LUCY_COLORS.primarySoft, borderColor: 'transparent' },
+  statusText: { color: LUCY_COLORS.textSubtle, fontWeight: '800', fontSize: 11 },
+  statusTextActive: { color: LUCY_COLORS.primary },
+  rowAction: { borderRadius: 12, backgroundColor: LUCY_COLORS.primary + '1F', paddingHorizontal: 13, paddingVertical: 8 },
+  rowActionText: { color: LUCY_COLORS.primary, fontWeight: '800', fontSize: 12 },
+  rowActionDestructive: { backgroundColor: LUCY_COLORS.error + '1F' },
+  rowActionTextDestructive: { color: LUCY_COLORS.error },
   infoButton: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, justifyContent: 'center', alignItems: 'center' },
-  infoText: { color: LUCY_COLORS.textMuted, fontSize: 15, fontWeight: '700', fontStyle: 'italic' },
-  button: { borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, alignItems: 'center', paddingVertical: 13 },
-  buttonPrimary: { backgroundColor: LUCY_COLORS.primary, borderColor: LUCY_COLORS.primary },
-  buttonLabel: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 14 },
+  infoText: { color: LUCY_COLORS.textSubtle, fontSize: 15, fontWeight: '700', fontStyle: 'italic' },
+  button: { borderRadius: 14, backgroundColor: LUCY_COLORS.primary + '14', alignItems: 'center', paddingVertical: 14 },
+  buttonPrimary: { backgroundColor: LUCY_COLORS.primary },
+  buttonLabel: { color: LUCY_COLORS.primary, fontWeight: '800', fontSize: 14 },
   buttonLabelPrimary: { color: LUCY_COLORS.white },
   dim: { opacity: 0.55 },
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  scrim: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(3, 8, 10, 0.68)' },
-  sheet: { maxHeight: '80%', backgroundColor: LUCY_COLORS.surfaceRaised, borderTopLeftRadius: 25, borderTopRightRadius: 25, borderWidth: 1, borderColor: LUCY_COLORS.border, padding: 19 },
+  scrim: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(20,22,40,0.40)' },
+  sheet: { maxHeight: '85%', backgroundColor: LUCY_COLORS.surfaceSheet, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 19, ...LUCY_SHADOWS.lg },
+  sheetGrip: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.border, marginBottom: 12 },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, gap: 10 },
-  sheetTitle: { flex: 1, color: LUCY_COLORS.textDark, fontSize: 19, fontWeight: '700' },
-  closeButton: { paddingVertical: 7, paddingHorizontal: 11, borderRadius: 13, backgroundColor: LUCY_COLORS.surface },
-  closeText: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '700' },
+  sheetTitle: { flex: 1, color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '900', letterSpacing: -0.3 },
+  closeButton: { paddingVertical: 7, paddingHorizontal: 13, borderRadius: 999, backgroundColor: LUCY_COLORS.surfaceRaised },
+  closeText: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '800' },
   sheetContent: { gap: 12, paddingBottom: 8 },
   metrics: { flexDirection: 'row', gap: 7 },
-  metric: { flex: 1, backgroundColor: LUCY_COLORS.surface, borderRadius: 13, paddingVertical: 11, alignItems: 'center' },
-  metricValue: { color: LUCY_COLORS.textDark, fontSize: 18, fontWeight: '700' },
-  metricLabel: { color: LUCY_COLORS.textMuted, fontSize: 10, fontWeight: '600', marginTop: 4 },
-  warm: { color: LUCY_COLORS.primaryGlow },
+  metric: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: LUCY_COLORS.border },
+  metricValue: { color: LUCY_COLORS.textDark, fontSize: 18, fontWeight: '800' },
+  metricLabel: { color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '700', marginTop: 4 },
+  warm: { color: LUCY_COLORS.warning },
   benchmarkRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', paddingVertical: 4 },
   benchmarkTitle: { color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '700', marginBottom: 3 },
   benchmarkStatus: { fontSize: 12, fontWeight: '700', paddingTop: 2 },
   pass: { color: LUCY_COLORS.success },
   fail: { color: LUCY_COLORS.error },
-  modelOption: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 11, borderRadius: 13, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  modelOption: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13, borderRadius: 14, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border },
   modelOptionSelected: { borderColor: LUCY_COLORS.primary, backgroundColor: LUCY_COLORS.primarySoft },
   modelName: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '700', marginBottom: 3 },
-  modelChoice: { color: LUCY_COLORS.primaryGlow, fontSize: 12, fontWeight: '700' },
-  keyInput: { borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, color: LUCY_COLORS.textDark, backgroundColor: LUCY_COLORS.surface, paddingHorizontal: 13, paddingVertical: 12, fontSize: 14 },
+  modelChoice: { color: LUCY_COLORS.primary, fontSize: 12, fontWeight: '800' },
+  keyInput: { borderRadius: 14, borderWidth: 1, borderColor: LUCY_COLORS.border, color: LUCY_COLORS.textDark, backgroundColor: LUCY_COLORS.surfaceRaised, paddingHorizontal: 14, paddingVertical: 13, fontSize: 14 },
 
   // ─── Intelligence & models ──────────────────────────────────────────────
   intelBlock: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
@@ -1926,7 +1928,7 @@ const styles = StyleSheet.create({
   keySaveText: { color: LUCY_COLORS.white, fontWeight: '800', fontSize: 13 },
 
   // ─── Role model picker (centered fade dialog) ───────────────────────────
-  pickerScrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  pickerScrim: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   pickerCard: { width: '100%', maxWidth: 420, backgroundColor: LUCY_COLORS.surfaceElevated, borderRadius: 24, padding: 18, borderWidth: 1, borderColor: LUCY_COLORS.border, ...LUCY_SHADOWS.lg },
   pickerEyebrow: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
   pickerTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '900', letterSpacing: -0.3, marginTop: 4 },

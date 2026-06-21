@@ -12,7 +12,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
+import { RADIUS } from '../components/ui';
 import { LucyEmptyState } from '../components/LucyEmptyState';
 import { CollapsibleSection } from '../components/CollapsibleSection';
 import { FadeInUp, PressableScale, Stagger } from '../components/Motion';
@@ -268,10 +269,10 @@ export function AskScreen({ initialQuestion }: { initialQuestion?: string } = {}
               <Text style={styles.actionText}>History</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.actionButton, view === 'insights' && { backgroundColor: 'rgba(255,140,66,0.15)' }]}
+              style={[styles.actionButton, view === 'insights' && styles.actionButtonActive]}
               onPress={() => { setView('insights'); void loadInsights(); }}
             >
-              <Text style={[styles.actionText, view === 'insights' && { color: '#FF8C42' }]}>✦ Insights</Text>
+              <Text style={[styles.actionText, view === 'insights' && styles.actionTextActive]}>✦ Insights</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -379,12 +380,12 @@ export function AskScreen({ initialQuestion }: { initialQuestion?: string } = {}
 }
 
 const CATEGORY_META: Record<string, { color: string; icon: string; label: string }> = {
-  habits:        { color: '#FF8C42', icon: '◈', label: 'Habit' },
-  relationships: { color: '#60A5FA', icon: '◉', label: 'People' },
-  progress:      { color: '#4ADE80', icon: '▲', label: 'Progress' },
-  wellbeing:     { color: '#F472B6', icon: '♡', label: 'Health' },
-  memory:        { color: '#FFA05C', icon: '⟳', label: 'Memory' },
-  device:        { color: '#A78BFA', icon: '⌘', label: 'Device' },
+  habits:        { color: LUCY_COLORS.gold,    icon: '◈', label: 'Habit' },
+  relationships: { color: LUCY_COLORS.info,    icon: '◉', label: 'People' },
+  progress:      { color: LUCY_COLORS.success, icon: '▲', label: 'Progress' },
+  wellbeing:     { color: LUCY_COLORS.rose,    icon: '♡', label: 'Health' },
+  memory:        { color: LUCY_COLORS.primary, icon: '⟳', label: 'Memory' },
+  device:        { color: LUCY_COLORS.violet,  icon: '⌘', label: 'Device' },
 };
 
 function InsightCard({
@@ -589,20 +590,21 @@ const icStyles = StyleSheet.create({
     textTransform: 'uppercase', marginBottom: 10, marginTop: 4,
   },
   card: {
-    backgroundColor: LUCY_COLORS.surfaceRaised,
-    borderRadius: 18,
+    backgroundColor: LUCY_COLORS.surface,
+    borderRadius: RADIUS.card,
     borderLeftWidth: 3,
     marginBottom: 12,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: LUCY_COLORS.border,
+    ...LUCY_SHADOWS.md,
   },
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     padding: 16,
   },
   iconBadge: {
-    width: 36, height: 36, borderRadius: 10,
+    width: 40, height: 40, borderRadius: 20,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   icon: { fontSize: 17, fontWeight: '800' },
@@ -915,16 +917,18 @@ const styles = StyleSheet.create({
   headingActions: { flexDirection: 'row', gap: 7 },
   title: { fontSize: 30, letterSpacing: -0.8, fontWeight: '700', color: LUCY_COLORS.textDark },
   subtitle: { color: LUCY_COLORS.textMuted, fontSize: 14, marginTop: 4 },
-  actionButton: { borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 17, paddingVertical: 8, paddingHorizontal: 12 },
-  actionText: { color: LUCY_COLORS.primaryGlow, fontWeight: '700', fontSize: 12 },
+  actionButton: { borderWidth: 1, borderColor: LUCY_COLORS.border, backgroundColor: LUCY_COLORS.surface, borderRadius: 17, paddingVertical: 8, paddingHorizontal: 12 },
+  actionButtonActive: { backgroundColor: LUCY_COLORS.primarySoft, borderColor: LUCY_COLORS.primaryLine },
+  actionText: { color: LUCY_COLORS.primary, fontWeight: '800', fontSize: 12 },
+  actionTextActive: { color: LUCY_COLORS.primary },
   conversation: { flex: 1 },
   thread: { paddingBottom: 12, gap: 10 },
   bubble: { maxWidth: '94%', padding: 14, borderRadius: 19, borderWidth: 1 },
-  lucyBubble: { alignSelf: 'flex-start', backgroundColor: LUCY_COLORS.surfaceRaised, borderColor: LUCY_COLORS.border, borderBottomLeftRadius: 5 },
-  userBubble: { alignSelf: 'flex-end', backgroundColor: LUCY_COLORS.primarySoft, borderColor: '#62311C', borderBottomRightRadius: 5 },
+  lucyBubble: { alignSelf: 'flex-start', backgroundColor: LUCY_COLORS.surface, borderColor: LUCY_COLORS.border, borderBottomLeftRadius: 5, ...LUCY_SHADOWS.sm },
+  userBubble: { alignSelf: 'flex-end', backgroundColor: LUCY_COLORS.primarySoft, borderColor: LUCY_COLORS.primaryLine, borderBottomRightRadius: 5 },
   lucyText: { color: LUCY_COLORS.textDark, fontSize: 14, lineHeight: 20 },
   userText: { color: LUCY_COLORS.textDark, fontSize: 14, lineHeight: 20 },
-  suggestion: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderTopColor: '#3A3028', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, marginTop: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.18, shadowRadius: 3, elevation: 2 },
+  suggestion: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, marginTop: 2, ...LUCY_SHADOWS.sm },
   suggestionLabel: { color: LUCY_COLORS.primaryGlow, fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 7 },
   suggestionText: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 19 },
   thinking: { color: LUCY_COLORS.textMuted, fontSize: 14 },
@@ -934,12 +938,12 @@ const styles = StyleSheet.create({
   tipList: { gap: 8, marginBottom: 12 },
   tipItem: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 20, paddingLeft: 4 },
   tipHint: { color: LUCY_COLORS.textSubtle, fontSize: 12, lineHeight: 18, fontStyle: 'italic' },
-  actionConfirmCard: { margin: 16, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,140,66,0.3)', padding: 20, gap: 12 },
+  actionConfirmCard: { margin: 16, backgroundColor: LUCY_COLORS.surface, borderRadius: 20, borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, padding: 20, gap: 12, ...LUCY_SHADOWS.md },
   actionConfirmLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, color: LUCY_COLORS.primary, textTransform: 'uppercase' },
   actionConfirmTitle: { fontSize: 18, fontWeight: '800', color: LUCY_COLORS.textDark, lineHeight: 25 },
   actionConfirmButtons: { flexDirection: 'row', gap: 10, marginTop: 4 },
   actionConfirmBtn: { flex: 2, backgroundColor: LUCY_COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
-  actionConfirmBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  actionConfirmBtnText: { color: LUCY_COLORS.white, fontSize: 15, fontWeight: '700' },
   actionCancelBtn: { flex: 1, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   actionCancelText: { color: LUCY_COLORS.textMuted, fontSize: 15, fontWeight: '600' },
   insightsHeader: { marginBottom: 16 },
@@ -963,7 +967,7 @@ const styles = StyleSheet.create({
   planBullet: { color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '800' },
   planText: { color: LUCY_COLORS.textDark, fontSize: 14, flex: 1, lineHeight: 20 },
   planApplyBtn: { backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 8 },
-  planApplyText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  planApplyText: { color: LUCY_COLORS.white, fontSize: 14, fontWeight: '700' },
   planDone: { color: LUCY_COLORS.success, fontSize: 13, fontWeight: '700', marginTop: 8, lineHeight: 19 },
   sourcesSection: { borderTopWidth: 1, borderTopColor: LUCY_COLORS.divider, marginTop: 4, paddingTop: 12, gap: 6 },
   sourcesLabel: { color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 },
@@ -981,7 +985,7 @@ const styles = StyleSheet.create({
   sourceTitle: { color: LUCY_COLORS.textDark, fontSize: 13, lineHeight: 19, fontWeight: '700' },
   sourceAction: { color: LUCY_COLORS.textMuted, fontSize: 12, lineHeight: 18, marginTop: 6 },
   signal: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 12, lineHeight: 18 },
-  historyCard: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 17, padding: 14, gap: 8 },
+  historyCard: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 17, padding: 14, gap: 8, ...LUCY_SHADOWS.sm },
   historyTitle: { color: LUCY_COLORS.textDark, fontSize: 15, lineHeight: 21, fontWeight: '600' },
   historyMeta: { color: LUCY_COLORS.textMuted, fontSize: 12 },
   emptyHistory: { color: LUCY_COLORS.textMuted, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 16, padding: 16 },

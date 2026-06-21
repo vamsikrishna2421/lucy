@@ -94,6 +94,70 @@ export const LUCY_SHADOWS = {
   },
 } as const;
 
+// ─── Depth & light layer (P5 Visual Craft — additive) ───────────────────────────────────────────
+// A signature warm AMBER glow for "Lucy moments" (orb halo, hero wash) + an elevation/translucency
+// system distinct from flat Material. These are NEW tokens; no existing key changes, so every current
+// consumer is untouched. Use `withAlpha`/`amberGlow`/`amberWash`/`LUCY_ELEVATION` from the craft layer.
+
+/** Lucy's protected brand amber (matches the orb). Exempt from "accent = meaning only". */
+export const LUCY_AMBER = '#FAB23A' as const;
+/** A lighter amber for the outer halo / highlight edge. */
+export const LUCY_AMBER_SOFT = '#FFD78A' as const;
+/** A deeper amber for the warm evening end of a wash gradient. */
+export const LUCY_AMBER_DEEP = '#F2864A' as const;
+
+/** Compose an rgba/#RRGGBBAA string from a base hex + 0..1 alpha (RN-safe 8-digit hex). */
+export function withAlpha(hex: string, alpha: number): string {
+  const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255)
+    .toString(16)
+    .padStart(2, '0');
+  return `${hex}${a}`;
+}
+
+/**
+ * The amber GLOW ramp for an orb halo — three concentric translucencies (inner → mid → outer). Stack as
+ * radial-feeling layers behind the orb (RN has no radial gradient without a dep, so we layer circles).
+ */
+export const amberGlow = (intensity = 1) => ({
+  inner: withAlpha(LUCY_AMBER, 0.5 * intensity),
+  mid: withAlpha(LUCY_AMBER_SOFT, 0.32 * intensity),
+  outer: withAlpha(LUCY_AMBER_SOFT, 0.12 * intensity),
+});
+
+/**
+ * A time-of-day ambient WASH for the hero — soft amber tints from top → bottom. Layer these as stacked
+ * translucent bands (no gradient dep needed). Phase shifts the warmth (morning bright → night dim).
+ */
+export const amberWash = (phase: 'morning' | 'day' | 'evening' | 'night' = 'day') => {
+  const base: Record<typeof phase, { top: string; mid: string; bottom: string }> = {
+    morning: { top: withAlpha('#FFB064', 0.16), mid: withAlpha(LUCY_AMBER_SOFT, 0.08), bottom: withAlpha(LUCY_COLORS.surface, 0) },
+    day:     { top: withAlpha(LUCY_AMBER, 0.14),  mid: withAlpha(LUCY_AMBER_SOFT, 0.07), bottom: withAlpha(LUCY_COLORS.surface, 0) },
+    evening: { top: withAlpha(LUCY_AMBER_DEEP, 0.16), mid: withAlpha('#FFB07A', 0.08), bottom: withAlpha(LUCY_COLORS.surface, 0) },
+    night:   { top: withAlpha('#C98A4E', 0.12), mid: withAlpha('#E9BE86', 0.06), bottom: withAlpha(LUCY_COLORS.surface, 0) },
+  };
+  return base[phase];
+};
+
+/**
+ * Elevation / translucency tokens — a layered glass system distinct from flat Material fills. Overlay
+ * scrims for sheets/modals, a frosted panel tint, and a hairline edge highlight that sells depth on the
+ * light theme. Pair with the existing LUCY_SHADOWS for the cast shadow.
+ */
+export const LUCY_ELEVATION = {
+  /** Dim scrim behind a modal/sheet (tap-to-dismiss backdrop). */
+  scrim: withAlpha('#15161B', 0.32),
+  /** A lighter scrim for transient popovers / peek. */
+  scrimSoft: withAlpha('#15161B', 0.18),
+  /** Frosted translucent panel fill (overlays floating above content). */
+  glass: withAlpha('#FFFFFF', 0.72),
+  /** A warmer frosted fill for Lucy-moment overlays (amber-tinted glass). */
+  glassWarm: withAlpha('#FFF8EC', 0.78),
+  /** Top edge highlight (a 1px inner light line that lifts a surface off the bg). */
+  edgeHighlight: withAlpha('#FFFFFF', 0.6),
+  /** Bottom/contact shade for a subtle pressed/recessed feel. */
+  contactShade: withAlpha('#1A1B2E', 0.06),
+} as const;
+
 export type ColorKey = keyof typeof LUCY_COLORS;
 export type ShadowKey = keyof typeof LUCY_SHADOWS;
 

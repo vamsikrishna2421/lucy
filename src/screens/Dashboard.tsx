@@ -2722,61 +2722,10 @@ function TimelineView({
           <Text style={styles.imageViewerHint}>Tap to close · original photo</Text>
         </Pressable>
       </Modal>
-      {/* Quick capture bar */}
-      <View style={styles.tlQuickBar}>
-        <TextInput
-          style={styles.tlQuickInput}
-          placeholder="Capture a thought..."
-          placeholderTextColor={LUCY_COLORS.textSubtle}
-          value={quickAck || quickText}
-          onChangeText={setQuickText}
-          editable={!quickAck}
-          returnKeyType="send"
-          onSubmitEditing={() => void sendQuick()}
-          blurOnSubmit={false}
-        />
-        {/* Snap an image — receipt (expense) or any note/document → stored as memory */}
-        <TouchableOpacity
-          style={styles.tlReceiptBtn}
-          onPress={() => {
-            Alert.alert('Snap an image', 'What are you capturing?', [
-              {
-                text: '🧾 Receipt (expense)',
-                onPress: async () => {
-                  const { scanReceiptToText } = await import('../processing/receiptScan');
-                  const scanned = await scanReceiptToText();
-                  if (scanned) { setQuickText(scanned.text); pendingReceiptImage.current = scanned.imagePath; }
-                },
-              },
-              {
-                text: '📝 Note / document / image',
-                onPress: async () => {
-                  const { getModelKeyStatus, modelKeyMissingMessage } = await import('../ai/provider');
-                  const status = await getModelKeyStatus();
-                  if (status.remote && !status.keyPresent) { setConfirmSheet({ title: 'Add your API key', message: modelKeyMissingMessage(status), actions: [{ label: 'Got it', style: 'primary' }], cancelLabel: null }); return; }
-                  const { snapImageToMemory } = await import('../processing/imageCapture');
-                  try {
-                    const ok = await snapImageToMemory(setReadingImage);
-                    if (ok) onQueued?.();
-                  } finally {
-                    setReadingImage(false);
-                  }
-                },
-              },
-              { text: 'Cancel', style: 'cancel' },
-            ]);
-          }}
-        >
-          <Ionicons name="camera-outline" size={18} color={LUCY_COLORS.textMuted} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tlQuickSend, (!quickText.trim() || quickSending) && { opacity: 0.4 }]}
-          onPress={() => void sendQuick()}
-          disabled={!quickText.trim() || quickSending}
-        >
-          <Text style={styles.tlQuickSendText}>{quickSending ? '...' : '→'}</Text>
-        </TouchableOpacity>
-      </View>
+      {/* The in-body "Capture a thought…" quick bar was removed here — capture is now GLOBAL via the
+          persistent bottom CaptureBar (App.tsx), so it no longer needs to live inside the Timeline.
+          The "Search timeline…" filter below stays (it's the scoped in-list filter, distinct from the
+          omnipresent global search in the header). */}
       <View style={styles.searchBar}>
         <TextInput
           style={styles.searchInput}

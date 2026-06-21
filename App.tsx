@@ -40,6 +40,8 @@ import { AlarmOverlay } from './src/components/AlarmOverlay';
 import { ApprovalInbox } from './src/components/ApprovalInbox';
 import { LucyPeek } from './src/components/LucyPeek';
 import { ScreenFade } from './src/components/Motion';
+import { CaptureBar } from './src/components/CaptureBar';
+import { GlobalSearch, type SearchResult } from './src/components/GlobalSearch';
 import { wakeWord, type WakeWordStatus } from './src/voice/wakeWord';
 import { conversation, type ConvoState } from './src/voice/conversation';
 
@@ -107,6 +109,7 @@ export default function App() {
   const [askInitialQuestion, setAskInitialQuestion] = useState<string | undefined>(undefined);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [onboardingVisible, setOnboardingVisible] = useState(false);
+  const [searchVisible, setSearchVisible] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const shareToastAnim = useRef(new Animated.Value(0)).current;
@@ -890,6 +893,18 @@ export default function App() {
                   so it stays in the same fixed spot on every screen and the pills stay clear. */}
             </View>
           </View>
+          {/* Omnipresent global search (P2) — pinned top-right, left of the bell. Opens the
+              cross-feature search sheet on every screen; distinct from Timeline's filter chips. */}
+          <TouchableOpacity
+            style={styles.searchBtn}
+            activeOpacity={0.7}
+            onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setSearchVisible(true); }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Search everything"
+          >
+            <Ionicons name="search" size={21} color={LUCY_COLORS.textMuted} />
+          </TouchableOpacity>
           {/* Notifications + insights live behind this bell, pinned top-right. Tapping Lucy's face
               opens the conversation instead; the two entry points are now distinct. */}
           <TouchableOpacity
@@ -975,6 +990,21 @@ export default function App() {
             </>
           ) : null}
         </View>
+        {/* Persistent thumb-zone CAPTURE BAR (P4) — sits directly above the bottom nav, in the order
+            header → content → CaptureBar → bottomNav → safe-area. Wired to the SAME capture path the
+            Tasks screen uses (enqueueTranscript → drainQueue), so extraction isn't reinvented. Hidden
+            while typing in the Tasks composer / settings keyboard isn't needed; we keep it global. */}
+        {ready ? (
+          <CaptureBar
+            placeholder="Capture a thought…"
+            onSnap={quickSnap}
+            onCapture={async (t) => {
+              await enqueueTranscript(t, Platform.OS === 'ios' ? 'ios' : 'android');
+              setRefreshToken((value) => value + 1);
+              void drainQueue();
+            }}
+          />
+        ) : null}
         <View style={styles.bottomNav}>
           {/* Home */}
           <TouchableOpacity
@@ -1147,6 +1177,15 @@ export default function App() {
           void getDatabase().then((db) => getTotalUnreadCount(db)).then(setUnreadNotifCount).catch(() => {});
         }}
       />
+      <GlobalSearch
+        visible={searchVisible}
+        onClose={() => setSearchVisible(false)}
+        onOpenResult={(_r: SearchResult) => {
+          // Land the user on the Timeline (the canonical memory river) where the item lives. As more
+          // sources are added, this can route per result.source to each canonical home.
+          goToDashView('Timeline');
+        }}
+      />
       <ConversationModal
         visible={convoOpen}
         context={currentVoiceContext()}
@@ -1184,9 +1223,9 @@ const styles = StyleSheet.create({
   brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 42, position: 'relative' },
   logoWrap: { position: 'relative', alignSelf: 'flex-start', marginTop: 8, paddingLeft: 2 },
   logoStar: { position: 'absolute', top: -8, right: -14, color: LUCY_COLORS.primary, fontSize: 14, fontWeight: '800', textShadowColor: 'rgba(92,80,220,0.45)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
-  headerPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 48 },
+  headerPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 92 },
   globalFace: { position: 'absolute', right: 16, top: 118, zIndex: 30, elevation: 30, alignItems: 'flex-end' },
-  cameraFab: { position: 'absolute', right: 18, bottom: 104, width: 52, height: 52, borderRadius: 26, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center', zIndex: 40, ...LUCY_SHADOWS.glow },
+  cameraFab: { position: 'absolute', right: 18, bottom: 172, width: 52, height: 52, borderRadius: 26, backgroundColor: LUCY_COLORS.primary, alignItems: 'center', justifyContent: 'center', zIndex: 40, ...LUCY_SHADOWS.glow },
   updateOverlay: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', alignItems: 'center', justifyContent: 'center', padding: 30 },
   // overflow visible + extra top room so the peeking Lucy (who grips the top edge) isn't clipped.
   updateCard: { width: '100%', maxWidth: 360, backgroundColor: LUCY_COLORS.surface, borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingTop: 34, paddingHorizontal: 26, paddingBottom: 26, alignItems: 'center', overflow: 'visible', ...LUCY_SHADOWS.lg },
@@ -1247,6 +1286,7 @@ const styles = StyleSheet.create({
   // Notifications bell — pinned to the top-right of the header, sitting in the reserved gap
   // (headerPillRow has paddingRight: 48) so it never overlaps the Meeting/Listen pills.
   bellBtn: { position: 'absolute', top: 8, right: 0, width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+  searchBtn: { position: 'absolute', top: 8, right: 44, width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
   bellBadge: { position: 'absolute', top: 6, right: 4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: LUCY_COLORS.primary, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: LUCY_COLORS.background },
   bellBadgeText: { color: LUCY_COLORS.white, fontSize: 9, fontWeight: '800' },
   listenPill: { minHeight: 34, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 17, backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, flexDirection: 'row', alignItems: 'center', gap: 6 },

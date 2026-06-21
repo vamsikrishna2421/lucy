@@ -66,7 +66,7 @@ interface MoneyGoalsProps {
 }
 
 // ─── Pace state → color (color = meaning, per the brief + design system) ────────
-// done = success green · on track = primary amber · behind = rose · no deadline = calm neutral.
+// done = success green · on track = primary indigo · behind = error · no deadline = calm neutral.
 type PaceState = 'done' | 'onTrack' | 'behind' | 'neutral';
 
 function paceState(p: GoalProgress): PaceState {
@@ -619,7 +619,7 @@ const styles = StyleSheet.create({
 
   // Suggested-goal banner (propose & confirm) — soft primary-tinted, sits above the list
   suggestBox: {
-    backgroundColor: 'rgba(255,140,66,0.10)',
+    backgroundColor: LUCY_COLORS.primarySoft,
     borderWidth: 1,
     borderColor: LUCY_COLORS.primaryLine,
     borderRadius: 16,
@@ -647,7 +647,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
-  cardDone: { backgroundColor: 'rgba(74,222,128,0.06)' },
+  cardDone: { backgroundColor: LUCY_COLORS.success + '12' },
   cardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 11 },
   dot: { width: 12, height: 12, borderRadius: 6, marginTop: 3, shadowOpacity: 0.5, shadowRadius: 7, shadowOffset: { width: 0, height: 0 } },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
   pctChipT: { fontWeight: '900', fontSize: 12 },
   metaChip: { backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
   metaChipT: { color: LUCY_COLORS.textMuted, fontWeight: '700', fontSize: 11.5 },
-  metaChipWarn: { backgroundColor: 'rgba(251,113,133,0.10)', borderColor: 'rgba(251,113,133,0.4)' },
+  metaChipWarn: { backgroundColor: LUCY_COLORS.error + '1A', borderColor: LUCY_COLORS.error + '66' },
   metaChipWarnT: { color: LUCY_COLORS.error },
 
   // Progress bar
@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
   emptyCtaT: { color: '#fff', fontWeight: '800', fontSize: 14 },
 
   // Sheets
-  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  modalBg: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: LUCY_COLORS.surfaceSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 34, borderTopWidth: 1, borderTopColor: LUCY_COLORS.border },
   grip: { width: 40, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.border, alignSelf: 'center', marginBottom: 14 },
   eyebrow: { color: LUCY_COLORS.primaryGlow, fontWeight: '900', fontSize: 11, letterSpacing: 1, marginBottom: 4 },

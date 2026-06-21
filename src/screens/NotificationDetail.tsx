@@ -1,5 +1,5 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 
 export type NotificationDetailPayload =
   | { kind: 'guardian'; entityNames: string[]; evidenceCount: number; message?: string }
@@ -125,7 +125,7 @@ export function NotificationDetailModal({ payload, onDismiss }: Props) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.78)',
+    backgroundColor: 'rgba(20,22,40,0.40)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -138,6 +138,7 @@ const styles = StyleSheet.create({
     borderColor: LUCY_COLORS.primarySoft,
     width: '100%',
     maxWidth: 380,
+    ...LUCY_SHADOWS.lg,
   },
   badge: {
     alignSelf: 'flex-start',

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text } from 'react-native';
+import { LUCY_COLORS } from '../config/colors';
 
 export function SplashAnimation({ fadeAnim, visible }: { fadeAnim: Animated.Value; visible: boolean }) {
   const scale     = useRef(new Animated.Value(0.82)).current;
@@ -37,7 +38,7 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#0F0E0B',
+    backgroundColor: LUCY_COLORS.background, // light lavender-gray splash
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 999,
@@ -46,16 +47,16 @@ const styles = StyleSheet.create({
     fontSize: 80,
     fontWeight: '900',
     letterSpacing: -4,
-    color: '#F5EFE6',
+    color: LUCY_COLORS.textDark, // crisp near-black wordmark on light
     lineHeight: 90,
   },
   lucyY: {
-    color: '#FF8C42',
+    color: LUCY_COLORS.gold, // the one warm amber accent survives the rebrand
   },
   tagline: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#8A7560',
+    color: LUCY_COLORS.textSubtle,
     letterSpacing: 2.5,
     textTransform: 'uppercase',
     marginTop: 12,

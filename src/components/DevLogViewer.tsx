@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 import { getDatabase } from '../db';
 import { clearDevLogs, listDevLogs, type DevLogRow } from '../db/devLog';
 
 const CATEGORY_COLOR: Record<string, string> = {
   extraction: LUCY_COLORS.primary,
-  ask: '#60A5FA',
-  whisper: '#A78BFA',
-  meeting: '#34D399',
-  error: '#FB7185',
+  ask: LUCY_COLORS.info,
+  whisper: LUCY_COLORS.violet,
+  meeting: LUCY_COLORS.teal,
+  error: LUCY_COLORS.error,
 };
 
 function formatMs(ms: number): string {
@@ -112,12 +112,12 @@ export function DevLogViewer({ visible, onClose }: { visible: boolean; onClose: 
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: LUCY_COLORS.border, maxHeight: '92%' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: LUCY_COLORS.border, maxHeight: '92%', ...LUCY_SHADOWS.lg },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 6 },
   title: { color: LUCY_COLORS.textDark, fontSize: 18, fontWeight: '800' },
   subtitle: { color: LUCY_COLORS.textSubtle, fontSize: 11, paddingHorizontal: 20, paddingBottom: 10 },
-  clearBtn: { color: '#FB7185', fontSize: 13, fontWeight: '700' },
+  clearBtn: { color: LUCY_COLORS.error, fontSize: 13, fontWeight: '700' },
   closeBtn: { color: LUCY_COLORS.primary, fontSize: 15, fontWeight: '700' },
   list: { paddingHorizontal: 16 },
   empty: { color: LUCY_COLORS.textSubtle, textAlign: 'center', padding: 32, fontSize: 13 },
@@ -128,7 +128,7 @@ const s = StyleSheet.create({
   model: { color: LUCY_COLORS.textSubtle, fontSize: 11 },
   meta: { color: LUCY_COLORS.textSubtle, fontSize: 10 },
   preview: { color: LUCY_COLORS.textMuted, fontSize: 12, lineHeight: 17 },
-  errorText: { color: '#FB7185', fontSize: 12, lineHeight: 17 },
+  errorText: { color: LUCY_COLORS.error, fontSize: 12, lineHeight: 17 },
   expanded: { marginTop: 8, backgroundColor: LUCY_COLORS.background, borderRadius: 8, padding: 10, gap: 2 },
   expandLabel: { color: LUCY_COLORS.textSubtle, fontSize: 9, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
   expandBody: { color: LUCY_COLORS.textMuted, fontSize: 11, lineHeight: 16 },

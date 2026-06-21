@@ -9,7 +9,7 @@ import {
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 import { getDatabase } from '../db';
 import { haptic } from '../config/haptics';
 import { generateWrapped, markWrappedShown, type WrappedSlide } from '../processing/lucyWrapped';
@@ -115,7 +115,7 @@ export function LucyWrapped({ visible, onClose }: { visible: boolean; onClose: (
 
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
-      <Pressable style={[styles.backdrop, current ? { backgroundColor: `${current.accent}18` } : {}]} onPress={advance}>
+      <Pressable style={[styles.backdrop, current ? { backgroundColor: `${current.accent}1F` } : {}]} onPress={advance}>
         {loading ? (
           <View style={styles.loading}>
             <Text style={{ color: LUCY_COLORS.primary, fontSize: 16, fontWeight: '700' }}>Building your Wrapped…</Text>
@@ -178,13 +178,13 @@ const WrappedShareCard = forwardRef<View, { slides: WrappedSlide[] }>(({ slides 
 WrappedShareCard.displayName = 'WrappedShareCard';
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: '#0C0B0980', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  backdrop: { flex: 1, backgroundColor: LUCY_COLORS.background, justifyContent: 'center', alignItems: 'center', padding: 24 },
   loading: { alignItems: 'center' },
   slide: {
     backgroundColor: LUCY_COLORS.surface, borderRadius: 28, padding: 32,
     width: '100%', maxWidth: 360, gap: 0,
     borderWidth: 1, borderColor: LUCY_COLORS.border,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.45, shadowRadius: 24, elevation: 16,
+    ...LUCY_SHADOWS.lg,
   },
   dots: { flexDirection: 'row', gap: 5, marginBottom: 32 },
   dot: { height: 3, flex: 1, borderRadius: 2, opacity: 0.3 },

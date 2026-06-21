@@ -8,6 +8,7 @@
  */
 
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { LUCY_COLORS } from '../config/colors';
 import { getSetting, setSetting } from '../db/settings';
 
 export interface WrappedSlide {
@@ -73,7 +74,7 @@ export async function generateWrapped(db: SQLiteDatabase): Promise<WrappedSlide[
       headline: quarterCaptures.toString(),
       sub: `thoughts captured this quarter`,
       detail: `${totalCaptures} total memories in your brain`,
-      accent: '#FF8C42',
+      accent: LUCY_COLORS.primary,
       emoji: '💭',
     });
   }
@@ -93,7 +94,7 @@ export async function generateWrapped(db: SQLiteDatabase): Promise<WrappedSlide[
       headline: completedTasks.toString(),
       sub: `tasks completed`,
       detail: `out of ${taskRow?.total ?? 0} captured this quarter`,
-      accent: '#4ADE80',
+      accent: LUCY_COLORS.success,
       emoji: '✅',
     });
   }
@@ -109,7 +110,7 @@ export async function generateWrapped(db: SQLiteDatabase): Promise<WrappedSlide[
       headline: personRow.name,
       sub: `most on your mind`,
       detail: `mentioned ${personRow.n} times in your captures`,
-      accent: '#60A5FA',
+      accent: LUCY_COLORS.info,
       emoji: '👥',
     });
   }
@@ -125,8 +126,8 @@ export async function generateWrapped(db: SQLiteDatabase): Promise<WrappedSlide[
     neutral: '😐', stressed: '😤', frustrated: '😤', negative: '😔',
   };
   const moodColor: Record<string, string> = {
-    positive: '#4ADE80', excited: '#FFA05C', calm: '#60A5FA',
-    stressed: '#F59E0B', frustrated: '#FB7185', negative: '#FB7185', neutral: '#8A7560',
+    positive: LUCY_COLORS.success, excited: LUCY_COLORS.gold, calm: LUCY_COLORS.info,
+    stressed: LUCY_COLORS.warning, frustrated: LUCY_COLORS.rose, negative: LUCY_COLORS.rose, neutral: LUCY_COLORS.textSubtle,
   };
   if (moodRow?.tone) {
     slides.push({
@@ -135,7 +136,7 @@ export async function generateWrapped(db: SQLiteDatabase): Promise<WrappedSlide[
       headline: moodRow.tone.charAt(0).toUpperCase() + moodRow.tone.slice(1),
       sub: `was your dominant mood`,
       detail: `${moodRow.n} captures with this tone`,
-      accent: moodColor[moodRow.tone] ?? '#8A7560',
+      accent: moodColor[moodRow.tone] ?? LUCY_COLORS.textSubtle,
       emoji: moodEmoji[moodRow.tone] ?? '😐',
     });
   }
@@ -168,7 +169,7 @@ export async function generateWrapped(db: SQLiteDatabase): Promise<WrappedSlide[
       headline: `${maxStreak}`,
       sub: `day capture streak`,
       detail: `Your longest unbroken run of daily captures`,
-      accent: '#C084FC',
+      accent: LUCY_COLORS.violet,
       emoji: '🔥',
     });
   }
@@ -187,7 +188,7 @@ export async function generateWrapped(db: SQLiteDatabase): Promise<WrappedSlide[
       headline: `$${expRow.total}`,
       sub: `spent on ${expRow.category}`,
       detail: `${expRow.cnt} expense entries captured`,
-      accent: '#F59E0B',
+      accent: LUCY_COLORS.gold,
       emoji: '💰',
     });
   }
@@ -204,7 +205,7 @@ export async function generateWrapped(db: SQLiteDatabase): Promise<WrappedSlide[
       headline: ideaCount.toString(),
       sub: `ideas worth building`,
       detail: `All stored privately in your second brain`,
-      accent: '#818CF8',
+      accent: LUCY_COLORS.primaryGlow,
       emoji: '💡',
     });
   }
@@ -216,7 +217,7 @@ export async function generateWrapped(db: SQLiteDatabase): Promise<WrappedSlide[
     headline: 'Still here.',
     sub: `Your second brain is growing stronger.`,
     detail: `${totalCaptures} memories. More to come.`,
-    accent: '#FF8C42',
+    accent: LUCY_COLORS.primary,
     emoji: '🧠',
   });
 

@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
   thumbPh: { fontSize: 32, opacity: 0.4 },
   bucketTag: { position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 10, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, overflow: 'hidden', maxWidth: '90%' },
   cardTitle: { color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '600', padding: 10 },
-  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalBg: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: LUCY_COLORS.surfaceSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '88%', borderTopWidth: 1, borderTopColor: LUCY_COLORS.border },
   close: { position: 'absolute', top: 12, right: 14, zIndex: 2, width: 32, height: 32, borderRadius: 16, backgroundColor: LUCY_COLORS.surfaceRaised, alignItems: 'center', justifyContent: 'center' },
   closeX: { color: LUCY_COLORS.textMuted, fontSize: 15 },

@@ -6,9 +6,9 @@ import type { PrivacyLevel } from '../types/extraction';
  * Privacy indicator \u2014 reads as "yours, private, safe" not "locked out".
  *
  * Design intent:
- *   private  \u2192 warm amber shield ring (5\u00D75 pt dot inside a 9\u00D79 ring) \u2014 your most
+ *   private  \u2192 indigo shield ring (5\u00D75 pt dot inside a 9\u00D79 ring) \u2014 your most
  *              sensitive memories. The ring evokes a soft shield without the alarm of a padlock.
- *   local    \u2192 single 5\u00D75 pt warm dot, no ring \u2014 on-device, nothing sent anywhere.
+ *   local    \u2192 single 5\u00D75 pt muted dot, no ring \u2014 on-device, nothing sent anywhere.
  *   normal   \u2192 nothing rendered (default; every memory is on-device anyway, so no
  *              badge is needed and absence avoids badge-blindness).
  *
@@ -38,9 +38,9 @@ export function PrivacyBadge({ level }: { level: PrivacyLevel }) {
   return null;
 }
 
-// Amber at ~40 % opacity for the ring so it is visible but not alarming.
-const RING_COLOR = 'rgba(255, 140, 66, 0.38)';
-const DOT_COLOR = LUCY_COLORS.primary; // full-opacity amber centre
+// Indigo at ~38% opacity for the ring so it is visible but not alarming.
+const RING_COLOR = LUCY_COLORS.primary + '61'; // ≈38% alpha
+const DOT_COLOR = LUCY_COLORS.primary; // full-opacity indigo centre
 
 const styles = StyleSheet.create({
   // Private: 9\u00D79 ring with a 5\u00D75 filled centre

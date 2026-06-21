@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 import { getDatabase } from '../db';
 import { getSetting, setSetting } from '../db/settings';
 import {
@@ -177,8 +177,8 @@ function TimeColumn({ label, value, options, format, onSelect }: {
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', flexDirection: 'column' },
-  sheet: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: LUCY_COLORS.border, padding: 20, paddingBottom: 32 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', flexDirection: 'column' },
+  sheet: { backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: LUCY_COLORS.border, padding: 20, paddingBottom: 32, ...LUCY_SHADOWS.lg },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: LUCY_COLORS.textDark, fontSize: 18, fontWeight: '800' },
   close: { color: LUCY_COLORS.primary, fontSize: 15, fontWeight: '700' },
@@ -192,7 +192,7 @@ const s = StyleSheet.create({
   empty: { color: LUCY_COLORS.textSubtle, fontSize: 13, paddingVertical: 16, textAlign: 'center' },
   timeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 13, paddingHorizontal: 14, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, marginBottom: 8 },
   timeText: { color: LUCY_COLORS.textDark, fontSize: 16, fontWeight: '700' },
-  removeBtn: { color: '#FB7185', fontSize: 16, fontWeight: '700' },
+  removeBtn: { color: LUCY_COLORS.error, fontSize: 16, fontWeight: '700' },
   addRow: { paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   addText: { color: LUCY_COLORS.primaryGlow, fontSize: 15, fontWeight: '700' },
   pickerWrap: { backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 14, padding: 14, marginTop: 8 },

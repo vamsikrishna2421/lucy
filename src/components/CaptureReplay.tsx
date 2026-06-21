@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 import type { ExtractionResult } from '../types/extraction';
 
 interface ReplayItem {
@@ -24,22 +24,22 @@ function buildReplayItems(extraction: ExtractionResult): ReplayItem[] {
     items.push({ icon: '✓', label: task.task, color: LUCY_COLORS.primary });
   }
   for (const expense of extraction.expenses.slice(0, 1)) {
-    items.push({ icon: '$', label: `${expense.amount} — ${expense.description}`, color: '#4ADE80' });
+    items.push({ icon: '$', label: `${expense.amount} — ${expense.description}`, color: LUCY_COLORS.success });
   }
   for (const person of extraction.people.slice(0, 2)) {
-    items.push({ icon: '◉', label: person, color: '#60A5FA' });
+    items.push({ icon: '◉', label: person, color: LUCY_COLORS.info });
   }
   for (const reminder of extraction.reminders.slice(0, 1)) {
-    items.push({ icon: '⏰', label: reminder.text, color: '#F59E0B' });
+    items.push({ icon: '⏰', label: reminder.text, color: LUCY_COLORS.warning });
   }
   for (const loop of extraction.open_loops.slice(0, 1)) {
     items.push({ icon: '↩', label: loop.description, color: LUCY_COLORS.textMuted });
   }
   for (const fu of extraction.follow_ups.slice(0, 1)) {
-    items.push({ icon: '→', label: `${fu.assignee}: ${fu.action}`, color: '#FFA05C' });
+    items.push({ icon: '→', label: `${fu.assignee}: ${fu.action}`, color: LUCY_COLORS.gold });
   }
   for (const decision of extraction.decisions.slice(0, 1)) {
-    items.push({ icon: '⚡', label: decision, color: '#A78BFA' });
+    items.push({ icon: '⚡', label: decision, color: LUCY_COLORS.violet });
   }
   return items.slice(0, 5); // max 5 items
 }
@@ -119,13 +119,14 @@ export function CaptureReplay({ extraction, onDismiss }: Props) {
 
 const styles = StyleSheet.create({
   backdrop: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',
+    flex: 1, backgroundColor: 'rgba(20,22,40,0.40)',
     justifyContent: 'flex-end', paddingBottom: 100,
   },
   card: {
     backgroundColor: LUCY_COLORS.surface,
     borderRadius: 24, borderWidth: 1, borderColor: LUCY_COLORS.border,
     marginHorizontal: 20, padding: 22, gap: 12,
+    ...LUCY_SHADOWS.lg,
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   pulseDot: {

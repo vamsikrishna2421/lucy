@@ -8,7 +8,7 @@ import {
   Animated, Easing, Modal, Pressable, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
 import { getDatabase } from '../db';
 import type { CaptureRow } from '../db/captures';
 
@@ -86,7 +86,7 @@ export function StoryView({
   const [loading, setLoading] = useState(false);
   const slideAnim = useRef(new Animated.Value(600)).current;
 
-  const accentColor = subject?.kind === 'person' ? '#60A5FA' : LUCY_COLORS.primary;
+  const accentColor = subject?.kind === 'person' ? LUCY_COLORS.info : LUCY_COLORS.primary;
 
   useEffect(() => {
     if (visible) {
@@ -164,15 +164,15 @@ export function StoryView({
                     </View>
                   ) : null}
                   {daysSince !== null ? (
-                    <View style={[styles.metaChip, { borderColor: daysSince > 14 ? '#FB7185' + '55' : `${accentColor}55` }]}>
-                      <Text style={[styles.metaChipText, { color: daysSince > 14 ? '#FB7185' : accentColor }]}>
+                    <View style={[styles.metaChip, { borderColor: daysSince > 14 ? LUCY_COLORS.error + '55' : `${accentColor}55` }]}>
+                      <Text style={[styles.metaChipText, { color: daysSince > 14 ? LUCY_COLORS.error : accentColor }]}>
                         {daysSince === 0 ? 'Today' : `${daysSince}d since last mention`}
                       </Text>
                     </View>
                   ) : null}
                   {subject.pendingFollowUps ? (
-                    <View style={[styles.metaChip, { borderColor: 'rgba(245,158,11,0.55)' }]}>
-                      <Text style={[styles.metaChipText, { color: '#F59E0B' }]}>
+                    <View style={[styles.metaChip, { borderColor: LUCY_COLORS.warning + '8C' }]}>
+                      <Text style={[styles.metaChipText, { color: LUCY_COLORS.warning }]}>
                         {subject.pendingFollowUps} follow-up{subject.pendingFollowUps !== 1 ? 's' : ''} pending
                       </Text>
                     </View>
@@ -222,11 +222,11 @@ export function StoryView({
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: LUCY_COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
     borderTopWidth: 1, borderColor: LUCY_COLORS.border, maxHeight: '92%',
-    shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.35, shadowRadius: 16, elevation: 12,
+    ...LUCY_SHADOWS.lg,
   },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: LUCY_COLORS.border, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
   header: { padding: 20, paddingTop: 12, flexDirection: 'row', alignItems: 'flex-start', borderBottomWidth: 1, gap: 12 },
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
   spineDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
   spineLine: { width: 2, flex: 1, marginTop: 4, marginBottom: -4 },
   // Entry card
-  entryCard: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: LUCY_COLORS.border, borderTopColor: '#3A3028', gap: 4 },
+  entryCard: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: LUCY_COLORS.border, borderTopColor: LUCY_COLORS.primaryLine, gap: 4 },
   entryAge: { color: LUCY_COLORS.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
   entryTitle: { color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '600', lineHeight: 20 },
   entryRaw: { color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 18, marginTop: 4 },

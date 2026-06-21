@@ -397,7 +397,7 @@ export function MeetingMode({ visible, onClose, onRecordingStarted, onSummaryRea
                       </Text>
                     )}
                     {summary.speakerNotes ? (
-                      <View style={{ marginTop: 12, backgroundColor: 'rgba(255,140,66,0.07)', borderRadius: 10, padding: 10 }}>
+                      <View style={{ marginTop: 12, backgroundColor: LUCY_COLORS.primaryMist, borderRadius: 10, padding: 10 }}>
                         <Text style={{ color: LUCY_COLORS.primary, fontSize: 10, fontWeight: '800', letterSpacing: 1, marginBottom: 4 }}>SPEAKER CONTEXT</Text>
                         <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, lineHeight: 20 }}>{summary.speakerNotes}</Text>
                       </View>
@@ -466,7 +466,7 @@ function SummarySection({ title, items }: { title: string; items: string[] }) {
 
 const styles = StyleSheet.create({
   kavWrap: { flex: 1 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(20,22,40,0.40)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: LUCY_COLORS.surface,
     borderTopLeftRadius: 24,

@@ -35,7 +35,10 @@ import { SegmentedControl, type SegmentOption } from '../components/SegmentedCon
 import { ActionSheet, Toast, type SheetAction } from '../components/ActionSheet';
 import { LucyEmptyState } from '../components/LucyEmptyState';
 import { CommitmentsSection } from '../components/CommitmentsSection';
-import { RADIUS } from '../components/ui';
+import { RADIUS, LucyHero, DistributionBar, TeaserCard, SwipeRow, DOMAIN_ACCENT, type DomainKey } from '../components/ui';
+import { typeStyle } from '../config/type';
+import { withAlpha } from '../config/colors';
+import { markTodoCompleted } from '../db/todos';
 
 const VIEW_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   'Timeline': 'time-outline',
@@ -191,13 +194,14 @@ function greetingForHour(hour: number): string {
   return 'Good evening';
 }
 
-export function DashboardScreen({ refreshToken, onAskAbout, requestedView, requestKey, onViewChange, initialAskQuestion }: {
+export function DashboardScreen({ refreshToken, onAskAbout, requestedView, requestKey, onViewChange, initialAskQuestion, onOpenConversation }: {
   refreshToken: number;
   onAskAbout?: (question: string) => void;
   requestedView?: ViewMode;
   requestKey?: number;
   onViewChange?: (v: ViewMode) => void;
   initialAskQuestion?: string;
+  onOpenConversation?: () => void;
 }) {
   const [view, setView] = useState<ViewMode>('Timeline');
   const [tab, setTab] = useState<LibraryTab>('Home');
@@ -294,26 +298,31 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
   const views: ViewMode[] = ['Timeline', 'Focus Now', 'Ask Lucy', 'Health'];
   const viewOptions: SegmentOption<ViewMode>[] = views.map((v) => ({ value: v, label: v, icon: VIEW_ICON[v] }));
 
-  // Lucy "speaks" — a warm, reactive two-part greeting that mirrors the day's state. The orb itself
-  // is the single global overlay (App.tsx) that sits in this hero's top-right, so the copy reads as
-  // her companion voice without seating a second orb here.
+  // Lucy "speaks" — a warm, reactive one-line greeting that mirrors the day's state. This line lives
+  // UNDER the living-orb hero (v3 P5): the orb is the emotional anchor, the line is her companion voice.
   const heroLine = pendingTodos.length
     ? `I'm holding ${pendingTodos.length} open task${pendingTodos.length === 1 ? '' : 's'} for you — tap Focus Now when you're ready.`
     : captures.length
       ? "You're all caught up. I'll keep watch and tidy things quietly."
       : 'Hold the mic or snap anything — I\'ll organize what matters.';
 
+  // Eyebrow = today's date in Lucy's warm display kicker; greeting folds the user's first name in.
+  const heroEyebrow = `${new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}`;
+  const greetingLine = `${greetingForHour(new Date().getHours())}${userName ? `, ${userName}` : ''}`;
+
   return (
     <View style={styles.container}>
-      <View style={styles.homeHero}>
-        <View style={styles.homeHeroGlow} />
-        <Text style={styles.todayDate}>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
-        <Text style={styles.title} numberOfLines={1}>{greetingForHour(new Date().getHours())}{userName ? `, ${userName}` : ''}</Text>
-        <Text style={styles.subtitle} numberOfLines={2}>{heroLine}</Text>
-      </View>
+      <LucyHero
+        state="idle"
+        eyebrow={heroEyebrow}
+        line={greetingLine}
+        unreadCount={contextRequests.length}
+        onPressOrb={onOpenConversation}
+        style={styles.hero}
+      />
       <SegmentedControl options={viewOptions} value={view} onChange={setView} style={styles.viewNav} />
       {view === 'Focus Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} stalenessReviews={stalenessReviews} contextBatch={contextBatch} onStalenessResolved={() => setContextRefresh((v) => v + 1)} /> : null}
-      {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} onAskAbout={onAskAbout} /> : null}
+      {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} pendingTodos={pendingTodos} reminders={reminders} expenses={expenses} heroSubline={heroLine} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} onAskAbout={onAskAbout} onGoFocus={() => setView('Focus Now')} /> : null}
       {view === 'Ask Lucy' ? <AskScreen initialQuestion={initialAskQuestion} /> : null}
       {view === 'Brain' ? <LibraryView tab={tab} setTab={setTab} todos={todos} ideas={ideas} expenses={expenses} /> : null}
       {view === 'Health' ? <HealthView /> : null}
@@ -2344,18 +2353,145 @@ function groupByDate(captures: CaptureRow[]): Array<{ dateLabel: string; dateKey
     }));
 }
 
+// ─── v3 media-river helpers ─────────────────────────────────────────────────────
+// Map a capture to a content-type-aware MediaCard `kind` + a per-domain accent, so the river reads as
+// media (photo / voice / doc / text) rather than a wall of gray rows. Source + note_type drive it.
+function kindForCapture(
+  item: CaptureRow,
+  noteType?: string,
+): { kind: 'photo' | 'voice' | 'doc' | 'place' | 'person' | 'text'; domain: DomainKey } {
+  if (item.source_image_path) return { kind: 'photo', domain: 'photo' };
+  if (item.source === 'voice' || item.source === 'passive') return { kind: 'voice', domain: 'voice' };
+  switch (noteType) {
+    case 'task':     return { kind: 'text', domain: 'task' };
+    case 'idea':     return { kind: 'text', domain: 'idea' };
+    case 'meeting':  return { kind: 'doc', domain: 'meeting' };
+    case 'reminder': return { kind: 'text', domain: 'idea' };
+    case 'resource': return { kind: 'doc', domain: 'doc' };
+    default:         return { kind: 'text', domain: 'note' };
+  }
+}
+
+/**
+ * WhatMattersCard — the ONE focal S-DECISION card on the Home landing. Leads with a single human
+ * one-line summary via DistributionBar ("3 things need you today"), expandable to a segmented viz; the
+ * top 2-3 actionable items render as SwipeRows with inline complete / snooze. Not a stack of blocks.
+ */
+function WhatMattersCard({
+  pendingTodos,
+  reminders,
+  fallbackLine,
+  onChanged,
+  onGoFocus,
+}: {
+  pendingTodos: TodoRow[];
+  reminders: ReminderRow[];
+  fallbackLine?: string;
+  onChanged: () => void;
+  onGoFocus?: () => void;
+}) {
+  const nowMs = Date.now();
+  const dueReminders = reminders.filter((r) => r.remind_at && new Date(r.remind_at).getTime() <= nowMs + 24 * 3600 * 1000);
+  const highTodos = pendingTodos.filter((t) => t.urgency === 'high');
+  const total = pendingTodos.length + dueReminders.length;
+
+  // Top 2-3 actionable items (high-urgency first), as SwipeRows.
+  const topItems = [...highTodos, ...pendingTodos.filter((t) => t.urgency !== 'high')].slice(0, 3);
+
+  const completeTodo = async (id: number) => {
+    try { const db = await getDatabase(); await markTodoCompleted(db, id); } catch { /* non-critical */ }
+    onChanged();
+  };
+  const snoozeTodo = async (id: number) => {
+    try { const db = await getDatabase(); await archiveTodo(db, id, 'snoozed from Home'); } catch { /* non-critical */ }
+    onChanged();
+  };
+
+  // Nothing actionable → a calm, warm caught-up state (still the focal card, never empty noise).
+  if (total === 0) {
+    return (
+      <View style={styles.focalCard}>
+        <Text style={[typeStyle('ui.eyebrow'), { color: LUCY_COLORS.primary }]}>WHAT MATTERS NOW</Text>
+        <Text style={[typeStyle('display.line'), { marginTop: 8 }]}>
+          {fallbackLine ?? "You're all caught up. I'll keep watch."}
+        </Text>
+      </View>
+    );
+  }
+
+  const summary =
+    `${total} thing${total === 1 ? '' : 's'} need${total === 1 ? 's' : ''} you${highTodos.length ? ` · ${highTodos.length} urgent` : ' today'}`;
+
+  const segments = [
+    { label: 'urgent', value: highTodos.length, color: LUCY_COLORS.error },
+    { label: 'tasks', value: pendingTodos.length - highTodos.length, color: LUCY_COLORS.primary },
+    { label: 'reminders', value: dueReminders.length, color: LUCY_COLORS.violet },
+  ].filter((s) => s.value > 0);
+
+  return (
+    <View style={styles.focalCard}>
+      <Text style={[typeStyle('ui.eyebrow'), { color: LUCY_COLORS.primary }]}>WHAT MATTERS NOW</Text>
+      <DistributionBar summary={summary} segments={segments} style={{ marginTop: 6 }} />
+
+      {topItems.length > 0 ? (
+        <View style={{ marginTop: 14, gap: 8 }}>
+          {topItems.map((t) => {
+            const urg = URGENCY_CONFIG[t.urgency as 'high' | 'medium' | 'low'] ?? URGENCY_CONFIG.low;
+            return (
+              <SwipeRow
+                key={t.id}
+                leftAction={{ icon: 'checkmark', label: 'Done', color: LUCY_COLORS.success, onAction: () => void completeTodo(t.id) }}
+                rightAction={{ icon: 'time-outline', label: 'Snooze', color: LUCY_COLORS.violet, onAction: () => void snoozeTodo(t.id) }}
+              >
+                <View style={styles.focalItem}>
+                  <View style={[styles.focalDot, { backgroundColor: urg.color }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={typeStyle('ui.subtitle')} numberOfLines={2}>{protectedPreview(t.task)}</Text>
+                    {t.category ? (
+                      <Text style={[typeStyle('ui.meta'), { textTransform: 'capitalize' }]} numberOfLines={1}>{t.category}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              </SwipeRow>
+            );
+          })}
+        </View>
+      ) : null}
+
+      <Pressable
+        onPress={onGoFocus}
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.focalFooter, pressed && { opacity: 0.6 }]}
+      >
+        <Text style={[typeStyle('ui.meta'), { color: LUCY_COLORS.primary, fontWeight: '800' }]}>Open Focus Now</Text>
+        <Ionicons name="arrow-forward" size={14} color={LUCY_COLORS.primary} />
+      </Pressable>
+    </View>
+  );
+}
+
 function TimelineView({
   captures,
   moodsByCapture,
+  pendingTodos = [],
+  reminders = [],
+  expenses = [],
+  heroSubline,
   onFeedback,
   onQueued,
   onAskAbout,
+  onGoFocus,
 }: {
   captures: CaptureRow[];
   moodsByCapture: Record<number, string>;
+  pendingTodos?: TodoRow[];
+  reminders?: ReminderRow[];
+  expenses?: ExpenseRow[];
+  heroSubline?: string;
   onFeedback: () => void;
   onQueued?: () => void;
   onAskAbout?: (question: string) => void;
+  onGoFocus?: () => void;
 }) {
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [feedbackTarget, setFeedbackTarget] = useState<CaptureRow | null>(null);
@@ -2656,9 +2792,55 @@ function TimelineView({
         ) : null}
       </View>
 
-      {/* stickyHeaderIndices={[0]} makes chips stick to top when scrolling.
-          Chips are always at index 0; when noteTypes is empty they have height:0 so they're invisible. */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} stickyHeaderIndices={Object.keys(noteTypes).length > 0 ? [0] : []}>
+      {/* Landing body: focal "what matters now" card + real-data teasers scroll above the river; the
+          filter chips (index 1) stay sticky to the top while the user browses. */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} stickyHeaderIndices={Object.keys(noteTypes).length > 0 ? [1] : []}>
+        {/* index 0 — focal S-DECISION card + discovery teasers (only on the unsearched, unfiltered landing) */}
+        <View>
+          {!searchResults && !noteTypeFilter ? (
+            <>
+              <WhatMattersCard
+                pendingTodos={pendingTodos}
+                reminders={reminders}
+                fallbackLine={heroSubline}
+                onChanged={onFeedback}
+                onGoFocus={onGoFocus}
+              />
+              {(() => {
+                // 1-2 read-only discovery teasers from REAL data (P3): money + latest photo/scan.
+                const teasers: React.ReactNode[] = [];
+                const recentSpend = expenses.slice(0, 1)[0];
+                if (recentSpend) {
+                  const amt = recentSpend.amount != null ? `$${recentSpend.amount}` : 'An expense';
+                  teasers.push(
+                    <TeaserCard
+                      key="money"
+                      icon="cash-outline"
+                      domain="money"
+                      title={`Lucy logged ${amt} → Money`}
+                      subtitle={recentSpend.description ? protectedPreview(recentSpend.description) : (recentSpend.category ?? 'Tap to review your spending')}
+                      onPress={() => onAskAbout?.('Show me my recent spending')}
+                    />,
+                  );
+                }
+                const recentPhoto = captures.find((c) => c.source_image_path);
+                if (recentPhoto) {
+                  teasers.push(
+                    <TeaserCard
+                      key="photo"
+                      imageUri={recentPhoto.source_image_path ?? undefined}
+                      domain="photo"
+                      title={recentPhoto.extracted_title ? protectedPreview(recentPhoto.extracted_title) : 'You snapped a photo'}
+                      subtitle="In Scans & photos"
+                      onPress={() => onAskAbout?.(`Tell me more about: "${recentPhoto.extracted_title ?? 'my recent photo'}"`)}
+                    />,
+                  );
+                }
+                return teasers.length ? <View style={{ gap: 8, marginBottom: 16 }}>{teasers.slice(0, 2)}</View> : null;
+              })()}
+            </>
+          ) : null}
+        </View>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -2766,6 +2948,32 @@ function TimelineView({
                   <View style={[styles.tlCard, isExpanded && styles.tlCardExpanded]}>
                     {/* Left accent bar — mood colour */}
                     <View style={[styles.tlAccent, { backgroundColor: moodColor }]} />
+
+                    {/* ── Media-forward leading tile (v3): photo thumb / voice waveform / typed glyph-chip ── */}
+                    {(() => {
+                      const { kind, domain } = kindForCapture(item, noteTypes[item.id]);
+                      const accent = DOMAIN_ACCENT[domain] ?? LUCY_COLORS.textMuted;
+                      if (kind === 'photo' && item.source_image_path) {
+                        return <Image source={{ uri: item.source_image_path }} style={styles.tlMediaThumb} resizeMode="cover" />;
+                      }
+                      if (kind === 'voice') {
+                        const bars = [9, 16, 24, 14, 20, 11, 18, 13];
+                        return (
+                          <View style={[styles.tlMediaTile, { backgroundColor: withAlpha(accent, 0.12) }]}>
+                            <View style={styles.tlWaveRow}>
+                              {bars.map((h, bi) => <View key={bi} style={[styles.tlWaveBar, { height: h, backgroundColor: accent }]} />)}
+                            </View>
+                          </View>
+                        );
+                      }
+                      const glyph: keyof typeof Ionicons.glyphMap =
+                        kind === 'doc' ? 'document-text' : domain === 'task' ? 'checkbox-outline' : domain === 'idea' ? 'bulb-outline' : 'pricetag-outline';
+                      return (
+                        <View style={[styles.tlMediaTile, { backgroundColor: withAlpha(accent, 0.12), borderColor: withAlpha(accent, 0.2), borderWidth: 1 }]}>
+                          <Ionicons name={glyph} size={20} color={accent} />
+                        </View>
+                      );
+                    })()}
 
                     <View style={styles.tlCardContent}>
 
@@ -3843,12 +4051,21 @@ function Card({ title, detail, privacy, onDelete }: { title: string; detail: str
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  homeHero: { position: 'relative', overflow: 'hidden', backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: RADIUS.card, paddingLeft: 18, paddingRight: 74, paddingTop: 14, paddingBottom: 15, marginTop: 6, marginBottom: 10, ...LUCY_SHADOWS.md },
-  homeHeroGlow: { position: 'absolute', right: -72, top: -92, width: 156, height: 156, borderRadius: 78, backgroundColor: LUCY_COLORS.primary + '12' },
-  todayDate: { color: LUCY_COLORS.primaryGlow, fontSize: 10.5, fontWeight: '900', letterSpacing: 1, marginBottom: 4, textTransform: 'uppercase' },
-  title: { fontSize: 23, letterSpacing: -0.3, fontWeight: '900', color: LUCY_COLORS.textDark, lineHeight: 27 },
-  subtitle: { color: LUCY_COLORS.textMuted, fontSize: 13, marginTop: 5, lineHeight: 18.5, maxWidth: 280 },
-  viewNav: { marginBottom: 10 },
+  // v3 living-orb hero (P5): the orb is the single focal element up top with a soft time-of-day wash.
+  hero: { marginTop: 2, marginBottom: 14, borderRadius: RADIUS.card },
+  viewNav: { marginBottom: 14 },
+
+  // v3 focal "what matters now" card (S-DECISION)
+  focalCard: { backgroundColor: LUCY_COLORS.surface, borderRadius: RADIUS.card, padding: 18, marginBottom: 16, borderWidth: 1, borderColor: LUCY_COLORS.border, ...LUCY_SHADOWS.md },
+  focalItem: { flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: LUCY_COLORS.surface, borderRadius: RADIUS.chip, paddingVertical: 11, paddingHorizontal: 12, borderWidth: 1, borderColor: LUCY_COLORS.border },
+  focalDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  focalFooter: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 14, paddingVertical: 4 },
+
+  // v3 media-forward river tile
+  tlMediaThumb: { width: 44, height: 44, borderRadius: 12, margin: 11, marginRight: 0, backgroundColor: LUCY_COLORS.surfaceRaised },
+  tlMediaTile: { width: 44, height: 44, borderRadius: 12, margin: 11, marginRight: 0, alignItems: 'center', justifyContent: 'center' },
+  tlWaveRow: { flexDirection: 'row', alignItems: 'center', gap: 2, height: 26 },
+  tlWaveBar: { width: 2.5, borderRadius: 2 },
   // "Today" glance strip
   content: { flex: 1 },
   tonight: { backgroundColor: LUCY_COLORS.surface, borderColor: LUCY_COLORS.border, borderWidth: 1, borderRadius: 24, padding: 20, marginBottom: 16, ...LUCY_SHADOWS.md },

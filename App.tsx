@@ -804,7 +804,7 @@ export default function App() {
   // shared element, since both the header and the always-mounted dashboard may render it). It's placed
   // either in the global header (non-dashboard screens) or inside the Home hero card (dashboard) — so
   // on Home it sits in the greeting card and the Meeting/Listen pills stay clear.
-  const renderLucyFace = () => (
+  const renderLucyFace = (pillOnly = false) => (
     <View style={styles.faceRow}>
       {wakeWordEnabled && wakeStatus !== 'disabled' ? (
         <View style={styles.wakePill}>
@@ -820,7 +820,7 @@ export default function App() {
           </Text>
         </View>
       ) : null}
-      <AnimatedFace
+      {pillOnly ? null : <AnimatedFace
         unreadCount={0}
         celebrateKey={refreshToken}
         status={
@@ -835,7 +835,7 @@ export default function App() {
           : 'idle'
         }
         onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setConvoOpen(true); }}
-      />
+      />}
     </View>
   );
 
@@ -957,6 +957,7 @@ export default function App() {
                   requestKey={dashRequestKey}
                   onViewChange={setDashCurrentView}
                   initialAskQuestion={askInitialQuestion}
+                  onOpenConversation={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setConvoOpen(true); }}
                 />
               </ScreenFade>
               <ScreenFade active={screen === 'settings'} style={{ flex: 1 }}>
@@ -1045,9 +1046,11 @@ export default function App() {
         {/* The conversation entry point now lives on Lucy's face itself (tap the face to talk).
             The old floating chat FAB was removed — face = talk to Lucy, bell = notifications. */}
         {/* LUCY's animated face — a single global overlay pinned just below the header so it sits in
-            the same fixed spot on every screen (over the Home greeting card on the dashboard). */}
+            the same fixed spot on every screen. On the dashboard the v3 living-orb HERO (Dashboard's
+            LucyHero) IS the orb, so we suppress this overlay there to avoid two faces (per the
+            no-two-orbs rule) — the hero orb owns tap-to-talk on Home. */}
         <View style={styles.globalFace} pointerEvents="box-none">
-          {renderLucyFace()}
+          {renderLucyFace(screen === 'dashboard')}
         </View>
         {/* Camera FAB (bottom-right, where the old chat bubble was) — one-tap meal/note photo. */}
         {screen === 'dashboard' ? (

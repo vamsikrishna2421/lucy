@@ -58,6 +58,10 @@ export const LUCY_COLORS = {
   yield:      '#FAB23A',   // amber
 } as const;
 
+/** TEMP (user 2026-06-20): disconnect the Lucy animated face/orb app-wide to evaluate the look without it.
+ *  Flip back to true to restore the character. Gated in AnimatedFace / LucyPeek / LucyEmptyState / LucyHero. */
+export const LUCY_FACE_ENABLED = false;
+
 /** Shadow presets for depth — soft neutral elevation on the light theme (no more amber glow). */
 export const LUCY_SHADOWS = {
   /** Subtle elevation — secondary cards */

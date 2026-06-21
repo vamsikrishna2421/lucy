@@ -19,7 +19,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_FACE_ENABLED } from '../config/colors';
 
 // Match AnimatedFace's eye palette so she reads as the same character.
 const EYE_WHITE = '#FBF1E2';
@@ -180,6 +180,8 @@ export function LucyPeek() {
       </Animated.View>
     );
   };
+
+  if (!LUCY_FACE_ENABLED) return null;
 
   return (
     // Outer frame: NOT clipped (hands extend down onto the card). Absolutely positioned over the card's

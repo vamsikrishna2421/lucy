@@ -35,6 +35,7 @@ import {
   amberWash,
   LUCY_COLORS,
   LUCY_SHADOWS,
+  LUCY_FACE_ENABLED,
   withAlpha,
 } from '../config/colors';
 import { DURATION, SPRING, motionConfig, useReducedMotion } from '../config/motion';
@@ -404,27 +405,31 @@ export function LucyHero({
       accessibilityRole="header"
       accessibilityLabel={[eyebrow, line].filter(Boolean).join('. ') || 'Lucy'}
     >
-      {/* Time-of-day ambient wash — three stacked soft bands behind the orb. */}
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <View style={[styles.heroWashTop, { backgroundColor: wash.top }]} />
-        <View style={[styles.heroWashMid, { backgroundColor: wash.mid }]} />
-      </View>
+      {/* Time-of-day ambient wash — three stacked soft bands behind the orb. (Suppressed when the face is off.) */}
+      {LUCY_FACE_ENABLED ? (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <View style={[styles.heroWashTop, { backgroundColor: wash.top }]} />
+          <View style={[styles.heroWashMid, { backgroundColor: wash.mid }]} />
+        </View>
+      ) : null}
 
       {eyebrow ? <Text style={[typeStyle('ui.eyebrow'), { color: LUCY_COLORS.primary }]}>{eyebrow}</Text> : null}
 
-      <View style={[styles.heroOrbBox, { width: orbBox, height: orbBox }]}>
-        {/* Amber halo — concentric translucent circles (radial feel without a gradient dep). */}
-        <View pointerEvents="none" style={[styles.heroHalo, { width: orbBox * 1.25, height: orbBox * 1.25, borderRadius: orbBox, backgroundColor: glow.outer }]} />
-        <View pointerEvents="none" style={[styles.heroHalo, { width: orbBox * 0.95, height: orbBox * 0.95, borderRadius: orbBox, backgroundColor: glow.mid }]} />
-        <View style={{ transform: [{ scale }] }}>
-          <AnimatedFace
-            unreadCount={unreadCount}
-            onPress={onPressOrb ?? (() => {})}
-            status={orbStatus}
-            celebrateKey={celebrateKey}
-          />
+      {LUCY_FACE_ENABLED ? (
+        <View style={[styles.heroOrbBox, { width: orbBox, height: orbBox }]}>
+          {/* Amber halo — concentric translucent circles (radial feel without a gradient dep). */}
+          <View pointerEvents="none" style={[styles.heroHalo, { width: orbBox * 1.25, height: orbBox * 1.25, borderRadius: orbBox, backgroundColor: glow.outer }]} />
+          <View pointerEvents="none" style={[styles.heroHalo, { width: orbBox * 0.95, height: orbBox * 0.95, borderRadius: orbBox, backgroundColor: glow.mid }]} />
+          <View style={{ transform: [{ scale }] }}>
+            <AnimatedFace
+              unreadCount={unreadCount}
+              onPress={onPressOrb ?? (() => {})}
+              status={orbStatus}
+              celebrateKey={celebrateKey}
+            />
+          </View>
         </View>
-      </View>
+      ) : null}
 
       {line ? (
         <Animated.Text

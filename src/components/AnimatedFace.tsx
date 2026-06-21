@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { LUCY_COLORS, LUCY_SHADOWS } from '../config/colors';
+import { LUCY_COLORS, LUCY_SHADOWS, LUCY_FACE_ENABLED } from '../config/colors';
 
 // The warm amber the orb is drawn in (kept across the rebrand as Lucy's signature). Used for the orb's
 // own soft halo shadow + the floating music notes, so they glow amber regardless of the indigo theme.
@@ -642,6 +642,8 @@ export function AnimatedFace({
       </Animated.View>
     );
   }
+
+  if (!LUCY_FACE_ENABLED) return null;
 
   return (
     <TouchableOpacity

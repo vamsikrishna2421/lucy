@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+import { LUCY_COLORS, LUCY_FACE_ENABLED } from '../config/colors';
 
 const EYE_WHITE = '#FBF1E2';
 const IRIS = '#241606';
@@ -128,7 +128,7 @@ export function LucyEmptyState({
 }) {
   return (
     <View style={[styles.container, compact && styles.containerCompact]}>
-      <EmptyOrb />
+      {LUCY_FACE_ENABLED ? <EmptyOrb /> : null}
       <Text style={styles.title}>{title}</Text>
       {message ? <Text style={styles.message}>{message}</Text> : null}
       {ctaLabel && onCta ? (

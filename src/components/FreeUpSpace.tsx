@@ -187,7 +187,6 @@ export function FreeUpSpace({
   const footerY = footer.interpolate({ inputRange: [0, 1], outputRange: [120, 0] });
 
   return (
-    <>
       <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
         <Animated.View style={[styles.backdrop, { opacity: fade }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
@@ -286,10 +285,11 @@ export function FreeUpSpace({
             ) : null}
           </Animated.View>
         </View>
-      </Modal>
 
-      {/* Designed confirm — never a raw Alert */}
+      {/* Designed confirm — EMBEDDED so it renders inside this Modal. A second stacked <Modal> silently
+          fails to present on iOS (the confirm never showed → "delete button didn't work"). */}
       <ActionSheet
+        embedded
         visible={confirming}
         onClose={() => setConfirming(false)}
         context="Free up space"
@@ -309,8 +309,8 @@ export function FreeUpSpace({
         cancelLabel="Keep them"
       />
 
-      <Toast visible={!!toast} message={toast ?? ''} onHide={() => setToast(null)} />
-    </>
+      <Toast embedded visible={!!toast} message={toast ?? ''} onHide={() => setToast(null)} />
+      </Modal>
   );
 }
 

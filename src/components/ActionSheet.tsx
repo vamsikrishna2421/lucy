@@ -30,6 +30,7 @@ export function ActionSheet({
   accent = LUCY_COLORS.primary,
   actions,
   cancelLabel = 'Cancel',
+  embedded = false,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -42,6 +43,12 @@ export function ActionSheet({
   actions: SheetAction[];
   /** Pass null to hide the cancel row. */
   cancelLabel?: string | null;
+  /**
+   * Render as an in-place absolute overlay instead of its own <Modal>. REQUIRED when this is opened
+   * from inside another Modal — iOS silently fails to present a second stacked Modal (the confirm never
+   * shows, so the action looks dead). The parent must give it a full-bleed container to cover.
+   */
+  embedded?: boolean;
 }) {
   const slide = useRef(new Animated.Value(0)).current;
   const fade = useRef(new Animated.Value(0)).current;
@@ -66,8 +73,8 @@ export function ActionSheet({
     requestAnimationFrame(() => a.onPress?.());
   };
 
-  return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+  const body = (
+    <>
       <Animated.View style={[styles.backdrop, { opacity: fade }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
@@ -114,6 +121,18 @@ export function ActionSheet({
           </View>
         </Animated.View>
       </View>
+    </>
+  );
+
+  // Embedded (no nested Modal — works when opened from inside another Modal, esp. on iOS).
+  if (embedded) {
+    if (!visible) return null;
+    return <View style={StyleSheet.absoluteFill}>{body}</View>;
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      {body}
     </Modal>
   );
 }
@@ -128,12 +147,15 @@ export function Toast({
   onHide,
   icon = '✓',
   duration = 2200,
+  embedded = false,
 }: {
   visible: boolean;
   message: string;
   onHide: () => void;
   icon?: string;
   duration?: number;
+  /** Render as an in-place overlay instead of its own <Modal> (for use inside another Modal). */
+  embedded?: boolean;
 }) {
   const anim = useRef(new Animated.Value(0)).current;
 
@@ -151,16 +173,23 @@ export function Toast({
 
   const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [-60, 0] });
 
+  const inner = (
+    <View style={styles.toastAnchor} pointerEvents="none">
+      <Animated.View style={[styles.toast, { opacity: anim, transform: [{ translateY }] }]}>
+        <View style={styles.toastIconWrap}><Text style={styles.toastIcon}>{icon}</Text></View>
+        <Text style={styles.toastText} numberOfLines={2}>{message}</Text>
+      </Animated.View>
+    </View>
+  );
+
+  // Embedded: render in place (the parent Modal already covers the screen). Avoids a stacked Modal.
+  if (embedded) return inner;
+
   // Render in a non-blocking transparent Modal so the toast floats above the screen regardless of
   // where it's mounted (e.g. inside a ScrollView) and never intercepts touches.
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent>
-      <View style={styles.toastAnchor} pointerEvents="none">
-        <Animated.View style={[styles.toast, { opacity: anim, transform: [{ translateY }] }]}>
-          <View style={styles.toastIconWrap}><Text style={styles.toastIcon}>{icon}</Text></View>
-          <Text style={styles.toastText} numberOfLines={2}>{message}</Text>
-        </Animated.View>
-      </View>
+      {inner}
     </Modal>
   );
 }
